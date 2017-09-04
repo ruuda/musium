@@ -65,12 +65,12 @@ impl MemoryMetaIndex {
           <I as IntoIterator>::Item: AsRef<Path> {
         for path in paths {
             let reader = claxon::FlacReader::open(path.as_ref())?;
-            println!("{}", reader.get_tag("title").next().unwrap());
-            println!("{}", reader.get_tag("tracknumber").next().unwrap());
-            println!("{}", reader.get_tag("artist").next().unwrap());
-            println!("{}", reader.get_tag("musicbrainz_trackid").next().unwrap());
-            println!("{}", reader.get_tag("musicbrainz_albumid").next().unwrap());
-            println!("{}", reader.get_tag("musicbrainz_albumartistid").next().unwrap());
+            println!("{}", reader.get_tag("title").next().unwrap_or(""));
+            println!("{}", reader.get_tag("tracknumber").next().unwrap_or(""));
+            println!("{}", reader.get_tag("artist").next().unwrap_or(""));
+            println!("{}", reader.get_tag("musicbrainz_trackid").next().unwrap_or(""));
+            println!("{}", reader.get_tag("musicbrainz_albumid").next().unwrap_or(""));
+            println!("{}", reader.get_tag("musicbrainz_albumartistid").next().unwrap_or(""));
         }
 
         Ok(MemoryMetaIndex::new())
