@@ -1,0 +1,8 @@
+[package]
+name = "metaindex"
+version = "0.0.0"
+authors = ["Ruud van Asseldonk <dev@veniogames.com>"]
+
+[dependencies]
+claxon  = { path = "file://../../claxon" }
+walkdir = "1.0"

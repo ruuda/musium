@@ -1,0 +1,6 @@
+# Cargo files
+/target
+
+# Editor files
+*.swp
+*.swo
