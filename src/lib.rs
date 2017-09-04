@@ -9,12 +9,11 @@
 #![allow(dead_code)]
 
 extern crate claxon;
-extern crate walkdir;
 
 use std::io;
 use std::path::{Path, PathBuf};
 
-trait MetaIndex {
+pub trait MetaIndex {
     /// Returns the number of tracks in the index.
     fn len(&self) -> usize;
 }
@@ -44,7 +43,7 @@ impl From<claxon::Error> for Error {
 
 type Result<T> = std::result::Result<T, Error>;
 
-struct MemoryMetaIndex {
+pub struct MemoryMetaIndex {
 
 }
 
@@ -65,7 +64,13 @@ impl MemoryMetaIndex {
     where I: IntoIterator,
           <I as IntoIterator>::Item: AsRef<Path> {
         for path in paths {
-            let flac_reader = claxon::FlacReader::open(path.as_ref())?;
+            let reader = claxon::FlacReader::open(path.as_ref())?;
+            println!("{}", reader.get_tag("title").next().unwrap());
+            println!("{}", reader.get_tag("tracknumber").next().unwrap());
+            println!("{}", reader.get_tag("artist").next().unwrap());
+            println!("{}", reader.get_tag("musicbrainz_trackid").next().unwrap());
+            println!("{}", reader.get_tag("musicbrainz_albumid").next().unwrap());
+            println!("{}", reader.get_tag("musicbrainz_albumartistid").next().unwrap());
         }
 
         Ok(MemoryMetaIndex::new())
