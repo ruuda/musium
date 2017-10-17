@@ -13,6 +13,77 @@ extern crate claxon;
 use std::io;
 use std::path::{Path, PathBuf};
 
+// Stats of my personal music library at this point:
+//
+//     11.5k tracks
+//      1.2k albums
+//      0.3k album artists
+//      1.4k track artists
+//
+// The observation is that there is an order of magnitude difference between
+// the track count and album count, and also between album count and artist
+// count. In other words, track data will dominate, and album artist data is
+// hardly relevant.
+//
+// What should I design for? My library will probably grow to twice its size
+// over time. Perhaps even to 10x the size. But I am pretty confident that it
+// will not grow by 100x. So by designing the system to support 1M tracks, I
+// should be safe.
+//
+// Let's consider IDs for a moment. The 16-byte MusicBrainz UUIDs take up a lot
+// of space, and I want to run on low-end systems, in particular the
+// first-generation Raspberry Pi, which has 16k L1 cache and 128k L2 cache.
+// Saving 50% on IDs can have a big impact there. So under the above assumptions
+// of 1M tracks, can I get away with using 8 bytes of the 16-byte UUIDs? Let's
+// consider the collision probability. With 8-byte identifiers, to have a 1%
+// collision probability, one would need about 608M tracks. That is a lot more
+// than what I am designing for. For MusicBrainz, which aims to catalog every
+// track ever produced by humanity, this might be too risky. But for my personal
+// collection the memory savings are well worth the risk.
+
+struct TrackId(u64);
+struct AlbumId(u64);
+struct ArtistId(u64);
+
+/// Index into a byte array that contains length-prefixed strings.
+struct StringRef(u32);
+
+struct Track {
+    album_id: AlbumId,
+    disc_number: u16,
+    track_number: u16,
+    title: StringRef,
+    artist: StringRef,
+    artist_for_sort: StringRef,
+    duration_seconds: u32,
+    filename: StringRef,
+}
+
+struct Date {
+    year: u16,
+    month: u8,
+    day: u8,
+}
+
+struct Album {
+    artist_id: ArtistId,
+    title: StringRef,
+    original_release_date: Date,
+}
+
+struct Artist {
+    name: StringRef,
+    name_for_sort: StringRef,
+}
+
+#[test]
+fn struct_sizes_are_as_expected() {
+    use std::mem;
+    assert_eq!(mem::size_of::<Track>(), 32);
+    assert_eq!(mem::size_of::<Album>(), 16);
+    assert_eq!(mem::size_of::<Artist>(), 8);
+}
+
 pub trait MetaIndex {
     /// Returns the number of tracks in the index.
     fn len(&self) -> usize;
