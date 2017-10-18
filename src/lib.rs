@@ -12,6 +12,8 @@ extern crate claxon;
 
 use std::io;
 use std::path::{Path, PathBuf};
+use std::thread;
+use std::sync::mpsc::{Sender, Receiver, sync_channel, channel};
 
 // Stats of my personal music library at this point:
 //
@@ -126,6 +128,24 @@ impl MemoryMetaIndex {
         MemoryMetaIndex { }
     }
 
+    pub fn process(recv: Receiver<PathBuf>, tx: Sender<String>) {
+        for path in recv.iter() {
+            let reader = claxon::FlacReader::open(path).unwrap();
+            let mut s = String::from(reader.get_tag("title").next().unwrap_or(""));
+            s.push('\n');
+            s.push_str(reader.get_tag("tracknumber").next().unwrap_or(""));
+            s.push('\n');
+            s.push_str(reader.get_tag("artist").next().unwrap_or(""));
+            s.push('\n');
+            s.push_str(reader.get_tag("musicbrainz_trackid").next().unwrap_or(""));
+            s.push('\n');
+            s.push_str(reader.get_tag("musicbrainz_albumid").next().unwrap_or(""));
+            s.push('\n');
+            s.push_str(reader.get_tag("musicbrainz_albumartistid").next().unwrap_or(""));
+            tx.send(s).unwrap();
+        }
+    }
+
     /// Index the given files, and store the index in the target directory.
     ///
     /// Although this streams most metadata to disk, a few parts of the index
@@ -134,16 +154,30 @@ impl MemoryMetaIndex {
     pub fn from_paths<I>(paths: I) -> Result<MemoryMetaIndex>
     where I: IntoIterator,
           <I as IntoIterator>::Item: AsRef<Path> {
-        for path in paths {
-            let reader = claxon::FlacReader::open(path.as_ref())?;
-            println!("{}", reader.get_tag("title").next().unwrap_or(""));
-            println!("{}", reader.get_tag("tracknumber").next().unwrap_or(""));
-            println!("{}", reader.get_tag("artist").next().unwrap_or(""));
-            println!("{}", reader.get_tag("musicbrainz_trackid").next().unwrap_or(""));
-            println!("{}", reader.get_tag("musicbrainz_albumid").next().unwrap_or(""));
-            println!("{}", reader.get_tag("musicbrainz_albumartistid").next().unwrap_or(""));
+        use std::mem;
+        let (sendm, recvm) = channel();
+        let num_threads = 64;
+        let mut txs = Vec::new();
+        let mut threads = Vec::new();
+        for _ in 0..num_threads {
+            let (tx, recv) = sync_channel(32);
+            txs.push(tx);
+            let sendm_local = sendm.clone();
+            let t = thread::spawn(move || MemoryMetaIndex::process(recv, sendm_local));
+            threads.push(t);
         }
-
+        mem::drop(sendm);
+        let tz = thread::spawn(move ||
+            for res in recvm.iter() {
+                println!("{}", res);
+            }
+        );
+        for (i, path) in paths.into_iter().enumerate() {
+            txs[i % num_threads].send(path.as_ref().to_path_buf()).unwrap();
+        }
+        mem::drop(txs);
+        for t in threads { t.join().unwrap(); }
+        tz.join().unwrap();
         Ok(MemoryMetaIndex::new())
     }
 }
