@@ -13,7 +13,7 @@ extern crate claxon;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::sync::mpsc::{Sender, Receiver, sync_channel, channel};
+use std::sync::mpsc::{Sender, Receiver, TrySendError, sync_channel, channel};
 
 // Stats of my personal music library at this point:
 //
@@ -156,11 +156,16 @@ impl MemoryMetaIndex {
           <I as IntoIterator>::Item: AsRef<Path> {
         use std::mem;
         let (sendm, recvm) = channel();
-        let num_threads = 64;
+        let num_threads = 48;
         let mut txs = Vec::new();
         let mut threads = Vec::new();
         for _ in 0..num_threads {
-            let (tx, recv) = sync_channel(32);
+            // Note that a channel size of 0 is optimal here. What I suspect is
+            // happening, is that the for order in which filenames are returned
+            // from the iterator, the files are near on disk. Having large
+            // queues destroys this correlation, making the disk access pattern
+            // more random. We are doing poor man's non-blocking IO here.
+            let (tx, recv) = sync_channel(0);
             txs.push(tx);
             let sendm_local = sendm.clone();
             let t = thread::spawn(move || MemoryMetaIndex::process(recv, sendm_local));
@@ -172,8 +177,23 @@ impl MemoryMetaIndex {
                 println!("{}", res);
             }
         );
-        for (i, path) in paths.into_iter().enumerate() {
-            txs[i % num_threads].send(path.as_ref().to_path_buf()).unwrap();
+        let mut i = 0;
+        for path in paths {
+            let mut p = Some(path.as_ref().to_path_buf());
+            for _ in 0..(num_threads * 2 + 1) {
+                match txs[i % num_threads].try_send(p.take().unwrap()) {
+                    Ok(..) => break,
+                    Err(TrySendError::Full(x)) => {
+                        i += 1;
+                        p = Some(x);
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            if let Some(x) = p {
+                txs[i % num_threads].send(x).unwrap();
+            }
+            i += 1;
         }
         mem::drop(txs);
         for t in threads { t.join().unwrap(); }

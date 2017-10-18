@@ -41,3 +41,24 @@ how much threads to use. 64 threads probably already takes all of the parallel
 gains, and the returns diminish quickly. It could be worth optimizing the number
 of threads for running time with a warm disk cache, and that would likely also
 perform almost optimally for a cold cache.
+
+Some more results after reducing the thread queue size and doing non-blocking
+pushes, to keep the queue sizes more even:
+
+Disk Cache  Threads  Queue Size  Time (seconds)
+----------  -------  ----------  ---------------
+Cold            128          16    105.591609927
+Cold            512           0     97.509055644
+Cold            512           0     96.345510293
+Cold            128           1     94.403741744
+Cold            128           0     85.897972147
+Cold             64           0     82.595254011
+Cold             64           0     83.793832797
+Cold             48           0     80.877349368
+Cold             32           0     80.913407455
+Cold             24           0     82.893433723
+Cold             16           0     83.807142608
+Cold             16           0     83.967152892
+Warm            128          16      0.075636796
+Warm            128           1      0.072041480
+Warm            128           0      0.075571860
