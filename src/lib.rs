@@ -9,11 +9,11 @@
 #![allow(dead_code)]
 
 extern crate claxon;
+extern crate crossbeam;
 
 use std::io;
 use std::path::{Path, PathBuf};
-use std::thread;
-use std::sync::mpsc::{Sender, Receiver, TrySendError, sync_channel, channel};
+use std::sync::Mutex;
 
 // Stats of my personal music library at this point:
 //
@@ -128,8 +128,14 @@ impl MemoryMetaIndex {
         MemoryMetaIndex { }
     }
 
-    pub fn process(recv: Receiver<PathBuf>, tx: Sender<String>) {
-        for path in recv.iter() {
+    pub fn process<I>(paths: &Mutex<I>)
+    where I: Iterator, <I as Iterator>::Item: AsRef<Path> {
+        loop {
+            let opt_path = paths.lock().unwrap().next();
+            let path = match opt_path {
+                Some(p) => p,
+                None => return,
+            };
             let reader = claxon::FlacReader::open(path).unwrap();
             let mut s = String::from(reader.get_tag("title").next().unwrap_or(""));
             s.push('\n');
@@ -142,7 +148,7 @@ impl MemoryMetaIndex {
             s.push_str(reader.get_tag("musicbrainz_albumid").next().unwrap_or(""));
             s.push('\n');
             s.push_str(reader.get_tag("musicbrainz_albumartistid").next().unwrap_or(""));
-            tx.send(s).unwrap();
+            println!("{}", s);
         }
     }
 
@@ -152,52 +158,18 @@ impl MemoryMetaIndex {
     /// have to be kept in memory for efficient sorting, so the paths iterator
     /// should not yield *too* many elements.
     pub fn from_paths<I>(paths: I) -> Result<MemoryMetaIndex>
-    where I: IntoIterator,
-          <I as IntoIterator>::Item: AsRef<Path> {
-        use std::mem;
-        let (sendm, recvm) = channel();
-        let num_threads = 48;
-        let mut txs = Vec::new();
-        let mut threads = Vec::new();
-        for _ in 0..num_threads {
-            // Note that a channel size of 0 is optimal here. What I suspect is
-            // happening, is that the for order in which filenames are returned
-            // from the iterator, the files are near on disk. Having large
-            // queues destroys this correlation, making the disk access pattern
-            // more random. We are doing poor man's non-blocking IO here.
-            let (tx, recv) = sync_channel(0);
-            txs.push(tx);
-            let sendm_local = sendm.clone();
-            let t = thread::spawn(move || MemoryMetaIndex::process(recv, sendm_local));
-            threads.push(t);
-        }
-        mem::drop(sendm);
-        let tz = thread::spawn(move ||
-            for res in recvm.iter() {
-                println!("{}", res);
+    where I: Iterator,
+          <I as IntoIterator>::Item: AsRef<Path>,
+          <I as IntoIterator>::IntoIter: Send {
+        let paths_iterator = paths.into_iter().fuse();
+        let mutex = Mutex::new(paths_iterator);
+
+        let num_threads = 24;
+        crossbeam::scope(|scope| {
+            for _ in 0..num_threads {
+                scope.spawn(|| MemoryMetaIndex::process(&mutex));
             }
-        );
-        let mut i = 0;
-        for path in paths {
-            let mut p = Some(path.as_ref().to_path_buf());
-            for _ in 0..(num_threads * 2 + 1) {
-                match txs[i % num_threads].try_send(p.take().unwrap()) {
-                    Ok(..) => break,
-                    Err(TrySendError::Full(x)) => {
-                        i += 1;
-                        p = Some(x);
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            if let Some(x) = p {
-                txs[i % num_threads].send(x).unwrap();
-            }
-            i += 1;
-        }
-        mem::drop(txs);
-        for t in threads { t.join().unwrap(); }
-        tz.join().unwrap();
+        });
         Ok(MemoryMetaIndex::new())
     }
 }

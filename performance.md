@@ -62,3 +62,20 @@ Cold             16           0     83.967152892
 Warm            128          16      0.075636796
 Warm            128           1      0.072041480
 Warm            128           0      0.075571860
+
+And without queues or channels, protecting the directory iterator with a mutex
+instead:
+
+Disk Cache  Threads  Time (seconds)
+----------  -------  ---------------
+Cold             48     83.731602753
+Cold             48     83.806947689
+Cold             24     81.919455988
+Cold             24     80.765494864
+Cold             12     82.537088779
+Cold             12     83.135829488
+Warm             48      0.056744610
+Cold             24      0.059594100
+Cold             24      0.054264233
+Cold             12      0.056491306
+Cold             12      0.056685518
