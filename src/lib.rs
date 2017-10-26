@@ -136,7 +136,11 @@ impl MemoryMetaIndex {
                 Some(p) => p,
                 None => return,
             };
-            let reader = claxon::FlacReader::open(path).unwrap();
+            let opts = claxon::FlacReaderOptions {
+                metadata_only: true,
+                read_vorbis_comment: true,
+            };
+            let reader = claxon::FlacReader::open_ext(path, opts).unwrap();
             let mut s = String::from(reader.get_tag("title").next().unwrap_or(""));
             s.push('\n');
             s.push_str(reader.get_tag("tracknumber").next().unwrap_or(""));
