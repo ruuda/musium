@@ -65,7 +65,6 @@ struct Track {
     track_number: u16,
     title: StringRef,
     artist: StringRef,
-    artist_for_sort: StringRef,
     duration_seconds: u32,
     filename: StringRef,
 }
@@ -152,7 +151,6 @@ impl BuildMetaIndex {
         let mut title = None;
         let mut album = None;
         let mut artist = None;
-        let mut artist_for_sort = None;
         let mut album_artist = None;
         let mut album_artist_for_sort = None;
         let mut original_date = None;
@@ -172,7 +170,6 @@ impl BuildMetaIndex {
                 "albumartist"               => album_artist = Some(self.insert_string(value)),
                 "albumartistsort"           => album_artist_for_sort = Some(self.insert_string(value)),
                 "artist"                    => artist = Some(self.insert_string(value)),
-                "artistsort"                => artist_for_sort = Some(self.insert_string(value)),
                 "discnumber"                => disc_number = Some(u16::from_str(value).unwrap()),
                 "musicbrainz_albumartistid" => mbid_artist = parse_uuid(value).unwrap(),
                 "musicbrainz_albumid"       => mbid_album = parse_uuid(value).unwrap(),
@@ -185,7 +182,6 @@ impl BuildMetaIndex {
             }
         }
 
-        if disc_number == None { panic!("discnumber not set") }
         if track_number == None { panic!("tracknumber not set") }
         if title == None { panic!("title not set") }
         if album == None { panic!("album not set") }
@@ -202,11 +198,10 @@ impl BuildMetaIndex {
 
         let track = Track {
             album_id: album_id,
-            disc_number: disc_number.expect("discnumber not set"),
+            disc_number: disc_number.unwrap_or(1),
             track_number: track_number.expect("tracknumber not set"),
             title: StringRef(title.expect("title not set")),
             artist: StringRef(artist.expect("artist not set")),
-            artist_for_sort: StringRef(artist_for_sort.or(artist).unwrap()),
             duration_seconds: 1, // TODO: Get from streaminfo.
             filename: StringRef(filename_id),
         };
@@ -276,7 +271,7 @@ impl MemoryMetaIndex {
             let opt_path = paths.lock().unwrap().next();
             let path = match opt_path {
                 Some(p) => p,
-                None => return,
+                None => break,
             };
             let opts = claxon::FlacReaderOptions {
                 metadata_only: true,
@@ -285,6 +280,10 @@ impl MemoryMetaIndex {
             let reader = claxon::FlacReader::open_ext(path.as_ref(), opts).unwrap();
             builder.insert(path.as_ref().to_str().expect("TODO"), &mut reader.tags());
             println!("{}", path.as_ref().to_str().unwrap());
+        }
+
+        for s in builder.strings {
+            println!("{}={}", s.1, s.0);
         }
     }
 
