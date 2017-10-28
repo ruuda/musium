@@ -138,7 +138,9 @@ impl BuildMetaIndex {
         // an allocation that turns the &str into a String when an insert is
         // required. We expect inserts to occur less than half of the time
         // (usually the sort artist is the same as the artist, and many tracks
-        // share the same artist), therefore opt for the check first.
+        // share the same artist), therefore opt for the check first. Empirical
+        // evidence: on my personal library, about 22% of the strings need to be
+        // inserted (12.6k out of 57.8k total strings).
         let next_id = self.strings.len() as u32;
         if let Some(id) = self.strings.get(string) { return *id }
         self.strings.insert(string.to_string(), next_id);
