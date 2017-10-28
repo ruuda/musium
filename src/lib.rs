@@ -11,8 +11,11 @@
 extern crate claxon;
 extern crate crossbeam;
 
+use std::ascii::AsciiExt;
+use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::Mutex;
 
 // Stats of my personal music library at this point:
@@ -43,11 +46,17 @@ use std::sync::Mutex;
 // track ever produced by humanity, this might be too risky. But for my personal
 // collection the memory savings are well worth the risk.
 
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct TrackId(u64);
+
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct AlbumId(u64);
+
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct ArtistId(u64);
 
 /// Index into a byte array that contains length-prefixed strings.
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct StringRef(u32);
 
 struct Track {
@@ -84,6 +93,138 @@ fn struct_sizes_are_as_expected() {
     assert_eq!(mem::size_of::<Track>(), 32);
     assert_eq!(mem::size_of::<Album>(), 16);
     assert_eq!(mem::size_of::<Artist>(), 8);
+}
+
+struct BuildMetaIndex {
+    artists: BTreeMap<ArtistId, Artist>,
+    albums: BTreeMap<AlbumId, Album>,
+    tracks: BTreeMap<TrackId, Track>,
+    strings: BTreeMap<String, u32>,
+    filenames: Vec<String>,
+}
+
+fn parse_date(_date_str: &str) -> Option<Date> {
+    // TODO
+    let date = Date {
+        year: 0,
+        month: 0,
+        day: 0,
+    };
+    Some(date)
+}
+
+fn parse_uuid(_uuid: &str) -> Option<u64> {
+    // TODO
+    Some(1)
+}
+
+impl BuildMetaIndex {
+    pub fn new() -> BuildMetaIndex {
+        BuildMetaIndex {
+            artists: BTreeMap::new(),
+            albums: BTreeMap::new(),
+            tracks: BTreeMap::new(),
+            strings: BTreeMap::new(),
+            filenames: Vec::new(),
+        }
+    }
+
+    /// Insert a string in the strings map, returning its id.
+    ///
+    /// The id is just an opaque integer. When the strings are written out
+    /// sorted at a later time, the id can be converted into a `StringRef`.
+    fn insert_string(&mut self, string: &str) -> u32 {
+        // If the string exists already, return its id, otherwise insert it.
+        // This does involve two lookups in the case of insert, but it does save
+        // an allocation that turns the &str into a String when an insert is
+        // required. We expect inserts to occur less than half of the time
+        // (usually the sort artist is the same as the artist, and many tracks
+        // share the same artist), therefore opt for the check first.
+        let next_id = self.strings.len() as u32;
+        if let Some(id) = self.strings.get(string) { return *id }
+        self.strings.insert(string.to_string(), next_id);
+        next_id
+    }
+
+    pub fn insert(&mut self, filename: &str, tags: &mut claxon::metadata::Tags) {
+        let mut disc_number = None;
+        let mut track_number = None;
+        let mut title = None;
+        let mut album = None;
+        let mut artist = None;
+        let mut artist_for_sort = None;
+        let mut album_artist = None;
+        let mut album_artist_for_sort = None;
+        let mut original_date = None;
+        let mut date = None;
+
+        let mut mbid_track = 0;
+        let mut mbid_album = 0;
+        let mut mbid_artist = 0;
+
+        let filename_id = self.filenames.len() as u32;
+        self.filenames.push(filename.to_string());
+
+        for (tag, value) in tags {
+            match &tag.to_ascii_lowercase()[..] {
+                // TODO: Replace unwraps here with proper parse error reporting.
+                "album"                     => album = Some(self.insert_string(value)),
+                "albumartist"               => album_artist = Some(self.insert_string(value)),
+                "albumartistsort"           => album_artist_for_sort = Some(self.insert_string(value)),
+                "artist"                    => artist = Some(self.insert_string(value)),
+                "artistsort"                => artist_for_sort = Some(self.insert_string(value)),
+                "discnumber"                => disc_number = Some(u16::from_str(value).unwrap()),
+                "musicbrainz_albumartistid" => mbid_artist = parse_uuid(value).unwrap(),
+                "musicbrainz_albumid"       => mbid_album = parse_uuid(value).unwrap(),
+                "musicbrainz_trackid"       => mbid_track = parse_uuid(value).unwrap(),
+                "originaldate"              => original_date = parse_date(value),
+                "date"                      => date = parse_date(value),
+                "title"                     => title = Some(self.insert_string(value)),
+                "tracknumber"               => track_number = Some(u16::from_str(value).unwrap()),
+                _ => {}
+            }
+        }
+
+        if disc_number == None { panic!("discnumber not set") }
+        if track_number == None { panic!("tracknumber not set") }
+        if title == None { panic!("title not set") }
+        if album == None { panic!("album not set") }
+        if artist == None { panic!("artist not set") }
+        if album_artist == None { panic!("album artist not set") }
+
+        if mbid_track == 0 { panic!("musicbrainz_trackid not set") }
+        if mbid_album == 0 { panic!("musicbrainz_albumid not set") }
+        if mbid_artist == 0 { panic!("musicbrainz_albumartistid not set") }
+
+        let track_id = TrackId(mbid_track);
+        let album_id = AlbumId(mbid_album);
+        let artist_id = ArtistId(mbid_artist);
+
+        let track = Track {
+            album_id: album_id,
+            disc_number: disc_number.expect("discnumber not set"),
+            track_number: track_number.expect("tracknumber not set"),
+            title: StringRef(title.expect("title not set")),
+            artist: StringRef(artist.expect("artist not set")),
+            artist_for_sort: StringRef(artist_for_sort.or(artist).unwrap()),
+            duration_seconds: 1, // TODO: Get from streaminfo.
+            filename: StringRef(filename_id),
+        };
+        let album = Album {
+            artist_id: artist_id,
+            title: StringRef(album.expect("album not set")),
+            original_release_date: original_date.or(date).expect("neither originaldate nor date set"),
+        };
+        let artist = Artist {
+            name: StringRef(album_artist.expect("albumartist not set")),
+            name_for_sort: StringRef(album_artist_for_sort.or(album_artist).unwrap()),
+        };
+
+        // TODO: Check for consistency if duplicates occur.
+        self.tracks.insert(track_id, track);
+        self.albums.insert(album_id, album);
+        self.artists.insert(artist_id, artist);
+    }
 }
 
 pub trait MetaIndex {
@@ -130,6 +271,7 @@ impl MemoryMetaIndex {
 
     pub fn process<I>(paths: &Mutex<I>)
     where I: Iterator, <I as Iterator>::Item: AsRef<Path> {
+        let mut builder = BuildMetaIndex::new();
         loop {
             let opt_path = paths.lock().unwrap().next();
             let path = match opt_path {
@@ -140,19 +282,9 @@ impl MemoryMetaIndex {
                 metadata_only: true,
                 read_vorbis_comment: true,
             };
-            let reader = claxon::FlacReader::open_ext(path, opts).unwrap();
-            let mut s = String::from(reader.get_tag("title").next().unwrap_or(""));
-            s.push('\n');
-            s.push_str(reader.get_tag("tracknumber").next().unwrap_or(""));
-            s.push('\n');
-            s.push_str(reader.get_tag("artist").next().unwrap_or(""));
-            s.push('\n');
-            s.push_str(reader.get_tag("musicbrainz_trackid").next().unwrap_or(""));
-            s.push('\n');
-            s.push_str(reader.get_tag("musicbrainz_albumid").next().unwrap_or(""));
-            s.push('\n');
-            s.push_str(reader.get_tag("musicbrainz_albumartistid").next().unwrap_or(""));
-            println!("{}", s);
+            let reader = claxon::FlacReader::open_ext(path.as_ref(), opts).unwrap();
+            builder.insert(path.as_ref().to_str().expect("TODO"), &mut reader.tags());
+            println!("{}", path.as_ref().to_str().unwrap());
         }
     }
 
