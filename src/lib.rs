@@ -99,7 +99,8 @@ fn struct_sizes_are_as_expected() {
 #[derive(Copy, Clone, Debug)]
 pub enum IssueDetail {
     FieldMissingError(&'static str),
-    FieldParseFaild(&'static str),
+    FieldParseFaildError(&'static str),
+    DateFallbackWarning,
 }
 
 #[derive(Debug)]
@@ -152,6 +153,14 @@ impl BuildMetaIndex {
         self.issues.send(issue).unwrap();
     }
 
+    fn warn_date_fallback(&mut self, filename: String) {
+        let issue = Issue {
+            filename: filename,
+            detail: IssueDetail::DateFallbackWarning,
+        };
+        self.issues.send(issue).unwrap();
+    }
+
     /// Insert a string in the strings map, returning its id.
     ///
     /// The id is just an opaque integer. When the strings are written out
@@ -179,7 +188,6 @@ impl BuildMetaIndex {
         let mut artist = None;
         let mut album_artist = None;
         let mut album_artist_for_sort = None;
-        let mut original_date = None;
         let mut date = None;
 
         let mut mbid_track = 0;
@@ -197,8 +205,7 @@ impl BuildMetaIndex {
                 "musicbrainz_albumartistid" => mbid_artist = parse_uuid(value).unwrap(),
                 "musicbrainz_albumid"       => mbid_album = parse_uuid(value).unwrap(),
                 "musicbrainz_trackid"       => mbid_track = parse_uuid(value).unwrap(),
-                "originaldate"              => original_date = parse_date(value),
-                "date"                      => date = parse_date(value),
+                "originaldate"              => date = parse_date(value),
                 "title"                     => title = Some(self.insert_string(value)),
                 "tracknumber"               => track_number = Some(u16::from_str(value).unwrap()),
                 _ => {}
@@ -221,11 +228,31 @@ impl BuildMetaIndex {
             return
         }
 
-        if track_number == None { panic!("tracknumber not set") }
-        if title == None { panic!("title not set") }
-        if album == None { panic!("album not set") }
-        if artist == None { panic!("artist not set") }
-        if album_artist == None { panic!("album artist not set") }
+        // TODO: Make a macro for this, this is terrible.
+        let f_track_number = match track_number {
+            Some(t) => t,
+            None => return self.error_missing_field(filename_string, "tracknumber"),
+        };
+        let f_title = match title {
+            Some(t) => t,
+            None => return self.error_missing_field(filename_string, "title"),
+        };
+        let f_artist = match artist {
+            Some(a) => a,
+            None => return self.error_missing_field(filename_string, "artist"),
+        };
+        let f_album = match album {
+            Some(a) => a,
+            None => return self.error_missing_field(filename_string, "album"),
+        };
+        let f_album_artist = match album_artist {
+            Some(a) => a,
+            None => return self.error_missing_field(filename_string, "albumartist"),
+        };
+        let f_date = match date {
+            Some(d) => d,
+            None => return self.error_missing_field(filename_string, "originaldate"),
+        };
 
         let track_id = TrackId(mbid_track);
         let album_id = AlbumId(mbid_album);
@@ -234,20 +261,20 @@ impl BuildMetaIndex {
         let track = Track {
             album_id: album_id,
             disc_number: disc_number.unwrap_or(1),
-            track_number: track_number.expect("tracknumber not set"),
-            title: StringRef(title.expect("title not set")),
-            artist: StringRef(artist.expect("artist not set")),
+            track_number: f_track_number,
+            title: StringRef(f_title),
+            artist: StringRef(f_artist),
             duration_seconds: 1, // TODO: Get from streaminfo.
             filename: StringRef(filename_id),
         };
         let album = Album {
             artist_id: artist_id,
-            title: StringRef(album.expect("album not set")),
-            original_release_date: original_date.or(date).expect("neither originaldate nor date set"),
+            title: StringRef(f_album),
+            original_release_date: f_date,
         };
         let artist = Artist {
-            name: StringRef(album_artist.expect("albumartist not set")),
-            name_for_sort: StringRef(album_artist_for_sort.or(album_artist).unwrap()),
+            name: StringRef(f_album_artist),
+            name_for_sort: StringRef(album_artist_for_sort.unwrap_or(f_album_artist)),
         };
 
         // TODO: Check for consistency if duplicates occur.
