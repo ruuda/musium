@@ -122,6 +122,24 @@ impl fmt::Display for Issue {
     }
 }
 
+impl fmt::Display for TrackId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:016x}", self.0)
+    }
+}
+
+impl fmt::Display for AlbumId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:016x}", self.0)
+    }
+}
+
+impl fmt::Display for ArtistId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:016x}", self.0)
+    }
+}
+
 struct BuildMetaIndex {
     artists: BTreeMap<ArtistId, Artist>,
     albums: BTreeMap<AlbumId, Album>,
@@ -381,6 +399,9 @@ impl MemoryMetaIndex {
         for s in builder.strings {
             println!("{}={}", s.1, s.0);
             m = m.max(s.0.len());
+        }
+        for (trid, track) in &builder.tracks {
+            println!("{}: {}.{} - <title>", trid, track.disc_number, track.track_number);
         }
         println!("max string len: {}", m);
         println!("indexed {} tracks on {} albums by {} artists",
