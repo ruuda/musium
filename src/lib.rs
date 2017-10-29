@@ -14,9 +14,11 @@ extern crate crossbeam;
 use std::ascii::AsciiExt;
 use std::collections::BTreeMap;
 use std::io;
+use std::mem;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Mutex;
+use std::sync::mpsc::{SyncSender, sync_channel};
 
 // Stats of my personal music library at this point:
 //
@@ -94,12 +96,25 @@ fn struct_sizes_are_as_expected() {
     assert_eq!(mem::size_of::<Artist>(), 8);
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum IssueDetail {
+    FieldMissingError(&'static str),
+    FieldParseFaild(&'static str),
+}
+
+#[derive(Debug)]
+pub struct Issue {
+    pub filename: String,
+    pub detail: IssueDetail,
+}
+
 struct BuildMetaIndex {
     artists: BTreeMap<ArtistId, Artist>,
     albums: BTreeMap<AlbumId, Album>,
     tracks: BTreeMap<TrackId, Track>,
     strings: BTreeMap<String, u32>,
     filenames: Vec<String>,
+    issues: SyncSender<Issue>,
 }
 
 fn parse_date(_date_str: &str) -> Option<Date> {
@@ -118,14 +133,23 @@ fn parse_uuid(_uuid: &str) -> Option<u64> {
 }
 
 impl BuildMetaIndex {
-    pub fn new() -> BuildMetaIndex {
+    pub fn new(issues: SyncSender<Issue>) -> BuildMetaIndex {
         BuildMetaIndex {
             artists: BTreeMap::new(),
             albums: BTreeMap::new(),
             tracks: BTreeMap::new(),
             strings: BTreeMap::new(),
             filenames: Vec::new(),
+            issues: issues,
         }
+    }
+
+    fn error_missing_field(&mut self, filename: String, field: &'static str) {
+        let issue = Issue {
+            filename: filename,
+            detail: IssueDetail::FieldMissingError(field),
+        };
+        self.issues.send(issue).unwrap();
     }
 
     /// Insert a string in the strings map, returning its id.
@@ -162,9 +186,6 @@ impl BuildMetaIndex {
         let mut mbid_album = 0;
         let mut mbid_artist = 0;
 
-        let filename_id = self.filenames.len() as u32;
-        self.filenames.push(filename.to_string());
-
         for (tag, value) in tags {
             match &tag.to_ascii_lowercase()[..] {
                 // TODO: Replace unwraps here with proper parse error reporting.
@@ -184,15 +205,27 @@ impl BuildMetaIndex {
             }
         }
 
+        let filename_id = self.filenames.len() as u32;
+        let filename_string = filename.to_string();
+
+        if mbid_track == 0 {
+            self.error_missing_field(filename_string, "musicbrainz_trackid");
+            return
+        }
+        if mbid_album == 0 {
+            self.error_missing_field(filename_string, "musicbrainz_albumid");
+            return
+        }
+        if mbid_artist == 0 {
+            self.error_missing_field(filename_string, "musicbrainz_albumartistid");
+            return
+        }
+
         if track_number == None { panic!("tracknumber not set") }
         if title == None { panic!("title not set") }
         if album == None { panic!("album not set") }
         if artist == None { panic!("artist not set") }
         if album_artist == None { panic!("album artist not set") }
-
-        if mbid_track == 0 { panic!("musicbrainz_trackid not set") }
-        if mbid_album == 0 { panic!("musicbrainz_albumid not set") }
-        if mbid_artist == 0 { panic!("musicbrainz_albumartistid not set") }
 
         let track_id = TrackId(mbid_track);
         let album_id = AlbumId(mbid_album);
@@ -218,6 +251,7 @@ impl BuildMetaIndex {
         };
 
         // TODO: Check for consistency if duplicates occur.
+        self.filenames.push(filename_string);
         self.tracks.insert(track_id, track);
         self.albums.insert(album_id, album);
         self.artists.insert(artist_id, artist);
@@ -266,9 +300,9 @@ impl MemoryMetaIndex {
         MemoryMetaIndex { }
     }
 
-    pub fn process<I>(paths: &Mutex<I>)
+    pub fn process<I>(paths: &Mutex<I>, issues: SyncSender<Issue>)
     where I: Iterator, <I as Iterator>::Item: AsRef<Path> {
-        let mut builder = BuildMetaIndex::new();
+        let mut builder = BuildMetaIndex::new(issues);
         loop {
             let opt_path = paths.lock().unwrap().next();
             let path = match opt_path {
@@ -281,12 +315,20 @@ impl MemoryMetaIndex {
             };
             let reader = claxon::FlacReader::open_ext(path.as_ref(), opts).unwrap();
             builder.insert(path.as_ref().to_str().expect("TODO"), &mut reader.tags());
-            println!("{}", path.as_ref().to_str().unwrap());
+            //println!("{}", path.as_ref().to_str().unwrap());
         }
 
+        let mut m = 0;
         for s in builder.strings {
             println!("{}={}", s.1, s.0);
+            m = m.max(s.0.len());
         }
+        println!("max string len: {}", m);
+        println!("indexed {} tracks on {} albums by {} artists",
+          builder.tracks.len(),
+          builder.albums.len(),
+          builder.artists.len(),
+        );
     }
 
     /// Index the given files, and store the index in the target directory.
@@ -300,12 +342,22 @@ impl MemoryMetaIndex {
           <I as IntoIterator>::IntoIter: Send {
         let paths_iterator = paths.into_iter().fuse();
         let mutex = Mutex::new(paths_iterator);
+        let (tx_issue, rx_issue) = sync_channel(16);
 
-        let num_threads = 24;
+        let num_threads = 1; //24;
         crossbeam::scope(|scope| {
             for _ in 0..num_threads {
-                scope.spawn(|| MemoryMetaIndex::process(&mutex));
+                let issues = tx_issue.clone();
+                scope.spawn(|| MemoryMetaIndex::process(&mutex, issues));
             }
+
+            // Print issues live as indexing happens.
+            mem::drop(tx_issue);
+            scope.spawn(|| {
+                for issue in rx_issue {
+                    println!("{:?}", issue);
+                }
+            });
         });
         Ok(MemoryMetaIndex::new())
     }
