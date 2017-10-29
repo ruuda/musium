@@ -12,7 +12,7 @@ extern crate claxon;
 extern crate crossbeam;
 
 use std::ascii::AsciiExt;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::io;
 use std::mem;
@@ -153,7 +153,7 @@ impl fmt::Display for ArtistId {
 struct BuildMetaIndex {
     artists: BTreeMap<ArtistId, Artist>,
     albums: BTreeMap<AlbumId, Album>,
-    tracks: BTreeSet<(TrackId, Track)>,
+    tracks: BTreeMap<TrackId, Track>,
     strings: BTreeMap<String, u32>,
     filenames: Vec<String>,
     issues: SyncSender<Issue>,
@@ -192,7 +192,7 @@ impl BuildMetaIndex {
         BuildMetaIndex {
             artists: BTreeMap::new(),
             albums: BTreeMap::new(),
-            tracks: BTreeSet::new(),
+            tracks: BTreeMap::new(),
             strings: BTreeMap::new(),
             filenames: Vec::new(),
             issues: issues,
@@ -289,6 +289,7 @@ impl BuildMetaIndex {
         }
 
         // TODO: Make a macro for this, this is terrible.
+        let f_disc_number = disc_number.unwrap_or(1);
         let f_track_number = match track_number {
             Some(t) => t,
             None => return self.error_missing_field(filename_string, "tracknumber"),
@@ -314,13 +315,25 @@ impl BuildMetaIndex {
             None => return self.error_missing_field(filename_string, "originaldate"),
         };
 
-        let track_id = TrackId(mbid_track);
+        // The Musicbrainz track id is really a track id, so when the track
+        // occurs on multiple albums, it will be the same -- Musicbrainz track
+        // ids might not be unique across the library. So xor them with the
+        // album id, because the combination must be unique. (Unless for some
+        // reason you have multiple copies of a single album. But just don't do
+        // that then.) But sometimes the same track occurs twice on an album. It
+        // can be a different recording of the same track (e.g. a live
+        // recording), and the Musicbrainz metadata contains no way to
+        // disambiguate. So fasctor in the track and disck number as well.
+        // TODO: This feels like a hack. If we drop the literal Musicbrainz id
+        // anyway, we might as well take something else, such as the md5
+        // signature from the streaminfo. Content-adressable indexing!
+        let track_id = TrackId(mbid_track ^ mbid_album ^ ((f_disc_number as u64) << 8) ^ (f_track_number as u64));
         let album_id = AlbumId(mbid_album);
         let artist_id = ArtistId(mbid_artist);
 
         let track = Track {
             album_id: album_id,
-            disc_number: disc_number.unwrap_or(1),
+            disc_number: f_disc_number,
             track_number: f_track_number,
             title: StringRef(f_title),
             artist: StringRef(f_artist),
@@ -339,7 +352,10 @@ impl BuildMetaIndex {
 
         // TODO: Check for consistency if duplicates occur.
         self.filenames.push(filename_string);
-        self.tracks.insert((track_id, track));
+        if self.tracks.get(&track_id).is_some() {
+            panic!("Duplicate track {}, file {}.", track_id, filename);
+        }
+        self.tracks.insert(track_id, track);
         self.albums.insert(album_id, album);
         self.artists.insert(artist_id, artist);
     }
@@ -408,7 +424,7 @@ impl MemoryMetaIndex {
         for s in builder.strings {
             m = m.max(s.0.len());
         }
-        for &(ref trid, ref track) in &builder.tracks {
+        for (trid, track) in &builder.tracks {
             println!("{}: {}.{} - <title>", trid, track.disc_number, track.track_number);
         }
         println!("max string len: {}", m);
