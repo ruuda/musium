@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Mutex;
 use std::sync::mpsc::{SyncSender, sync_channel};
+use std::u32;
 
 // Stats of my personal music library at this point:
 //
@@ -100,7 +101,7 @@ fn struct_sizes_are_as_expected() {
 #[derive(Copy, Clone, Debug)]
 pub enum IssueDetail {
     FieldMissingError(&'static str),
-    FieldParseFaildError(&'static str),
+    FieldParseFailedError(&'static str),
 }
 
 #[derive(Debug)]
@@ -115,7 +116,7 @@ impl fmt::Display for Issue {
         match self.detail {
             IssueDetail::FieldMissingError(field) =>
                 write!(f, "error: field '{}' missing.", field),
-            IssueDetail::FieldParseFaildError(field) =>
+            IssueDetail::FieldParseFailedError(field) =>
                 write!(f, "error: failed to parse field '{}'.", field),
         }
     }
@@ -140,9 +141,22 @@ fn parse_date(_date_str: &str) -> Option<Date> {
     Some(date)
 }
 
-fn parse_uuid(_uuid: &str) -> Option<u64> {
-    // TODO
-    Some(1)
+fn parse_uuid(uuid: &str) -> Option<u64> {
+    // Validate that the textual format of the UUID is as expected.
+    // E.g. `1070cbb2-ad74-44ce-90a4-7fa1dfd8164e`.
+    if uuid.len() != 36 { return None }
+    if uuid.as_bytes()[8] != b'-' { return None }
+    if uuid.as_bytes()[13] != b'-' { return None }
+    if uuid.as_bytes()[18] != b'-' { return None }
+    if uuid.as_bytes()[23] != b'-' { return None }
+    // We parse the first and last 4 bytes and use these as the 8-byte id.
+    // See the comments above for the motivation for using only 64 of the 128
+    // bits. We take the front and back of the string because it is eary, there
+    // are no dashes to strip. Also, the non-random version bits are in the
+    // middle, so this way we avoid using those.
+    let high = u32::from_str_radix(&uuid[..8], 16).ok()? as u64;
+    let low = u32::from_str_radix(&uuid[28..], 16).ok()? as u64;
+    Some((high << 32) | low)
 }
 
 impl BuildMetaIndex {
@@ -161,6 +175,14 @@ impl BuildMetaIndex {
         let issue = Issue {
             filename: filename,
             detail: IssueDetail::FieldMissingError(field),
+        };
+        self.issues.send(issue).unwrap();
+    }
+
+    fn error_parse_failed(&mut self, filename: String, field: &'static str) {
+        let issue = Issue {
+            filename: filename,
+            detail: IssueDetail::FieldParseFailedError(field),
         };
         self.issues.send(issue).unwrap();
     }
@@ -198,6 +220,9 @@ impl BuildMetaIndex {
         let mut mbid_album = 0;
         let mut mbid_artist = 0;
 
+        let filename_id = self.filenames.len() as u32;
+        let filename_string = filename.to_string();
+
         for (tag, value) in tags {
             match &tag.to_ascii_lowercase()[..] {
                 // TODO: Replace unwraps here with proper parse error reporting.
@@ -206,9 +231,18 @@ impl BuildMetaIndex {
                 "albumartistsort"           => album_artist_for_sort = Some(self.insert_string(value)),
                 "artist"                    => artist = Some(self.insert_string(value)),
                 "discnumber"                => disc_number = Some(u16::from_str(value).unwrap()),
-                "musicbrainz_albumartistid" => mbid_artist = parse_uuid(value).unwrap(),
-                "musicbrainz_albumid"       => mbid_album = parse_uuid(value).unwrap(),
-                "musicbrainz_trackid"       => mbid_track = parse_uuid(value).unwrap(),
+                "musicbrainz_albumartistid" => mbid_artist = match parse_uuid(value) {
+                    Some(id) => id,
+                    None => return self.error_parse_failed(filename_string, "musicbrainz_albumartistid"),
+                },
+                "musicbrainz_albumid"       => mbid_album = match parse_uuid(value) {
+                    Some(id) => id,
+                    None => return self.error_parse_failed(filename_string, "musicbrainz_albumid"),
+                },
+                "musicbrainz_trackid"       => mbid_track = match parse_uuid(value) {
+                    Some(id) => id,
+                    None => return self.error_parse_failed(filename_string, "musicbrainz_trackid"),
+                },
                 "originaldate"              => date = parse_date(value),
                 "title"                     => title = Some(self.insert_string(value)),
                 "tracknumber"               => track_number = Some(u16::from_str(value).unwrap()),
@@ -216,20 +250,14 @@ impl BuildMetaIndex {
             }
         }
 
-        let filename_id = self.filenames.len() as u32;
-        let filename_string = filename.to_string();
-
         if mbid_track == 0 {
-            self.error_missing_field(filename_string, "musicbrainz_trackid");
-            return
+            return self.error_missing_field(filename_string, "musicbrainz_trackid")
         }
         if mbid_album == 0 {
-            self.error_missing_field(filename_string, "musicbrainz_albumid");
-            return
+            return self.error_missing_field(filename_string, "musicbrainz_albumid")
         }
         if mbid_artist == 0 {
-            self.error_missing_field(filename_string, "musicbrainz_albumartistid");
-            return
+            return self.error_missing_field(filename_string, "musicbrainz_albumartistid")
         }
 
         // TODO: Make a macro for this, this is terrible.
