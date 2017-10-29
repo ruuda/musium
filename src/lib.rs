@@ -63,14 +63,22 @@ struct ArtistId(u64);
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct StringRef(u32);
 
+#[repr(C, packed)]
 struct Track {
     album_id: AlbumId,
-    disc_number: u16,
-    track_number: u16,
     title: StringRef,
     artist: StringRef,
-    duration_seconds: u32,
     filename: StringRef,
+    // Using u16 for duration gives us a little over 18 hours as maximum
+    // duration; using u8 for track number gives us at most 255 tracks. This is
+    // perhaps a bit limiting, but it does allow us to squeeze a `(TrackId,
+    // Track)` into half a cache line, so they never straddle cache line
+    // boundaries. And of course more of them fit in the cache. If range ever
+    // becomes a problem, we could use some of the disc number bits to extend
+    // the duration range or track number range.
+    duration_seconds: u16,
+    disc_number: u8,
+    track_number: u8,
 }
 
 struct Date {
@@ -93,9 +101,10 @@ struct Artist {
 #[test]
 fn struct_sizes_are_as_expected() {
     use std::mem;
-    assert_eq!(mem::size_of::<Track>(), 32);
+    assert_eq!(mem::size_of::<Track>(), 24);
     assert_eq!(mem::size_of::<Album>(), 16);
     assert_eq!(mem::size_of::<Artist>(), 8);
+    assert_eq!(mem::size_of::<(TrackId, Track)>(), 32);
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -248,7 +257,7 @@ impl BuildMetaIndex {
                 "albumartist"               => album_artist = Some(self.insert_string(value)),
                 "albumartistsort"           => album_artist_for_sort = Some(self.insert_string(value)),
                 "artist"                    => artist = Some(self.insert_string(value)),
-                "discnumber"                => disc_number = Some(u16::from_str(value).unwrap()),
+                "discnumber"                => disc_number = Some(u8::from_str(value).unwrap()),
                 "musicbrainz_albumartistid" => mbid_artist = match parse_uuid(value) {
                     Some(id) => id,
                     None => return self.error_parse_failed(filename_string, "musicbrainz_albumartistid"),
@@ -263,7 +272,7 @@ impl BuildMetaIndex {
                 },
                 "originaldate"              => date = parse_date(value),
                 "title"                     => title = Some(self.insert_string(value)),
-                "tracknumber"               => track_number = Some(u16::from_str(value).unwrap()),
+                "tracknumber"               => track_number = Some(u8::from_str(value).unwrap()),
                 _ => {}
             }
         }
