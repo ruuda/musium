@@ -13,6 +13,7 @@ extern crate crossbeam;
 
 use std::ascii::AsciiExt;
 use std::collections::BTreeMap;
+use std::fmt;
 use std::io;
 use std::mem;
 use std::path::{Path, PathBuf};
@@ -100,13 +101,24 @@ fn struct_sizes_are_as_expected() {
 pub enum IssueDetail {
     FieldMissingError(&'static str),
     FieldParseFaildError(&'static str),
-    DateFallbackWarning,
 }
 
 #[derive(Debug)]
 pub struct Issue {
     pub filename: String,
     pub detail: IssueDetail,
+}
+
+impl fmt::Display for Issue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}: ", self.filename)?;
+        match self.detail {
+            IssueDetail::FieldMissingError(field) =>
+                write!(f, "error: field '{}' missing.", field),
+            IssueDetail::FieldParseFaildError(field) =>
+                write!(f, "error: failed to parse field '{}'.", field),
+        }
+    }
 }
 
 struct BuildMetaIndex {
@@ -149,14 +161,6 @@ impl BuildMetaIndex {
         let issue = Issue {
             filename: filename,
             detail: IssueDetail::FieldMissingError(field),
-        };
-        self.issues.send(issue).unwrap();
-    }
-
-    fn warn_date_fallback(&mut self, filename: String) {
-        let issue = Issue {
-            filename: filename,
-            detail: IssueDetail::DateFallbackWarning,
         };
         self.issues.send(issue).unwrap();
     }
@@ -382,7 +386,7 @@ impl MemoryMetaIndex {
             mem::drop(tx_issue);
             scope.spawn(|| {
                 for issue in rx_issue {
-                    println!("{:?}", issue);
+                    println!("{}", issue);
                 }
             });
         });
