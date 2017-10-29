@@ -12,7 +12,7 @@ extern crate claxon;
 extern crate crossbeam;
 
 use std::ascii::AsciiExt;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::io;
 use std::mem;
@@ -64,6 +64,7 @@ struct ArtistId(u64);
 struct StringRef(u32);
 
 #[repr(C, packed)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct Track {
     album_id: AlbumId,
     title: StringRef,
@@ -152,7 +153,7 @@ impl fmt::Display for ArtistId {
 struct BuildMetaIndex {
     artists: BTreeMap<ArtistId, Artist>,
     albums: BTreeMap<AlbumId, Album>,
-    tracks: BTreeMap<TrackId, Track>,
+    tracks: BTreeSet<(TrackId, Track)>,
     strings: BTreeMap<String, u32>,
     filenames: Vec<String>,
     issues: SyncSender<Issue>,
@@ -191,7 +192,7 @@ impl BuildMetaIndex {
         BuildMetaIndex {
             artists: BTreeMap::new(),
             albums: BTreeMap::new(),
-            tracks: BTreeMap::new(),
+            tracks: BTreeSet::new(),
             strings: BTreeMap::new(),
             filenames: Vec::new(),
             issues: issues,
@@ -338,7 +339,7 @@ impl BuildMetaIndex {
 
         // TODO: Check for consistency if duplicates occur.
         self.filenames.push(filename_string);
-        self.tracks.insert(track_id, track);
+        self.tracks.insert((track_id, track));
         self.albums.insert(album_id, album);
         self.artists.insert(artist_id, artist);
     }
@@ -401,15 +402,13 @@ impl MemoryMetaIndex {
             };
             let reader = claxon::FlacReader::open_ext(path.as_ref(), opts).unwrap();
             builder.insert(path.as_ref().to_str().expect("TODO"), &mut reader.tags());
-            //println!("{}", path.as_ref().to_str().unwrap());
         }
 
         let mut m = 0;
         for s in builder.strings {
-            println!("{}={}", s.1, s.0);
             m = m.max(s.0.len());
         }
-        for (trid, track) in &builder.tracks {
+        for &(ref trid, ref track) in &builder.tracks {
             println!("{}: {}.{} - <title>", trid, track.disc_number, track.track_number);
         }
         println!("max string len: {}", m);
