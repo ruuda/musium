@@ -187,6 +187,35 @@ fn parse_uuid(uuid: &str) -> Option<u64> {
     Some((high << 32) | low)
 }
 
+fn get_track_id(album_artist_id: ArtistId,
+                album_id: AlbumId,
+                disc_number: u8,
+                track_number: u8)
+                -> TrackId {
+    // Take the most significant bits from the album artist, such that when we
+    // sort by track id, all tracks by the same artist are adjacent. This is
+    // good for locality of reference.
+    let high = album_artist_id.0 & 0xffff_ffff_0000_0000;
+
+    // Then take the bits from the album id, so all the tracks within one album
+    // are adjacent. This is desirable, because two tracks fit in a cache line,
+    // halving the memory access cost of looking up an entire album. It also
+    // makes memory access more predictable. Finally, if the 48 most significant
+    // bits uniquely identify the album (which we assume, TODO work out stats),
+    // then all tracks are guaranteed to be adjacent, and we can use an
+    // efficient range query to find them.
+    let mid = album_id.0 & 0x0000_0000_ffff_00000;
+
+    // Finally, within an album the disc number and track number should uniquely
+    // identify the track.
+    let low = ((disc_number as u64) << 8) | (track_number as u64);
+
+    // TODO: Actually I can apply the same trick for the album id, take the
+    // artist id as prefix. And then I can collapse all data structures to
+    // remove the redundancies.
+    TrackId(high | mid | low)
+}
+
 impl BuildMetaIndex {
     pub fn new(issues: SyncSender<Issue>) -> BuildMetaIndex {
         BuildMetaIndex {
@@ -315,21 +344,9 @@ impl BuildMetaIndex {
             None => return self.error_missing_field(filename_string, "originaldate"),
         };
 
-        // The Musicbrainz track id is really a track id, so when the track
-        // occurs on multiple albums, it will be the same -- Musicbrainz track
-        // ids might not be unique across the library. So xor them with the
-        // album id, because the combination must be unique. (Unless for some
-        // reason you have multiple copies of a single album. But just don't do
-        // that then.) But sometimes the same track occurs twice on an album. It
-        // can be a different recording of the same track (e.g. a live
-        // recording), and the Musicbrainz metadata contains no way to
-        // disambiguate. So fasctor in the track and disck number as well.
-        // TODO: This feels like a hack. If we drop the literal Musicbrainz id
-        // anyway, we might as well take something else, such as the md5
-        // signature from the streaminfo. Content-adressable indexing!
-        let track_id = TrackId(mbid_track ^ mbid_album ^ ((f_disc_number as u64) << 8) ^ (f_track_number as u64));
         let album_id = AlbumId(mbid_album);
         let artist_id = ArtistId(mbid_artist);
+        let track_id = get_track_id(artist_id, album_id, f_disc_number, f_track_number);
 
         let track = Track {
             album_id: album_id,
