@@ -10,9 +10,10 @@
 
 extern crate claxon;
 extern crate crossbeam;
+extern crate unicode_normalization;
 
 use std::ascii::AsciiExt;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::io;
 use std::mem;
@@ -21,6 +22,8 @@ use std::str::FromStr;
 use std::sync::Mutex;
 use std::sync::mpsc::{SyncSender, sync_channel};
 use std::u32;
+
+use unicode_normalization::UnicodeNormalization;
 
 // Stats of my personal music library at this point:
 //
@@ -163,8 +166,15 @@ struct BuildMetaIndex {
     artists: BTreeMap<ArtistId, Artist>,
     albums: BTreeMap<AlbumId, Album>,
     tracks: BTreeMap<TrackId, Track>,
-    strings: BTreeMap<String, u32>,
+    strings_to_id: BTreeMap<String, u32>,
+    strings: Vec<String>,
     filenames: Vec<String>,
+    words_track_title: BTreeSet<(String, TrackId)>,
+    words_album_title: BTreeSet<(String, AlbumId)>,
+    words_artist: BTreeSet<(String, ArtistId)>,
+    // When the track artist differs from the album artist, the words that occur
+    // in the track artist but not in the album artist, are included here.
+    words_track_artist: BTreeSet<(String, TrackId)>,
     issues: SyncSender<Issue>,
 }
 
@@ -217,14 +227,51 @@ fn get_track_id(album_id: AlbumId,
     TrackId(high | mid | low)
 }
 
+/// Fills the vector with the words in the string in normalized form.
+///
+/// This first normalizes words to Unicode Normalization Form KD, which
+/// decomposes characters with accents into the character and the accent
+/// separately. The "KD" form, as opposed to the "D" form, also replaces more
+/// things that have the same semantic meaning, such as replacing superscripts
+/// with normal digits. Finally (not part of the KD normalization), everything
+/// is lowercased, and accents, some punctuation, and single-character words are
+/// removed.
+fn normalize_words(title: &str, dest: &mut Vec<String>) {
+    for original_word in title.split_whitespace() {
+        // We assume that in the majority of the cases, the transformations
+        // below do not change the number of bytes.
+        let mut word = String::with_capacity(original_word.len());
+        let mut num_chars = 0;
+
+        // Iterate over the "Unicode Normalization Form KD" characters.
+        for ch_original_case in original_word.nfkd() {
+            for ch in ch_original_case.to_lowercase() {
+                word.push(ch);
+                num_chars += 1;
+            }
+        }
+
+        // TODO: But if there is only a single word, then I do want to include
+        // single-character words.
+        if num_chars > 1 {
+            dest.push(word);
+        }
+    }
+}
+
 impl BuildMetaIndex {
     pub fn new(issues: SyncSender<Issue>) -> BuildMetaIndex {
         BuildMetaIndex {
             artists: BTreeMap::new(),
             albums: BTreeMap::new(),
             tracks: BTreeMap::new(),
-            strings: BTreeMap::new(),
+            strings: Vec::new(),
+            strings_to_id: BTreeMap::new(),
             filenames: Vec::new(),
+            words_track_title: BTreeSet::new(),
+            words_album_title: BTreeSet::new(),
+            words_artist: BTreeSet::new(),
+            words_track_artist: BTreeSet::new(),
             issues: issues,
         }
     }
@@ -259,8 +306,10 @@ impl BuildMetaIndex {
         // evidence: on my personal library, about 22% of the strings need to be
         // inserted (12.6k out of 57.8k total strings).
         let next_id = self.strings.len() as u32;
-        if let Some(id) = self.strings.get(string) { return *id }
-        self.strings.insert(string.to_string(), next_id);
+        // TODO: Unicode-normalize the string.
+        if let Some(id) = self.strings_to_id.get(string) { return *id }
+        self.strings_to_id.insert(string.to_string(), next_id);
+        self.strings.push(string.to_string());
         next_id
     }
 
@@ -345,9 +394,18 @@ impl BuildMetaIndex {
             None => return self.error_missing_field(filename_string, "originaldate"),
         };
 
-        let album_id = AlbumId(mbid_album);
         let artist_id = ArtistId(mbid_artist);
+        let album_id = AlbumId(mbid_album);
         let track_id = get_track_id(album_id, f_disc_number, f_track_number);
+
+        let mut words = Vec::new();
+        normalize_words(&self.strings[f_title as usize], &mut words);
+        for w in words.drain(..) { self.words_track_title.insert((w, track_id)); }
+        normalize_words(&self.strings[f_album as usize], &mut words);
+        for w in words.drain(..) { self.words_album_title.insert((w, album_id)); }
+        normalize_words(&self.strings[f_artist as usize], &mut words);
+        for w in words.drain(..) { self.words_artist.insert((w, artist_id)); }
+        // TODO: Also add track artist words.
 
         let track = Track {
             album_id: album_id,
@@ -439,11 +497,14 @@ impl MemoryMetaIndex {
         }
 
         let mut m = 0;
-        for s in builder.strings {
-            m = m.max(s.0.len());
+        for s in &builder.strings {
+            m = m.max(s.len());
         }
-        for (trid, track) in &builder.tracks {
+        /*for (trid, track) in &builder.tracks {
             println!("{}: {}.{} - <title>", trid, track.disc_number, track.track_number);
+        }*/
+        for &(ref w, trid) in &builder.words_track_title {
+            println!("{} -> {}", w, trid);
         }
         println!("max string len: {}", m);
         println!("indexed {} tracks on {} albums by {} artists",

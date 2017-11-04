@@ -4,6 +4,7 @@ version = "0.0.0"
 authors = ["Ruud van Asseldonk <dev@veniogames.com>"]
 
 [dependencies]
-claxon    = { path = "file://../../claxon" }
-crossbeam = "0.3"
-walkdir   = "1.0"
+claxon                = { path = "file://../../claxon" }
+crossbeam             = "0.3"
+unicode-normalization = "0.1.5"
+walkdir               = "1.0"
