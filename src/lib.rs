@@ -227,6 +227,16 @@ fn get_track_id(album_id: AlbumId,
     TrackId(high | mid | low)
 }
 
+fn push_word(dest: &mut Vec<String>, word: &mut String) {
+    if word.len() == 0 {
+        return
+    }
+
+    let mut w = String::new();
+    mem::swap(&mut w, word);
+    dest.push(w);
+}
+
 /// Fills the vector with the words in the string in normalized form.
 ///
 /// This first normalizes words to Unicode Normalization Form KD, which
@@ -237,85 +247,80 @@ fn get_track_id(album_id: AlbumId,
 /// is lowercased, and accents, some punctuation, and single-character words are
 /// removed.
 fn normalize_words(title: &str, dest: &mut Vec<String>) {
-    for original_word in title.split_whitespace() {
-        // We assume that in the majority of the cases, the transformations
-        // below do not change the number of bytes.
-        let mut word = String::with_capacity(original_word.len());
-        let mut num_chars = 0;
+    // We assume that in the majority of the cases, the transformations
+    // below do not change the number of bytes.
+    let mut word = String::new();
+    let mut num_dots = 0;
 
-        // Iterate over the "Unicode Normalization Form KD" characters.
-        for ch_original_case in original_word.nfkd() {
-            for ch in ch_original_case.to_lowercase() {
-                // Drop some punctuation characters and accents. Deadmau5 can go
-                // and use some normal titles next time.
-                let drop = "@\\“”‘’'\"()[]<>«».,?∞✝❦\u{300}\u{301}\u{302}\u{303}\u{307}\u{308}\u{327}";
-                let keep = "$€#*=_'&/-:!%+∆";
-                let add_ch = match ch {
-                    _ if drop.contains(ch) => continue,
-                    _ if keep.contains(ch) => ch,
-                    // Normalize a few characters to more common ones.
-                    '°' => 'o', // Sometimes used in "n°", map to "no".
-                    '♯' => '#',
-                    'ø' => 'o',
-                    '\u{2010}' => '-', // A hyphen; use the ascii one instead.
-                    'æ' => {
-                        word.push('a');
-                        word.push('e');
-                        num_chars += 2;
-                        continue;
-                    }
-                    'œ' => {
-                        word.push('o');
-                        word.push('e');
-                        num_chars += 2;
-                        continue;
-                    }
-                    _ if ch.is_alphanumeric() => ch,
-                    _ => panic!("Unknown character {} ({}) in title: {}", ch, ch.escape_unicode(), title),
-                };
-                word.push(add_ch);
-                num_chars += 1;
+    // Drop some punctuation characters and accents. We remove punctuation that
+    // is unlikely to contain a lot of information about the title. (Deadmau5
+    // can go and use some normal titles next time.) We remove accents to make
+    // searching easier without having to type the exact accent.
+    let drop = "“”‘’'\"()[]«»,❦\u{300}\u{301}\u{302}\u{303}\u{307}\u{308}\u{327}";
+    let keep = "$€#&=*%∆";
+
+    // Cut words at the following punctuation characters, but still include them
+    // as a word of their own. This ensures that words are broken up properly,
+    // but it still allows searching for this punctuation. This is important,
+    // because some artists are under the illusion that it is cool to use
+    // punctuation as part of a name.
+    let cut = "/\\@_+-:!?<>";
+
+    // Loop over the characters, normalized and lowercased.
+    for ch in title.nfkd().flat_map(|nch| nch.to_lowercase()) {
+        match ch {
+            // Split words at whitespace or at the cut characters.
+            _ if ch.is_whitespace() => {
+                push_word(dest, &mut word);
             }
-        }
-
-        // Cut off trailing punctuation characters that are not likely to be
-        // part of a name at the end of a word, but which may occur inside a
-        // word, because some people are under the illusion that it is cool to
-        // use punctuation as part of a name.
-        let drop_at_end = b":!'+-";
-        let mut should_drop = true;
-        loop {
-            match word.as_bytes().last() {
-                Some(ch) if drop_at_end.contains(ch) => {}
-                _ => break
-            };
-            word.pop();
-        }
-
-        // In some cases, a word consists of only punctuation. In those cases we
-        // might want to keep it.
-        if num_chars == 0 {
-            match original_word {
-                "..." => dest.push("...".to_string()),
-                "∞" => dest.push("infinity".to_string()),
-                // I do want to be able to find my Justice albums with a normal
-                // keyboard.
-                "✝" => dest.push("cross".to_string()),
-                _ => {}
+            _ if cut.contains(ch) => {
+                push_word(dest, &mut word);
+                dest.push(ch.to_string());
             }
+            // The period is special: generally we don't want to include it as a
+            // word, and simply ignore it altogether. (E.g. "S.P.Y" turns into
+            // "spy".) But the ellipisis (...) we do want to keep. There are
+            // even tracks titled "...". So we need to detect the ellipsis.
+            '.' => {
+                num_dots += 1;
+                if num_dots == 3 {
+                    dest.push("...".to_string());
+                    word = String::new();
+                }
+                continue
+            }
+            // Normalize a few characters to more common ones.
+            // Sometimes used in "n°", map to "no".
+            '°' => word.push('o'),
+            '♯' => word.push('#'),
+            'ø' => word.push('o'),
+            'æ' => word.push_str("ae"),
+            'œ' => word.push_str("oe"),
+            // A hyphen, use the ascii one instead.
+            '\u{2010}' => word.push('-'),
+            // I do want to be able to find my Justice albums with a normal
+            // keyboard.
+            '✝' => {
+                push_word(dest, &mut word);
+                dest.push("cross".to_string());
+            }
+            '∞' => {
+                push_word(dest, &mut word);
+                dest.push("infinity".to_string());
+            }
+            // Drop characters that we don't care for, keep characters that we
+            // definitely care for.
+            _ if drop.contains(ch) => {}
+            _ if keep.contains(ch) || ch.is_alphanumeric() => word.push(ch),
+            _ => panic!("Unknown character {} ({}) in title: {}", ch, ch.escape_unicode(), title),
         }
-        // TODO: When the word contains a dash, add both the word including
-        // dash, as well as the parts, to the collection. Same for / and \, and
-        // maybe _ and @. Or maybe split the dash only when there are more than
-        // 2 characters before or after. Maybe also split on : (for finding
-        // "Nu:Tone").
 
-        // TODO: But if there is only a single word, then I do want to include
-        // single-character words.
-        if num_chars > 1 {
-            dest.push(word);
-        }
+        // Reset the ellipsis counter after every non-period character.
+        num_dots = 0;
     }
+
+    // Push the final word.
+    push_word(dest, &mut word);
 }
 
 impl BuildMetaIndex {
