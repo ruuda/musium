@@ -246,10 +246,69 @@ fn normalize_words(title: &str, dest: &mut Vec<String>) {
         // Iterate over the "Unicode Normalization Form KD" characters.
         for ch_original_case in original_word.nfkd() {
             for ch in ch_original_case.to_lowercase() {
-                word.push(ch);
+                // Drop some punctuation characters and accents. Deadmau5 can go
+                // and use some normal titles next time.
+                let drop = "@\\“”‘’'\"()[]<>«».,?∞✝❦\u{300}\u{301}\u{302}\u{303}\u{307}\u{308}\u{327}";
+                let keep = "$€#*=_'&/-:!%+∆";
+                let add_ch = match ch {
+                    _ if drop.contains(ch) => continue,
+                    _ if keep.contains(ch) => ch,
+                    // Normalize a few characters to more common ones.
+                    '°' => 'o', // Sometimes used in "n°", map to "no".
+                    '♯' => '#',
+                    'ø' => 'o',
+                    '\u{2010}' => '-', // A hyphen; use the ascii one instead.
+                    'æ' => {
+                        word.push('a');
+                        word.push('e');
+                        num_chars += 2;
+                        continue;
+                    }
+                    'œ' => {
+                        word.push('o');
+                        word.push('e');
+                        num_chars += 2;
+                        continue;
+                    }
+                    _ if ch.is_alphanumeric() => ch,
+                    _ => panic!("Unknown character {} ({}) in title: {}", ch, ch.escape_unicode(), title),
+                };
+                word.push(add_ch);
                 num_chars += 1;
             }
         }
+
+        // Cut off trailing punctuation characters that are not likely to be
+        // part of a name at the end of a word, but which may occur inside a
+        // word, because some people are under the illusion that it is cool to
+        // use punctuation as part of a name.
+        let drop_at_end = b":!'+-";
+        let mut should_drop = true;
+        loop {
+            match word.as_bytes().last() {
+                Some(ch) if drop_at_end.contains(ch) => {}
+                _ => break
+            };
+            word.pop();
+        }
+
+        // In some cases, a word consists of only punctuation. In those cases we
+        // might want to keep it.
+        if num_chars == 0 {
+            match original_word {
+                "..." => dest.push("...".to_string()),
+                "∞" => dest.push("infinity".to_string()),
+                // I do want to be able to find my Justice albums with a normal
+                // keyboard.
+                "✝" => dest.push("cross".to_string()),
+                _ => {}
+            }
+        }
+        // TODO: When the word contains a dash, add both the word including
+        // dash, as well as the parts, to the collection. Same for / and \, and
+        // maybe _ and @. Or maybe split the dash only when there are more than
+        // 2 characters before or after. Maybe also split on : (for finding
+        // "Nu:Tone").
 
         // TODO: But if there is only a single word, then I do want to include
         // single-character words.
@@ -503,8 +562,12 @@ impl MemoryMetaIndex {
         /*for (trid, track) in &builder.tracks {
             println!("{}: {}.{} - <title>", trid, track.disc_number, track.track_number);
         }*/
+        let mut prev = "".to_string();
         for &(ref w, trid) in &builder.words_track_title {
-            println!("{} -> {}", w, trid);
+            if w != &prev {
+                println!("{}", w);
+                prev = w.to_string();
+            }
         }
         println!("max string len: {}", m);
         println!("indexed {} tracks on {} albums by {} artists",
