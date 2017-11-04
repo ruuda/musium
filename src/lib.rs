@@ -171,7 +171,7 @@ struct BuildMetaIndex {
     filenames: Vec<String>,
     words_track_title: BTreeSet<(String, TrackId)>,
     words_album_title: BTreeSet<(String, AlbumId)>,
-    words_artist: BTreeSet<(String, ArtistId)>,
+    words_album_artist: BTreeSet<(String, ArtistId)>,
     // When the track artist differs from the album artist, the words that occur
     // in the track artist but not in the album artist, are included here.
     words_track_artist: BTreeSet<(String, TrackId)>,
@@ -334,7 +334,7 @@ impl BuildMetaIndex {
             filenames: Vec::new(),
             words_track_title: BTreeSet::new(),
             words_album_title: BTreeSet::new(),
-            words_artist: BTreeSet::new(),
+            words_album_artist: BTreeSet::new(),
             words_track_artist: BTreeSet::new(),
             issues: issues,
         }
@@ -441,7 +441,7 @@ impl BuildMetaIndex {
             Some(t) => t,
             None => return self.error_missing_field(filename_string, "title"),
         };
-        let f_artist = match artist {
+        let f_track_artist = match artist {
             Some(a) => a,
             None => return self.error_missing_field(filename_string, "artist"),
         };
@@ -462,21 +462,36 @@ impl BuildMetaIndex {
         let album_id = AlbumId(mbid_album);
         let track_id = get_track_id(album_id, f_disc_number, f_track_number);
 
+        // Split the title, album, and album artist, on words, and add those to
+        // the indexes, to allow finding the track/album/artist later by word.
         let mut words = Vec::new();
         normalize_words(&self.strings[f_title as usize], &mut words);
         for w in words.drain(..) { self.words_track_title.insert((w, track_id)); }
         normalize_words(&self.strings[f_album as usize], &mut words);
         for w in words.drain(..) { self.words_album_title.insert((w, album_id)); }
-        normalize_words(&self.strings[f_artist as usize], &mut words);
-        for w in words.drain(..) { self.words_artist.insert((w, artist_id)); }
-        // TODO: Also add track artist words.
+        normalize_words(&self.strings[f_album_artist as usize], &mut words);
+        for w in words.drain(..) { self.words_album_artist.insert((w, artist_id)); }
+
+        // If the track artist differs from the album artist, add words for the
+        // track artist, but only for the words that do not occur in the album
+        // artist. This allows looking up e.g. a "feat. artist", without
+        // polluting the index with every track by that artist.
+        if f_track_artist != f_album_artist {
+            normalize_words(&self.strings[f_track_artist as usize], &mut words);
+            for w in words.drain(..) {
+                let pair = (w, artist_id);
+                if !self.words_album_artist.contains(&pair) {
+                    self.words_track_artist.insert((pair.0, track_id));
+                }
+            }
+        }
 
         let track = Track {
             album_id: album_id,
             disc_number: f_disc_number,
             track_number: f_track_number,
             title: StringRef(f_title),
-            artist: StringRef(f_artist),
+            artist: StringRef(f_track_artist),
             duration_seconds: 1, // TODO: Get from streaminfo.
             filename: StringRef(filename_id),
         };
@@ -568,7 +583,7 @@ impl MemoryMetaIndex {
             println!("{}: {}.{} - <title>", trid, track.disc_number, track.track_number);
         }*/
         let mut prev = "".to_string();
-        for &(ref w, trid) in &builder.words_track_title {
+        for &(ref w, _trid) in &builder.words_track_artist {
             if w != &prev {
                 println!("{}", w);
                 prev = w.to_string();
