@@ -581,11 +581,41 @@ impl MemoryMetaIndex {
         }
         println!("max string len: {}", m);
         println!("word counts: {} track, {} album, {} artist, {} feat. artist",
-            builder.words_track_title.len(),
+            builder.words_track_title.iter().map(|p| p.0.clone()).collect::<BTreeSet<String>>().len(),
             builder.words_album_title.len(),
             builder.words_album_artist.len(),
             builder.words_track_artist.len(),
         );
+        let bytes: BTreeSet<u8> = builder.words_track_title
+            .iter()
+            .map(|&(ref w, _)| w.as_bytes()[0])
+            .collect();
+        println!("{} unique first bytes ({:?})", bytes.len(), bytes);
+        let mut count_by_first = BTreeMap::new();
+        for &(ref w, _) in &builder.words_track_title {
+            let bs = w.as_bytes();
+            let map = count_by_first.entry(bs[0]).or_insert(BTreeSet::new());
+            if bs.len() > 1 {
+                map.insert(bs[1]);
+            }
+        }
+        let mut lens = Vec::new();
+        for (w, ref m) in count_by_first {
+            println!("{:02x}: {}", w, m.len());
+            lens.push(m.len());
+        }
+        lens.sort();
+        println!("Min, median, max len: {} {} {}", lens[0], lens[lens.len() / 2], lens[lens.len() - 1]);
+        lens.clear();
+        let mut lens: Vec<usize> = builder.words_track_title
+            .iter()
+            .map(|&(ref w, _)| w.clone())
+            .collect::<BTreeSet<String>>()
+            .iter()
+            .map(|w| w.len())
+            .collect();
+        lens.sort();
+        println!("Min, median, max word len: {} {} {}", lens[0], lens[lens.len() / 2], lens[lens.len() - 1]);
         println!("indexed {} tracks on {} albums by {} artists",
             builder.tracks.len(),
             builder.albums.len(),

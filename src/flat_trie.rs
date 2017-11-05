@@ -1,6 +1,6 @@
 
-// Some stats: on the trie of words that occur in track titles, for my personal
-// collection, this trie contains roughly 8k unique words. There are 52 distinct
+// Some stats: on the index of words that occur in track titles, for my personal
+// collection, the index contains roughly 8k unique words. There are 52 distinct
 // first bytes of those words. For the number of distinct second bytes (given
 // the first), the minimum is 0 (a 1-character word), the median is 8, and the
 // maximum is 28. However, counting like this is not entirely fair, because the
@@ -29,8 +29,34 @@
 //
 // We could take the 256-entry array to the extreme, and make a 256-ary tree.
 // At that point, the number of misses would be proportional to the length of
-// the query, not to the number of words in the index.  However, that would
-// waste a *lot* of memory, which puts pressure on the cache.
+// the query, not to the number of words in the index. However, that would waste
+// a *lot* of memory, which puts pressure on the cache.
+//
+// Would something proportional to the size of the query actually be
+// advantageous? The min, median, and max word length, where the median is
+// weighed by the number of occurrences (so "the" is counted once for every
+// track title it occurs in), are 1, 4, and 31 bytes. Although the median in
+// this case is likely skewed by short common words such as "the" and "in". When
+// looking at unique words only, the median length is 6 bytes.
+//
+// We could do a trie-like structure and have something that incurs 5 or 6
+// misses in the median case, but for something proportional to the query size,
+// we might be unlucky and need more than 9 misses. Suddenly the sorted array
+// with inline strings sounds very attractive, because it is so simple, and it
+// has worst-case guarantees.
+
+#[repr(C, packed)]
+struct Entry {
+    /// Offset of the data associated with this entry.
+    ///
+    /// A 0 indicates that the key did not fit in this entry, and it continues
+    /// in the next entry. The actual data offset is stored in the last
+    /// non-continuation entry.
+    data_ptr: u32,
+
+    /// The key, padded at the end with zeros if it is shorter than 12 bytes.
+    key: [u8; 12],
+}
 
 #[repr(C, packed)]
 struct FlatTrieNode {
@@ -72,6 +98,12 @@ struct FlatTrieEndNode {
 mod test {
     use super::FlatTrieNode;
     use std::mem;
+
+    #[test]
+    fn entry_has_expected_size() {
+        // Four `Entry` instances should fit one cache line exactly.
+        assert_eq!(mem::size_of::<Entry>(), 16);
+    }
 
     #[test]
     fn flat_trie_node_has_expected_size() {
