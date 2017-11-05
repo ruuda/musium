@@ -579,21 +579,17 @@ impl MemoryMetaIndex {
         for s in &builder.strings {
             m = m.max(s.len());
         }
-        /*for (trid, track) in &builder.tracks {
-            println!("{}: {}.{} - <title>", trid, track.disc_number, track.track_number);
-        }*/
-        let mut prev = "".to_string();
-        for &(ref w, _trid) in &builder.words_track_artist {
-            if w != &prev {
-                println!("{}", w);
-                prev = w.to_string();
-            }
-        }
         println!("max string len: {}", m);
+        println!("word counts: {} track, {} album, {} artist, {} feat. artist",
+            builder.words_track_title.len(),
+            builder.words_album_title.len(),
+            builder.words_album_artist.len(),
+            builder.words_track_artist.len(),
+        );
         println!("indexed {} tracks on {} albums by {} artists",
-          builder.tracks.len(),
-          builder.albums.len(),
-          builder.artists.len(),
+            builder.tracks.len(),
+            builder.albums.len(),
+            builder.artists.len(),
         );
     }
 
