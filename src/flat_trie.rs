@@ -44,6 +44,18 @@
 // we might be unlucky and need more than 9 misses. Suddenly the sorted array
 // with inline strings sounds very attractive, because it is so simple, and it
 // has worst-case guarantees.
+//
+// Idea (sorry for the stream of thoughts): don't use a trie, use a regular
+// tree! I want a sorted map/dictionary, a tree is the canonical implementatin
+// of that. And here too, the string can be inlined. For a binary search tree,
+// that would have the same number of cache misses as a binary search. But now
+// for the killer trick: the tree does not need to be binary. With 7-byte
+// strings we could store 4 key/value pairs per cache line, plus 5 child
+// pointers. So instead of loading log2(8000) cache lines, we need to load only
+// log5(8000) => 5 or 6 cache lines. Or for 12-byte strings, have 4 children,
+// and 6 or 7 cache misses. Minus the root which is likely hot, we are now down
+// to 4-6 misses, with efficient memory usage (4 + 4/n additional bytes per
+// string, compared to the array, but nowhere near the waste of a 256-ary trie).
 
 #[repr(C, packed)]
 struct Entry {
