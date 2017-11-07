@@ -56,6 +56,56 @@
 // and 6 or 7 cache misses. Minus the root which is likely hot, we are now down
 // to 4-6 misses, with efficient memory usage (4 + 4/n additional bytes per
 // string, compared to the array, but nowhere near the waste of a 256-ary trie).
+//
+// Some more statistics: with all words combined from track title, album title,
+// album artist, and track artist, I have 9222 unique words. Length percentiles:
+// p0: 1, p50: 6, p75: 8, p90: 9, p100: 31. When I discard 90% of the input data
+// (of the raw words, which may contain duplicates), I get 2135 unique words.
+// When discarding 50% of the input data, I get 6358 unique words. Based on
+// this, I am not entirely comfortable assuming that word indexes would fit in
+// 16 bits.
+//
+// We now need to make a choice: store data in the leaf nodes only, or also in
+// the internal nodes? For a branching factor of 5, strings in the internal
+// nodes take up up, 20% of the strings, so this would require 20% more memory.
+// But in exchange, we don't need to store data pointers in internal nodes, so
+// strings can be longer (11 bytes, as opposed to 7 bytes if they also need to
+// store a data pointer). Besides, branching factors of 4 and 5 could both be
+// viable. So the options:
+//
+// * Data in internal nodes, branching factor 4. 3 strings of 12 bytes in the
+//   internal nodes. 3 x 4 bytes data pointers, and 4 x 4 bytes child pointers,
+//   fills one cache line. Leaves could store 4 12-byte strings.
+//
+//   Solving `4p + 3q = 9200, p = q * (\sum_{n=1}^\infty (1/4)^n)` yields
+//   approximately p = 708, q = 2123, so we would need 2811 cache lines in
+//   total. (Assuming strings longer than 12 bytes are sufficiently rare.)
+//
+//   In the worst case we would access 7 cache lines to query a given string,
+//   but in 25% of the cases we definitely do better. In the best case we would
+//   access 1 cache line.
+//
+// * Internal nodes duplicate strings, branching factor 5. 4 strings of 11 bytes
+//   in the internal nodes, 4 strings of 12 bytes in the leaves.
+//
+//   Solving `q = 9200/4, p = q * (\sum_{n=1}^\infty (1/5)^n)` yields p = 575,
+//   q = 2300, so we would need 2875 cache lines. (Assuming again strings longer
+//   than 11 bytes are negligible ... they might not be, 483 of 9222 words were
+//   at least 11 bytes, 252 were at least 12 bytes.
+//
+//   In the worst case we would access 6 cache lines. In the best cache we would
+//   access 5 cache lines.
+//
+// My conclusion: let's try duplicating the strings in the nodes. By the way, we
+// really do need to deal with the long string edge case: truncated strings are
+// not necessarily unique. All of these occur in my corpus:
+//
+// * conversation
+// * conversationalist
+// * conversations
+// * shapeshifted
+// * shapeshifter
+// * shapeshifters
 
 #[repr(C, packed)]
 struct Entry {
