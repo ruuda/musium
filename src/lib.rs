@@ -607,15 +607,31 @@ impl MemoryMetaIndex {
         lens.sort();
         println!("Min, median, max len: {} {} {}", lens[0], lens[lens.len() / 2], lens[lens.len() - 1]);
         lens.clear();
-        let mut lens: Vec<usize> = builder.words_track_title
+        let mut ws = builder.words_track_title
             .iter()
             .map(|&(ref w, _)| w.clone())
-            .collect::<BTreeSet<String>>()
+            .collect::<BTreeSet<String>>();
+        ws.extend(builder.words_album_title
             .iter()
-            .map(|w| w.len())
-            .collect();
+            .map(|&(ref w, _)| w.clone()));
+        ws.extend(builder.words_album_artist
+            .iter()
+            .map(|&(ref w, _)| w.clone()));
+        ws.extend(builder.words_track_artist
+            .iter()
+            .map(|&(ref w, _)| w.clone()));
+        for w in &ws { println!("{}", w); }
+        println!("Number of distinct words: {}", ws.len());
+        let mut lens: Vec<usize> = ws.iter().map(|w| w.len()).collect();
         lens.sort();
-        println!("Min, median, max word len: {} {} {}", lens[0], lens[lens.len() / 2], lens[lens.len() - 1]);
+        let p = lens.iter().position(|x| *x == 12).unwrap();
+        println!("# keys shorter than 11 bits: {} / {}", lens.len() - p, lens.len());
+        println!("Word len q0, q50, q75, q90, q100: {} {} {} {} {}",
+                 lens[0],
+                 lens[lens.len() * 50 / 100],
+                 lens[lens.len() * 75 / 100],
+                 lens[lens.len() * 90 / 100],
+                 lens[lens.len() - 1]);
         println!("indexed {} tracks on {} albums by {} artists",
             builder.tracks.len(),
             builder.albums.len(),
