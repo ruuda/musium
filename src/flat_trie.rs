@@ -194,7 +194,6 @@ impl FlatTreeBuilder {
 
             i = j;
             if j == key.len() { break }
-            println!("overflow, {}/{}, leaf {}", j, key.len(), self.leaves.len());
         }
 
         // Store the last key added, which is used to add internal nodes.
