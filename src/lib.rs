@@ -12,6 +12,8 @@ extern crate claxon;
 extern crate crossbeam;
 extern crate unicode_normalization;
 
+mod flat_trie; // TODO: Rename.
+
 use std::ascii::AsciiExt;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -575,6 +577,7 @@ impl MemoryMetaIndex {
             builder.insert(path.as_ref().to_str().expect("TODO"), &mut reader.tags());
         }
 
+
         let mut m = 0;
         for s in &builder.strings {
             m = m.max(s.len());
@@ -620,7 +623,13 @@ impl MemoryMetaIndex {
         ws.extend(builder.words_track_artist
             .iter()
             .map(|&(ref w, _)| w.clone()));
-        for w in &ws { println!("{}", w); }
+
+        let mut tbuilder = flat_trie::FlatTreeBuilder::new();
+        for (i, w) in ws.iter().enumerate() {
+            tbuilder.insert(w.as_bytes(), i as u32);
+            println!("{}", w);
+        }
+
         println!("Number of distinct words: {}", ws.len());
         let mut lens: Vec<usize> = ws.iter().map(|w| w.len()).collect();
         lens.sort();

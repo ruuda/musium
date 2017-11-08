@@ -108,6 +108,29 @@
 // * shapeshifters
 
 #[repr(C, packed)]
+struct InternalNode {
+    /// Indices of the leaf nodes.
+    ///
+    /// Element `i` points to the leaf for queries where `q <= keys[i]`
+    /// lexicographically. The last element points to the leaf for queries
+    /// bigger than any of the keys.
+    ///
+    /// A value of 0 is used to indicate that the key did not fit in a single
+    /// slot, and overflows into the next slot. This can happen multiple times,
+    /// also into the next `InternalNode`.
+    leaves: [u32; 5],
+
+    /// String keys corresponding to the maximum of each leaf node.
+    ///
+    /// This contains the bytes of the UTF-8 encoded string. Strings shorter
+    /// than 11 characters are padded with zeros at the end. For strings longer
+    /// than 11 characters, the corresponding leaf index is set to 0, and the
+    /// string continues in the next key, which might be in the next node.
+    keys: [[u8; 11]; 4],
+}
+
+/// Entry in a leaf node. Four of these together form one leaf.
+#[repr(C, packed)]
 struct Entry {
     /// Offset of the data associated with this entry.
     ///
@@ -118,6 +141,66 @@ struct Entry {
 
     /// The key, padded at the end with zeros if it is shorter than 12 bytes.
     key: [u8; 12],
+}
+
+pub struct FlatTreeBuilder {
+    leaves: Vec<Entry>,
+    last_key: Vec<u8>,
+    internal_full: Vec<InternalNode>,
+    internal_open: Vec<InternalNode>,
+}
+
+impl FlatTreeBuilder {
+    pub fn new() -> FlatTreeBuilder {
+        FlatTreeBuilder {
+            leaves: Vec::new(),
+            last_key: Vec::new(),
+            internal_full: Vec::new(),
+            internal_open: Vec::new(),
+        }
+    }
+
+    pub fn insert(&mut self, key: &[u8], value: u32) {
+        // If the entry would overflow into the next cache line, then instead
+        // pad the current cache line with unused entries, and insert the
+        // current entry on the next cache line. This way we can ensure that
+        // lookups require loading only a single cache line, except when a
+        // single entry is bigger than one cache line (48 bytes of key).
+        let slots_left = 4 - (self.leaves.len() % 4);
+        let slots_required = (key.len() + 11) / 12;
+        if slots_required > slots_left {
+            // TODO: Pad to the next cache line.
+        }
+
+        // Insert the internal node to finalize the previous cache line, if
+        // applicable.
+        if self.leaves.len() % 4 == 0 {
+            // TODO: acutally insert internal nodes.
+        }
+
+        // Insert the entry, or multiple if the key is too long for a single
+        // entry.
+        let mut i = 0;
+        loop {
+            let j = key.len().min(i + 12);
+            let mut entry_key = [0; 12];
+            (&mut entry_key[..j - i]).copy_from_slice(&key[i..j]);
+
+            let entry = Entry {
+                data_ptr: if j == key.len() { value } else { 0 },
+                key: entry_key,
+            };
+            self.leaves.push(entry);
+
+            i = j;
+            if j == key.len() { break }
+            println!("overflow, {}/{}, leaf {}", j, key.len(), self.leaves.len());
+        }
+
+        // Store the last key added, which is used to add internal nodes.
+        self.last_key.clear();
+        self.last_key.extend(key.iter());
+    }
 }
 
 #[repr(C, packed)]
@@ -138,39 +221,17 @@ struct FlatTrieNode {
     symbols: [u8; 12],
 }
 
-#[repr(C, packed)]
-struct FlatTrieEndNode {
-    /// Offset of the data associated with this node.
-    ///
-    /// Two values have special meaning:
-    ///
-    /// * 0 indicates that there is no data associated with the node.
-    /// * 1 indicates that the node continues in the next struct. The actual
-    ///   data offset is stored in the last non-continuation struct.
-    data_ptr: u32,
-
-    /// The offsets of the child nodes, corresponding to the symbols.
-    child_ptrs: [u32; 5],
-
-    /// The symbols, for which the node offsets are stored.
-    symbols: [u8; 5],
-}
-
 #[cfg(test)]
 mod test {
     use super::FlatTrieNode;
     use std::mem;
 
     #[test]
-    fn entry_has_expected_size() {
+    fn nodes_have_expected_size() {
         // Four `Entry` instances should fit one cache line exactly.
         assert_eq!(mem::size_of::<Entry>(), 16);
-    }
 
-    #[test]
-    fn flat_trie_node_has_expected_size() {
-        // A `FlatTrieNode` should be one cache line exactly.
-        assert_eq!(mem::size_of::<FlatTrieNode>(), 64);
-        assert_eq!(mem::size_of::<FlatTrieEndNode>(), 32);
+        // An internal node should be the size of a cache line.
+        assert_eq!(mem::size_of::<InternalNode>(), 64);
     }
 }
