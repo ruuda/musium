@@ -12,7 +12,7 @@ extern crate claxon;
 extern crate crossbeam;
 extern crate unicode_normalization;
 
-mod flat_trie; // TODO: Rename.
+mod flat_tree; // TODO: Rename.
 
 use std::ascii::AsciiExt;
 use std::collections::{BTreeMap, BTreeSet};
@@ -624,7 +624,7 @@ impl MemoryMetaIndex {
             .iter()
             .map(|&(ref w, _)| w.clone()));
 
-        let mut tbuilder = flat_trie::FlatTreeBuilder::new();
+        let mut tbuilder = flat_tree::FlatTreeBuilder::new();
         for (i, w) in ws.iter().enumerate() {
             tbuilder.insert(w.as_bytes(), i as u32);
             println!("{}", w);
