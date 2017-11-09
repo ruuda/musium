@@ -1,4 +1,3 @@
-
 // Some stats: on the index of words that occur in track titles, for my personal
 // collection, the index contains roughly 8k unique words. There are 52 distinct
 // first bytes of those words. For the number of distinct second bytes (given
@@ -106,6 +105,16 @@
 // * shapeshifted
 // * shapeshifter
 // * shapeshifters
+//
+// Note: The Raspberry Pi 1 actually has a 32-byte cache line size, not 64. This
+// makes the proposed approach roughly twice as expensive, putting it in the
+// same ballpark as the binary search with 12-bytes inline keys (which does not
+// get more expensive assuming every load is a miss). On 9200 keys, the proposed
+// tree should still do better than the binary search. See also:
+//
+// http://sandsoftwaresound.net/raspberry-pi/raspberry-pi-gen-1/memory-hierarchy/
+
+use std::mem;
 
 #[repr(C, packed)]
 struct InternalNode {
@@ -143,11 +152,29 @@ struct Entry {
     key: [u8; 12],
 }
 
+impl InternalNode {
+    pub fn max() -> InternalNode {
+        InternalNode {
+            leaves: [0; 5],
+            keys: [[0xff; 11]; 4],
+        }
+    }
+}
+
+impl Entry {
+    pub fn max() -> Entry {
+        Entry {
+            data_ptr: 0,
+            key: [0xff; 12],
+        }
+    }
+}
+
 pub struct FlatTreeBuilder {
     leaves: Vec<Entry>,
     last_key: Vec<u8>,
-    internal_full: Vec<InternalNode>,
-    internal_open: Vec<InternalNode>,
+    internal: Vec<InternalNode>,
+    stack: Vec<Vec<(Vec<u8>, u32)>>,
 }
 
 impl FlatTreeBuilder {
@@ -155,9 +182,67 @@ impl FlatTreeBuilder {
         FlatTreeBuilder {
             leaves: Vec::new(),
             last_key: Vec::new(),
-            internal_full: Vec::new(),
-            internal_open: Vec::new(),
+            internal: Vec::new(),
+            stack: Vec::new(),
         }
+    }
+
+    fn push_child(&mut self, key: Vec<u8>, value: u32) {
+        let height = self.stack.len();
+
+        if self.stack.len() > 0 {
+            self.stack.last_mut().unwrap().push((key, value));
+        } else {
+            self.stack.push(vec![(key, value)]);
+            return
+        }
+
+        if self.stack.last().unwrap().len() == 5 {
+            self.push_internal_node();
+            println!("===> Internal nodes: {}", self.internal.len());
+        }
+
+        if self.stack.len() < height {
+            self.stack.push(Vec::new());
+        }
+    }
+
+    fn push_internal_node(&mut self) {
+        let mut nodes = self.stack.pop().unwrap();
+        debug_assert_eq!(nodes.len(), 5);
+        let j = self.internal.len() as u32;
+
+        let mut node = InternalNode::max();
+        let mut i = 0;
+        let mut was_reset = false;
+        while i < 4 && !was_reset {
+            let (key, value) = nodes.remove(0);
+            let mut left = key.len();
+            for ck in key.chunks(11) {
+                node.keys[i] = [0; 11];
+                (&mut node.keys[i][0..ck.len()]).copy_from_slice(ck);
+                i += 1;
+                left -= ck.len();
+                if left == 0 {
+                    node.leaves[i] = value;
+                } else if i == 4 {
+                    self.internal.push(node);
+                    node = InternalNode::max();
+                    i = 0;
+                    was_reset = true;
+                }
+            }
+        }
+
+        let (mk, mv) = nodes.remove(0);
+        node.leaves[i] = mv;
+
+        self.internal.push(node);
+
+        // The remaining entries, if any are filled with 0xff... keys, so
+        // they will not be matched by keys less than that.
+
+        self.push_child(mk, j);
     }
 
     pub fn insert(&mut self, key: &[u8], value: u32) {
@@ -169,13 +254,19 @@ impl FlatTreeBuilder {
         let slots_left = 4 - (self.leaves.len() % 4);
         let slots_required = (key.len() + 11) / 12;
         if slots_required > slots_left {
-            // TODO: Pad to the next cache line.
+            for _ in 0..slots_left {
+                self.leaves.push(Entry::max());
+            }
         }
 
         // Insert the internal node to finalize the previous cache line, if
         // applicable.
-        if self.leaves.len() % 4 == 0 {
-            // TODO: acutally insert internal nodes.
+        if self.leaves.len() % 4 == 0 && self.leaves.len() > 0 {
+            // TODO: Index is incorrect if the entry spanned multiple lines.
+            let mut k = Vec::new();
+            mem::swap(&mut self.last_key, &mut k);
+            let v = self.leaves.len() as u32 - 4;
+            self.push_child(k, v);
         }
 
         // Insert the entry, or multiple if the key is too long for a single
