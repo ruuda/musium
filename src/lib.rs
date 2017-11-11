@@ -18,6 +18,7 @@ use std::ascii::AsciiExt;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::io;
+use std::io::Write;
 use std::mem;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -146,6 +147,14 @@ impl fmt::Display for Issue {
     }
 }
 
+#[derive(Debug)]
+pub enum Progress {
+    /// A number of files have been indexed.
+    Indexed(u32),
+    /// An issue with a file was encountered.
+    Issue(Issue),
+}
+
 impl fmt::Display for TrackId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:016x}", self.0)
@@ -177,7 +186,8 @@ struct BuildMetaIndex {
     // When the track artist differs from the album artist, the words that occur
     // in the track artist but not in the album artist, are included here.
     words_track_artist: BTreeSet<(String, TrackId)>,
-    issues: SyncSender<Issue>,
+    progress: SyncSender<Progress>,
+    progress_unreported: u32,
 }
 
 fn parse_date(_date_str: &str) -> Option<Date> {
@@ -326,7 +336,7 @@ fn normalize_words(title: &str, dest: &mut Vec<String>) {
 }
 
 impl BuildMetaIndex {
-    pub fn new(issues: SyncSender<Issue>) -> BuildMetaIndex {
+    pub fn new(progress: SyncSender<Progress>) -> BuildMetaIndex {
         BuildMetaIndex {
             artists: BTreeMap::new(),
             albums: BTreeMap::new(),
@@ -338,7 +348,8 @@ impl BuildMetaIndex {
             words_album_title: BTreeSet::new(),
             words_album_artist: BTreeSet::new(),
             words_track_artist: BTreeSet::new(),
-            issues: issues,
+            progress: progress,
+            progress_unreported: 0,
         }
     }
 
@@ -347,7 +358,7 @@ impl BuildMetaIndex {
             filename: filename,
             detail: IssueDetail::FieldMissingError(field),
         };
-        self.issues.send(issue).unwrap();
+        self.progress.send(Progress::Issue(issue)).unwrap();
     }
 
     fn error_parse_failed(&mut self, filename: String, field: &'static str) {
@@ -355,7 +366,7 @@ impl BuildMetaIndex {
             filename: filename,
             detail: IssueDetail::FieldParseFailedError(field),
         };
-        self.issues.send(issue).unwrap();
+        self.progress.send(Progress::Issue(issue)).unwrap();
     }
 
     /// Insert a string in the strings map, returning its id.
@@ -560,9 +571,11 @@ impl MemoryMetaIndex {
         MemoryMetaIndex { }
     }
 
-    pub fn process<I>(paths: &Mutex<I>, issues: SyncSender<Issue>)
-    where I: Iterator, <I as Iterator>::Item: AsRef<Path> {
-        let mut builder = BuildMetaIndex::new(issues);
+    pub fn process<I>(paths: &Mutex<I>, progress: SyncSender<Progress>)
+    where
+        I: Iterator, <I as Iterator>::Item: AsRef<Path>
+    {
+        let mut builder = BuildMetaIndex::new(progress);
         loop {
             let opt_path = paths.lock().unwrap().next();
             let path = match opt_path {
@@ -575,77 +588,21 @@ impl MemoryMetaIndex {
             };
             let reader = claxon::FlacReader::open_ext(path.as_ref(), opts).unwrap();
             builder.insert(path.as_ref().to_str().expect("TODO"), &mut reader.tags());
-        }
+            builder.progress_unreported += 1;
 
-
-        let mut m = 0;
-        for s in &builder.strings {
-            m = m.max(s.len());
-        }
-        println!("max string len: {}", m);
-        println!("word counts: {} track, {} album, {} artist, {} feat. artist",
-            builder.words_track_title.iter().map(|p| p.0.clone()).collect::<BTreeSet<String>>().len(),
-            builder.words_album_title.len(),
-            builder.words_album_artist.len(),
-            builder.words_track_artist.len(),
-        );
-        let bytes: BTreeSet<u8> = builder.words_track_title
-            .iter()
-            .map(|&(ref w, _)| w.as_bytes()[0])
-            .collect();
-        println!("{} unique first bytes ({:?})", bytes.len(), bytes);
-        let mut count_by_first = BTreeMap::new();
-        for &(ref w, _) in &builder.words_track_title {
-            let bs = w.as_bytes();
-            let map = count_by_first.entry(bs[0]).or_insert(BTreeSet::new());
-            if bs.len() > 1 {
-                map.insert(bs[1]);
+            // Don't report every track individually, to avoid synchronisation
+            // overhead.
+            if builder.progress_unreported == 17 {
+                builder.progress.send(Progress::Indexed(builder.progress_unreported)).unwrap();
+                builder.progress_unreported = 0;
             }
         }
-        let mut lens = Vec::new();
-        for (w, ref m) in count_by_first {
-            println!("{:02x}: {}", w, m.len());
-            lens.push(m.len());
-        }
-        lens.sort();
-        println!("Min, median, max len: {} {} {}", lens[0], lens[lens.len() / 2], lens[lens.len() - 1]);
-        lens.clear();
-        let mut ws = builder.words_track_title
-            .iter()
-            .map(|&(ref w, _)| w.clone())
-            .collect::<BTreeSet<String>>();
-        ws.extend(builder.words_album_title
-            .iter()
-            .map(|&(ref w, _)| w.clone()));
-        ws.extend(builder.words_album_artist
-            .iter()
-            .map(|&(ref w, _)| w.clone()));
-        ws.extend(builder.words_track_artist
-            .iter()
-            .map(|&(ref w, _)| w.clone()));
 
-        let mut tbuilder = flat_tree::FlatTreeBuilder::new();
-        for (i, w) in ws.iter().enumerate() {
-            tbuilder.insert(w.as_bytes(), i as u32);
-            println!("{}", w);
+        // TODO: It does not actually have to be a field on the struct, does it?
+        if builder.progress_unreported != 0 {
+            builder.progress.send(Progress::Indexed(builder.progress_unreported)).unwrap();
+            builder.progress_unreported = 0;
         }
-
-        println!("Number of distinct words: {}", ws.len());
-        let mut lens: Vec<usize> = ws.iter().map(|w| w.len()).collect();
-        lens.sort();
-        let p = lens.iter().position(|x| *x == 12).unwrap();
-        println!("# keys shorter than 11 bits: {} / {}", lens.len() - p, lens.len());
-        println!("Word len q0, q50, q75, q90, q100: {} {} {} {} {}",
-                 lens[0],
-                 lens[lens.len() * 50 / 100],
-                 lens[lens.len() * 75 / 100],
-                 lens[lens.len() * 90 / 100],
-                 lens[lens.len() - 1]);
-        println!("indexed {} tracks on {} albums by {} artists",
-            builder.tracks.len(),
-            builder.albums.len(),
-            builder.artists.len(),
-        );
     }
 
     /// Index the given files, and store the index in the target directory.
@@ -659,21 +616,37 @@ impl MemoryMetaIndex {
           <I as IntoIterator>::IntoIter: Send {
         let paths_iterator = paths.into_iter().fuse();
         let mutex = Mutex::new(paths_iterator);
-        let (tx_issue, rx_issue) = sync_channel(16);
+        let (tx_progress, rx_progress) = sync_channel(16);
 
-        let num_threads = 1; //24;
+        let num_threads = 24;
         crossbeam::scope(|scope| {
             for _ in 0..num_threads {
-                let issues = tx_issue.clone();
+                let issues = tx_progress.clone();
                 scope.spawn(|| MemoryMetaIndex::process(&mutex, issues));
             }
 
             // Print issues live as indexing happens.
-            mem::drop(tx_issue);
+            mem::drop(tx_progress);
             scope.spawn(|| {
-                for issue in rx_issue {
-                    println!("{}", issue);
+                let mut printed_count = false;
+                let mut count = 0;
+                for progress in rx_progress {
+                    match progress {
+                        Progress::Issue(issue) => {
+                            if printed_count { print!("\r"); }
+                            println!("{}", issue);
+                            printed_count = false;
+                        }
+                        Progress::Indexed(n) => {
+                            count += n;
+                            if printed_count { print!("\r"); }
+                            print!("{} tracks indexed", count);
+                            std::io::stdout().flush().unwrap();
+                            printed_count = true;
+                        }
+                    }
                 }
+                if printed_count { println!(""); }
             });
         });
         Ok(MemoryMetaIndex::new())
