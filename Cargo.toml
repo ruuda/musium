@@ -8,3 +8,4 @@ claxon                = { path = "file://../../claxon" }
 crossbeam             = "0.3"
 unicode-normalization = "0.1.5"
 walkdir               = "1.0"
+simple-server         = "0.3"

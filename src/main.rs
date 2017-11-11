@@ -1,10 +1,13 @@
 extern crate metaindex;
+extern crate simple_server;
 extern crate walkdir;
 
 use std::env;
 use std::process;
 use std::ffi::OsStr;
 use std::path::PathBuf;
+
+use simple_server::Server;
 
 fn main() {
     if env::args().len() < 2 {
@@ -28,4 +31,11 @@ fn main() {
         .collect();
 
     assert!(metaindex::MemoryMetaIndex::from_paths(paths.iter()).is_ok());
+
+    // Have a basic server to serve an API.
+    let server = Server::new(|request, mut response| {
+        println!("Request: {} {}", request.method(), request.uri());
+        Ok(response.body("Hi".as_bytes())?)
+    });
+    server.listen("0.0.0.0", "8233");
 }
