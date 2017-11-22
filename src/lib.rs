@@ -187,7 +187,6 @@ struct BuildMetaIndex {
     // in the track artist but not in the album artist, are included here.
     words_track_artist: BTreeSet<(String, TrackId)>,
     progress: SyncSender<Progress>,
-    progress_unreported: u32,
 }
 
 fn parse_date(_date_str: &str) -> Option<Date> {
@@ -349,7 +348,6 @@ impl BuildMetaIndex {
             words_album_artist: BTreeSet::new(),
             words_track_artist: BTreeSet::new(),
             progress: progress,
-            progress_unreported: 0,
         }
     }
 
@@ -576,6 +574,7 @@ impl MemoryMetaIndex {
         I: Iterator, <I as Iterator>::Item: AsRef<Path>
     {
         let mut builder = BuildMetaIndex::new(progress);
+        let mut progress_unreported = 0;
         loop {
             let opt_path = paths.lock().unwrap().next();
             let path = match opt_path {
@@ -588,20 +587,18 @@ impl MemoryMetaIndex {
             };
             let reader = claxon::FlacReader::open_ext(path.as_ref(), opts).unwrap();
             builder.insert(path.as_ref().to_str().expect("TODO"), &mut reader.tags());
-            builder.progress_unreported += 1;
+            progress_unreported += 1;
 
             // Don't report every track individually, to avoid synchronisation
             // overhead.
-            if builder.progress_unreported == 17 {
-                builder.progress.send(Progress::Indexed(builder.progress_unreported)).unwrap();
-                builder.progress_unreported = 0;
+            if progress_unreported == 17 {
+                builder.progress.send(Progress::Indexed(progress_unreported)).unwrap();
+                progress_unreported = 0;
             }
         }
 
-        // TODO: It does not actually have to be a field on the struct, does it?
-        if builder.progress_unreported != 0 {
-            builder.progress.send(Progress::Indexed(builder.progress_unreported)).unwrap();
-            builder.progress_unreported = 0;
+        if progress_unreported != 0 {
+            builder.progress.send(Progress::Indexed(progress_unreported)).unwrap();
         }
     }
 
