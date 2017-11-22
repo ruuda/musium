@@ -613,7 +613,7 @@ impl MemoryMetaIndex {
           <I as IntoIterator>::IntoIter: Send {
         let paths_iterator = paths.into_iter().fuse();
         let mutex = Mutex::new(paths_iterator);
-        let (tx_progress, rx_progress) = sync_channel(16);
+        let (tx_progress, rx_progress) = sync_channel(8);
 
         let num_threads = 24;
         crossbeam::scope(|scope| {
@@ -622,29 +622,30 @@ impl MemoryMetaIndex {
                 scope.spawn(|| MemoryMetaIndex::process(&mutex, issues));
             }
 
-            // Print issues live as indexing happens.
+            // Drop the original sender to ensure the channel is closed when all
+            // threads are done.
             mem::drop(tx_progress);
-            scope.spawn(|| {
-                let mut printed_count = false;
-                let mut count = 0;
-                for progress in rx_progress {
-                    match progress {
-                        Progress::Issue(issue) => {
-                            if printed_count { print!("\r"); }
-                            println!("{}", issue);
-                            printed_count = false;
-                        }
-                        Progress::Indexed(n) => {
-                            count += n;
-                            if printed_count { print!("\r"); }
-                            print!("{} tracks indexed", count);
-                            std::io::stdout().flush().unwrap();
-                            printed_count = true;
-                        }
+
+            // Print issues live as indexing happens.
+            let mut printed_count = false;
+            let mut count = 0;
+            for progress in rx_progress {
+                match progress {
+                    Progress::Issue(issue) => {
+                        if printed_count { print!("\r"); }
+                        println!("{}", issue);
+                        printed_count = false;
+                    }
+                    Progress::Indexed(n) => {
+                        count += n;
+                        if printed_count { print!("\r"); }
+                        print!("{} tracks indexed", count);
+                        std::io::stdout().flush().unwrap();
+                        printed_count = true;
                     }
                 }
-                if printed_count { println!(""); }
-            });
+            }
+            if printed_count { println!(""); }
         });
         Ok(MemoryMetaIndex::new())
     }
