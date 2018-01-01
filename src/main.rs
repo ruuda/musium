@@ -31,7 +31,7 @@ fn main() {
         .collect();
 
     assert!(metaindex::MemoryMetaIndex::from_paths(paths.iter()).is_ok());
-    println!("Indexing cmplete, starting server on port 8233.");
+    println!("Indexing complete, starting server on port 8233.");
 
     // Have a basic server to serve an API.
     let server = Server::new(|request, mut response| {
