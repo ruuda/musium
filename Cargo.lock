@@ -14,7 +14,8 @@ dependencies = [
 
 [[package]]
 name = "claxon"
-version = "0.3.1"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "crossbeam"
@@ -72,7 +73,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "metaindex"
 version = "0.0.0"
 dependencies = [
- "claxon 0.3.1",
+ "claxon 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "crossbeam 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "simple-server 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-normalization 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -141,6 +142,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [metadata]
 "checksum byteorder 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ff81738b726f5d099632ceaffe7fb65b90212e8dce59d518729e7e8634032d3d"
 "checksum bytes 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)" = "d828f97b58cc5de3e40c421d0cf2132d6b2da4ee0e11b8632fa838f0f9333ad6"
+"checksum claxon 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ea4ed046a8729cabb48e3574522bff437d951fa16bf3d5a0993ca54f69b893ab"
 "checksum crossbeam 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "8837ab96533202c5b610ed44bc7f4183e7957c1c8f56e8cc78bb098593c8ba0a"
 "checksum fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)" = "2fad85553e09a6f881f739c29f0b00b0f01357c743266d478b68951ce23285f3"
 "checksum http 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "7fa2bbed743b54e56a0f1afa2d6d6eeb195383a60fb733eec4f8107c47bd4576"
