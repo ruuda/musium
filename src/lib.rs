@@ -209,7 +209,7 @@ fn parse_uuid(uuid: &str) -> Option<u64> {
     if uuid.as_bytes()[23] != b'-' { return None }
     // We parse the first and last 4 bytes and use these as the 8-byte id.
     // See the comments above for the motivation for using only 64 of the 128
-    // bits. We take the front and back of the string because it is eary, there
+    // bits. We take the front and back of the string because it is easy, there
     // are no dashes to strip. Also, the non-random version bits are in the
     // middle, so this way we avoid using those.
     let high = u32::from_str_radix(&uuid[..8], 16).ok()? as u64;
