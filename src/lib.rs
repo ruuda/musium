@@ -221,8 +221,8 @@ fn get_track_id(album_id: AlbumId,
                 disc_number: u8,
                 track_number: u8)
                 -> TrackId {
-    // Then take the bits from the album id, so all the tracks within one album
-    // are adjacent. This is desirable, because two tracks fit in a cache line,
+    // Take the bits from the album id, so all the tracks within one album are
+    // adjacent. This is desirable, because two tracks fit in a cache line,
     // halving the memory access cost of looking up an entire album. It also
     // makes memory access more predictable. Finally, if the 52 most significant
     // bits uniquely identify the album (which we assume), then all tracks are
