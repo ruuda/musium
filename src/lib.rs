@@ -78,7 +78,7 @@ struct ArtistId(u64);
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct StringRef(u32);
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct Track {
     album_id: AlbumId,
@@ -121,6 +121,10 @@ fn struct_sizes_are_as_expected() {
     assert_eq!(mem::size_of::<Album>(), 16);
     assert_eq!(mem::size_of::<Artist>(), 8);
     assert_eq!(mem::size_of::<(TrackId, Track)>(), 32);
+
+    assert_eq!(mem::align_of::<Track>(), 8);
+    assert_eq!(mem::align_of::<Album>(), 8);
+    assert_eq!(mem::align_of::<Artist>(), 4);
 }
 
 #[derive(Copy, Clone, Debug)]

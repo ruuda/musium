@@ -139,7 +139,7 @@ struct InternalNode {
 }
 
 /// Entry in a leaf node. Four of these together form one leaf.
-#[repr(C, packed)]
+#[repr(C)]
 struct Entry {
     /// Offset of the data associated with this entry.
     ///
@@ -313,13 +313,14 @@ struct FlatTrieNode {
 
 #[cfg(test)]
 mod test {
-    use super::FlatTrieNode;
+    use super::{Entry, InternalNode};
     use std::mem;
 
     #[test]
     fn nodes_have_expected_size() {
         // Four `Entry` instances should fit one cache line exactly.
         assert_eq!(mem::size_of::<Entry>(), 16);
+        assert_eq!(mem::align_of::<Entry>(), 4);
 
         // An internal node should be the size of a cache line.
         assert_eq!(mem::size_of::<InternalNode>(), 64);
