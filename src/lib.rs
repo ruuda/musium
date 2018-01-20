@@ -60,27 +60,27 @@ use unicode_normalization::UnicodeNormalization;
 // artists, then albums by that artist, and then tracks on those albums. And I
 // would like to do so based on their metadata only, not involving global
 // counters, because I want something that is deterministic but which can be
-// parallelized. So how many bits do we need for the album artist? Let's say I
+// parallelized. So how many bits do we need for the album artist? Let's say
 // the upper bound is 50k artists, and I want a collision probability of at most
 // 0.1% at that number of artists. The lowest multiple of 8 that I can get away
 // with is 48 bits.
 
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-struct TrackId(u64);
+pub struct TrackId(u64);
 
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-struct AlbumId(u64);
+pub struct AlbumId(u64);
 
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-struct ArtistId(u64);
+pub struct ArtistId(u64);
 
 /// Index into a byte array that contains length-prefixed strings.
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-struct StringRef(u32);
+pub struct StringRef(u32);
 
 #[repr(C)]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-struct Track {
+pub struct Track {
     album_id: AlbumId,
     title: StringRef,
     artist: StringRef,
@@ -97,22 +97,64 @@ struct Track {
     track_number: u8,
 }
 
-struct Date {
+pub struct Date {
     year: u16,
     month: u8,
     day: u8,
 }
 
-struct Album {
+pub struct Album {
     artist_id: ArtistId,
     title: StringRef,
     original_release_date: Date,
 }
 
-struct Artist {
+pub struct Artist {
     name: StringRef,
     name_for_sort: StringRef,
 }
+
+pub trait MetaIndex {
+    /// Return the number of tracks in the index.
+    fn len(&self) -> usize;
+
+    /// Resolve a `StringRef` to a string slice.
+    ///
+    /// Returns an empty string if the ref is out of bounds. May return a
+    /// garbage string when the ref is at the wrong offset.
+    fn get_string(&self, sr: StringRef) -> &str;
+
+    /// Return track metadata.
+    fn get_track(&self, id: TrackId) -> Option<&Track>;
+
+    /// Return album metadata.
+    fn get_album(&self, id: AlbumId) -> Option<&Album>;
+}
+
+pub enum Error {
+    /// An IO error during writing the index or reading the index or metadata.
+    IoError(io::Error),
+
+    /// An FLAC file to be indexed could not be read.
+    FormatError(claxon::Error),
+}
+
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Error {
+        Error::IoError(err)
+    }
+}
+
+impl From<claxon::Error> for Error {
+    fn from(err: claxon::Error) -> Error {
+        match err {
+            claxon::Error::IoError(io_err) => Error::IoError(io_err),
+            _ => Error::FormatError(err),
+        }
+    }
+}
+
+type Result<T> = std::result::Result<T, Error>;
 
 #[test]
 fn struct_sizes_are_as_expected() {
@@ -531,36 +573,6 @@ impl BuildMetaIndex {
     }
 }
 
-pub trait MetaIndex {
-    /// Returns the number of tracks in the index.
-    fn len(&self) -> usize;
-}
-
-pub enum Error {
-    /// An IO error during writing the index or reading the index or metadata.
-    IoError(io::Error),
-
-    /// An FLAC file to be indexed could not be read.
-    FormatError(claxon::Error),
-}
-
-impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Error {
-        Error::IoError(err)
-    }
-}
-
-impl From<claxon::Error> for Error {
-    fn from(err: claxon::Error) -> Error {
-        match err {
-            claxon::Error::IoError(io_err) => Error::IoError(io_err),
-            _ => Error::FormatError(err),
-        }
-    }
-}
-
-type Result<T> = std::result::Result<T, Error>;
-
 pub struct MemoryMetaIndex {
 
 }
@@ -659,6 +671,18 @@ impl MetaIndex for MemoryMetaIndex {
     fn len(&self) -> usize {
         // TODO: Real impl
         0
+    }
+
+    fn get_string(&self, sr: StringRef) -> &str {
+        unimplemented!();
+    }
+
+    fn get_track(&self, id: TrackId) -> Option<&Track> {
+        unimplemented!();
+    }
+
+    fn get_album(&self, id: AlbumId) -> Option<&Album> {
+        unimplemented!();
     }
 }
 
