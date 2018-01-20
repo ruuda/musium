@@ -574,7 +574,12 @@ impl BuildMetaIndex {
 }
 
 pub struct MemoryMetaIndex {
-
+    // TODO: Use an mmappable data structure. For now this will suffice.
+    artists: BTreeMap<ArtistId, Artist>,
+    albums: BTreeMap<AlbumId, Album>,
+    tracks: BTreeMap<TrackId, Track>,
+    strings: Vec<String>,
+    filenames: Vec<String>,
 }
 
 impl MemoryMetaIndex {
@@ -582,7 +587,13 @@ impl MemoryMetaIndex {
     ///
     /// The empty index acts as a unit for combining with other indices.
     pub fn new() -> MemoryMetaIndex {
-        MemoryMetaIndex { }
+        MemoryMetaIndex {
+            artists: BTreeMap::new(),
+            albums: BTreeMap::new(),
+            tracks: BTreeMap::new(),
+            strings: Vec::new(),
+            filenames: Vec::new(),
+        }
     }
 
     pub fn process<I>(paths: &Mutex<I>, progress: SyncSender<Progress>)
