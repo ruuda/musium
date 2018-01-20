@@ -1,5 +1,6 @@
+extern crate futures;
+extern crate hyper;
 extern crate metaindex;
-extern crate simple_server;
 extern crate walkdir;
 
 use std::env;
@@ -7,13 +8,57 @@ use std::process;
 use std::ffi::OsStr;
 use std::path::PathBuf;
 
-use simple_server::{Request, Response, ResponseBuilder, Server};
+use futures::future::Future;
+use hyper::server::{Http, Request, Response, Service};
 
-fn route(request: Request<&[u8]>,
-         response: &mut ResponseBuilder)
-    // TODO: Try to get rid of the vec.
-    -> Result<Response<Vec<u8>>, simple_server::Error> {
-    Ok(response.body("Hi".as_bytes().to_vec())?)
+struct MetaServer;
+
+impl Service for MetaServer {
+    type Request = Request;
+    type Response = Response;
+    type Error = hyper::Error;
+    type Future = Box<Future<Item=Self::Response, Error=Self::Error>>;
+
+    fn call(&self, request: Request) -> Self::Future {
+        println!("Request: {:?}", request);
+        let parts: Vec<&str> = request.uri().path().split('/').filter(|x| x.len() > 0).collect();
+
+        let response = if parts.len() == 2 {
+            let section = parts[0];
+            let id = parts[1];
+            match section {
+                "track" if id.ends_with(".flac") => {
+                    Response::<hyper::Body>::new()
+                        .with_body("serve raw track bytes".as_bytes())
+                }
+                "track" => {
+                    Response::<hyper::Body>::new()
+                        .with_body("track metadata".as_bytes())
+                }
+                "album" if id.ends_with(".jpg") => {
+                    Response::<hyper::Body>::new()
+                        .with_body("album cover art".as_bytes())
+                }
+                "album" => {
+                    Response::<hyper::Body>::new()
+                        .with_body("album metadata".as_bytes())
+                }
+                "artist" => {
+                    Response::<hyper::Body>::new()
+                        .with_body("artist metadata".as_bytes())
+                }
+                _ => {
+                    Response::<hyper::Body>::new()
+                        .with_body("BAD REQUEST".as_bytes())
+                }
+            }
+        } else {
+            Response::<hyper::Body>::new()
+                .with_body("BAD REQUEST".as_bytes())
+        };
+
+        Box::new(futures::future::ok(response))
+    }
 }
 
 fn main() {
@@ -39,38 +84,7 @@ fn main() {
 
     assert!(metaindex::MemoryMetaIndex::from_paths(paths.iter()).is_ok());
     println!("Indexing complete, starting server on port 8233.");
-
-    // Have a basic server to serve an API.
-    let server = Server::new(|request, mut response| {
-        println!("Request: {} {}", request.method(), request.uri());
-        let parts: Vec<_> = request.uri().path().split('/').filter(|x| x.len() > 0).collect();
-
-        if parts.len() == 2 {
-            let section = parts[0];
-            let id = parts[1];
-            match section {
-                "track" if id.ends_with(".flac") => {
-                    Ok(response.body("serve raw track bytes".as_bytes())?)
-                }
-                "track" => {
-                    Ok(response.body("track metadata".as_bytes())?)
-                }
-                "album" if id.ends_with(".jpg") => {
-                    Ok(response.body("album cover art".as_bytes())?)
-                }
-                "album" => {
-                    Ok(response.body("album metadata".as_bytes())?)
-                }
-                "artist" => {
-                    Ok(response.body("artist metadata".as_bytes())?)
-                }
-                _ => {
-                    Ok(response.body("BAD REQUEST".as_bytes())?)
-                }
-            }
-        } else {
-            Ok(response.body("BAD REQUEST".as_bytes())?)
-        }
-    });
-    server.listen("0.0.0.0", "8233");
+    let addr = ([0, 0, 0, 0], 8233).into();
+    let server = Http::new().bind(&addr, || Ok(MetaServer)).unwrap();
+    server.run().unwrap();
 }
