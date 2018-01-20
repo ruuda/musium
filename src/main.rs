@@ -9,55 +9,87 @@ use std::ffi::OsStr;
 use std::path::PathBuf;
 
 use futures::future::Future;
+use hyper::header::ContentLength;
 use hyper::server::{Http, Request, Response, Service};
+use hyper::{Get, StatusCode};
 
 struct MetaServer;
+
+type BoxFuture = Box<Future<Item=Response, Error=hyper::Error>>;
+
+impl MetaServer {
+
+    fn handle_not_found(&self) -> BoxFuture {
+        let not_found = "Not Found";
+        let response = Response::new()
+            .with_status(StatusCode::NotFound)
+            .with_header(ContentLength(not_found.len() as u64))
+            .with_body(not_found);
+        Box::new(futures::future::ok(response))
+    }
+
+    fn handle_bad_request(&self, reason: &'static str) -> BoxFuture {
+        let response = Response::new()
+            .with_status(StatusCode::BadRequest)
+            .with_header(ContentLength(reason.len() as u64))
+            .with_body(reason);
+        Box::new(futures::future::ok(response))
+    }
+
+    fn handle_track(&self, _request: &Request, id: &str) -> BoxFuture {
+        let response = Response::new().with_body("Track");
+        Box::new(futures::future::ok(response))
+    }
+
+    fn handle_album(&self, _request: &Request, id: &str) -> BoxFuture {
+        let response = Response::new().with_body("Album");
+        Box::new(futures::future::ok(response))
+    }
+
+    fn handle_albums(&self, _request: &Request) -> BoxFuture {
+        let response = Response::new().with_body("Albums");
+        Box::new(futures::future::ok(response))
+    }
+
+    fn handle_artist(&self, _request: &Request, id: &str) -> BoxFuture {
+        let response = Response::new().with_body("Artist");
+        Box::new(futures::future::ok(response))
+    }
+
+    fn handle_search(&self, _request: &Request) -> BoxFuture {
+        let response = Response::new().with_body("Search");
+        Box::new(futures::future::ok(response))
+    }
+}
 
 impl Service for MetaServer {
     type Request = Request;
     type Response = Response;
     type Error = hyper::Error;
-    type Future = Box<Future<Item=Self::Response, Error=Self::Error>>;
+    type Future = BoxFuture;
 
     fn call(&self, request: Request) -> Self::Future {
         println!("Request: {:?}", request);
-        let parts: Vec<&str> = request.uri().path().split('/').filter(|x| x.len() > 0).collect();
 
-        let response = if parts.len() == 2 {
-            let section = parts[0];
-            let id = parts[1];
-            match section {
-                "track" if id.ends_with(".flac") => {
-                    Response::<hyper::Body>::new()
-                        .with_body("serve raw track bytes".as_bytes())
-                }
-                "track" => {
-                    Response::<hyper::Body>::new()
-                        .with_body("track metadata".as_bytes())
-                }
-                "album" if id.ends_with(".jpg") => {
-                    Response::<hyper::Body>::new()
-                        .with_body("album cover art".as_bytes())
-                }
-                "album" => {
-                    Response::<hyper::Body>::new()
-                        .with_body("album metadata".as_bytes())
-                }
-                "artist" => {
-                    Response::<hyper::Body>::new()
-                        .with_body("artist metadata".as_bytes())
-                }
-                _ => {
-                    Response::<hyper::Body>::new()
-                        .with_body("BAD REQUEST".as_bytes())
-                }
-            }
-        } else {
-            Response::<hyper::Body>::new()
-                .with_body("BAD REQUEST".as_bytes())
-        };
+        let mut parts = request
+            .uri()
+            .path()
+            .splitn(3, '/')
+            .filter(|x| x.len() > 0);
 
-        Box::new(futures::future::ok(response))
+        let p0 = parts.next();
+        let p1 = parts.next();
+
+        // A very basic router. See also docs/api.md for an overview.
+        match (request.method(), p0, p1) {
+            (&Get, Some("track"),  Some(t)) => self.handle_track(&request, t),
+            (&Get, Some("album"),  Some(a)) => self.handle_album(&request, a),
+            (&Get, Some("albums"), None)    => self.handle_albums(&request),
+            (&Get, Some("artist"), Some(a)) => self.handle_artist(&request, a),
+            (&Get, Some("search"), None)    => self.handle_search(&request),
+            (&Get, _, _) => self.handle_not_found(),
+            _ => self.handle_bad_request("Expected a GET request."),
+        }
     }
 }
 
