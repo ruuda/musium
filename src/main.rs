@@ -36,12 +36,12 @@ impl MetaServer {
         Box::new(futures::future::ok(response))
     }
 
-    fn handle_track(&self, _request: &Request, id: &str) -> BoxFuture {
+    fn handle_track(&self, _request: &Request, _id: &str) -> BoxFuture {
         let response = Response::new().with_body("Track");
         Box::new(futures::future::ok(response))
     }
 
-    fn handle_album(&self, _request: &Request, id: &str) -> BoxFuture {
+    fn handle_album(&self, _request: &Request, _id: &str) -> BoxFuture {
         let response = Response::new().with_body("Album");
         Box::new(futures::future::ok(response))
     }
@@ -51,7 +51,7 @@ impl MetaServer {
         Box::new(futures::future::ok(response))
     }
 
-    fn handle_artist(&self, _request: &Request, id: &str) -> BoxFuture {
+    fn handle_artist(&self, _request: &Request, _id: &str) -> BoxFuture {
         let response = Response::new().with_body("Artist");
         Box::new(futures::future::ok(response))
     }
