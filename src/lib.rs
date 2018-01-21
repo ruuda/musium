@@ -178,10 +178,17 @@ fn struct_sizes_are_as_expected() {
     assert_eq!(mem::align_of::<Artist>(), 4);
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum IssueDetail {
+    /// A required metadata field is missing. Contains the field name.
     FieldMissingError(&'static str),
+
+    /// A metadata field could be parsed. Contains the field name.
     FieldParseFailedError(&'static str),
+
+    /// Two different titles were found for an album with the same mbid.
+    /// Contains the title used, and the discarded alternative.
+    AlbumTitleMismatch(AlbumId, String, String),
 }
 
 #[derive(Debug)]
@@ -198,6 +205,9 @@ impl fmt::Display for Issue {
                 write!(f, "error: field '{}' missing.", field),
             IssueDetail::FieldParseFailedError(field) =>
                 write!(f, "error: failed to parse field '{}'.", field),
+            IssueDetail::AlbumTitleMismatch(_id, ref title, ref alt) =>
+                write!(f, "warning: discarded inconsistent album title '{}' in favour of '{}'.",
+                       alt, title),
         }
     }
 }
@@ -616,16 +626,17 @@ pub struct MemoryMetaIndex {
 ///
 /// The arguments passed to process are `(i, id, value)`, where `i` is the
 /// index of the builder. The collection iterated over is determined by
-/// `project`.
+/// `project`. If the collections contain duplicates, all of them are passed to
+/// `process`.
 fn for_each_sorted<'a, P, I, T, F>(
     builders: &'a [BuildMetaIndex],
     project: P,
-    mut process: F
+    mut process: F,
 ) where
   P: Fn(&'a BuildMetaIndex) -> btree_map::Iter<'a, I, T>,
-  F: FnMut(usize, I, T),
   I: Clone + Eq + Ord + 'a,
   T: Clone + Eq + 'a,
+  F: FnMut(usize, I, T),
 {
     let mut iters: Vec<_> = builders
         .iter()
@@ -635,8 +646,6 @@ fn for_each_sorted<'a, P, I, T, F>(
         .iter_mut()
         .map(|i| i.next())
         .collect();
-
-    let mut prev_id = None;
 
     // Apply the processing function to all elements from the builders in order.
     while let Some((i, _)) = candidates
@@ -651,13 +660,12 @@ fn for_each_sorted<'a, P, I, T, F>(
         // Current now contains the value of `candidates[i]` before the swap,
         // which is not none, so the unwrap is safe.
         let current = next.unwrap();
+        process(i, current.0.clone(), current.1.clone());
+    }
 
-        // Skip duplicates. TODO: Have a mechanism to check that the content is
-        // indeed identical, not only the key.
-        if prev_id.as_ref() != Some(current.0) {
-            process(i, current.0.clone(), current.1.clone());
-            prev_id = Some(current.0.clone());
-        }
+    // Nothing should be left.
+    for candidate in candidates {
+        debug_assert!(candidate.is_none());
     }
 }
 
@@ -666,9 +674,9 @@ impl MemoryMetaIndex {
     fn new(builders: &[BuildMetaIndex]) -> MemoryMetaIndex {
         assert!(builders.len() > 0);
         let mut strings_to_id: BTreeMap<String, u32> = BTreeMap::new();
-        let mut artists = Vec::new();
-        let mut albums = Vec::new();
-        let mut tracks = Vec::new();
+        let mut artists: Vec<(ArtistId, Artist)> = Vec::new();
+        let mut albums: Vec<(AlbumId, Album)> = Vec::new();
+        let mut tracks: Vec<(TrackId, Track)> = Vec::new();
         let mut strings = StringDeduper::new();
         let mut filenames = Vec::new();
 
@@ -682,6 +690,14 @@ impl MemoryMetaIndex {
             );
             filenames.push(builders[i].filenames[track.filename.0 as usize].clone());
             track.filename = StringRef(filenames.len() as u32 - 1);
+
+            if let Some(&(prev_id, ref prev)) = tracks.last() {
+                if prev_id == id {
+                    assert_eq!(&track, prev);
+                    return // Like `continue`, returns from the closure.
+                }
+            }
+
             tracks.push((id, track));
         });
 
@@ -689,6 +705,27 @@ impl MemoryMetaIndex {
             album.title = StringRef(
                 strings.insert(builders[i].strings.get(album.title.0))
             );
+
+            if let Some(&(prev_id, ref prev)) = albums.last() {
+                if prev_id == id {
+                    // TODO: Extract this somewhere, and report using
+                    // IssueDetail::AlbumTitleMismatch.
+                    let title_curr = strings.get(album.title.0);
+                    let title_prev = strings.get(prev.title.0);
+                    if title_curr != title_prev {
+                        println!("warning: discarding inconsistent album title '{}' \
+                                  in favour of '{}'", title_curr, title_prev);
+                    }
+                    if album.artist_id != prev.artist_id {
+                        // TODO: Print artist name rather than id.
+                        println!("warning: discarding inconsistent album artist {} \
+                                  in favour of {} for album '{}'",
+                                  album.artist_id, prev.artist_id, title_prev);
+                    }
+                    return // Like `continue`, returns from the closure.
+                }
+            }
+
             albums.push((id, album));
         });
 
@@ -699,6 +736,27 @@ impl MemoryMetaIndex {
             artist.name_for_sort = StringRef(
                 strings.insert(builders[i].strings.get(artist.name_for_sort.0))
             );
+
+            if let Some(&(prev_id, ref prev)) = artists.last() {
+                if prev_id == id {
+                    // TODO: Extract this somewhere, and report Issue::XXX.
+                    let name_curr = strings.get(artist.name.0);
+                    let name_prev = strings.get(prev.name.0);
+                    let sort_curr = strings.get(artist.name_for_sort.0);
+                    let sort_prev = strings.get(prev.name_for_sort.0);
+                    if name_curr != name_prev {
+                        println!("warning: discarding inconsistent artist name '{}' \
+                                  in favour of '{}'", name_prev, name_curr);
+                    }
+                    if sort_curr != sort_prev {
+                        println!("warning: discarding inconsistent sort name '{}' \
+                                  in favour of '{}' for artist '{}'",
+                                  sort_curr, sort_prev, name_prev);
+                    }
+                    return // Like `continue`, returns from the closure.
+                }
+            }
+
             artists.push((id, artist));
         });
 
