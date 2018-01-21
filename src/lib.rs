@@ -614,7 +614,6 @@ pub struct MemoryMetaIndex {
 fn for_all_sorted<'a, P, I, T, F>(
     builders: &'a [BuildMetaIndex],
     project: P,
-    sentinel_index: I,
     mut process: F
 ) where
   P: Fn(&'a BuildMetaIndex) -> btree_map::Iter<'a, I, T>,
@@ -622,33 +621,29 @@ fn for_all_sorted<'a, P, I, T, F>(
   I: Clone + Eq + Ord + 'a,
   T: Clone + Eq + 'a,
 {
-    // Sentinel ids, that we use instead of Option candidates that are set
-    // to None when a builder is depleted. This is a bit more error prone,
-    // but it makes sorting easier.
-    let value_zero: T = unsafe { mem::zeroed() };
-    let sentinel = (&sentinel_index, &value_zero);
-
     let mut iters: Vec<_> = builders
         .iter()
         .map(project)
         .collect();
     let mut candidates: Vec<_> = iters
         .iter_mut()
-        .map(|i| i.next().unwrap_or(sentinel))
+        .map(|i| i.next())
         .collect();
 
     // Apply the processing function to all elements from the builders in order.
-    loop {
-        let i = candidates
+    while let Some((i, _)) = candidates
             .iter()
             .enumerate()
-            .min_by_key(|&(i, &(id, _))| id).unwrap().0;
-
-        if candidates[i] == sentinel { break }
-
-        let mut next = iters[i].next().unwrap_or(sentinel);
+            .filter_map(|(i, id_val)| id_val.map(|(id, _val)| (i, id)))
+            .min_by_key(|&(i, id)| id)
+    {
+        let mut next = iters[i].next();
         mem::swap(&mut candidates[i], &mut next);
-        process(i, next.0.clone(), next.1.clone());
+
+        // Current now contains the value of `candidates[i]` before the swap,
+        // which is not none, so the unwrap is safe.
+        let current = next.unwrap();
+        process(i, current.0.clone(), current.1.clone());
     }
 }
 
@@ -663,8 +658,7 @@ impl MemoryMetaIndex {
         let mut strings = StringDeduper::new();
         let mut filenames = Vec::new();
 
-        for_all_sorted(builders, |b| b.tracks.iter(), TrackId(u64::MAX),
-        |i, id, mut track| {
+        for_all_sorted(builders, |b| b.tracks.iter(), |i, id, mut track| {
             // Give the track the final stringrefs, into the merged arrays.
             track.title = StringRef(
                 strings.insert(builders[i].strings.get(track.title.0))
