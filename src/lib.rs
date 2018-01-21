@@ -636,6 +636,8 @@ fn for_each_sorted<'a, P, I, T, F>(
         .map(|i| i.next())
         .collect();
 
+    let mut prev_id = None;
+
     // Apply the processing function to all elements from the builders in order.
     while let Some((i, _)) = candidates
             .iter()
@@ -649,7 +651,13 @@ fn for_each_sorted<'a, P, I, T, F>(
         // Current now contains the value of `candidates[i]` before the swap,
         // which is not none, so the unwrap is safe.
         let current = next.unwrap();
-        process(i, current.0.clone(), current.1.clone());
+
+        // Skip duplicates. TODO: Have a mechanism to check that the content is
+        // indeed identical, not only the key.
+        if prev_id.as_ref() != Some(current.0) {
+            process(i, current.0.clone(), current.1.clone());
+            prev_id = Some(current.0.clone());
+        }
     }
 }
 
@@ -693,6 +701,10 @@ impl MemoryMetaIndex {
             );
             artists.push((id, artist));
         });
+
+        println!("{} files indexed.", filenames.len());
+        println!("{} strings, {} tracks, {} albums, {} artists.",
+                 strings.strings.len(), tracks.len(), albums.len(), artists.len());
 
         MemoryMetaIndex {
             artists: artists,
