@@ -99,18 +99,24 @@ pub struct Track {
     track_number: u8,
 }
 
+#[repr(C)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Date {
     year: u16,
     month: u8,
     day: u8,
 }
 
+#[repr(C)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Album {
     artist_id: ArtistId,
     title: StringRef,
     original_release_date: Date,
 }
 
+#[repr(C)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Artist {
     name: StringRef,
     name_for_sort: StringRef,
@@ -611,7 +617,7 @@ pub struct MemoryMetaIndex {
 /// The arguments passed to process are `(i, id, value)`, where `i` is the
 /// index of the builder. The collection iterated over is determined by
 /// `project`.
-fn for_all_sorted<'a, P, I, T, F>(
+fn for_each_sorted<'a, P, I, T, F>(
     builders: &'a [BuildMetaIndex],
     project: P,
     mut process: F
@@ -658,7 +664,7 @@ impl MemoryMetaIndex {
         let mut strings = StringDeduper::new();
         let mut filenames = Vec::new();
 
-        for_all_sorted(builders, |b| b.tracks.iter(), |i, id, mut track| {
+        for_each_sorted(builders, |b| b.tracks.iter(), |i, id, mut track| {
             // Give the track the final stringrefs, into the merged arrays.
             track.title = StringRef(
                 strings.insert(builders[i].strings.get(track.title.0))
@@ -671,7 +677,22 @@ impl MemoryMetaIndex {
             tracks.push((id, track));
         });
 
-        println!("{} files indexed.", filenames.len());
+        for_each_sorted(builders, |b| b.albums.iter(), |i, id, mut album| {
+            album.title = StringRef(
+                strings.insert(builders[i].strings.get(album.title.0))
+            );
+            albums.push((id, album));
+        });
+
+        for_each_sorted(builders, |b| b.artists.iter(), |i, id, mut artist| {
+            artist.name = StringRef(
+                strings.insert(builders[i].strings.get(artist.name.0))
+            );
+            artist.name_for_sort = StringRef(
+                strings.insert(builders[i].strings.get(artist.name_for_sort.0))
+            );
+            artists.push((id, artist));
+        });
 
         MemoryMetaIndex {
             artists: artists,
