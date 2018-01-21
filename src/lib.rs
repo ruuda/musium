@@ -15,7 +15,7 @@ extern crate unicode_normalization;
 mod flat_tree; // TODO: Rename.
 
 use std::ascii::AsciiExt;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::io;
 use std::io::Write;
@@ -221,12 +221,53 @@ impl fmt::Display for ArtistId {
     }
 }
 
+struct StringDeduper {
+    pub strings_to_id: HashMap<String, u32>,
+    pub strings: Vec<String>,
+}
+
+impl StringDeduper {
+    pub fn new() -> StringDeduper {
+        StringDeduper {
+            strings_to_id: HashMap::new(),
+            strings: Vec::new(),
+        }
+    }
+
+    /// Insert the string, or return its index if it was present already.
+    pub fn insert(&mut self, string: &str) -> u32 {
+        // If the string exists already, return its id, otherwise insert it.
+        // This does involve two lookups in the case of insert, but it does save
+        // an allocation that turns the &str into a String when an insert is
+        // required. We expect inserts to occur less than half of the time
+        // (usually the sort artist is the same as the artist, and many tracks
+        // share the same artist), therefore opt for the check first. Empirical
+        // evidence: on my personal library, about 22% of the strings need to be
+        // inserted (12.6k out of 57.8k total strings).
+        let next_id = self.strings.len() as u32;
+        // TODO: Unicode-normalize the string.
+        if let Some(id) = self.strings_to_id.get(string) { return *id }
+        self.strings_to_id.insert(string.to_string(), next_id);
+        self.strings.push(string.to_string());
+        next_id
+    }
+
+    /// Return the underlying string vector, destroying the deduplicator.
+    pub fn into_vec(self) -> Vec<String> {
+        self.strings
+    }
+
+    /// Return the string with the given index. Panics when out of bounds.
+    pub fn get(&self, index: u32) -> &str {
+        &self.strings[index as usize]
+    }
+}
+
 struct BuildMetaIndex {
     artists: BTreeMap<ArtistId, Artist>,
     albums: BTreeMap<AlbumId, Album>,
     tracks: BTreeMap<TrackId, Track>,
-    strings_to_id: BTreeMap<String, u32>,
-    strings: Vec<String>,
+    strings: StringDeduper,
     filenames: Vec<String>,
     words_track_title: BTreeSet<(String, TrackId)>,
     words_album_title: BTreeSet<(String, AlbumId)>,
@@ -390,8 +431,7 @@ impl BuildMetaIndex {
             artists: BTreeMap::new(),
             albums: BTreeMap::new(),
             tracks: BTreeMap::new(),
-            strings: Vec::new(),
-            strings_to_id: BTreeMap::new(),
+            strings: StringDeduper::new(),
             filenames: Vec::new(),
             words_track_title: BTreeSet::new(),
             words_album_title: BTreeSet::new(),
@@ -417,27 +457,6 @@ impl BuildMetaIndex {
         self.progress.as_mut().unwrap().send(Progress::Issue(issue)).unwrap();
     }
 
-    /// Insert a string in the strings map, returning its id.
-    ///
-    /// The id is just an opaque integer. When the strings are written out
-    /// sorted at a later time, the id can be converted into a `StringRef`.
-    fn insert_string(&mut self, string: &str) -> u32 {
-        // If the string exists already, return its id, otherwise insert it.
-        // This does involve two lookups in the case of insert, but it does save
-        // an allocation that turns the &str into a String when an insert is
-        // required. We expect inserts to occur less than half of the time
-        // (usually the sort artist is the same as the artist, and many tracks
-        // share the same artist), therefore opt for the check first. Empirical
-        // evidence: on my personal library, about 22% of the strings need to be
-        // inserted (12.6k out of 57.8k total strings).
-        let next_id = self.strings.len() as u32;
-        // TODO: Unicode-normalize the string.
-        if let Some(id) = self.strings_to_id.get(string) { return *id }
-        self.strings_to_id.insert(string.to_string(), next_id);
-        self.strings.push(string.to_string());
-        next_id
-    }
-
     pub fn insert(&mut self, filename: &str, tags: &mut claxon::metadata::Tags) {
         let mut disc_number = None;
         let mut track_number = None;
@@ -458,10 +477,10 @@ impl BuildMetaIndex {
         for (tag, value) in tags {
             match &tag.to_ascii_lowercase()[..] {
                 // TODO: Replace unwraps here with proper parse error reporting.
-                "album"                     => album = Some(self.insert_string(value)),
-                "albumartist"               => album_artist = Some(self.insert_string(value)),
-                "albumartistsort"           => album_artist_for_sort = Some(self.insert_string(value)),
-                "artist"                    => artist = Some(self.insert_string(value)),
+                "album"                     => album = Some(self.strings.insert(value)),
+                "albumartist"               => album_artist = Some(self.strings.insert(value)),
+                "albumartistsort"           => album_artist_for_sort = Some(self.strings.insert(value)),
+                "artist"                    => artist = Some(self.strings.insert(value)),
                 "discnumber"                => disc_number = Some(u8::from_str(value).unwrap()),
                 "musicbrainz_albumartistid" => mbid_artist = match parse_uuid(value) {
                     Some(id) => id,
@@ -476,7 +495,7 @@ impl BuildMetaIndex {
                     None => return self.error_parse_failed(filename_string, "musicbrainz_trackid"),
                 },
                 "originaldate"              => date = parse_date(value),
-                "title"                     => title = Some(self.insert_string(value)),
+                "title"                     => title = Some(self.strings.insert(value)),
                 "tracknumber"               => track_number = Some(u8::from_str(value).unwrap()),
                 _ => {}
             }
@@ -526,11 +545,11 @@ impl BuildMetaIndex {
         // Split the title, album, and album artist, on words, and add those to
         // the indexes, to allow finding the track/album/artist later by word.
         let mut words = Vec::new();
-        normalize_words(&self.strings[f_title as usize], &mut words);
+        normalize_words(&self.strings.get(f_title), &mut words);
         for w in words.drain(..) { self.words_track_title.insert((w, track_id)); }
-        normalize_words(&self.strings[f_album as usize], &mut words);
+        normalize_words(&self.strings.get(f_album), &mut words);
         for w in words.drain(..) { self.words_album_title.insert((w, album_id)); }
-        normalize_words(&self.strings[f_album_artist as usize], &mut words);
+        normalize_words(&self.strings.get(f_album_artist), &mut words);
         for w in words.drain(..) { self.words_album_artist.insert((w, artist_id)); }
 
         // If the track artist differs from the album artist, add words for the
@@ -538,7 +557,7 @@ impl BuildMetaIndex {
         // artist. This allows looking up e.g. a "feat. artist", without
         // polluting the index with every track by that artist.
         if f_track_artist != f_album_artist {
-            normalize_words(&self.strings[f_track_artist as usize], &mut words);
+            normalize_words(&self.strings.get(f_track_artist), &mut words);
             for w in words.drain(..) {
                 let pair = (w, artist_id);
                 if !self.words_album_artist.contains(&pair) {
@@ -594,7 +613,7 @@ impl MemoryMetaIndex {
         let mut artists = Vec::new();
         let mut albums = Vec::new();
         let mut tracks = Vec::new();
-        let mut strings = Vec::new();
+        let mut strings = StringDeduper::new();
         let mut filenames = Vec::new();
 
         // Sentinel ids, that we use instead of Option candidates that are set
@@ -639,7 +658,7 @@ impl MemoryMetaIndex {
             artists: artists,
             albums: albums,
             tracks: tracks,
-            strings: strings,
+            strings: strings.into_vec(),
             filenames: filenames,
         }
     }
