@@ -12,6 +12,7 @@ use futures::future::Future;
 use hyper::header::ContentLength;
 use hyper::server::{Http, Request, Response, Service};
 use hyper::{Get, StatusCode};
+use metaindex::MetaIndex;
 
 struct MetaServer;
 
@@ -114,7 +115,9 @@ fn main() {
         .filter(|p| p.extension() == Some(flac_ext))
         .collect();
 
-    assert!(metaindex::MemoryMetaIndex::from_paths(paths.iter()).is_ok());
+    let index = metaindex::MemoryMetaIndex::from_paths(paths.iter())
+        .expect("Failed to build index.");
+    println!("Index has {} tracks.", index.len());
     println!("Indexing complete, starting server on port 8233.");
     let addr = ([0, 0, 0, 0], 8233).into();
     let server = Http::new().bind(&addr, || Ok(MetaServer)).unwrap();

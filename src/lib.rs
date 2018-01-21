@@ -25,6 +25,7 @@ use std::str::FromStr;
 use std::sync::Mutex;
 use std::sync::mpsc::{SyncSender, sync_channel};
 use std::u32;
+use std::u64;
 
 use unicode_normalization::UnicodeNormalization;
 
@@ -131,6 +132,7 @@ pub trait MetaIndex {
     fn get_album(&self, id: AlbumId) -> Option<&Album>;
 }
 
+#[derive(Debug)]
 pub enum Error {
     /// An IO error during writing the index or reading the index or metadata.
     IoError(io::Error),
@@ -232,7 +234,9 @@ struct BuildMetaIndex {
     // When the track artist differs from the album artist, the words that occur
     // in the track artist but not in the album artist, are included here.
     words_track_artist: BTreeSet<(String, TrackId)>,
-    progress: SyncSender<Progress>,
+    // TODO: This option, to drop it when processing is done, is a bit of a
+    // hack. It would be nice to not have it in the builder at all.
+    progress: Option<SyncSender<Progress>>,
 }
 
 fn parse_date(_date_str: &str) -> Option<Date> {
@@ -393,7 +397,7 @@ impl BuildMetaIndex {
             words_album_title: BTreeSet::new(),
             words_album_artist: BTreeSet::new(),
             words_track_artist: BTreeSet::new(),
-            progress: progress,
+            progress: Some(progress),
         }
     }
 
@@ -402,7 +406,7 @@ impl BuildMetaIndex {
             filename: filename,
             detail: IssueDetail::FieldMissingError(field),
         };
-        self.progress.send(Progress::Issue(issue)).unwrap();
+        self.progress.as_mut().unwrap().send(Progress::Issue(issue)).unwrap();
     }
 
     fn error_parse_failed(&mut self, filename: String, field: &'static str) {
@@ -410,7 +414,7 @@ impl BuildMetaIndex {
             filename: filename,
             detail: IssueDetail::FieldParseFailedError(field),
         };
-        self.progress.send(Progress::Issue(issue)).unwrap();
+        self.progress.as_mut().unwrap().send(Progress::Issue(issue)).unwrap();
     }
 
     /// Insert a string in the strings map, returning its id.
@@ -575,32 +579,75 @@ impl BuildMetaIndex {
 
 pub struct MemoryMetaIndex {
     // TODO: Use an mmappable data structure. For now this will suffice.
-    artists: BTreeMap<ArtistId, Artist>,
-    albums: BTreeMap<AlbumId, Album>,
-    tracks: BTreeMap<TrackId, Track>,
+    artists: Vec<(ArtistId, Artist)>,
+    albums: Vec<(AlbumId, Album)>,
+    tracks: Vec<(TrackId, Track)>,
     strings: Vec<String>,
     filenames: Vec<String>,
 }
 
 impl MemoryMetaIndex {
-    /// Create an empty memory-backed metaindex.
-    ///
-    /// The empty index acts as a unit for combining with other indices.
-    pub fn new() -> MemoryMetaIndex {
+    /// Combine builders into a memory-backed index.
+    fn new(builders: &[BuildMetaIndex]) -> MemoryMetaIndex {
+        assert!(builders.len() > 0);
+        let mut strings_to_id: BTreeMap<String, u32> = BTreeMap::new();
+        let mut artists = Vec::new();
+        let mut albums = Vec::new();
+        let mut tracks = Vec::new();
+        let mut strings = Vec::new();
+        let mut filenames = Vec::new();
+
+        // Sentinel ids, that we use instead of Option candidates that are set
+        // to None when a builder is depleted. This is a bit more error prone,
+        // but it makes sorting much easier.
+        let track_zero: Track = unsafe { mem::zeroed() };
+        let album_zero: Album = unsafe { mem::zeroed() };
+        let artist_zero: Artist = unsafe { mem::zeroed() };
+        let track_sentinel = (&TrackId(u64::MAX), &track_zero);
+        let album_sentinel = (&AlbumId(u64::MAX), &album_zero);
+        let artist_sentinel = (&ArtistId(u64::MAX), &artist_zero);
+
+        let mut iters: Vec<_> = builders
+            .iter()
+            .map(|b| b.tracks.iter())
+            .collect();
+        let mut candidates: Vec<_> = iters
+            .iter_mut()
+            .map(|i| i.next().unwrap_or(track_sentinel))
+            .collect();
+
+        // Fill the tracks, taking from all builders, and keeping the tracks
+        // array sorted. Find the track with the smallest id among all builders,
+        // process it, and repeat.
+        loop {
+            let i = candidates
+                .iter()
+                .enumerate()
+                .min_by_key(|&(i, &(id, _))| id).unwrap().0;
+
+            if candidates[i] == track_sentinel { break }
+
+            let mut next = iters[i].next().unwrap_or(track_sentinel);
+            mem::swap(&mut candidates[i], &mut next);
+            let (id, track) = (next.0.clone(), next.1.clone());
+
+            // TODO: Merge.
+            tracks.push((id, track));
+        }
+
         MemoryMetaIndex {
-            artists: BTreeMap::new(),
-            albums: BTreeMap::new(),
-            tracks: BTreeMap::new(),
-            strings: Vec::new(),
-            filenames: Vec::new(),
+            artists: artists,
+            albums: albums,
+            tracks: tracks,
+            strings: strings,
+            filenames: filenames,
         }
     }
 
-    pub fn process<I>(paths: &Mutex<I>, progress: SyncSender<Progress>)
+    fn process<I>(paths: &Mutex<I>, builder: &mut BuildMetaIndex)
     where
         I: Iterator, <I as Iterator>::Item: AsRef<Path>
     {
-        let mut builder = BuildMetaIndex::new(progress);
         let mut progress_unreported = 0;
         loop {
             let opt_path = paths.lock().unwrap().next();
@@ -619,14 +666,16 @@ impl MemoryMetaIndex {
             // Don't report every track individually, to avoid synchronisation
             // overhead.
             if progress_unreported == 17 {
-                builder.progress.send(Progress::Indexed(progress_unreported)).unwrap();
+                builder.progress.as_mut().unwrap().send(Progress::Indexed(progress_unreported)).unwrap();
                 progress_unreported = 0;
             }
         }
 
         if progress_unreported != 0 {
-            builder.progress.send(Progress::Indexed(progress_unreported)).unwrap();
+            builder.progress.as_mut().unwrap().send(Progress::Indexed(progress_unreported)).unwrap();
         }
+
+        builder.progress = None;
     }
 
     /// Index the given files, and store the index in the target directory.
@@ -643,15 +692,19 @@ impl MemoryMetaIndex {
         let (tx_progress, rx_progress) = sync_channel(8);
 
         let num_threads = 24;
-        crossbeam::scope(|scope| {
-            for _ in 0..num_threads {
-                let issues = tx_progress.clone();
-                scope.spawn(|| MemoryMetaIndex::process(&mutex, issues));
-            }
+        let mut builders: Vec<_> = (0..num_threads)
+            .map(|_| BuildMetaIndex::new(tx_progress.clone()))
+            .collect();
 
-            // Drop the original sender to ensure the channel is closed when all
-            // threads are done.
-            mem::drop(tx_progress);
+        // Drop the original sender to ensure the channel is closed when all
+        // threads are done.
+        mem::drop(tx_progress);
+
+        crossbeam::scope(|scope| {
+            for builder in builders.iter_mut() {
+                let mtx = &mutex;
+                scope.spawn(move || MemoryMetaIndex::process(mtx, builder));
+            }
 
             // Print issues live as indexing happens.
             let mut printed_count = false;
@@ -674,14 +727,14 @@ impl MemoryMetaIndex {
             }
             if printed_count { println!(""); }
         });
-        Ok(MemoryMetaIndex::new())
+
+        Ok(MemoryMetaIndex::new(&builders))
     }
 }
 
 impl MetaIndex for MemoryMetaIndex {
     fn len(&self) -> usize {
-        // TODO: Real impl
-        0
+        self.tracks.len()
     }
 
     fn get_string(&self, sr: StringRef) -> &str {
