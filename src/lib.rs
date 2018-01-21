@@ -16,6 +16,7 @@ mod flat_tree; // TODO: Rename.
 
 use std::ascii::AsciiExt;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::btree_map;
 use std::fmt;
 use std::io;
 use std::io::Write;
@@ -605,6 +606,52 @@ pub struct MemoryMetaIndex {
     filenames: Vec<String>,
 }
 
+/// Invokes `process` for all elements in the builder, in sorted order.
+///
+/// The arguments passed to process are `(i, id, value)`, where `i` is the
+/// index of the builder. The collection iterated over is determined by
+/// `project`.
+fn for_all_sorted<'a, P, I, T, F>(
+    builders: &'a [BuildMetaIndex],
+    project: P,
+    sentinel_index: I,
+    mut process: F
+) where
+  P: Fn(&'a BuildMetaIndex) -> btree_map::Iter<'a, I, T>,
+  F: FnMut(usize, I, T),
+  I: Clone + Eq + Ord + 'a,
+  T: Clone + Eq + 'a,
+{
+    // Sentinel ids, that we use instead of Option candidates that are set
+    // to None when a builder is depleted. This is a bit more error prone,
+    // but it makes sorting easier.
+    let value_zero: T = unsafe { mem::zeroed() };
+    let sentinel = (&sentinel_index, &value_zero);
+
+    let mut iters: Vec<_> = builders
+        .iter()
+        .map(project)
+        .collect();
+    let mut candidates: Vec<_> = iters
+        .iter_mut()
+        .map(|i| i.next().unwrap_or(sentinel))
+        .collect();
+
+    // Apply the processing function to all elements from the builders in order.
+    loop {
+        let i = candidates
+            .iter()
+            .enumerate()
+            .min_by_key(|&(i, &(id, _))| id).unwrap().0;
+
+        if candidates[i] == sentinel { break }
+
+        let mut next = iters[i].next().unwrap_or(sentinel);
+        mem::swap(&mut candidates[i], &mut next);
+        process(i, next.0.clone(), next.1.clone());
+    }
+}
+
 impl MemoryMetaIndex {
     /// Combine builders into a memory-backed index.
     fn new(builders: &[BuildMetaIndex]) -> MemoryMetaIndex {
@@ -616,40 +663,8 @@ impl MemoryMetaIndex {
         let mut strings = StringDeduper::new();
         let mut filenames = Vec::new();
 
-        // Sentinel ids, that we use instead of Option candidates that are set
-        // to None when a builder is depleted. This is a bit more error prone,
-        // but it makes sorting much easier.
-        let track_zero: Track = unsafe { mem::zeroed() };
-        let album_zero: Album = unsafe { mem::zeroed() };
-        let artist_zero: Artist = unsafe { mem::zeroed() };
-        let track_sentinel = (&TrackId(u64::MAX), &track_zero);
-        let album_sentinel = (&AlbumId(u64::MAX), &album_zero);
-        let artist_sentinel = (&ArtistId(u64::MAX), &artist_zero);
-
-        let mut iters: Vec<_> = builders
-            .iter()
-            .map(|b| b.tracks.iter())
-            .collect();
-        let mut candidates: Vec<_> = iters
-            .iter_mut()
-            .map(|i| i.next().unwrap_or(track_sentinel))
-            .collect();
-
-        // Fill the tracks, taking from all builders, and keeping the tracks
-        // array sorted. Find the track with the smallest id among all builders,
-        // process it, and repeat.
-        loop {
-            let i = candidates
-                .iter()
-                .enumerate()
-                .min_by_key(|&(i, &(id, _))| id).unwrap().0;
-
-            if candidates[i] == track_sentinel { break }
-
-            let mut next = iters[i].next().unwrap_or(track_sentinel);
-            mem::swap(&mut candidates[i], &mut next);
-            let (id, mut track) = (next.0.clone(), next.1.clone());
-
+        for_all_sorted(builders, |b| b.tracks.iter(), TrackId(u64::MAX),
+        |i, id, mut track| {
             // Give the track the final stringrefs, into the merged arrays.
             track.title = StringRef(
                 strings.insert(builders[i].strings.get(track.title.0))
@@ -659,9 +674,10 @@ impl MemoryMetaIndex {
             );
             filenames.push(builders[i].filenames[track.filename.0 as usize].clone());
             track.filename = StringRef(filenames.len() as u32 - 1);
-
             tracks.push((id, track));
-        }
+        });
+
+        println!("{} files indexed.", filenames.len());
 
         MemoryMetaIndex {
             artists: artists,
