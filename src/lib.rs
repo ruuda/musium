@@ -648,9 +648,18 @@ impl MemoryMetaIndex {
 
             let mut next = iters[i].next().unwrap_or(track_sentinel);
             mem::swap(&mut candidates[i], &mut next);
-            let (id, track) = (next.0.clone(), next.1.clone());
+            let (id, mut track) = (next.0.clone(), next.1.clone());
 
-            // TODO: Merge.
+            // Give the track the final stringrefs, into the merged arrays.
+            track.title = StringRef(
+                strings.insert(builders[i].strings.get(track.title.0))
+            );
+            track.artist = StringRef(
+                strings.insert(builders[i].strings.get(track.artist.0))
+            );
+            filenames.push(builders[i].filenames[track.filename.0 as usize].clone());
+            track.filename = StringRef(filenames.len() as u32 - 1);
+
             tracks.push((id, track));
         }
 
