@@ -83,10 +83,10 @@ pub struct StringRef(u32);
 #[repr(C)]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Track {
-    album_id: AlbumId,
-    title: StringRef,
-    artist: StringRef,
-    filename: StringRef,
+    pub album_id: AlbumId,
+    pub title: StringRef,
+    pub artist: StringRef,
+    pub filename: StringRef,
     // Using u16 for duration gives us a little over 18 hours as maximum
     // duration; using u8 for track number gives us at most 255 tracks. This is
     // perhaps a bit limiting, but it does allow us to squeeze a `(TrackId,
@@ -94,32 +94,32 @@ pub struct Track {
     // boundaries. And of course more of them fit in the cache. If range ever
     // becomes a problem, we could use some of the disc number bits to extend
     // the duration range or track number range.
-    duration_seconds: u16,
-    disc_number: u8,
-    track_number: u8,
+    pub duration_seconds: u16,
+    pub disc_number: u8,
+    pub track_number: u8,
 }
 
 #[repr(C)]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Date {
-    year: u16,
-    month: u8,
-    day: u8,
+    pub year: u16,
+    pub month: u8,
+    pub day: u8,
 }
 
 #[repr(C)]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Album {
-    artist_id: ArtistId,
-    title: StringRef,
-    original_release_date: Date,
+    pub artist_id: ArtistId,
+    pub title: StringRef,
+    pub original_release_date: Date,
 }
 
 #[repr(C)]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Artist {
-    name: StringRef,
-    name_for_sort: StringRef,
+    pub name: StringRef,
+    pub name_for_sort: StringRef,
 }
 
 pub trait MetaIndex {
@@ -876,7 +876,7 @@ impl MetaIndex for MemoryMetaIndex {
     }
 
     fn get_string(&self, sr: StringRef) -> &str {
-        unimplemented!();
+        &self.strings[sr.0 as usize]
     }
 
     fn get_track(&self, id: TrackId) -> Option<&Track> {
