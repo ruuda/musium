@@ -4,21 +4,31 @@ extern crate metaindex;
 extern crate walkdir;
 
 use std::env;
-use std::process;
 use std::ffi::OsStr;
+use std::io;
+use std::io::Write;
 use std::path::PathBuf;
+use std::process;
+use std::rc::Rc;
 
 use futures::future::Future;
 use hyper::header::ContentLength;
 use hyper::server::{Http, Request, Response, Service};
 use hyper::{Get, StatusCode};
-use metaindex::MetaIndex;
+use metaindex::{MetaIndex, MemoryMetaIndex};
 
-struct MetaServer;
+struct MetaServer {
+    index: MemoryMetaIndex,
+}
 
 type BoxFuture = Box<Future<Item=Response, Error=hyper::Error>>;
 
 impl MetaServer {
+    fn new(index: MemoryMetaIndex) -> MetaServer {
+        MetaServer {
+            index: index,
+        }
+    }
 
     fn handle_not_found(&self) -> BoxFuture {
         let not_found = "Not Found";
@@ -48,7 +58,10 @@ impl MetaServer {
     }
 
     fn handle_albums(&self, _request: &Request) -> BoxFuture {
-        let response = Response::new().with_body("Albums");
+        let buffer = Vec::new();
+        let mut writer = io::Cursor::new(buffer);
+        write!(writer, "foo {} baz", "bar");
+        let response = Response::new().with_body(writer.into_inner());
         Box::new(futures::future::ok(response))
     }
 
@@ -119,7 +132,8 @@ fn main() {
         .expect("Failed to build index.");
     println!("Index has {} tracks.", index.len());
     println!("Indexing complete, starting server on port 8233.");
+    let service = Rc::new(MetaServer::new(index));
     let addr = ([0, 0, 0, 0], 8233).into();
-    let server = Http::new().bind(&addr, || Ok(MetaServer)).unwrap();
+    let server = Http::new().bind(&addr, move || Ok(service.clone())).unwrap();
     server.run().unwrap();
 }
