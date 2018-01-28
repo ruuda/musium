@@ -1,6 +1,7 @@
 extern crate futures;
 extern crate hyper;
 extern crate metaindex;
+extern crate serde_json;
 extern crate walkdir;
 
 use std::env;
@@ -58,10 +59,25 @@ impl MetaServer {
     }
 
     fn handle_albums(&self, _request: &Request) -> BoxFuture {
+        let albums = self.index.get_albums();
+
         let buffer = Vec::new();
-        let mut writer = io::Cursor::new(buffer);
-        write!(writer, "foo {} baz", "bar");
-        let response = Response::new().with_body(writer.into_inner());
+        let mut w = io::Cursor::new(buffer);
+        write!(w, "[");
+        let mut first = true;
+        for &(ref id, ref album) in albums {
+            if !first { write!(w, ","); }
+            // TODO: Proper json escaping, extract serializer for testing.
+            write!(w, r#"{{"id":"{}","title":"{}","artist":"{}","date":"{}"}}"#,
+               id,
+               self.index.get_string(album.title),
+               "TODO: Lookup artist",
+               "1970-01-01",
+            );
+            first = false;
+        }
+        write!(w, "]");
+        let response = Response::new().with_body(w.into_inner());
         Box::new(futures::future::ok(response))
     }
 
