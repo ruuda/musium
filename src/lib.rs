@@ -137,6 +137,15 @@ pub trait MetaIndex {
 
     /// Return album metadata.
     fn get_album(&self, id: AlbumId) -> Option<&Album>;
+
+    /// Return all tracks, ordered by id.
+    fn get_tracks(&self) -> &[(TrackId, Track)];
+
+    /// Return all albums, ordered by id.
+    fn get_albums(&self) -> &[(AlbumId, Album)];
+
+    /// Return all album artists, ordered by id.
+    fn get_artists(&self) -> &[(ArtistId, Artist)];
 }
 
 #[derive(Debug)]
@@ -876,6 +885,18 @@ impl MetaIndex for MemoryMetaIndex {
 
     fn get_album(&self, id: AlbumId) -> Option<&Album> {
         unimplemented!();
+    }
+
+    fn get_tracks(&self) -> &[(TrackId, Track)] {
+        &self.tracks
+    }
+
+    fn get_albums(&self) -> &[(AlbumId, Album)] {
+        &self.albums
+    }
+
+    fn get_artists(&self) -> &[(ArtistId, Artist)] {
+        &self.artists
     }
 }
 
