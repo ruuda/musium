@@ -68,9 +68,9 @@ impl MetaServer {
         for &(ref id, ref album) in albums {
             if !first { write!(w, ","); }
             // TODO: Proper json escaping, extract serializer for testing.
-            write!(w, r#"{{"id":"{}","title":"{}","artist":"{}","date":"{}"}}"#,
-               id,
-               self.index.get_string(album.title),
+            write!(w, r#"{{"id":"{}","title":"#, id);
+            serde_json::to_writer(&mut w, self.index.get_string(album.title));
+            write!(w, r#","artist":"{}","date":"{}"}}"#,
                "TODO: Lookup artist",
                "1970-01-01",
             );
