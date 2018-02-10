@@ -493,7 +493,6 @@ impl BuildMetaIndex {
         let mut album_artist_for_sort = None;
         let mut date = None;
 
-        let mut mbid_track = 0;
         let mut mbid_album = 0;
         let mut mbid_artist = 0;
 
@@ -516,10 +515,6 @@ impl BuildMetaIndex {
                     Some(id) => id,
                     None => return self.error_parse_failed(filename_string, "musicbrainz_albumid"),
                 },
-                "musicbrainz_trackid"       => mbid_track = match parse_uuid(value) {
-                    Some(id) => id,
-                    None => return self.error_parse_failed(filename_string, "musicbrainz_trackid"),
-                },
                 "originaldate"              => date = parse_date(value),
                 "title"                     => title = Some(self.strings.insert(value)),
                 "tracknumber"               => track_number = Some(u8::from_str(value).unwrap()),
@@ -527,9 +522,6 @@ impl BuildMetaIndex {
             }
         }
 
-        if mbid_track == 0 {
-            return self.error_missing_field(filename_string, "musicbrainz_trackid")
-        }
         if mbid_album == 0 {
             return self.error_missing_field(filename_string, "musicbrainz_albumid")
         }
