@@ -122,6 +122,12 @@ pub struct Artist {
     pub name_for_sort: StringRef,
 }
 
+impl fmt::Display for Date {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}-{}-{}", self.year, self.month, self.day)
+    }
+}
+
 pub trait MetaIndex {
     /// Return the number of tracks in the index.
     fn len(&self) -> usize;
