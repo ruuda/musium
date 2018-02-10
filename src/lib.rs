@@ -100,7 +100,7 @@ pub struct Track {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Date {
     pub year: u16,
     pub month: u8,
@@ -222,7 +222,7 @@ pub struct Issue {
 
 impl fmt::Display for Issue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}: ", self.filename)?;
+        write!(f, "{}:\n  ", self.filename)?;
         match self.detail {
             IssueDetail::FieldMissingError(field) =>
                 write!(f, "error: field '{}' missing.", field),
@@ -304,6 +304,40 @@ impl StringDeduper {
     pub fn get(&self, index: u32) -> &str {
         &self.strings[index as usize]
     }
+}
+
+/// Return an issue if the two albums are not equal.
+fn albums_different(
+    strings: &StringDeduper,
+    id: AlbumId,
+    a: &Album,
+    b: &Album)
+    -> Option<IssueDetail>
+{
+    let title_a = strings.get(a.title.0);
+    let title_b = strings.get(b.title.0);
+
+    if title_a != title_b {
+        return Some(IssueDetail::AlbumTitleMismatch(
+            id,
+            title_a.into(),
+            title_b.into(),
+        ));
+    }
+
+    if a.original_release_date != b.original_release_date {
+        return Some(IssueDetail::AlbumReleaseDateMismatch(
+            id,
+            a.original_release_date,
+            b.original_release_date,
+        ));
+    }
+
+    if a.artist_id != b.artist_id {
+        unimplemented!("TODO: Look up artist names.");
+    }
+
+    None
 }
 
 struct BuildMetaIndex {
@@ -484,20 +518,20 @@ impl BuildMetaIndex {
         }
     }
 
-    fn error_missing_field(&mut self, filename: String, field: &'static str) {
+    fn issue(&mut self, filename: String, detail: IssueDetail) {
         let issue = Issue {
             filename: filename,
-            detail: IssueDetail::FieldMissingError(field),
+            detail: detail
         };
         self.progress.as_mut().unwrap().send(Progress::Issue(issue)).unwrap();
     }
 
+    fn error_missing_field(&mut self, filename: String, field: &'static str) {
+        self.issue(filename, IssueDetail::FieldMissingError(field));
+    }
+
     fn error_parse_failed(&mut self, filename: String, field: &'static str) {
-        let issue = Issue {
-            filename: filename,
-            detail: IssueDetail::FieldParseFailedError(field),
-        };
-        self.progress.as_mut().unwrap().send(Progress::Issue(issue)).unwrap();
+        self.issue(filename, IssueDetail::FieldParseFailedError(field));
     }
 
     pub fn insert(&mut self, filename: &str, tags: &mut claxon::metadata::Tags) {
@@ -620,11 +654,24 @@ impl BuildMetaIndex {
             name_for_sort: StringRef(album_artist_for_sort.unwrap_or(f_album_artist)),
         };
 
-        // TODO: Check for consistency if duplicates occur.
-        self.filenames.push(filename_string);
+        // Check for consistency if duplicates occur.
         if self.tracks.get(&track_id).is_some() {
             panic!("Duplicate track {}, file {}.", track_id, filename);
         }
+        if let Some(existing_album) = self.albums.get(&album_id) {
+            if let Some(detail) = albums_different(&self.strings, album_id, existing_album, &album) {
+                let issue = Issue {
+                    filename: filename_string.clone(),
+                    detail: detail
+                };
+                self.progress.as_mut().unwrap().send(Progress::Issue(issue)).unwrap();
+            }
+        }
+        if let Some(existing_artist) = self.artists.get(&artist_id) {
+            //assert_eq!(artist, *existing_artist);
+        }
+
+        self.filenames.push(filename_string);
         self.tracks.insert(track_id, track);
         self.albums.insert(album_id, album);
         self.artists.insert(artist_id, artist);
@@ -860,7 +907,7 @@ impl MemoryMetaIndex {
                 match progress {
                     Progress::Issue(issue) => {
                         if printed_count { print!("\r"); }
-                        println!("{}", issue);
+                        println!("{}\n", issue);
                         printed_count = false;
                     }
                     Progress::Indexed(n) => {
