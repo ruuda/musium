@@ -204,6 +204,14 @@ pub enum IssueDetail {
     /// Two different titles were found for an album with the same mbid.
     /// Contains the title used, and the discarded alternative.
     AlbumTitleMismatch(AlbumId, String, String),
+
+    /// Two different release dates were found for an album with the same mbid.
+    /// Contains the date used, and the discarded alternative.
+    AlbumReleaseDateMismatch(AlbumId, Date, Date),
+
+    /// Two different artists were found for an album with the same mbid.
+    /// Contains the artist used, and the discarded alternative.
+    AlbumArtistMismatch(AlbumId, String, String),
 }
 
 #[derive(Debug)]
@@ -221,8 +229,11 @@ impl fmt::Display for Issue {
             IssueDetail::FieldParseFailedError(field) =>
                 write!(f, "error: failed to parse field '{}'.", field),
             IssueDetail::AlbumTitleMismatch(_id, ref title, ref alt) =>
-                write!(f, "warning: discarded inconsistent album title '{}' in favour of '{}'.",
-                       alt, title),
+                write!(f, "warning: discarded inconsistent album title '{}' in favour of '{}'.", alt, title),
+            IssueDetail::AlbumReleaseDateMismatch(_id, ref date, ref alt) =>
+                write!(f, "warning: discarded inconsistent album release date {} in favour of {}.", alt, date),
+            IssueDetail::AlbumArtistMismatch(_id, ref artist, ref alt) =>
+                write!(f, "warning: discarded inconsistent album artist '{}' in favour of '{}'.", alt, artist),
         }
     }
 }
