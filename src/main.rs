@@ -72,7 +72,7 @@ impl MetaServer {
             serde_json::to_writer(&mut w, self.index.get_string(album.title));
             write!(w, r#","artist":"{}","date":"{}"}}"#,
                "TODO: Lookup artist",
-               "1970-01-01",
+               album.original_release_date,
             );
             first = false;
         }

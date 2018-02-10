@@ -124,7 +124,7 @@ pub struct Artist {
 
 impl fmt::Display for Date {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}-{}-{}", self.year, self.month, self.day)
+        write!(f, "{:04}-{:02}-{:02}", self.year, self.month, self.day)
     }
 }
 
@@ -357,13 +357,29 @@ struct BuildMetaIndex {
     progress: Option<SyncSender<Progress>>,
 }
 
-fn parse_date(_date_str: &str) -> Option<Date> {
-    // TODO
+fn parse_date(date_str: &str) -> Option<Date> {
+    // TODO: Parse partial dates such as "2014", and "2014-04".
+
+    if date_str.len() != 10 {
+        return None
+    }
+    if date_str.as_bytes()[4] != b'-' || date_str.as_bytes()[7] != b'-' {
+        return None
+    }
+
     let date = Date {
-        year: 0,
-        month: 0,
-        day: 0,
+        year: u16::from_str(&date_str[0..4]).ok()?,
+        month: u8::from_str(&date_str[5..7]).ok()?,
+        day: u8::from_str(&date_str[8..10]).ok()?,
     };
+
+    // This is not the most strict date well-formedness check that we can do,
+    // but it is something at least. Note that we do allow the month and day to
+    // be zero, to indicate the entire month or entire year.
+    if date.month > 12 || date.day > 31 {
+        return None
+    }
+
     Some(date)
 }
 
