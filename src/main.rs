@@ -75,6 +75,8 @@ impl MetaServer {
             serde_json::to_writer(&mut w, self.index.get_string(album.title));
             write!(w, r#","artist":"#);
             serde_json::to_writer(&mut w, self.index.get_string(artist.name));
+            write!(w, r#","sort_artist":"#);
+            serde_json::to_writer(&mut w, self.index.get_string(artist.name_for_sort));
             write!(w, r#","date":"{}"}}"#, album.original_release_date);
             first = false;
         }

@@ -599,6 +599,7 @@ impl BuildMetaIndex {
                 // TODO: Replace unwraps here with proper parse error reporting.
                 "album"                     => album = Some(self.strings.insert(value)),
                 "albumartist"               => album_artist = Some(self.strings.insert(value)),
+                // TODO: Unicode-normalize and lowercase the sort artist.
                 "albumartistsort"           => album_artist_for_sort = Some(self.strings.insert(value)),
                 "artist"                    => artist = Some(self.strings.insert(value)),
                 "discnumber"                => disc_number = Some(u8::from_str(value).unwrap()),
