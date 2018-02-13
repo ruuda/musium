@@ -168,6 +168,9 @@ pub trait MetaIndex {
 
     /// Return all album artists, ordered by id.
     fn get_artists(&self) -> &[(ArtistId, Artist)];
+
+    /// Look up an artist by id.
+    fn get_artist(&self, ArtistId) -> Option<&Artist>;
 }
 
 #[derive(Debug)]
@@ -997,6 +1000,13 @@ impl MetaIndex for MemoryMetaIndex {
 
     fn get_artists(&self) -> &[(ArtistId, Artist)] {
         &self.artists
+    }
+
+    fn get_artist(&self, id: ArtistId) -> Option<&Artist> {
+        self.artists
+            .binary_search_by_key(&id, |pair| pair.0)
+            .ok()
+            .map(|idx| &self.artists[idx].1)
     }
 }
 

@@ -66,14 +66,16 @@ impl MetaServer {
         write!(w, "[");
         let mut first = true;
         for &(ref id, ref album) in albums {
+            // The unwrap is safe here, in the sense that if the index is
+            // well-formed, it will never fail. The id is provided by the index
+            // itself, not user input, so the artist should be present.
+            let artist = self.index.get_artist(album.artist_id).unwrap();
             if !first { write!(w, ","); }
-            // TODO: Proper json escaping, extract serializer for testing.
             write!(w, r#"{{"id":"{}","title":"#, id);
             serde_json::to_writer(&mut w, self.index.get_string(album.title));
-            write!(w, r#","artist":"{}","date":"{}"}}"#,
-               "TODO: Lookup artist",
-               album.original_release_date,
-            );
+            write!(w, r#","artist":"#);
+            serde_json::to_writer(&mut w, self.index.get_string(artist.name));
+            write!(w, r#","date":"{}"}}"#, album.original_release_date);
             first = false;
         }
         write!(w, "]");
