@@ -107,6 +107,22 @@ pub struct Date {
     pub day: u8,
 }
 
+impl Date {
+    pub fn new(year: u16, month: u8, day: u8) -> Date {
+        // We assume dates are parsed from YYYY-MM-DD strings.
+        // Note that zeros are valid, they are used to indicate
+        // unknown months or days.
+        debug_assert!(year <= 9999);
+        debug_assert!(month <= 12);
+        debug_assert!(day <= 31);
+        Date {
+            year,
+            month,
+            day,
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Album {
@@ -358,29 +374,37 @@ struct BuildMetaIndex {
 }
 
 fn parse_date(date_str: &str) -> Option<Date> {
-    // TODO: Parse partial dates such as "2014", and "2014-04".
+    // We expect at least a year.
+    if date_str.len() < 4 { return None }
 
-    if date_str.len() != 10 {
-        return None
-    }
-    if date_str.as_bytes()[4] != b'-' || date_str.as_bytes()[7] != b'-' {
-        return None
+    let year = u16::from_str(&date_str[0..4]).ok()?;
+    let mut month: u8 = 0;
+    let mut day: u8 = 0;
+
+    // If there is something following the year, it must be dash, and there must
+    // be at least two digits for the month.
+    if date_str.len() > 4 {
+        if date_str.as_bytes()[4] != b'-' { return None }
+        if date_str.len() < 7 { return None }
+        month = u8::from_str(&date_str[5..7]).ok()?;
     }
 
-    let date = Date {
-        year: u16::from_str(&date_str[0..4]).ok()?,
-        month: u8::from_str(&date_str[5..7]).ok()?,
-        day: u8::from_str(&date_str[8..10]).ok()?,
-    };
+    // If there is something following the month, it must be dash, and there
+    // must be exactly two digits for the day.
+    if date_str.len() > 7 {
+        if date_str.as_bytes()[7] != b'-' { return None }
+        if date_str.len() != 10 { return None }
+        day = u8::from_str(&date_str[8..10]).ok()?;
+    }
 
     // This is not the most strict date well-formedness check that we can do,
     // but it is something at least. Note that we do allow the month and day to
     // be zero, to indicate the entire month or entire year.
-    if date.month > 12 || date.day > 31 {
+    if month > 12 || day > 31 {
         return None
     }
 
-    Some(date)
+    Some(Date::new(year, month, day))
 }
 
 fn parse_uuid(uuid: &str) -> Option<u64> {
@@ -973,11 +997,42 @@ impl MetaIndex for MemoryMetaIndex {
 }
 
 mod tests {
-    use super::{MetaIndex, MemoryMetaIndex};
+    use super::{Date, MetaIndex, MemoryMetaIndex};
+    use super::{parse_date, parse_uuid};
+
+    #[test]
+    fn parse_date_parses_year() {
+        assert_eq!(parse_date("2018"), Some(Date::new(2018, 0, 0)));
+        assert_eq!(parse_date("1970"), Some(Date::new(1970, 0, 0)));
+        assert_eq!(parse_date("572"), None);
+        assert_eq!(parse_date("-572"), None);
+        assert_eq!(parse_date("MMXVIII"), None);
+        assert_eq!(parse_date("2018a"), None);
+    }
+
+    #[test]
+    fn parse_date_parses_month() {
+        assert_eq!(parse_date("2018-01"), Some(Date::new(2018, 1, 0)));
+        assert_eq!(parse_date("2018-12"), Some(Date::new(2018, 12, 0)));
+        assert_eq!(parse_date("2018-42"), None);
+        assert_eq!(parse_date("2018 12"), None);
+        assert_eq!(parse_date("2018-3"), None);
+        assert_eq!(parse_date("2018-03a"), None);
+    }
+
+    #[test]
+    fn parse_date_parses_day() {
+        assert_eq!(parse_date("2018-01-01"), Some(Date::new(2018, 1, 1)));
+        assert_eq!(parse_date("2018-01-31"), Some(Date::new(2018, 1, 31)));
+        assert_eq!(parse_date("2018-01-32"), None);
+        assert_eq!(parse_date("2018-01 01"), None);
+        assert_eq!(parse_date("2018-01-1"), None);
+        assert_eq!(parse_date("2018-01-01a"), None);
+    }
 
     #[test]
     fn new_is_empty() {
-        let mi = MemoryMetaIndex::new();
+        let mi = MemoryMetaIndex::new(&[]);
         assert_eq!(mi.len(), 0);
     }
 }
