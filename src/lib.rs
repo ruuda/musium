@@ -466,8 +466,7 @@ fn push_word(dest: &mut Vec<String>, word: &mut String) {
 /// separately. The "KD" form, as opposed to the "D" form, also replaces more
 /// things that have the same semantic meaning, such as replacing superscripts
 /// with normal digits. Finally (not part of the KD normalization), everything
-/// is lowercased, and accents, some punctuation, and single-character words are
-/// removed.
+/// is lowercased, and accents and some punctuation are removed.
 fn normalize_words(title: &str, dest: &mut Vec<String>) {
     // We assume that in the majority of the cases, the transformations
     // below do not change the number of bytes.
@@ -599,7 +598,6 @@ impl BuildMetaIndex {
                 // TODO: Replace unwraps here with proper parse error reporting.
                 "album"                     => album = Some(self.strings.insert(value)),
                 "albumartist"               => album_artist = Some(self.strings.insert(value)),
-                // TODO: Unicode-normalize and lowercase the sort artist.
                 "albumartistsort"           => album_artist_for_sort = Some(self.strings.insert(value)),
                 "artist"                    => artist = Some(self.strings.insert(value)),
                 "discnumber"                => disc_number = Some(u8::from_str(value).unwrap()),
@@ -669,6 +667,24 @@ impl BuildMetaIndex {
         normalize_words(&self.strings.get(f_album_artist), &mut words);
         for w in words.drain(..) { self.words_album_artist.insert((w, artist_id)); }
 
+        // Normalize the sort artist too. Generally, the only thing it is useful
+        // for is to turn e.g. "The Who" into "Who, The". (Data from Musicbrainz
+        // also puts the last name first for artists who use their real name,
+        // but I dislike this.) But this is not sufficient for sorting alone:
+        // there can still be case differences (e.g. "dEUS" and "deadmau5"
+        // sorting last because they are lowercase) and accents (e.g. "Étienne
+        // de Crécy" sorting last, and not with the "E"). The correct sort
+        // ordering depends on locale. I am going to ignore all of that and turn
+        // characters into the lowercase ascii character that looks most like
+        // it, then sort by that.
+        // TODO: Avoid inserting non-normalized sort artist in the string
+        // deduplicator above; the non-normalized string is never referenced
+        // except here temporarily.
+        normalize_words(&self.strings.get(album_artist_for_sort.unwrap_or(f_album_artist)), &mut words);
+        let sort_artist = words.join(" ");
+        let f_album_artist_for_sort = self.strings.insert(&sort_artist);
+        words.clear();
+
         // If the track artist differs from the album artist, add words for the
         // track artist, but only for the words that do not occur in the album
         // artist. This allows looking up e.g. a "feat. artist", without
@@ -699,7 +715,7 @@ impl BuildMetaIndex {
         };
         let artist = Artist {
             name: StringRef(f_album_artist),
-            name_for_sort: StringRef(album_artist_for_sort.unwrap_or(f_album_artist)),
+            name_for_sort: StringRef(f_album_artist_for_sort),
         };
 
         // Check for consistency if duplicates occur.
