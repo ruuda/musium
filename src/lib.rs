@@ -941,8 +941,11 @@ impl MemoryMetaIndex {
     /// Although this streams most metadata to disk, a few parts of the index
     /// have to be kept in memory for efficient sorting, so the paths iterator
     /// should not yield *too* many elements.
-    pub fn from_paths<I>(paths: I) -> Result<MemoryMetaIndex>
+    ///
+    /// Reports progress to `out`, which can be `std::io::stdout().lock()`.
+    pub fn from_paths<I, W>(paths: I, mut out: W) -> Result<MemoryMetaIndex>
     where I: Iterator,
+          W: Write,
           <I as IntoIterator>::Item: AsRef<Path>,
           <I as IntoIterator>::IntoIter: Send {
         let paths_iterator = paths.into_iter().fuse();
@@ -970,20 +973,20 @@ impl MemoryMetaIndex {
             for progress in rx_progress {
                 match progress {
                     Progress::Issue(issue) => {
-                        if printed_count { print!("\r"); }
-                        println!("{}\n", issue);
+                        if printed_count { write!(out, "\r"); }
+                        writeln!(out, "{}\n", issue);
                         printed_count = false;
                     }
                     Progress::Indexed(n) => {
                         count += n;
-                        if printed_count { print!("\r"); }
-                        print!("{} tracks indexed", count);
-                        std::io::stdout().flush().unwrap();
+                        if printed_count { write!(out, "\r"); }
+                        write!(out, "{} tracks indexed", count);
+                        out.flush().unwrap();
                         printed_count = true;
                     }
                 }
             }
-            if printed_count { println!(""); }
+            if printed_count { writeln!(out, ""); }
         });
 
         Ok(MemoryMetaIndex::new(&builders))

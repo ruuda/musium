@@ -148,8 +148,12 @@ fn main() {
         .filter(|p| p.extension() == Some(flac_ext))
         .collect();
 
-    let index = metaindex::MemoryMetaIndex::from_paths(paths.iter())
-        .expect("Failed to build index.");
+    let index = {
+        let stdout = std::io::stdout();
+        let mut lock = stdout.lock();
+        metaindex::MemoryMetaIndex::from_paths(paths.iter(), &mut lock)
+            .expect("Failed to build index.")
+    };
     println!("Index has {} tracks.", index.len());
     println!("Indexing complete, starting server on port 8233.");
     let service = Rc::new(MetaServer::new(index));
