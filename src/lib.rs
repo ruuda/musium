@@ -842,14 +842,14 @@ impl MemoryMetaIndex {
                     let title_curr = strings.get(album.title.0);
                     let title_prev = strings.get(prev.title.0);
                     if title_curr != title_prev {
-                        println!("warning: discarding inconsistent album title '{}' \
-                                  in favour of '{}'", title_curr, title_prev);
+                        //println!("warning: discarding inconsistent album title '{}' \
+                        //          in favour of '{}'", title_curr, title_prev);
                     }
                     if album.artist_id != prev.artist_id {
                         // TODO: Print artist name rather than id.
-                        println!("warning: discarding inconsistent album artist {} \
-                                  in favour of {} for album '{}'",
-                                  album.artist_id, prev.artist_id, title_prev);
+                        //println!("warning: discarding inconsistent album artist {} \
+                        //          in favour of {} for album '{}'",
+                        //          album.artist_id, prev.artist_id, title_prev);
                     }
                     return // Like `continue`, returns from the closure.
                 }
@@ -874,13 +874,13 @@ impl MemoryMetaIndex {
                     let sort_curr = strings.get(artist.name_for_sort.0);
                     let sort_prev = strings.get(prev.name_for_sort.0);
                     if name_curr != name_prev {
-                        println!("warning: discarding inconsistent artist name '{}' \
-                                  in favour of '{}'", name_prev, name_curr);
+                        //println!("warning: discarding inconsistent artist name '{}' \
+                        //          in favour of '{}'", name_prev, name_curr);
                     }
                     if sort_curr != sort_prev {
-                        println!("warning: discarding inconsistent sort name '{}' \
-                                  in favour of '{}' for artist '{}'",
-                                  sort_curr, sort_prev, name_prev);
+                        //println!("warning: discarding inconsistent sort name '{}' \
+                        //          in favour of '{}' for artist '{}'",
+                        //          sort_curr, sort_prev, name_prev);
                     }
                     return // Like `continue`, returns from the closure.
                 }
@@ -889,9 +889,9 @@ impl MemoryMetaIndex {
             artists.push((id, artist));
         });
 
-        println!("{} files indexed.", filenames.len());
-        println!("{} strings, {} tracks, {} albums, {} artists.",
-                 strings.strings.len(), tracks.len(), albums.len(), artists.len());
+        //println!("{} files indexed.", filenames.len());
+        //println!("{} strings, {} tracks, {} albums, {} artists.",
+        //         strings.strings.len(), tracks.len(), albums.len(), artists.len());
 
         MemoryMetaIndex {
             artists: artists,

@@ -26,7 +26,8 @@ fn build_index() -> MemoryMetaIndex {
         .filter(|p| p.extension() == Some(flac_ext))
         .collect();
 
-    MemoryMetaIndex::from_paths(paths.iter()).expect("Failed to build index.")
+    let mut sink = std::io::sink();
+    MemoryMetaIndex::from_paths(paths.iter(), sink).expect("Failed to build index.")
 }
 
 fn bench_get_artist(b: &mut Bencher) {
