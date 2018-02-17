@@ -26,7 +26,7 @@ fn build_index() -> MemoryMetaIndex {
         .filter(|p| p.extension() == Some(flac_ext))
         .collect();
 
-    let mut sink = std::io::sink();
+    let sink = std::io::sink();
     MemoryMetaIndex::from_paths(paths.iter(), sink).expect("Failed to build index.")
 }
 
@@ -40,8 +40,43 @@ fn bench_get_artist(b: &mut Bencher) {
     });
 }
 
+fn bench_get_artist_bsearch(b: &mut Bencher) {
+    let index = build_index();
+    let mut album = index.get_albums().iter().cycle();
+    let artists = index.get_artists();
+    b.iter(|| {
+        let id = album.next().unwrap().1.artist_id;
+        let artist = artists
+            .binary_search_by_key(&id, |pair| pair.0)
+            .ok()
+            .map(|idx| &artists[idx].1)
+            .unwrap();
+        black_box(artist);
+    });
+}
+
+fn bench_get_artist_isearch(b: &mut Bencher) {
+    let index = build_index();
+    let mut album = index.get_albums().iter().cycle();
+    let artists = index.get_artists();
+    b.iter(|| {
+        let id = album.next().unwrap().1.artist_id;
+        let k = (((id.0 >> 32) * artists.len() as u64) >> 32) as usize;
+        let mid = artists[k].0;
+        let (low, high) = if id < mid { (0, k) } else { (k, artists.len()) };
+        let artist = artists[low..high]
+            .binary_search_by_key(&id, |pair| pair.0)
+            .ok()
+            .map(|idx| &artists[idx].1)
+            .unwrap();
+        black_box(artist);
+    });
+}
+
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("get_artist", bench_get_artist);
+    c.bench_function("get_artist_bsearch", bench_get_artist_bsearch);
+    c.bench_function("get_artist_isearch", bench_get_artist_isearch);
 }
 
 criterion_group! {

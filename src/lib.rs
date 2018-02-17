@@ -73,8 +73,9 @@ pub struct TrackId(u64);
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct AlbumId(u64);
 
+// TODO: Field should not be pub.
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct ArtistId(u64);
+pub struct ArtistId(pub u64);
 
 /// Index into a byte array that contains length-prefixed strings.
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
