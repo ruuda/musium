@@ -50,8 +50,11 @@ criterion_group! {
         // Do not use p = 0.05, we are not doing social studies here. I want to
         // actually be sure, and not be wrong 1 in 20 times, because I will run
         // the benchmark more than 20 times for sure.
-        .significance_level(0.001)
-        .confidence_level(0.99);
+        .significance_level(0.0005)
+        .confidence_level(0.99)
+        // The default 100 samples yielded results that could differ by 10% per
+        // run; use more samples then.
+        .sample_size(500);
     targets = criterion_benchmark
 }
 
