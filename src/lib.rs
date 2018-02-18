@@ -801,7 +801,7 @@ fn for_each_sorted<'a, P, I, T, F>(
 
 impl MemoryMetaIndex {
     /// Combine builders into a memory-backed index.
-    fn new(builders: &[BuildMetaIndex]) -> MemoryMetaIndex {
+    fn new(builders: &[BuildMetaIndex], issues: &mut Vec<Issue>) -> MemoryMetaIndex {
         assert!(builders.len() > 0);
         let mut strings_to_id: BTreeMap<String, u32> = BTreeMap::new();
         let mut artists: Vec<(ArtistId, Artist)> = Vec::new();
@@ -822,10 +822,7 @@ impl MemoryMetaIndex {
             track.filename = StringRef(filenames.len() as u32 - 1);
 
             if let Some(&(prev_id, ref prev)) = tracks.last() {
-                if prev_id == id {
-                    assert_eq!(&track, prev);
-                    return // Like `continue`, returns from the closure.
-                }
+                assert!(prev_id != id, "Duplicate track should not occur.");
             }
 
             tracks.push((id, track));
@@ -838,21 +835,14 @@ impl MemoryMetaIndex {
 
             if let Some(&(prev_id, ref prev)) = albums.last() {
                 if prev_id == id {
-                    // TODO: Extract this somewhere, and report using
-                    // IssueDetail::AlbumTitleMismatch.
-                    let title_curr = strings.get(album.title.0);
-                    let title_prev = strings.get(prev.title.0);
-                    if title_curr != title_prev {
-                        //println!("warning: discarding inconsistent album title '{}' \
-                        //          in favour of '{}'", title_curr, title_prev);
+                    if let Some(detail) = albums_different(&strings, id, prev, &album) {
+                        let issue = Issue {
+                            filename: "TODO: Get filename.".into(),
+                            detail: detail
+                        };
+                        issues.push(issue);
+                        return // Like `continue`, returns from the closure.
                     }
-                    if album.artist_id != prev.artist_id {
-                        // TODO: Print artist name rather than id.
-                        //println!("warning: discarding inconsistent album artist {} \
-                        //          in favour of {} for album '{}'",
-                        //          album.artist_id, prev.artist_id, title_prev);
-                    }
-                    return // Like `continue`, returns from the closure.
                 }
             }
 
@@ -875,13 +865,13 @@ impl MemoryMetaIndex {
                     let sort_curr = strings.get(artist.name_for_sort.0);
                     let sort_prev = strings.get(prev.name_for_sort.0);
                     if name_curr != name_prev {
-                        //println!("warning: discarding inconsistent artist name '{}' \
-                        //          in favour of '{}'", name_prev, name_curr);
+                        println!("warning: discarding inconsistent artist name '{}' \
+                                  in favour of '{}'", name_prev, name_curr);
                     }
                     if sort_curr != sort_prev {
-                        //println!("warning: discarding inconsistent sort name '{}' \
-                        //          in favour of '{}' for artist '{}'",
-                        //          sort_curr, sort_prev, name_prev);
+                        println!("warning: discarding inconsistent sort name '{}' \
+                                  in favour of '{}' for artist '{}'",
+                                  sort_curr, sort_prev, name_prev);
                     }
                     return // Like `continue`, returns from the closure.
                 }
@@ -890,9 +880,9 @@ impl MemoryMetaIndex {
             artists.push((id, artist));
         });
 
-        //println!("{} files indexed.", filenames.len());
-        //println!("{} strings, {} tracks, {} albums, {} artists.",
-        //         strings.strings.len(), tracks.len(), albums.len(), artists.len());
+        println!("{} files indexed.", filenames.len());
+        println!("{} strings, {} tracks, {} albums, {} artists.",
+                 strings.strings.len(), tracks.len(), albums.len(), artists.len());
 
         MemoryMetaIndex {
             artists: artists,
@@ -990,7 +980,15 @@ impl MemoryMetaIndex {
             if printed_count { writeln!(out, ""); }
         });
 
-        Ok(MemoryMetaIndex::new(&builders))
+        let mut issues = Vec::new();
+        let memory_index = MemoryMetaIndex::new(&builders, &mut issues);
+
+        // Report issues that resulted from merging.
+        for issue in &issues {
+            writeln!(out, "{}\n", issue);
+        }
+
+        Ok(memory_index)
     }
 }
 
