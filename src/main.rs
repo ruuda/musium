@@ -7,7 +7,6 @@ extern crate walkdir;
 use std::env;
 use std::ffi::OsStr;
 use std::io;
-use std::io::Write;
 use std::path::PathBuf;
 use std::process;
 use std::rc::Rc;
@@ -59,28 +58,9 @@ impl MetaServer {
     }
 
     fn handle_albums(&self, _request: &Request) -> BoxFuture {
-        let albums = self.index.get_albums();
-
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        write!(w, "[");
-        let mut first = true;
-        for &(ref id, ref album) in albums {
-            // The unwrap is safe here, in the sense that if the index is
-            // well-formed, it will never fail. The id is provided by the index
-            // itself, not user input, so the artist should be present.
-            let artist = self.index.get_artist(album.artist_id).unwrap();
-            if !first { write!(w, ","); }
-            write!(w, r#"{{"id":"{}","title":"#, id);
-            serde_json::to_writer(&mut w, self.index.get_string(album.title));
-            write!(w, r#","artist":"#);
-            serde_json::to_writer(&mut w, self.index.get_string(artist.name));
-            write!(w, r#","sort_artist":"#);
-            serde_json::to_writer(&mut w, self.index.get_string(artist.name_for_sort));
-            write!(w, r#","date":"{}"}}"#, album.original_release_date);
-            first = false;
-        }
-        write!(w, "]");
+        self.index.write_albums_json(&mut w).unwrap();
         let response = Response::new().with_body(w.into_inner());
         Box::new(futures::future::ok(response))
     }

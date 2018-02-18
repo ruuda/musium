@@ -10,6 +10,7 @@
 
 extern crate claxon;
 extern crate crossbeam;
+extern crate serde_json;
 extern crate unicode_normalization;
 
 mod flat_tree; // TODO: Rename.
@@ -21,7 +22,7 @@ use std::fmt;
 use std::io;
 use std::io::Write;
 use std::mem;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::Mutex;
 use std::sync::mpsc::{SyncSender, sync_channel};
@@ -176,6 +177,28 @@ pub trait MetaIndex {
 
     /// Look up an artist by id.
     fn get_artist(&self, ArtistId) -> Option<&Artist>;
+
+    /// Write a json representation of the album list to the writer.
+    fn write_albums_json<W: Write>(&self, mut w: W) -> io::Result<()> {
+        write!(w, "[")?;
+        let mut first = true;
+        for &(ref id, ref album) in self.get_albums() {
+            // The unwrap is safe here, in the sense that if the index is
+            // well-formed, it will never fail. The id is provided by the index
+            // itself, not user input, so the artist should be present.
+            let artist = self.get_artist(album.artist_id).unwrap();
+            if !first { write!(w, ",")?; }
+            write!(w, r#"{{"id":"{}","title":"#, id)?;
+            serde_json::to_writer(&mut w, self.get_string(album.title))?;
+            write!(w, r#","artist":"#)?;
+            serde_json::to_writer(&mut w, self.get_string(artist.name))?;
+            write!(w, r#","sort_artist":"#)?;
+            serde_json::to_writer(&mut w, self.get_string(artist.name_for_sort))?;
+            write!(w, r#","date":"{}"}}"#, album.original_release_date)?;
+            first = false;
+        }
+        write!(w, "]")
+    }
 }
 
 #[derive(Debug)]
@@ -836,7 +859,7 @@ fn for_each_sorted<'a, P, I, T, F>(
             .iter()
             .enumerate()
             .filter_map(|(i, id_val)| id_val.map(|(id, _val)| (i, id)))
-            .min_by_key(|&(i, id)| id)
+            .min_by_key(|&(_, id)| id)
     {
         let mut next = iters[i].next();
         mem::swap(&mut candidates[i], &mut next);
@@ -1078,6 +1101,7 @@ impl MetaIndex for MemoryMetaIndex {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::{Date, MetaIndex, MemoryMetaIndex};
     use super::{parse_date, parse_uuid};
