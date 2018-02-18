@@ -82,6 +82,27 @@ pub struct ArtistId(pub u64);
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct StringRef(u32);
 
+impl TrackId {
+    #[inline]
+    pub fn parse(src: &str) -> Option<TrackId> {
+        u64::from_str_radix(src, 16).ok().map(TrackId)
+    }
+}
+
+impl AlbumId {
+    #[inline]
+    pub fn parse(src: &str) -> Option<AlbumId> {
+        u64::from_str_radix(src, 16).ok().map(AlbumId)
+    }
+}
+
+impl ArtistId {
+    #[inline]
+    pub fn parse(src: &str) -> Option<ArtistId> {
+        u64::from_str_radix(src, 16).ok().map(ArtistId)
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Track {
