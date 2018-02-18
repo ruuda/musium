@@ -58,14 +58,14 @@ impl MetaServer {
             None => return self.handle_bad_request("Invalid album id."),
         };
 
+        let album = match self.index.get_album(album_id) {
+            Some(a) => a,
+            None => return self.handle_not_found(),
+        };
+
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        match self.index.write_album_json(&mut w, album_id) {
-            Ok(()) => {}
-            Err(ref e) if e.kind() == io::ErrorKind::NotFound => return self.handle_not_found(),
-            Err(e) => panic!("Unexpected IO error: {:?}", e),
-        }
-
+        self.index.write_album_json(&mut w, album).unwrap();
         let response = Response::new().with_body(w.into_inner());
         Box::new(futures::future::ok(response))
     }

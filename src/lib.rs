@@ -223,13 +223,9 @@ pub trait MetaIndex {
 
     /// Write a json representation of the album and its tracks to the writer.
     ///
-    /// Returns an IO error of kind `NotFound` if the album does not exist.
-    fn write_album_json<W: Write>(&self, mut w: W, album_id: AlbumId) -> io::Result<()> {
-        let album = match self.get_album(album_id) {
-            Some(a) => a,
-            None => return Err(io::Error::new(io::ErrorKind::NotFound, "")),
-        };
-
+    /// The album is expected to come from this index, so the artists and
+    /// strings it references are valid.
+    fn write_album_json<W: Write>(&self, mut w: W, album: &Album) -> io::Result<()> {
         // The unwrap is safe here, in the sense that if the index is
         // well-formed, it will never fail. The id is provided by the index
         // itself, not user input, so the artist should be present.
