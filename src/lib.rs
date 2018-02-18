@@ -880,7 +880,6 @@ impl MemoryMetaIndex {
     /// Combine builders into a memory-backed index.
     fn new(builders: &[BuildMetaIndex], issues: &mut Vec<Issue>) -> MemoryMetaIndex {
         assert!(builders.len() > 0);
-        let mut strings_to_id: BTreeMap<String, u32> = BTreeMap::new();
         let mut artists: Vec<(ArtistId, Artist)> = Vec::new();
         let mut albums: Vec<(AlbumId, Album)> = Vec::new();
         let mut tracks: Vec<(TrackId, Track)> = Vec::new();
@@ -898,7 +897,7 @@ impl MemoryMetaIndex {
             filenames.push(builders[i].filenames[track.filename.0 as usize].clone());
             track.filename = StringRef(filenames.len() as u32 - 1);
 
-            if let Some(&(prev_id, ref prev)) = tracks.last() {
+            if let Some(&(prev_id, ref _prev)) = tracks.last() {
                 assert!(prev_id != id, "Duplicate track should not occur.");
             }
 
