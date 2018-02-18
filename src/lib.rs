@@ -234,6 +234,15 @@ pub enum IssueDetail {
     AlbumArtistMismatch(AlbumId, String, String),
 }
 
+impl IssueDetail {
+    pub fn for_file(self, filename: String) -> Issue {
+        Issue {
+            filename: filename,
+            detail: self,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Issue {
     pub filename: String,
@@ -562,10 +571,7 @@ impl BuildMetaIndex {
     }
 
     fn issue(&mut self, filename: String, detail: IssueDetail) {
-        let issue = Issue {
-            filename: filename,
-            detail: detail
-        };
+        let issue = detail.for_file(filename);
         self.progress.as_mut().unwrap().send(Progress::Issue(issue)).unwrap();
     }
 
@@ -725,10 +731,7 @@ impl BuildMetaIndex {
         }
         if let Some(existing_album) = self.albums.get(&album_id) {
             if let Some(detail) = albums_different(&self.strings, album_id, existing_album, &album) {
-                let issue = Issue {
-                    filename: filename_string.clone(),
-                    detail: detail
-                };
+                let issue = detail.for_file(filename_string.clone());
                 self.progress.as_mut().unwrap().send(Progress::Issue(issue)).unwrap();
             }
         }
@@ -836,10 +839,7 @@ impl MemoryMetaIndex {
             if let Some(&(prev_id, ref prev)) = albums.last() {
                 if prev_id == id {
                     if let Some(detail) = albums_different(&strings, id, prev, &album) {
-                        let issue = Issue {
-                            filename: "TODO: Get filename.".into(),
-                            detail: detail
-                        };
+                        let issue = detail.for_file("TODO: Get filename".into());
                         issues.push(issue);
                         return // Like `continue`, returns from the closure.
                     }
