@@ -187,6 +187,9 @@ pub trait MetaIndex {
     /// Return album metadata.
     fn get_album(&self, id: AlbumId) -> Option<&Album>;
 
+    /// Return all tracks that are part of the album.
+    fn get_album_tracks(&self, id: AlbumId) -> &[(TrackId, Track)];
+
     /// Return all tracks, ordered by id.
     fn get_tracks(&self) -> &[(TrackId, Track)];
 
@@ -1126,6 +1129,30 @@ impl MetaIndex for MemoryMetaIndex {
             .ok()
             // TODO: Remove bounds check.
             .map(|idx| &self.albums[idx].1)
+    }
+
+    #[inline]
+    fn get_album_tracks(&self, id: AlbumId) -> &[(TrackId, Track)] {
+        // Look for track 0 of disc 0. This is the first track of the album,
+        // if it exists. Otherwise binary search would find the first track
+        // after it.
+        let tid = get_track_id(id, 0, 0);
+        let begin = match self.tracks.binary_search_by_key(&tid, |pair| pair.0) {
+            Ok(i) => i,
+            Err(i) => i,
+        };
+        // Then do a linear scan over the tracks to find the first track that
+        // does not belong to the album any more. We could do another binary
+        // search to find the end instead, but a binary search would take about
+        // 13 random memory accesses for 12k tracks, whereas most albums have
+        // less tracks than that, and the linear scan has a very regular memory
+        // access pattern.
+        let end = begin + self.tracks[begin..]
+            .iter()
+            .position(|&(_tid, ref track)| track.album_id != id)
+            .unwrap_or(self.tracks.len() - begin);
+
+        &self.tracks[begin..end]
     }
 
     #[inline]
