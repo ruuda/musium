@@ -62,7 +62,42 @@ fn bench_get_artist_isearch(b: &mut Bencher) {
     b.iter(|| {
         use std::u64;
         let id = album.next().unwrap().1.artist_id;
-        let artist = index.get_artist_isearch(id);
+        let mut artist = None;
+
+        unsafe {
+            let mut low: usize = 0;
+            let mut high: usize = artists.len();
+            let mut id_low: u64 = (artists.get_unchecked(0).0).0;
+            let mut id_high: u64 = (artists.get_unchecked(high - 1).0).0;
+
+            if id.0 == id_low {
+                artist = Some(&artists.get_unchecked(0).1);
+                break
+            }
+            if id.0 == id_high {
+                artist = Some(&artists.get_unchecked(high - 1).1);
+                break
+            }
+
+            while low + 1 < high {
+                let khilo = (high - low) as u64 - 2;
+                let iindx = (id.0 - id_low) >> 32;
+                let ihilo = (id_high - id_low) >> 32;
+                let mid = low + 1 + ((khilo * iindx + ihilo / 2) / ihilo) as usize;
+                let id_mid = (artists.get_unchecked(mid).0).0;
+
+                if id_mid == id.0 {
+                    artist = Some(&artists.get_unchecked(mid).1);
+                    break
+                } else if id_mid < id.0 {
+                    low = mid;
+                    id_low = id_mid;
+                } else {
+                    high = mid;
+                    id_high = id_mid;
+                }
+            }
+        }
         black_box(artist);
     });
 }
