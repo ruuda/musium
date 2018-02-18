@@ -709,7 +709,12 @@ impl BuildMetaIndex {
         self.issue(filename, IssueDetail::FieldParseFailedError(field));
     }
 
-    pub fn insert(&mut self, filename: &str, tags: &mut claxon::metadata::Tags) {
+    pub fn insert(
+        &mut self,
+        filename: &str,
+        streaminfo: &claxon::metadata::StreamInfo,
+        tags: &mut claxon::metadata::Tags
+    ) {
         let mut disc_number = None;
         let mut track_number = None;
         let mut title = None;
@@ -832,13 +837,18 @@ impl BuildMetaIndex {
             }
         }
 
+        // TODO: Check for u16 overflow.
+        // TODO: Warn if `streaminfo.samples` is None.
+        let samples = streaminfo.samples.unwrap_or(0);
+        let seconds = (samples + streaminfo.sample_rate as u64 / 2) / streaminfo.sample_rate as u64;
+
         let track = Track {
             album_id: album_id,
             disc_number: f_disc_number,
             track_number: f_track_number,
             title: StringRef(f_title),
             artist: StringRef(f_track_artist),
-            duration_seconds: 1, // TODO: Get from streaminfo.
+            duration_seconds: seconds as u16,
             filename: StringRef(filename_id),
         };
         let album = Album {
@@ -1027,7 +1037,7 @@ impl MemoryMetaIndex {
                 read_vorbis_comment: true,
             };
             let reader = claxon::FlacReader::open_ext(path.as_ref(), opts).unwrap();
-            builder.insert(path.as_ref().to_str().expect("TODO"), &mut reader.tags());
+            builder.insert(path.as_ref().to_str().expect("TODO"), &reader.streaminfo(), &mut reader.tags());
             progress_unreported += 1;
 
             // Don't report every track individually, to avoid synchronisation
