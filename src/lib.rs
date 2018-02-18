@@ -141,7 +141,11 @@ pub struct Artist {
 
 impl fmt::Display for Date {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:04}-{:02}-{:02}", self.year, self.month, self.day)
+        write!(f, "{:04}", self.year)?;
+        if self.month == 0 { return Ok(()) }
+        write!(f, "-{:02}", self.month)?;
+        if self.day == 0 { return Ok(()) }
+        write!(f, "-{:02}", self.day)
     }
 }
 
@@ -1106,8 +1110,17 @@ mod tests {
     }
 
     #[test]
-    fn new_is_empty() {
-        let mi = MemoryMetaIndex::new(&[]);
-        assert_eq!(mi.len(), 0);
+    fn format_date_formats_year_only() {
+        assert_eq!(format!("{}", Date::new(2018, 0, 0)), "2018");
+    }
+
+    #[test]
+    fn format_date_formats_year_and_month() {
+        assert_eq!(format!("{}", Date::new(2018, 1, 0)), "2018-01");
+    }
+
+    #[test]
+    fn format_date_formats_year_and_month_and_day() {
+        assert_eq!(format!("{}", Date::new(2018, 1, 2)), "2018-01-02");
     }
 }
