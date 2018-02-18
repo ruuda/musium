@@ -221,17 +221,25 @@ pub enum IssueDetail {
     /// A metadata field could be parsed. Contains the field name.
     FieldParseFailedError(&'static str),
 
-    /// Two different titles were found for an album with the same mbid.
+    /// Two different titles were found for albums with the same mbid.
     /// Contains the title used, and the discarded alternative.
     AlbumTitleMismatch(AlbumId, String, String),
 
-    /// Two different release dates were found for an album with the same mbid.
+    /// Two different release dates were found for albums with the same mbid.
     /// Contains the date used, and the discarded alternative.
     AlbumReleaseDateMismatch(AlbumId, Date, Date),
 
-    /// Two different artists were found for an album with the same mbid.
+    /// Two different artists were found for albums with the same mbid.
     /// Contains the artist used, and the discarded alternative.
     AlbumArtistMismatch(AlbumId, String, String),
+
+    /// Two different names were found for album artists with the same mbid.
+    /// Contains the name used, and the discarded alternative.
+    ArtistNameMismatch(ArtistId, String, String),
+
+    /// Two different sort names were found for album artists with the same mbid.
+    /// Contains the name used, and the discarded alternative.
+    ArtistSortNameMismatch(ArtistId, String, String),
 }
 
 impl IssueDetail {
@@ -263,6 +271,10 @@ impl fmt::Display for Issue {
                 write!(f, "warning: discarded inconsistent album release date {} in favour of {}.", alt, date),
             IssueDetail::AlbumArtistMismatch(_id, ref artist, ref alt) =>
                 write!(f, "warning: discarded inconsistent album artist '{}' in favour of '{}'.", alt, artist),
+            IssueDetail::ArtistNameMismatch(_id, ref name, ref alt) =>
+                write!(f, "warning: discarded inconsistent artist name '{}' in favour of '{}'.", alt, name),
+            IssueDetail::ArtistSortNameMismatch(_id, ref sort_name, ref alt) =>
+                write!(f, "warning: discarded inconsistent sort name '{}' in favour of '{}'.", alt, sort_name),
         }
     }
 }
@@ -364,6 +376,38 @@ fn albums_different(
 
     if a.artist_id != b.artist_id {
         unimplemented!("TODO: Look up artist names.");
+    }
+
+    None
+}
+
+/// Return an issue if the two artists are not equal.
+fn artists_different(
+    strings: &StringDeduper,
+    id: ArtistId,
+    a: &Artist,
+    b: &Artist)
+    -> Option<IssueDetail>
+{
+    let name_a = strings.get(a.name.0);
+    let name_b = strings.get(b.name.0);
+    let sort_name_a = strings.get(a.name_for_sort.0);
+    let sort_name_b = strings.get(b.name_for_sort.0);
+
+    if name_a != name_b {
+        return Some(IssueDetail::ArtistNameMismatch(
+            id,
+            name_a.into(),
+            name_b.into(),
+        ));
+    }
+
+    if sort_name_a != sort_name_b {
+        return Some(IssueDetail::ArtistSortNameMismatch(
+            id,
+            sort_name_a.into(),
+            sort_name_b.into(),
+        ));
     }
 
     None
@@ -859,21 +903,11 @@ impl MemoryMetaIndex {
 
             if let Some(&(prev_id, ref prev)) = artists.last() {
                 if prev_id == id {
-                    // TODO: Extract this somewhere, and report Issue::XXX.
-                    let name_curr = strings.get(artist.name.0);
-                    let name_prev = strings.get(prev.name.0);
-                    let sort_curr = strings.get(artist.name_for_sort.0);
-                    let sort_prev = strings.get(prev.name_for_sort.0);
-                    if name_curr != name_prev {
-                        println!("warning: discarding inconsistent artist name '{}' \
-                                  in favour of '{}'", name_prev, name_curr);
+                    if let Some(detail) = artists_different(&strings, id, prev, &artist) {
+                        let issue = detail.for_file("TODO: Get filename".into());
+                        issues.push(issue);
+                        return // Like `continue`, returns from the closure.
                     }
-                    if sort_curr != sort_prev {
-                        println!("warning: discarding inconsistent sort name '{}' \
-                                  in favour of '{}' for artist '{}'",
-                                  sort_curr, sort_prev, name_prev);
-                    }
-                    return // Like `continue`, returns from the closure.
                 }
             }
 
