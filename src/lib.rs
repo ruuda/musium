@@ -1094,7 +1094,11 @@ impl MetaIndex for MemoryMetaIndex {
 
     #[inline]
     fn get_album(&self, id: AlbumId) -> Option<&Album> {
-        unimplemented!();
+        self.albums
+            .binary_search_by_key(&id, |pair| pair.0)
+            .ok()
+            // TODO: Remove bounds check.
+            .map(|idx| &self.albums[idx].1)
     }
 
     #[inline]
@@ -1117,6 +1121,7 @@ impl MetaIndex for MemoryMetaIndex {
         self.artists
             .binary_search_by_key(&id, |pair| pair.0)
             .ok()
+            // TODO: Remove bounds check.
             .map(|idx| &self.artists[idx].1)
     }
 }
