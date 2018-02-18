@@ -220,6 +220,37 @@ pub trait MetaIndex {
         }
         write!(w, "]")
     }
+
+    /// Write a json representation of the album and its tracks to the writer.
+    ///
+    /// Returns an IO error of kind `NotFound` if the album does not exist.
+    fn write_album_json<W: Write>(&self, mut w: W, album_id: AlbumId) -> io::Result<()> {
+        let album = match self.get_album(album_id) {
+            Some(a) => a,
+            None => return Err(io::Error::new(io::ErrorKind::NotFound, "")),
+        };
+
+        // The unwrap is safe here, in the sense that if the index is
+        // well-formed, it will never fail. The id is provided by the index
+        // itself, not user input, so the artist should be present.
+        let artist = self.get_artist(album.artist_id).unwrap();
+
+        write!(w, r#"{{"title":"#)?;
+        serde_json::to_writer(&mut w, self.get_string(album.title))?;
+        write!(w, r#","artist":"#)?;
+        serde_json::to_writer(&mut w, self.get_string(artist.name))?;
+        write!(w, r#","sort_artist":"#)?;
+        serde_json::to_writer(&mut w, self.get_string(artist.name_for_sort))?;
+        write!(w, r#","date":"{}","tracks":["#, album.original_release_date)?;
+        // TODO: Implement get_tracks.
+        /*
+        let mut first = true;
+        for &(ref id, ref album) in self.get_tracks(album_id) {
+            if !first { write!(w, ",")?; }
+            first = false;
+        }*/
+        write!(w, "]}}")
+    }
 }
 
 #[derive(Debug)]

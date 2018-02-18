@@ -15,7 +15,7 @@ use futures::future::Future;
 use hyper::header::ContentLength;
 use hyper::server::{Http, Request, Response, Service};
 use hyper::{Get, StatusCode};
-use metaindex::{MetaIndex, MemoryMetaIndex};
+use metaindex::{AlbumId, MetaIndex, MemoryMetaIndex};
 
 struct MetaServer {
     index: MemoryMetaIndex,
@@ -52,8 +52,21 @@ impl MetaServer {
         Box::new(futures::future::ok(response))
     }
 
-    fn handle_album(&self, _request: &Request, _id: &str) -> BoxFuture {
-        let response = Response::new().with_body("Album");
+    fn handle_album(&self, _request: &Request, id: &str) -> BoxFuture {
+        let album_id = match AlbumId::parse(id) {
+            Some(aid) => aid,
+            None => return self.handle_bad_request("Invalid album id."),
+        };
+
+        let buffer = Vec::new();
+        let mut w = io::Cursor::new(buffer);
+        match self.index.write_album_json(&mut w, album_id) {
+            Ok(()) => {}
+            Err(ref e) if e.kind() == io::ErrorKind::NotFound => return self.handle_not_found(),
+            Err(e) => panic!("Unexpected IO error: {:?}", e),
+        }
+
+        let response = Response::new().with_body(w.into_inner());
         Box::new(futures::future::ok(response))
     }
 
