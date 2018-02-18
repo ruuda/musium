@@ -69,7 +69,7 @@ impl MetaServer {
             // The unwrap is safe here, in the sense that if the index is
             // well-formed, it will never fail. The id is provided by the index
             // itself, not user input, so the artist should be present.
-            let artist = self.index.get_artist(album.artist_id).unwrap();
+            let artist = self.index.get_artist_isearch(album.artist_id).unwrap();
             if !first { write!(w, ","); }
             write!(w, r#"{{"id":"{}","title":"#, id);
             serde_json::to_writer(&mut w, self.index.get_string(album.title));

@@ -60,15 +60,9 @@ fn bench_get_artist_isearch(b: &mut Bencher) {
     let mut album = index.get_albums().iter().cycle();
     let artists = index.get_artists();
     b.iter(|| {
+        use std::u64;
         let id = album.next().unwrap().1.artist_id;
-        let k = (((id.0 >> 32) * artists.len() as u64) >> 32) as usize;
-        let mid = artists[k].0;
-        let (low, high) = if id < mid { (0, k) } else { (k, artists.len()) };
-        let artist = artists[low..high]
-            .binary_search_by_key(&id, |pair| pair.0)
-            .ok()
-            .map(|idx| &artists[idx].1)
-            .unwrap();
+        let artist = index.get_artist_isearch(id);
         black_box(artist);
     });
 }
