@@ -228,7 +228,7 @@ pub trait MetaIndex {
     ///
     /// The album is expected to come from this index, so the artists and
     /// strings it references are valid.
-    fn write_album_json<W: Write>(&self, mut w: W, album: &Album) -> io::Result<()> {
+    fn write_album_json<W: Write>(&self, mut w: W, id: AlbumId, album: &Album) -> io::Result<()> {
         // The unwrap is safe here, in the sense that if the index is
         // well-formed, it will never fail. The id is provided by the index
         // itself, not user input, so the artist should be present.
@@ -241,13 +241,17 @@ pub trait MetaIndex {
         write!(w, r#","sort_artist":"#)?;
         serde_json::to_writer(&mut w, self.get_string(artist.name_for_sort))?;
         write!(w, r#","date":"{}","tracks":["#, album.original_release_date)?;
-        // TODO: Implement get_tracks.
-        /*
         let mut first = true;
-        for &(ref id, ref album) in self.get_tracks(album_id) {
+        for &(ref tid, ref track) in self.get_album_tracks(id) {
             if !first { write!(w, ",")?; }
+            write!(w, r#"{{"id":"{}","disc_number":{},"track_number":{},"title":"#,
+                   tid, track.disc_number, track.track_number)?;
+            serde_json::to_writer(&mut w, self.get_string(track.title))?;
+            write!(w, r#","artist":"#)?;
+            serde_json::to_writer(&mut w, self.get_string(track.artist))?;
+            write!(w, r#","duration_seconds":{}}}"#, track.duration_seconds)?;
             first = false;
-        }*/
+        }
         write!(w, "]}}")
     }
 }

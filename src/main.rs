@@ -65,7 +65,7 @@ impl MetaServer {
 
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        self.index.write_album_json(&mut w, album).unwrap();
+        self.index.write_album_json(&mut w, album_id, album).unwrap();
         let response = Response::new().with_body(w.into_inner());
         Box::new(futures::future::ok(response))
     }
