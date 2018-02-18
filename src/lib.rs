@@ -784,7 +784,10 @@ impl BuildMetaIndex {
             }
         }
         if let Some(existing_artist) = self.artists.get(&artist_id) {
-            //assert_eq!(artist, *existing_artist);
+            if let Some(detail) = artists_different(&self.strings, artist_id, existing_artist, &artist) {
+                let issue = detail.for_file(filename_string.clone());
+                self.progress.as_mut().unwrap().send(Progress::Issue(issue)).unwrap();
+            }
         }
 
         self.filenames.push(filename_string);
