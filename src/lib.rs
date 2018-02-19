@@ -979,8 +979,8 @@ impl MemoryMetaIndex {
                     if let Some(detail) = albums_different(&strings, id, prev, &album) {
                         let issue = detail.for_file("TODO: Get filename".into());
                         issues.push(issue);
-                        return // Like `continue`, returns from the closure.
                     }
+                    return // Like `continue`, returns from the closure.
                 }
             }
 
@@ -1000,8 +1000,8 @@ impl MemoryMetaIndex {
                     if let Some(detail) = artists_different(&strings, id, prev, &artist) {
                         let issue = detail.for_file("TODO: Get filename".into());
                         issues.push(issue);
-                        return // Like `continue`, returns from the closure.
                     }
+                    return // Like `continue`, returns from the closure.
                 }
             }
 
