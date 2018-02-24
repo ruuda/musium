@@ -14,7 +14,8 @@ use std::process;
 use std::rc::Rc;
 
 use futures::future::Future;
-use hyper::header::ContentLength;
+use hyper::header::{ContentLength, ContentType};
+use hyper::mime;
 use hyper::server::{Http, Request, Response, Service};
 use hyper::{Get, StatusCode};
 use metaindex::{AlbumId, MetaIndex, MemoryMetaIndex, TrackId};
@@ -89,7 +90,12 @@ impl MetaServer {
             return self.handle_error("Failed to read file.")
         }
 
-        let response = Response::new().with_body(body);
+        // TODO: Handle requests with Range header.
+        let audio_flac = "audio/flac".parse::<mime::Mime>().unwrap();
+        let response = Response::new()
+            .with_header(ContentType(audio_flac))
+            .with_header(ContentLength(body.len() as u64))
+            .with_body(body);
         Box::new(futures::future::ok(response))
     }
 
@@ -107,7 +113,9 @@ impl MetaServer {
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
         self.index.write_album_json(&mut w, album_id, album).unwrap();
-        let response = Response::new().with_body(w.into_inner());
+        let response = Response::new()
+            .with_header(ContentType::json())
+            .with_body(w.into_inner());
         Box::new(futures::future::ok(response))
     }
 
@@ -115,7 +123,9 @@ impl MetaServer {
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
         self.index.write_albums_json(&mut w).unwrap();
-        let response = Response::new().with_body(w.into_inner());
+        let response = Response::new()
+            .with_header(ContentType::json())
+            .with_body(w.into_inner());
         Box::new(futures::future::ok(response))
     }
 
