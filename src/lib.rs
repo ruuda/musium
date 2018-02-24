@@ -1198,11 +1198,12 @@ impl MetaIndex for MemoryMetaIndex {
 
     #[inline]
     fn get_album(&self, id: AlbumId) -> Option<&Album> {
-        self.albums
+        let slice = self.album_bookmarks.range(&self.albums[..], id.0);
+        slice
             .binary_search_by_key(&id, |pair| pair.0)
             .ok()
             // TODO: Remove bounds check.
-            .map(|idx| &self.albums[idx].1)
+            .map(|idx| &slice[idx].1)
     }
 
     #[inline]
