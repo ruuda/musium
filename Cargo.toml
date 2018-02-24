@@ -4,7 +4,8 @@ version = "0.0.0"
 authors = ["Ruud van Asseldonk <dev@veniogames.com>"]
 
 [dependencies]
-claxon                = "0.4"
+# claxon              = "0.4"
+claxon                = { path = "../claxon" }
 crossbeam             = "0.3"
 futures               = "0.1"
 hyper                 = "0.11"

@@ -1103,6 +1103,7 @@ impl MemoryMetaIndex {
             };
             let opts = claxon::FlacReaderOptions {
                 metadata_only: true,
+                read_picture: claxon::ReadPicture::Skip,
                 read_vorbis_comment: true,
             };
             let reader = claxon::FlacReader::open_ext(path.as_ref(), opts).unwrap();

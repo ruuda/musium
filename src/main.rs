@@ -1,3 +1,4 @@
+extern crate claxon;
 extern crate futures;
 extern crate hyper;
 extern crate metaindex;
@@ -56,6 +57,48 @@ impl MetaServer {
             .with_header(ContentLength(reason.len() as u64))
             .with_body(reason);
         Box::new(futures::future::ok(response))
+    }
+
+    fn handle_track_cover(&self, _request: &Request, id: &str) -> BoxFuture {
+        // TODO: DRY this track id parsing and loadong part.
+        let track_id = match TrackId::parse(id) {
+            Some(tid) => tid,
+            None => return self.handle_bad_request("Invalid track id."),
+        };
+
+        let track = match self.index.get_track(track_id) {
+            Some(t) => t,
+            None => return self.handle_not_found(),
+        };
+
+        let fname = self.index.get_filename(track.filename);
+
+        let opts = claxon::FlacReaderOptions {
+            metadata_only: true,
+            read_picture: claxon::ReadPicture::CoverAsVec,
+            read_vorbis_comment: false,
+        };
+        let reader = match claxon::FlacReader::open_ext(fname, opts) {
+            Ok(r) => r,
+            Err(..) => return self.handle_error("Failed to open flac file."),
+        };
+
+        if let Some(cover) = reader.into_pictures().pop() {
+            let mime = cover.mime_type.parse::<mime::Mime>().unwrap();
+            let data = match cover.data {
+                claxon::metadata::PictureData::Inline(vec) => vec,
+                // Not yet supported in Claxon.
+                claxon::metadata::PictureData::Offset(..) => unreachable!(),
+            };
+            let response = Response::new()
+                .with_header(ContentType(mime))
+                .with_header(ContentLength(data.len() as u64))
+                .with_body(data);
+            Box::new(futures::future::ok(response))
+        } else {
+            // The file has no embedded front cover.
+            self.handle_not_found()
+        }
     }
 
     fn handle_track(&self, _request: &Request, path: &str) -> BoxFuture {
@@ -160,6 +203,7 @@ impl Service for MetaServer {
 
         // A very basic router. See also docs/api.md for an overview.
         match (request.method(), p0, p1) {
+            (&Get, Some("cover"),  Some(t)) => self.handle_track_cover(&request, t),
             (&Get, Some("track"),  Some(t)) => self.handle_track(&request, t),
             (&Get, Some("album"),  Some(a)) => self.handle_album(&request, a),
             (&Get, Some("albums"), None)    => self.handle_albums(&request),
