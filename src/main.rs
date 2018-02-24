@@ -85,11 +85,7 @@ impl MetaServer {
 
         if let Some(cover) = reader.into_pictures().pop() {
             let mime = cover.mime_type.parse::<mime::Mime>().unwrap();
-            let data = match cover.data {
-                claxon::metadata::PictureData::Inline(vec) => vec,
-                // Not yet supported in Claxon.
-                claxon::metadata::PictureData::Offset(..) => unreachable!(),
-            };
+            let data = cover.into_vec();
             let response = Response::new()
                 .with_header(ContentType(mime))
                 .with_header(ContentLength(data.len() as u64))
