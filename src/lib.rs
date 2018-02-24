@@ -83,6 +83,10 @@ pub struct ArtistId(pub u64);
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct StringRef(u32);
 
+/// Index into a byte array that contains length-prefixed strings.
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct FilenameRef(u32);
+
 impl TrackId {
     #[inline]
     pub fn parse(src: &str) -> Option<TrackId> {
@@ -110,7 +114,7 @@ pub struct Track {
     pub album_id: AlbumId,
     pub title: StringRef,
     pub artist: StringRef,
-    pub filename: StringRef,
+    pub filename: FilenameRef,
     // Using u16 for duration gives us a little over 18 hours as maximum
     // duration; using u8 for track number gives us at most 255 tracks. This is
     // perhaps a bit limiting, but it does allow us to squeeze a `(TrackId,
@@ -181,6 +185,11 @@ pub trait MetaIndex {
     /// Returns an empty string if the ref is out of bounds. May return a
     /// garbage string when the ref is at the wrong offset.
     fn get_string(&self, sr: StringRef) -> &str;
+
+    /// Resolve a `StringRef` to a filename string slice.
+    ///
+    /// Same as `get_string()`, but for filenames, which have a different arena.
+    fn get_filename(&self, sr: FilenameRef) -> &str;
 
     /// Return track metadata.
     fn get_track(&self, id: TrackId) -> Option<&Track>;
@@ -850,7 +859,7 @@ impl BuildMetaIndex {
             title: StringRef(f_title),
             artist: StringRef(f_track_artist),
             duration_seconds: seconds as u16,
-            filename: StringRef(filename_id),
+            filename: FilenameRef(filename_id),
         };
         let album = Album {
             artist_id: artist_id,
@@ -1017,7 +1026,7 @@ impl MemoryMetaIndex {
                 strings.insert(builders[i].strings.get(track.artist.0))
             );
             filenames.push(builders[i].filenames[track.filename.0 as usize].clone());
-            track.filename = StringRef(filenames.len() as u32 - 1);
+            track.filename = FilenameRef(filenames.len() as u32 - 1);
 
             if let Some(&(prev_id, ref _prev)) = tracks.last() {
                 assert!(prev_id != id, "Duplicate track should not occur.");
@@ -1189,6 +1198,11 @@ impl MetaIndex for MemoryMetaIndex {
     #[inline]
     fn get_string(&self, sr: StringRef) -> &str {
         &self.strings[sr.0 as usize]
+    }
+
+    #[inline]
+    fn get_filename(&self, sr: FilenameRef) -> &str {
+        &self.filenames[sr.0 as usize]
     }
 
     #[inline]
