@@ -7,7 +7,7 @@ use std::ffi::OsStr;
 use std::path::PathBuf;
 
 use criterion::{Bencher, Criterion, black_box};
-use metaindex::{MetaIndex, MemoryMetaIndex};
+use metaindex::{AlbumId, MetaIndex, MemoryMetaIndex};
 
 fn build_index() -> MemoryMetaIndex {
     // TODO: Do not hard-code path.
@@ -104,7 +104,23 @@ fn bench_get_artist_isearch(b: &mut Bencher) {
     });
 }
 
+fn bench_get_album(b: &mut Bencher) {
+    let index = build_index();
+    // Create a list of album ids that has a different order than the albums,
+    // to ensure that the memory access pattern is random.
+    let mut aids: Vec<AlbumId> = index.get_albums().iter().map(|p| p.0).collect();
+    aids.sort_by_key(|id| id.0.wrapping_mul(17179869107));
+    let mut album_ids = aids.iter().cycle();
+    b.iter(|| {
+        let id = album_ids.next().unwrap();
+        let album = index.get_album(*id).unwrap();
+        black_box(album);
+    });
+}
+
 fn criterion_benchmark(c: &mut Criterion) {
+    c.bench_function("get_album", bench_get_album);
+
     c.bench_function("get_artist", bench_get_artist);
     c.bench_function("get_artist_bsearch", bench_get_artist_bsearch);
     c.bench_function("get_artist_isearch", bench_get_artist_isearch);

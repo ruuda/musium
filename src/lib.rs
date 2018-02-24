@@ -71,8 +71,9 @@ use unicode_normalization::UnicodeNormalization;
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct TrackId(u64);
 
+// TODO: Field should not be pub.
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct AlbumId(u64);
+pub struct AlbumId(pub u64);
 
 // TODO: Field should not be pub.
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
