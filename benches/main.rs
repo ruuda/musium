@@ -72,10 +72,12 @@ fn bench_get_artist_isearch(b: &mut Bencher) {
 
             if id.0 == id_low {
                 artist = Some(&artists.get_unchecked(0).1);
+                black_box(artist);
                 return
             }
             if id.0 == id_high {
                 artist = Some(&artists.get_unchecked(high - 1).1);
+                black_box(artist);
                 return
             }
 
