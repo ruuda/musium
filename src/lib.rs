@@ -1193,7 +1193,12 @@ impl MetaIndex for MemoryMetaIndex {
 
     #[inline]
     fn get_track(&self, id: TrackId) -> Option<&Track> {
-        unimplemented!();
+        let slice = self.track_bookmarks.range(&self.tracks[..], id.0);
+        slice
+            .binary_search_by_key(&id, |pair| pair.0)
+            .ok()
+            // TODO: Remove bounds check.
+            .map(|idx| &slice[idx].1)
     }
 
     #[inline]
