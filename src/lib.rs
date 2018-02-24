@@ -885,11 +885,67 @@ impl BuildMetaIndex {
     }
 }
 
+/// Indices into a sorted array based on the most significant byte of an id.
+///
+/// This is a middle ground between storing an additional hash table, which
+/// would require O(n) storage, but enable O(1) lookup of an artist, album, or
+/// track, and the full binary search, which requires no additional storage,
+/// but makes lookups O(log n).
+///
+/// A hash table would have two cache misses (one for the table, one for the
+/// actual value). A binary search has log(n) cache misses (one for every try).
+///
+/// With the bookmarks, we store ranges into the full array indexed on the most
+/// significant byte of the id. We spend 1028 additional bytes for the
+/// bookmarks. Lookups are now O(log2(n) - 8). For 10k tracks, log2(n) is only
+/// around 13, so we cut the majority of steps off of the binary search, and
+/// with that also the cache misses. Furthermore, because the bookmarks table is
+/// small unlike a full hash table, it is likely to be cached, so accessing it
+/// is essentially free.
+struct Bookmarks {
+    bookmarks: Box<[u32; 257]>,
+}
+
+impl Bookmarks {
+    pub fn new<I>(iter: I) -> Bookmarks where I: Iterator<Item = u64> {
+        let mut bookmarks = [0; 257];
+        let mut bc: i32 = -1;
+        let mut len: u32 = 0;
+        for id in iter {
+            let b = (id >> 56) as u8;
+            while bc < b as i32 {
+                bc = bc + 1;
+                bookmarks[bc as usize] = len;
+            }
+            assert!(len < u32::MAX);
+            len += 1;
+        }
+        while bc < 256 {
+            bc = bc + 1;
+            bookmarks[bc as usize] = len;
+        }
+        Bookmarks {
+            bookmarks: Box::new(bookmarks)
+        }
+    }
+
+    /// Return the subslice of `xs` that contains the given id.
+    pub fn range<'a, T>(&self, xs: &'a [T], id: u64) -> &'a [T] {
+        let b = (id >> 56) as usize;
+        let begin = self.bookmarks[b] as usize;
+        let end = self.bookmarks[b + 1] as usize;
+        &xs[begin..end]
+    }
+}
+
 pub struct MemoryMetaIndex {
     // TODO: Use an mmappable data structure. For now this will suffice.
     artists: Vec<(ArtistId, Artist)>,
     albums: Vec<(AlbumId, Album)>,
     tracks: Vec<(TrackId, Track)>,
+    artist_bookmarks: Bookmarks,
+    album_bookmarks: Bookmarks,
+    track_bookmarks: Bookmarks,
     strings: Vec<String>,
     filenames: Vec<String>,
 }
@@ -1008,11 +1064,14 @@ impl MemoryMetaIndex {
             artists.push((id, artist));
         });
 
-        println!("{} files indexed.", filenames.len());
-        println!("{} strings, {} tracks, {} albums, {} artists.",
-                 strings.strings.len(), tracks.len(), albums.len(), artists.len());
+        //println!("{} files indexed.", filenames.len());
+        //println!("{} strings, {} tracks, {} albums, {} artists.",
+        //         strings.strings.len(), tracks.len(), albums.len(), artists.len());
 
         MemoryMetaIndex {
+            artist_bookmarks: Bookmarks::new(artists.iter().map(|p| (p.0).0)),
+            album_bookmarks: Bookmarks::new(albums.iter().map(|p| (p.0).0)),
+            track_bookmarks: Bookmarks::new(tracks.iter().map(|p| (p.0).0)),
             artists: artists,
             albums: albums,
             tracks: tracks,
@@ -1186,11 +1245,12 @@ impl MetaIndex for MemoryMetaIndex {
 
     #[inline]
     fn get_artist(&self, id: ArtistId) -> Option<&Artist> {
-        self.artists
+        let slice = self.artist_bookmarks.range(&self.artists[..], id.0);
+        slice
             .binary_search_by_key(&id, |pair| pair.0)
             .ok()
             // TODO: Remove bounds check.
-            .map(|idx| &self.artists[idx].1)
+            .map(|idx| &slice[idx].1)
     }
 }
 
