@@ -15,7 +15,7 @@ use std::process;
 use std::rc::Rc;
 
 use futures::future::Future;
-use hyper::header::{ContentLength, ContentType};
+use hyper::header::{AccessControlAllowOrigin, ContentLength, ContentType};
 use hyper::mime;
 use hyper::server::{Http, Request, Response, Service};
 use hyper::{Get, StatusCode};
@@ -87,6 +87,7 @@ impl MetaServer {
             let mime = cover.mime_type.parse::<mime::Mime>().unwrap();
             let data = cover.into_vec();
             let response = Response::new()
+                .with_header(AccessControlAllowOrigin::Any)
                 .with_header(ContentType(mime))
                 .with_header(ContentLength(data.len() as u64))
                 .with_body(data);
@@ -132,6 +133,7 @@ impl MetaServer {
         // TODO: Handle requests with Range header.
         let audio_flac = "audio/flac".parse::<mime::Mime>().unwrap();
         let response = Response::new()
+            .with_header(AccessControlAllowOrigin::Any)
             .with_header(ContentType(audio_flac))
             .with_header(ContentLength(body.len() as u64))
             .with_body(body);
@@ -154,6 +156,7 @@ impl MetaServer {
         self.index.write_album_json(&mut w, album_id, album).unwrap();
         let response = Response::new()
             .with_header(ContentType::json())
+            .with_header(AccessControlAllowOrigin::Any)
             .with_body(w.into_inner());
         Box::new(futures::future::ok(response))
     }
@@ -164,6 +167,7 @@ impl MetaServer {
         self.index.write_albums_json(&mut w).unwrap();
         let response = Response::new()
             .with_header(ContentType::json())
+            .with_header(AccessControlAllowOrigin::Any)
             .with_body(w.into_inner());
         Box::new(futures::future::ok(response))
     }
