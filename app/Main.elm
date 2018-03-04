@@ -1,4 +1,5 @@
 import Html exposing (Html)
+import Html.Attributes as Html
 import Http
 import Json.Decode as Json
 
@@ -22,13 +23,14 @@ type alias Album =
 
 -- MODEL
 
-type alias Model =
-  { albums : List Album
-  }
+type Model
+  = Loading
+  | AlbumList (List Album)
+  | Failed String
 
 init : (Model, Cmd Msg)
 init =
-  ( Model []
+  ( Loading
   , getAlbums
   )
 
@@ -41,21 +43,27 @@ update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
     LoadAlbums (Ok albums) ->
-      (Model albums, Cmd.none)
+      (AlbumList (List.sortBy .date albums), Cmd.none)
     LoadAlbums (Err _) ->
-      (Model [], Cmd.none)
+      (Failed "Failed to retrieve album list.", Cmd.none)
 
 -- VIEW
 
 view : Model -> Html Msg
 view model =
-  Html.div [] (List.map viewAlbum model.albums)
+  case model of
+    Loading ->
+      Html.text "loading ..."
+    Failed message ->
+      Html.text message
+    AlbumList albums ->
+      Html.div [Html.id "album-list"] (List.map viewAlbum albums)
 
 viewAlbum : Album -> Html Msg
 viewAlbum album =
-  Html.div []
-    [ Html.span [] [Html.text album.title]
-    , Html.span [] [Html.text album.artist]
+  Html.div [ Html.class "album" ]
+    [ Html.h2 [] [Html.text album.title]
+    , Html.p [] [Html.text album.artist]
     ]
 
 -- SUBSCRIPTIONS

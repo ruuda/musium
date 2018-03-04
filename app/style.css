@@ -1,0 +1,38 @@
+@import url('https://fonts.googleapis.com/css?family=Karla:400,400i,700&subset=latin-ext');
+@import url('https://fonts.googleapis.com/css?family=Work+Sans:300,400,500,600,700,800,900');
+@import url('https://fonts.googleapis.com/css?family=Roboto+Mono:300,300i,400,400i,500,500i,700,700i&subset=latin-ext');
+
+*
+{
+  margin: 0;
+  padding: 0;
+}
+
+html
+{
+  font-size: 18px;
+  font-family: 'Work Sans';
+}
+
+body
+{
+  max-width: 40em;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+h1, h2, h3, h4, h5, h6
+{
+  font-size: 1em;
+  font-weight: normal;
+}
+
+.album
+{
+  padding: 1em;
+}
+
+.album h2
+{
+  font-weight: 700;
+}
