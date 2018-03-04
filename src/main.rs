@@ -6,6 +6,7 @@ extern crate serde_json;
 extern crate walkdir;
 
 use std::env;
+use std::time::{Duration, SystemTime};
 use std::ffi::OsStr;
 use std::fs;
 use std::io;
@@ -15,7 +16,7 @@ use std::process;
 use std::rc::Rc;
 
 use futures::future::Future;
-use hyper::header::{AccessControlAllowOrigin, ContentLength, ContentType};
+use hyper::header::{AccessControlAllowOrigin, ContentLength, ContentType, Expires, HttpDate};
 use hyper::mime;
 use hyper::server::{Http, Request, Response, Service};
 use hyper::{Get, StatusCode};
@@ -93,8 +94,10 @@ impl MetaServer {
                 }
             };
             let data = cover.into_vec();
+            let expires = SystemTime::now() + Duration::from_secs(3600 * 24 * 30);
             let response = Response::new()
                 .with_header(AccessControlAllowOrigin::Any)
+                .with_header(Expires(HttpDate::from(expires)))
                 .with_header(ContentType(mime))
                 .with_header(ContentLength(data.len() as u64))
                 .with_body(data);
