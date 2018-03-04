@@ -84,7 +84,14 @@ impl MetaServer {
         };
 
         if let Some(cover) = reader.into_pictures().pop() {
-            let mime = cover.mime_type.parse::<mime::Mime>().unwrap();
+            let mime = match cover.mime_type.parse::<mime::Mime>() {
+                Ok(m) => m,
+                Err(..) => {
+                    // TODO: Add a proper logging mechanism.
+                    println!("Warning invalid mime type: '{}' in track {} ({}).", cover.mime_type, id, fname);
+                    return self.handle_error("Invalid mime type.")
+                }
+            };
             let data = cover.into_vec();
             let response = Response::new()
                 .with_header(AccessControlAllowOrigin::Any)
