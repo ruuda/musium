@@ -64,6 +64,7 @@ viewAlbum album =
   Html.div [ Html.class "album" ]
     [ Html.h2 [] [Html.text album.title]
     , Html.p [] [Html.text album.artist]
+    , Html.p [Html.class "date"] [Html.text (String.left 4 album.date)]
     ]
 
 -- SUBSCRIPTIONS

@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css?family=Karla:400,400i,700&subset=latin-ext');
 @import url('https://fonts.googleapis.com/css?family=Work+Sans:300,400,500,600,700,800,900');
 @import url('https://fonts.googleapis.com/css?family=Roboto+Mono:300,300i,400,400i,500,500i,700,700i&subset=latin-ext');
+@import url('https://fonts.googleapis.com/css?family=Libre+Franklin:300,300i,400,400i,500,500i,600,600i,700,700i,800,800i,900,900i&subset=latin-ext');
 
 *
 {
@@ -12,6 +13,7 @@ html
 {
   font-size: 18px;
   font-family: 'Work Sans';
+  line-height: 1.3em;
 }
 
 body
@@ -35,4 +37,9 @@ h1, h2, h3, h4, h5, h6
 .album h2
 {
   font-weight: 700;
+}
+
+.date
+{
+  color: #bbb;
 }
