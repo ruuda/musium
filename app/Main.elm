@@ -3,6 +3,9 @@ import Html.Attributes as Html
 import Http
 import Json.Decode as Json
 
+apiHost : String
+apiHost = "http://localhost:8233"
+
 main =
   Html.program
     { init = init
@@ -62,7 +65,9 @@ view model =
 viewAlbum : Album -> Html Msg
 viewAlbum album =
   Html.div [ Html.class "album" ]
-    [ Html.h2 [] [Html.text album.title]
+    -- TODO: Serve album covers directly.
+    [ Html.img [Html.src (apiHost ++ "/cover/" ++ (String.dropRight 3 album.id) ++ "101")] []
+    , Html.h2 [] [Html.text album.title]
     , Html.p [] [Html.text album.artist]
     , Html.p [Html.class "date"] [Html.text (String.left 4 album.date)]
     ]
@@ -78,7 +83,7 @@ subscriptions model =
 getAlbums : Cmd Msg
 getAlbums =
   let
-    url = "http://localhost:8233/albums"
+    url = apiHost ++ "/albums"
   in
     Http.send LoadAlbums (Http.get url (Json.list decodeAlbum))
 

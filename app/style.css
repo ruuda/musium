@@ -43,3 +43,11 @@ h1, h2, h3, h4, h5, h6
 {
   color: #bbb;
 }
+
+.album img
+{
+  position: absolute;
+  width: 3.9em;
+  height: 3.9em;
+  margin-left: -4.9em;
+}
