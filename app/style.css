@@ -21,6 +21,7 @@ body
   max-width: 40em;
   margin-left: auto;
   margin-right: auto;
+  padding-left: 4.9em;
 }
 
 h1, h2, h3, h4, h5, h6
@@ -31,7 +32,8 @@ h1, h2, h3, h4, h5, h6
 
 .album
 {
-  padding: 1em;
+  padding: 0.5em;
+  padding-left: 1em;
 }
 
 .album h2
