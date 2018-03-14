@@ -36,7 +36,7 @@ a
   text-decoration: none;
 }
 
-.album
+.album, .track
 {
   padding: 0.5em;
   padding-left: 1em;
@@ -58,4 +58,19 @@ a
   width: 3.9em;
   height: 3.9em;
   margin-left: -4.9em;
+}
+
+.track h3
+{
+  display: inline;
+  font-weight: 700;
+}
+
+.tracknumber
+{
+  color: #bbb;
+  text-align: right;
+  width: 2em;
+  margin-left: -3em;
+  position: absolute;
 }
