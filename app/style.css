@@ -49,7 +49,7 @@ a
 
 .date
 {
-  color: #bbb;
+  color: #aaa;
 }
 
 .album img
@@ -68,9 +68,13 @@ a
 
 .tracknumber
 {
-  color: #bbb;
   text-align: right;
   width: 2em;
   margin-left: -3em;
   position: absolute;
+}
+
+.track p
+{
+  color: #aaa;
 }
