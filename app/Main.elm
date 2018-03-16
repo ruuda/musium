@@ -37,6 +37,20 @@ type alias Track =
   , durationSeconds : Int
   }
 
+-- Format total seconds in 'h:mm:ss' or 'm:ss' format.
+formatDuration : Int -> String
+formatDuration seconds =
+  let
+    h = seconds // 3600
+    m = (seconds - h * 3600) // 60
+    s = seconds - h * 3600 - m * 60
+    mStr = toString m
+    sStr = String.padLeft 2 '0' (toString s)
+  in
+     case h of
+       0 -> mStr ++ ":" ++ sStr
+       _ -> (toString h) ++ ":" ++ mStr ++ ":" ++ sStr
+
 -- MODEL
 
 type Model
@@ -111,7 +125,11 @@ viewTrack track =
     [ Html.span [Html.class "tracknumber"]
         [Html.text (toString track.trackNumber)]
     , Html.h3 [] [Html.text track.title]
-    , Html.p [] [Html.text track.artist]
+    , Html.p []
+        [ Html.span [Html.class "duration"]
+            [Html.text (formatDuration track.durationSeconds)]
+        , Html.text track.artist
+        ]
     ]
 
 -- SUBSCRIPTIONS

@@ -66,11 +66,11 @@ a
   font-weight: 700;
 }
 
-.tracknumber
+.tracknumber, .duration
 {
   text-align: right;
-  width: 2em;
-  margin-left: -3em;
+  width: 3em;
+  margin-left: -4em;
   position: absolute;
 }
 
