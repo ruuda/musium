@@ -44,11 +44,11 @@ formatDuration seconds =
     h = seconds // 3600
     m = (seconds - h * 3600) // 60
     s = seconds - h * 3600 - m * 60
-    mStr = toString m
+    mStr = String.padLeft 2 '0' (toString m)
     sStr = String.padLeft 2 '0' (toString s)
   in
      case h of
-       0 -> mStr ++ ":" ++ sStr
+       0 -> (toString m) ++ ":" ++ sStr
        _ -> (toString h) ++ ":" ++ mStr ++ ":" ++ sStr
 
 -- MODEL

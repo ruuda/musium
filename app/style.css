@@ -69,8 +69,8 @@ a
 .tracknumber, .duration
 {
   text-align: right;
-  width: 3em;
-  margin-left: -4em;
+  width: 4em;
+  margin-left: -5em;
   position: absolute;
 }
 
