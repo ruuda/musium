@@ -124,13 +124,26 @@ viewTrack track =
   Html.div [Html.class "track"]
     [ Html.span [Html.class "tracknumber"]
         [Html.text (toString track.trackNumber)]
-    , Html.h3 [] [Html.text track.title]
+    , viewTitle track.title
     , Html.p []
         [ Html.span [Html.class "duration"]
             [Html.text (formatDuration track.durationSeconds)]
         , Html.text track.artist
         ]
     ]
+
+-- Format a track title inside a h3, but set parenthesized suffixes inside a
+-- separate span, so they can be de-emphasized.
+viewTitle : String -> Html Msg
+viewTitle title =
+  case List.maximum (String.indices "(" title) of
+    Just n ->
+      Html.h3 []
+        [ Html.text (String.left n title)
+        , Html.span [Html.class "parens"] [Html.text (String.dropLeft n title)]
+        ]
+    Nothing ->
+      Html.h3 [] [Html.text title]
 
 -- SUBSCRIPTIONS
 

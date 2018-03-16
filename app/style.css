@@ -66,6 +66,11 @@ a
   font-weight: 700;
 }
 
+.parens
+{
+  font-weight: 400;
+}
+
 .tracknumber, .duration
 {
   text-align: right;
