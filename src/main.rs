@@ -10,7 +10,7 @@ use std::time::{Duration, SystemTime};
 use std::ffi::OsStr;
 use std::fs;
 use std::io;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process;
 use std::rc::Rc;
@@ -238,18 +238,35 @@ fn main() {
 
     let flac_ext = OsStr::new("flac");
 
-    let paths: Vec<_> = wd
-        .into_iter()
-        .map(|e| e.unwrap())
-        .filter(|e| e.file_type().is_file())
-        .map(|e| PathBuf::from(e.path()))
-        .filter(|p| p.extension() == Some(flac_ext))
-        .collect();
-
-    let index = {
+    let index;
+    {
         let stdout = std::io::stdout();
         let mut lock = stdout.lock();
-        metaindex::MemoryMetaIndex::from_paths(paths.iter(), &mut lock)
+
+        let mut k = 0;
+        let mut paths = Vec::new();
+        let paths_iter = wd
+            .into_iter()
+            .map(|e| e.unwrap())
+            .filter(|e| e.file_type().is_file())
+            .map(|e| PathBuf::from(e.path()))
+            .filter(|p| p.extension() == Some(flac_ext));
+
+        for p in paths_iter {
+            // Print progress updates on the number of files discovered.
+            // Enumerating the filesystem can take a long time when the OS
+            // caches are cold. When the caches are warm it is pretty much
+            // instant, but indexing tends to happen with cold caches.
+            k += 1;
+            if k % 64 == 0 {
+                write!(&mut lock, "\r{} files discovered", k);
+                lock.flush().unwrap();
+            }
+            paths.push(p);
+        }
+        writeln!(&mut lock, "\r{} files discovered", k);
+
+        index = metaindex::MemoryMetaIndex::from_paths(paths.iter(), &mut lock)
             .expect("Failed to build index.")
     };
     println!("Index has {} tracks.", index.len());
