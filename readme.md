@@ -22,3 +22,9 @@ List all of your albums, by original release date or by album artist:
 
     curl localhost:8233/albums | jq 'sort_by(.date)'
     curl localhost:8233/albums | jq 'sort_by(.sort_artist)'
+
+List all album artists, ordered by sort name:
+
+    curl localhost:8233/albums |
+      jq 'map({artist, sort_artist})' |
+      jq 'unique | sort_by(.sort_artist) | map(.artist)'
