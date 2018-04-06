@@ -1,7 +1,7 @@
 {
     "version": "0.0.0",
     "summary": "Music library browser",
-    "repository": "https://github.com/ruuda/metaindex.git",
+    "repository": "https://github.com/ruuda/mindec.git",
     "license": "Apache2",
     "source-directories": [
         "."

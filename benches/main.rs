@@ -1,13 +1,13 @@
 #[macro_use] extern crate criterion;
 
-extern crate metaindex;
+extern crate mindec;
 extern crate walkdir;
 
 use std::ffi::OsStr;
 use std::path::PathBuf;
 
 use criterion::{Bencher, Criterion, black_box};
-use metaindex::{AlbumId, MetaIndex, MemoryMetaIndex};
+use mindec::{AlbumId, MetaIndex, MemoryMetaIndex};
 
 fn build_index() -> MemoryMetaIndex {
     // TODO: Do not hard-code path.

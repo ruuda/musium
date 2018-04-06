@@ -1,7 +1,7 @@
 extern crate claxon;
 extern crate futures;
 extern crate hyper;
-extern crate metaindex;
+extern crate mindec;
 extern crate serde_json;
 extern crate walkdir;
 
@@ -20,7 +20,7 @@ use hyper::header::{AccessControlAllowOrigin, ContentLength, ContentType, Expire
 use hyper::mime;
 use hyper::server::{Http, Request, Response, Service};
 use hyper::{Get, StatusCode};
-use metaindex::{AlbumId, MetaIndex, MemoryMetaIndex, TrackId};
+use mindec::{AlbumId, MetaIndex, MemoryMetaIndex, TrackId};
 
 struct MetaServer {
     index: MemoryMetaIndex,
@@ -266,7 +266,7 @@ fn main() {
         }
         writeln!(&mut lock, "\r{} files discovered", k);
 
-        index = metaindex::MemoryMetaIndex::from_paths(paths.iter(), &mut lock)
+        index = mindec::MemoryMetaIndex::from_paths(paths.iter(), &mut lock)
             .expect("Failed to build index.")
     };
     println!("Index has {} tracks.", index.len());

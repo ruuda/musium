@@ -43,7 +43,7 @@ Mindec is **not**:
 The library and server are written in [Rust][rust] and build with Cargo:
 
     cargo build --release
-    target/release/metaindex ~/music
+    target/release/mindec ~/music
 
 The webapp is written in [Elm][elm]:
 
