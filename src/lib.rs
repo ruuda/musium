@@ -1,4 +1,4 @@
-// Metaindex -- A music metadata indexing library
+// Mindec -- Music metadata indexer
 // Copyright 2017 Ruud van Asseldonk
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
