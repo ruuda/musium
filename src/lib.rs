@@ -1133,11 +1133,10 @@ impl MemoryMetaIndex {
     ///
     /// Reports progress to `out`, which can be `std::io::stdout().lock()`.
     pub fn from_paths<I, W>(paths: I, mut out: W) -> Result<MemoryMetaIndex>
-    where I: Iterator,
+    where I: Iterator + Send,
           W: Write,
-          <I as IntoIterator>::Item: AsRef<Path>,
-          <I as IntoIterator>::IntoIter: Send {
-        let paths_iterator = paths.into_iter().fuse();
+          <I as Iterator>::Item: AsRef<Path> {
+        let paths_iterator = paths.fuse();
         let mutex = Mutex::new(paths_iterator);
         let (tx_progress, rx_progress) = sync_channel(8);
 

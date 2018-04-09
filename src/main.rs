@@ -250,13 +250,17 @@ fn main() {
         let stdout = std::io::stdout();
         let mut lock = stdout.lock();
 
+        // First enumerate all flac files, before indexing them. It turns out
+        // that this is faster than indexing them on the go (and not first
+        // collecting into a vector). See also performance.md in the root of the
+        // repository.
         let mut k = 0;
         let mut paths = Vec::new();
         let paths_iter = wd
             .into_iter()
             .map(|e| e.unwrap())
             .filter(|e| e.file_type().is_file())
-            .map(|e| PathBuf::from(e.path()))
+            .map(|e| e.into_path())
             .filter(|p| p.extension() == Some(flac_ext));
 
         for p in paths_iter {

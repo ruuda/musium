@@ -5,7 +5,7 @@
 Should files be read from multiple threads, even when the disk is the
 bottleneck? By having multiple concurrent reads, the operating system might be
 able to optimize the disk access pattern, and schedule reads more efficiently
-for higher throughput. Let's measure.
+for higher throughput. Let’s measure.
 
 | Disk Cache | Threads | Time (seconds)  |
 | ---------- | ------- | --------------- |
@@ -79,3 +79,75 @@ instead:
 | Warm       |      24 |     0.054264233 |
 | Warm       |      12 |     0.056491306 |
 | Warm       |      12 |     0.056685518 |
+
+## Precollect
+
+At commit `c6c611be9179d939dc5646dc43ab8bdf5ddc2962`, with 24 threads. First
+collecting discovered paths into a vec, and constructing the index by iterating
+over the paths in the vec. Is this the right thing to do, or should we put the
+paths iterator in a mutex directly? Measurement setup:
+
+    echo 3 | sudo tee /proc/sys/vm/drop_caches
+    perf stat target/release/mindec ~/music
+
+Note that the server was disabled to terminate the program after indexing. Also,
+these results are not comparable to the previous numbers, as the library has
+grown, and more data is processed. Furthermore, I did not redirect stdout to
+`/dev/null` in this case, but for a cold disk cache that does not make so much
+of a difference anyway.
+
+| Precollect         | Time (seconds)  |
+| ------------------ | --------------- |
+| Vec precollect 1   |    91.870704962 |
+| Vec precollect 1   |    90.106878818 |
+| Vec precollect 1   |    90.031705480 |
+| Vec precollect 2   |    86.926306901 |
+| Vec precollect 2   |    86.876997701 |
+| Vec precollect 2   |    89.131675265 |
+| Iter, double alloc |    93.370680604 |
+| Iter, double alloc |    93.180283609 |
+| Iter, double alloc |    93.259494622 |
+| Iter, single alloc |    94.026253229 |
+| Iter, single alloc |    94.147137607 |
+| Iter, single alloc |    94.352803977 |
+
+Note that I did upgrade Walkdir when switching from vector precollect to the
+iterator-based version, so the comparison may be unfair. The data collected
+before the switch is labelled “Vec precollect 1”, the version after upgrading to
+Walkdir 2.1.4 is labelled “Vec precollect 2”. Furtherore, Walkdir 2.1.4 requires
+copying the path (labelled “double alloc”). I made a small change to the crate
+to be able to avoid the copy and extra allocation (labelled “single alloc”).
+
+Counterintuitively, copying the path returned by the iterator is faster than not
+copying it. It might have something to do with ordering; spending more time in
+the iterator lock is actually a good thing? Or maybe I should collect more data,
+and this is just a statistical fluctuatin. Just storing the paths is definitely
+faster if the copy is avoided:
+
+    copy    <- c(0.023223363, 0.022365082, 0.022318216, 0.022584837,
+                 0.020660742, 0.023839308, 0.022084252, 0.021812114,
+                 0.022180668, 0.019982074, 0.020979151, 0.023186709,
+                 0.024758619, 0.022889618, 0.024148854, 0.024708654)
+    noncopy <- c(0.022403112, 0.021863389, 0.019650964, 0.020984869,
+                 0.021901483, 0.021376926, 0.021668108, 0.021504715,
+                 0.023730031, 0.021861766, 0.021060567, 0.021986531,
+                 0.022680138, 0.019719019, 0.020053399, 0.021137137)
+    t.test(copy, noncopy)
+
+    #     Welch Two Sample t-test
+    #
+    # data:  copy and noncopy
+    # t = 2.6055, df = 28.297, p-value = 0.01447
+    # alternative hypothesis: true difference in means is not equal to 0
+    # 95 percent confidence interval:
+    #  0.000242829 0.002024684
+    # sample estimates:
+    #  mean of x  mean of y
+    # 0.02260764 0.02147388
+
+So it is preferable to read many paths at once before processing them, perhaps
+due to better branch prediction. The gains are so big that the extra allocations
+and reallocations for storing the pathbuf pointers in a vec are totally worth
+it. It might be even better then to alternate beween scanning paths and
+processing them, to reduce peak memory usage, but let’s not worry about that at
+this point.
