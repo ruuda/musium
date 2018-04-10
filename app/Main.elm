@@ -10,12 +10,13 @@ import Html.Events as Html
 import Html.Attributes as Html
 import Http
 import Json.Decode as Json
+import Navigation exposing (Location)
 
 apiHost : String
 apiHost = "http://localhost:8233"
 
 main =
-  Html.program
+  Navigation.program UrlChange
     { init = init
     , view = view
     , update = update
@@ -58,6 +59,26 @@ formatDuration seconds =
        0 -> (toString m) ++ ":" ++ sStr
        _ -> (toString h) ++ ":" ++ mStr ++ ":" ++ sStr
 
+-- ROUTE
+
+type Route
+  = AtHome
+  | AtAlbum (AlbumId)
+
+parseRoute : String -> Maybe Route
+parseRoute hash =
+  -- /#
+  if (hash == "") || (hash == "#") then
+    Just AtHome
+  -- /#album:f6758afbcfa3c6d3
+  else if (String.startsWith "#album:" hash) && (String.length hash == 23) then
+    Just (AtAlbum (AlbumId (String.dropLeft 7 hash)))
+  else
+    Nothing
+
+routeAlbum : AlbumId -> String
+routeAlbum (AlbumId id) = "#album:" ++ id
+
 -- MODEL
 
 type Model
@@ -66,24 +87,29 @@ type Model
   | TrackList Album (List Track)
   | Failed String
 
-init : (Model, Cmd Msg)
-init =
-  ( Loading
-  , getAlbums
-  )
+init : Location -> (Model, Cmd Msg)
+init location =
+  handleUrl location Loading
 
 -- UPDATE
 
 type Msg
   = LoadAlbums (Result Http.Error (List Album))
   | LoadAlbum (Result Http.Error (Album, List Track))
-  | OpenAlbum Album
+  | UrlChange Location
+
+handleUrl : Location -> Model -> (Model, Cmd Msg)
+handleUrl location model =
+   case parseRoute location.hash of
+     Just AtHome -> (model, getAlbums)
+     Just (AtAlbum aid) -> (model, getAlbum aid)
+     Nothing -> (Failed "Invalid url.", Cmd.none)
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
-    OpenAlbum album ->
-      (model, getAlbum album)
+    UrlChange location ->
+      handleUrl location model
     LoadAlbums (Ok albums) ->
       (AlbumList (List.sortBy .date albums), Cmd.none)
     LoadAlbums (Err _) ->
@@ -113,11 +139,9 @@ viewAlbum album =
     (AlbumId id) = album.id
     firstTrack = (String.dropRight 3 id) ++ "101"
   in
-    Html.a [ Html.href "#" ]
+    Html.a [ Html.href (routeAlbum album.id) ]
       [ Html.div
-          [ Html.class "album"
-          , Html.onClick (OpenAlbum album)
-          ]
+          [ Html.class "album" ]
           -- TODO: Serve album covers directly.
           [ Html.img [Html.src (apiHost ++ "/cover/" ++ firstTrack)] []
           , Html.h2 [] [Html.text album.title]
@@ -167,15 +191,21 @@ getAlbums =
   in
     Http.send LoadAlbums (Http.get url (Json.list decodeAlbum))
 
-getAlbum : Album -> Cmd Msg
-getAlbum album =
+getAlbum : AlbumId -> Cmd Msg
+getAlbum albumId =
   let
-    (AlbumId id) = album.id
+    (AlbumId id) = albumId
     url = apiHost ++ "/album/" ++ id
-    prependAlbum ts = (album, ts)
+    decodeAlbumInline =
+      Json.map4 (Album albumId)
+        (Json.field "title" Json.string)
+        (Json.field "artist" Json.string)
+        (Json.field "sort_artist" Json.string)
+        (Json.field "date" Json.string)
     decodeTracks = Json.field "tracks" (Json.list decodeTrack)
+    decode = Json.map2 (\x y -> (x, y)) decodeAlbumInline decodeTracks
   in
-    Http.send LoadAlbum (Http.get url (Json.map prependAlbum decodeTracks))
+    Http.send LoadAlbum (Http.get url decode)
 
 decodeAlbum : Json.Decoder Album
 decodeAlbum =
