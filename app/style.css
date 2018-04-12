@@ -15,12 +15,6 @@ html
 
 body
 {
-  max-width: 40em;
-  margin-left: auto;
-  margin-right: auto;
-  padding-left: 4.9em;
-  padding-top: 0.5em;
-  padding-bottom: 0.5em;
   color: black;
 }
 
@@ -36,10 +30,54 @@ a
   text-decoration: none;
 }
 
+#album-list, #track-list
+{
+  padding-top: 0.5em;
+  padding-bottom: 0.5em;
+}
+
+#album-list
+{
+  width: 23em;
+  height: calc(100% - 1em);
+  position: fixed;
+  overflow-y: scroll;
+  padding-right: 1em;
+  border-right: 1px solid #eee;
+}
+
+#album-list::-webkit-scrollbar
+{
+  background-color: transparent;
+  width: 0.2em;
+}
+
+/*
+#album-list:hover::-webkit-scrollbar
+{
+  background-color: #fafafa;
+  width: 0.8em;
+}
+*/
+
+#album-list::-webkit-scrollbar-thumb
+{
+  background-color: #aaa;
+}
+
+#track-list
+{
+  height: calc(100% - 0.5em);
+  position: fixed;
+  overflow-y: auto;
+  left: 25.5em;
+  width: calc(100% - 25.5em);
+}
+
 .album, .track
 {
   padding: 0.5em;
-  padding-left: 1em;
+  padding-left: 5.9em;
 }
 
 .album h2
