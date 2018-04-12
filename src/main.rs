@@ -31,14 +31,16 @@ use mindec::{AlbumId, MetaIndex, MemoryMetaIndex, TrackId};
 
 struct MetaServer {
     index: MemoryMetaIndex,
+    cache_dir: PathBuf,
 }
 
 type BoxFuture = Box<Future<Item=Response, Error=hyper::Error>>;
 
 impl MetaServer {
-    fn new(index: MemoryMetaIndex) -> MetaServer {
+    fn new(index: MemoryMetaIndex, cache_dir: &str) -> MetaServer {
         MetaServer {
             index: index,
+            cache_dir: PathBuf::from(cache_dir),
         }
     }
 
@@ -113,6 +115,37 @@ impl MetaServer {
             // The file has no embedded front cover.
             self.handle_not_found()
         }
+    }
+
+    fn handle_thumb(&self, _request: &Request, id: &str) -> BoxFuture {
+        // TODO: DRY this track id parsing and loadong part.
+        let album_id = match AlbumId::parse(id) {
+            Some(aid) => aid,
+            None => return self.handle_bad_request("Invalid album id."),
+        };
+
+        let mut fname: PathBuf = PathBuf::from(&self.cache_dir);
+        fname.push(format!("{}.jpg", album_id));
+        let mut file = match fs::File::open(fname) {
+            Ok(f) => f,
+            // TODO: This is not entirely accurate. Also, try to generate the
+            // thumbnail if it does not exist.
+            Err(..) => return self.handle_not_found(),
+        };
+        let mut data = Vec::new();
+        match file.read_to_end(&mut data) {
+            Ok(..) => {}
+            Err(..) => return self.handle_error("Failed to read cached thumbnail."),
+        }
+        let expires = SystemTime::now() + Duration::from_secs(3600 * 24 * 30);
+        let mime = "image/jpeg".parse::<mime::Mime>().unwrap();
+        let response = Response::new()
+            .with_header(AccessControlAllowOrigin::Any)
+            .with_header(Expires(HttpDate::from(expires)))
+            .with_header(ContentType(mime))
+            .with_header(ContentLength(data.len() as u64))
+            .with_body(data);
+        Box::new(futures::future::ok(response))
     }
 
     fn handle_track(&self, _request: &Request, path: &str) -> BoxFuture {
@@ -221,6 +254,7 @@ impl Service for MetaServer {
         // A very basic router. See also docs/api.md for an overview.
         match (request.method(), p0, p1) {
             (&Get, Some("cover"),  Some(t)) => self.handle_track_cover(&request, t),
+            (&Get, Some("thumb"),  Some(t)) => self.handle_thumb(&request, t),
             (&Get, Some("track"),  Some(t)) => self.handle_track(&request, t),
             (&Get, Some("album"),  Some(a)) => self.handle_album(&request, a),
             (&Get, Some("albums"), None)    => self.handle_albums(&request),
@@ -321,7 +355,7 @@ fn generate_thumbnail(cache_dir: &str, album_id: AlbumId, filename: &str) -> cla
 
 fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &str) {
     let mut prev_album_id = AlbumId(0);
-    for &(ref tid, ref track) in index.get_tracks() {
+    for &(_tid, ref track) in index.get_tracks() {
         if track.album_id != prev_album_id {
             let fname = index.get_filename(track.filename);
             generate_thumbnail(cache_dir, track.album_id, fname).unwrap();
@@ -350,7 +384,7 @@ fn main() {
         "serve" => {
             let index = make_index(&dir);
             println!("Indexing complete, starting server on port 8233.");
-            let service = Rc::new(MetaServer::new(index));
+            let service = Rc::new(MetaServer::new(index, &cache_dir));
             let addr = ([0, 0, 0, 0], 8233).into();
             let server = Http::new().bind(&addr, move || Ok(service.clone())).unwrap();
             server.run().unwrap();
