@@ -137,13 +137,11 @@ viewAlbum : Album -> Html Msg
 viewAlbum album =
   let
     (AlbumId id) = album.id
-    firstTrack = (String.dropRight 3 id) ++ "101"
   in
     Html.a [ Html.href (routeAlbum album.id) ]
       [ Html.div
           [ Html.class "album" ]
-          -- TODO: Serve album covers directly.
-          [ Html.img [Html.src (apiHost ++ "/cover/" ++ firstTrack)] []
+          [ Html.img [Html.src (apiHost ++ "/thumb/" ++ id)] []
           , Html.h2 [] [Html.text album.title]
           , Html.p [] [Html.text album.artist]
           , Html.p [Html.class "date"] [Html.text (String.left 4 album.date)]
