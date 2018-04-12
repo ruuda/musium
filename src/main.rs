@@ -232,13 +232,7 @@ impl Service for MetaServer {
     }
 }
 
-fn main() {
-    if env::args().len() < 2 {
-        println!("usage: index /path/to/music/library");
-        process::exit(1);
-    }
-
-    let dir = env::args().nth(1).unwrap();
+fn make_index(dir: &str) -> MemoryMetaIndex {
     let wd = walkdir::WalkDir::new(&dir)
         .follow_links(true)
         .max_open(128);
@@ -277,13 +271,46 @@ fn main() {
         }
         writeln!(&mut lock, "\r{} files discovered", k);
 
-        index = mindec::MemoryMetaIndex::from_paths(paths.iter(), &mut lock)
-            .expect("Failed to build index.")
+        index = mindec::MemoryMetaIndex::from_paths(paths.iter(), &mut lock);
     };
+
+    let index = index.expect("Failed to build index.");
     println!("Index has {} tracks.", index.len());
-    println!("Indexing complete, starting server on port 8233.");
-    let service = Rc::new(MetaServer::new(index));
-    let addr = ([0, 0, 0, 0], 8233).into();
-    let server = Http::new().bind(&addr, move || Ok(service.clone())).unwrap();
-    server.run().unwrap();
+    index
+}
+
+fn print_usage() {
+    println!("usage: ");
+    println!("  mindec serve /path/to/music/library /path/to/cache");
+    println!("  mindec cache /path/to/music/library /path/to/cache");
+}
+
+fn main() {
+    if env::args().len() < 4 {
+        print_usage();
+        process::exit(1);
+    }
+
+    let cmd = env::args().nth(1).unwrap();
+    let dir = env::args().nth(2).unwrap();
+    let cache_dir = env::args().nth(3).unwrap();
+
+    match &cmd[..] {
+        "serve" => {
+            let index = make_index(&dir);
+            println!("Indexing complete, starting server on port 8233.");
+            let service = Rc::new(MetaServer::new(index));
+            let addr = ([0, 0, 0, 0], 8233).into();
+            let server = Http::new().bind(&addr, move || Ok(service.clone())).unwrap();
+            server.run().unwrap();
+        }
+        "cache" => {
+            let index = make_index(&dir);
+            println!("TODO: Cache images.");
+        }
+        _ => {
+            print_usage();
+            process::exit(1);
+        }
+    }
 }
