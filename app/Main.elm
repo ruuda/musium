@@ -81,15 +81,20 @@ routeAlbum (AlbumId id) = "#album:" ++ id
 
 -- MODEL
 
-type Model
+type StatusIndicator
   = Loading
-  | AlbumList (List Album)
-  | TrackList Album (List Track)
   | Failed String
+  | Ready
+
+type alias Model =
+  { status : StatusIndicator
+  , albums : List Album
+  , tracks : List Track
+  }
 
 init : Location -> (Model, Cmd Msg)
 init location =
-  handleUrl location Loading
+  handleUrl location { status = Loading, albums = [], tracks = [] }
 
 -- UPDATE
 
@@ -102,8 +107,11 @@ handleUrl : Location -> Model -> (Model, Cmd Msg)
 handleUrl location model =
    case parseRoute location.hash of
      Just AtHome -> (model, getAlbums)
-     Just (AtAlbum aid) -> (model, getAlbum aid)
-     Nothing -> (Failed "Invalid url.", Cmd.none)
+     Just (AtAlbum aid) ->
+       case model.albums of
+         [] -> (model, Cmd.batch [getAlbums, getAlbum aid])
+         _ -> (model, getAlbum aid)
+     Nothing -> ({ model | status = Failed "Invalid url." }, Cmd.none)
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -111,27 +119,28 @@ update msg model =
     UrlChange location ->
       handleUrl location model
     LoadAlbums (Ok albums) ->
-      (AlbumList (List.sortBy .date albums), Cmd.none)
+      ({ model | albums = List.sortBy .date albums, status = Ready }, Cmd.none)
     LoadAlbums (Err _) ->
-      (Failed "Failed to retrieve album list.", Cmd.none)
+      ({ model | status = Failed "Failed to retrieve album list." }, Cmd.none)
     LoadAlbum (Ok (album, tracks)) ->
-      (TrackList album tracks, Cmd.none)
+      ({ model | tracks = tracks, status = Ready }, Cmd.none)
     LoadAlbum (Err _) ->
-      (Failed "Failed to retrieve album.", Cmd.none)
+      ({ model | status = Failed "Failed to retrieve album." }, Cmd.none)
 
 -- VIEW
 
 view : Model -> Html Msg
 view model =
-  case model of
+  case model.status of
     Loading ->
       Html.text "loading ..."
     Failed message ->
       Html.text message
-    AlbumList albums ->
-      Html.div [Html.id "album-list"] (List.map viewAlbum albums)
-    TrackList album tracks ->
-      Html.div [Html.id "track-list"] (List.map viewTrack tracks)
+    Ready ->
+      Html.div []
+        [ Html.div [Html.id "album-list"] (List.map viewAlbum model.albums)
+        , Html.div [Html.id "track-list"] (List.map viewTrack model.tracks)
+        ]
 
 viewAlbum : Album -> Html Msg
 viewAlbum album =
