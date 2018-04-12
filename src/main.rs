@@ -279,6 +279,57 @@ fn make_index(dir: &str) -> MemoryMetaIndex {
     index
 }
 
+fn generate_thumbnail(cache_dir: &str, album_id: AlbumId, filename: &str) -> claxon::Result<()> {
+    use std::process::{Command, Stdio};
+    let opts = claxon::FlacReaderOptions {
+        metadata_only: true,
+        read_picture: claxon::ReadPicture::CoverAsVec,
+        read_vorbis_comment: false,
+    };
+    let reader = claxon::FlacReader::open_ext(filename, opts)?;
+    if let Some(cover) = reader.into_pictures().pop() {
+        let mut out_fname: PathBuf = PathBuf::from(cache_dir);
+        out_fname.push(format!("{}.jpg", album_id));
+        println!("{:?} <- {}", &out_fname, filename);
+        let mut convert = Command::new("convert")
+            // Read from stdin.
+            .arg("-")
+            .args(&["-colorspace", "LAB"])
+            // Lanczos2 is a bit less sharp than Cosine, but less sharp edges
+            // means that the image compresses better, and less artifacts. But
+            // still, Lanczos was too blurry in my opinion.
+            .args(&["-filter", "Cosine"])
+            // Twice the size of the thumb in the webinterface, so they appear
+            // pixel-perfect on a high-DPI display, or on a mobile phone.
+            .args(&["-distort", "Resize", "140x140!"])
+            .args(&["-colorspace", "sRGB"])
+            .args(&["-quality", "95"])
+            .arg(out_fname)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::inherit())
+            .spawn()
+            .expect("Failed to spawn Imagemagick's 'convert'.");
+        {
+            let mut stdin = convert.stdin.as_mut().expect("Failed to open stdin.");
+            stdin.write_all(cover.data());
+        }
+        // TODO: Use a custom error type, remove all `expect()`s.
+        convert.wait().expect("Failed to run Imagemagick's 'convert'.");
+    }
+    Ok(())
+}
+
+fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &str) {
+    let mut prev_album_id = AlbumId(0);
+    for &(ref tid, ref track) in index.get_tracks() {
+        if track.album_id != prev_album_id {
+            let fname = index.get_filename(track.filename);
+            generate_thumbnail(cache_dir, track.album_id, fname).unwrap();
+            prev_album_id = track.album_id;
+        }
+    }
+}
+
 fn print_usage() {
     println!("usage: ");
     println!("  mindec serve /path/to/music/library /path/to/cache");
@@ -306,7 +357,7 @@ fn main() {
         }
         "cache" => {
             let index = make_index(&dir);
-            println!("TODO: Cache images.");
+            generate_thumbnails(&index, &cache_dir);
         }
         _ => {
             print_usage();
