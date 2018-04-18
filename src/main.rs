@@ -8,6 +8,7 @@
 extern crate claxon;
 extern crate futures;
 extern crate hyper;
+extern crate mdns;
 extern crate mindec;
 extern crate serde_json;
 extern crate walkdir;
@@ -364,6 +365,66 @@ fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &str) {
     }
 }
 
+/// Returns the name of the Chromecast device as present in the TXT record.
+fn get_name_from_txt_record(txt: &str) -> Option<String> {
+    // The TXT record has the following format:
+    //
+    // "rs="
+    // "nf=1"
+    // "bs=<something uppercase hex>"
+    // "st=0"
+    // "ca=2052"
+    // "fn=<chromecast name>"
+    // "ic=/setup/icon.png"
+    // "md=Chromecast Audio"
+    // "ve=05"
+    // "rm=<something uppercase hex>"
+    // "cd=<something uppercase hex>"
+    // "id=<something lowercase hex>"
+    //
+    // However, this is not how it is passed ... See also
+    // https://github.com/tailhook/dns-parser/issues/29
+    // For now, deal with it. Upgrade later.
+    if let Some(i) = txt.find("fn=") {
+        // Cut off the `fn=` prefix.
+        let remainder = &txt[i + 3..];
+        if let Some(j) = remainder.find("ca=") {
+            // Drop until the next key.
+            return Some(String::from(&remainder[..j]))
+        }
+    }
+    None
+}
+
+fn run_cast() {
+    use mdns::{Record, RecordKind};
+    use std::net::IpAddr;
+    for response in mdns::discover::all("_googlecast._tcp.local").unwrap() {
+        let mut response = response.unwrap();
+        let mut addr: Option<IpAddr> = None;
+        let mut name: Option<String> = None;
+
+        for record in response.records() {
+            match record.kind {
+                RecordKind::A(addr_v4) => addr = Some(addr_v4.into()),
+                RecordKind::AAAA(addr_v6) => addr = Some(addr_v6.into()),
+                RecordKind::TXT(ref txt) => name = get_name_from_txt_record(&txt[..]),
+                _ => {}
+            }
+        }
+        match (addr, name) {
+            (Some(addr), Some(name)) => {
+                println!("Found {} at {}.", name, addr);
+                break
+            }
+            (Some(addr), _) => {
+                println!("Found nameless cast at {}.", addr);
+            }
+            _ => continue,
+        }
+    }
+}
+
 fn print_usage() {
     println!("usage: ");
     println!("  mindec serve /path/to/music/library /path/to/cache");
@@ -392,6 +453,9 @@ fn main() {
         "cache" => {
             let index = make_index(&dir);
             generate_thumbnails(&index, &cache_dir);
+        }
+        "cast" => {
+            run_cast();
         }
         _ => {
             print_usage();
