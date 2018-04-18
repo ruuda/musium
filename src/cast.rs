@@ -15,8 +15,11 @@ use std::thread;
 use mdns;
 use mdns::RecordKind;
 use rust_cast::channels::heartbeat::HeartbeatResponse;
+use rust_cast::channels::media::{Media, Metadata, MusicTrackMediaMetadata, StreamType};
 use rust_cast::channels::receiver::{Application, CastDeviceApp};
 use rust_cast::{CastDevice, ChannelMessage};
+
+use super::{MetaIndex, TrackId};
 
 /// A Chromecast, as discovered using mDNS.
 #[derive(Debug)]
@@ -219,6 +222,34 @@ impl CastSession {
         CastSession {
             join_handle: join_handle,
         }
+    }
+
+    pub fn play<M: MetaIndex>(track_id: TrackId, index: M) {
+        let track = index.get_track(track_id).unwrap();
+        let album = index.get_album(track.album_id).unwrap();
+        let artist = index.get_artist(album.artist_id).unwrap();
+        let release_date = format!("{}", album.original_release_date);
+        let metadata = MusicTrackMediaMetadata {
+            album_name: Some(index.get_string(album.title).to_string()),
+            title: Some(index.get_string(track.title).to_string()),
+            album_artist: Some(index.get_string(artist.name).to_string()),
+            artist: Some(index.get_string(track.artist).to_string()),
+            composer: None,
+            track_number: Some(track.track_number as u32),
+            disc_number: Some(track.disc_number as u32),
+            images: Vec::new(), // TODO
+            release_date: Some(release_date),
+        };
+        let host = "0.0.0.0";
+        let media = Media {
+            content_id: format!("http://{}/track/{}.flac", host, track_id),
+            // Let the device decide whether to buffer or not.
+            stream_type: StreamType::None,
+            content_type: "audio/flac".to_string(),
+            metadata: Some(Metadata::MusicTrack(metadata)),
+            duration: Some(track.duration_seconds as f32)
+        };
+        unimplemented!();
     }
 
     pub fn join(self) {
