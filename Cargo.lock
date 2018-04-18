@@ -159,7 +159,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "dns-parser"
 version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "quick-error 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -372,9 +371,8 @@ dependencies = [
 [[package]]
 name = "mdns"
 version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "dns-parser 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dns-parser 0.7.1",
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ifaces 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "mio 0.6.13 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -406,7 +404,7 @@ dependencies = [
  "crossbeam 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.11.18 (registry+https://github.com/rust-lang/crates.io-index)",
- "mdns 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "mdns 0.2.2",
  "serde_json 1.0.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-normalization 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "walkdir 2.1.4",
@@ -910,7 +908,6 @@ dependencies = [
 "checksum criterion-plot 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "bbfbe2e326c84218c34eacf423b43cf56c4ae32008755074abe6ff708c631814"
 "checksum criterion-stats 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0ee00c9461382c11919d95702239902d7e4a15ef27ff1c46a2b5f5c2d79ddc11"
 "checksum crossbeam 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "24ce9782d4d5c53674646a6a4c1863a21a8fc0cb649b3c94dfc16e45071dea19"
-"checksum dns-parser 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)" = "f7020f6760aea312d43d23cb83bf6c0c49f162541db8b02bf95209ac51dc253d"
 "checksum dtoa 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "09c3753c3db574d215cba4ea76018483895d7bff25a31b49ba45db21c48e50ab"
 "checksum either 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "740178ddf48b1a9e878e6d6509a1442a2d42fd2928aae8e7a6f8a36fb01981b3"
 "checksum error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ff511d5dc435d703f4971bc399647c9bc38e20cb41452e3b9feb4765419ed3f3"
@@ -936,7 +933,6 @@ dependencies = [
 "checksum libc 0.2.36 (registry+https://github.com/rust-lang/crates.io-index)" = "1e5d97d6708edaa407429faa671b942dc0f2727222fb6b6539bf1db936e4b121"
 "checksum log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)" = "e19e8d5c34a3e0e2223db8e060f9e8264aeeb5c5fc64a4ee9965c062211c024b"
 "checksum log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "89f010e843f2b1a31dbd316b3b8d443758bc634bed37aabade59c686d644e0a2"
-"checksum mdns 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "aa806525220e54e8b672df9842a5257e9cdd478222b83a164abd59ff9c5a9670"
 "checksum memchr 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "796fba70e76612589ed2ce7f45282f5af869e0fdd7cc6199fa1aa1f1d591ba9d"
 "checksum mime 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)" = "e2e00e17be181010a91dbfefb01660b17311059dc8c7f48b9017677721e732bd"
 "checksum mio 0.6.13 (registry+https://github.com/rust-lang/crates.io-index)" = "7da01a5e23070d92d99b1ecd1cd0af36447c6fd44b0fe283c2db199fa136724f"

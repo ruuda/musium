@@ -366,31 +366,26 @@ fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &str) {
 }
 
 /// Returns the name of the Chromecast device as present in the TXT record.
-fn get_name_from_txt_record(txt: &str) -> Option<String> {
+fn get_name_from_txt_record(txts: &[String]) -> Option<String> {
     // The TXT record has the following format:
     //
-    // "rs="
-    // "nf=1"
-    // "bs=<something uppercase hex>"
-    // "st=0"
-    // "ca=2052"
-    // "fn=<chromecast name>"
-    // "ic=/setup/icon.png"
-    // "md=Chromecast Audio"
-    // "ve=05"
-    // "rm=<something uppercase hex>"
-    // "cd=<something uppercase hex>"
-    // "id=<something lowercase hex>"
+    // rs=
+    // nf=1
+    // bs=<something uppercase hex>
+    // st=0
+    // ca=2052
+    // fn=<user-chosen chromecast name>
+    // ic=/setup/icon.png
+    // md=Chromecast Audio
+    // ve=05
+    // rm=<something uppercase hex>
+    // cd=<something uppercase hex>
+    // id=<something lowercase hex>
     //
-    // However, this is not how it is passed ... See also
-    // https://github.com/tailhook/dns-parser/issues/29
-    // For now, deal with it. Upgrade later.
-    if let Some(i) = txt.find("fn=") {
-        // Cut off the `fn=` prefix.
-        let remainder = &txt[i + 3..];
-        if let Some(j) = remainder.find("ca=") {
-            // Drop until the next key.
-            return Some(String::from(&remainder[..j]))
+    // We take the device name from the fn record.
+    for txt in txts {
+        if txt.starts_with("fn=") {
+            return Some(String::from(&txt[3..]))
         }
     }
     None
@@ -408,7 +403,7 @@ fn run_cast() {
             match record.kind {
                 RecordKind::A(addr_v4) => addr = Some(addr_v4.into()),
                 RecordKind::AAAA(addr_v6) => addr = Some(addr_v6.into()),
-                RecordKind::TXT(ref txt) => name = get_name_from_txt_record(&txt[..]),
+                RecordKind::TXT(ref txts) => name = get_name_from_txt_record(&txts[..]),
                 _ => {}
             }
         }
