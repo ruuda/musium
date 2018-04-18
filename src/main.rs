@@ -365,6 +365,8 @@ fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &str) {
 }
 
 fn run_cast() {
+    let addrs = mindec::net::getifaddrs();
+    println!("{:?}", addrs);
     let mut cs = mindec::cast::CastSession::new();
     cs.join()
 }

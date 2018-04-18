@@ -10,6 +10,7 @@
 
 extern crate claxon;
 extern crate crossbeam;
+extern crate libc;
 extern crate serde_json;
 extern crate unicode_normalization;
 
@@ -22,6 +23,7 @@ extern crate rust_cast;
 mod flat_tree; // TODO: Rename.
 
 pub mod cast;
+pub mod net;
 
 use std::ascii::AsciiExt;
 use std::collections::{BTreeMap, BTreeSet, HashMap};

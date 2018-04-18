@@ -9,6 +9,7 @@ claxon                = { path = "../claxon" }
 crossbeam             = "0.3"
 futures               = "0.1"
 hyper                 = "0.11"
+libc                  = "0.2.36"
 # TODO: Pull it from crates.io again, after new versions of dns-parser and mdns
 # are available.
 mdns                  = { path = "../mdns" }
