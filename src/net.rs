@@ -31,6 +31,9 @@ pub fn getifaddrs() -> Vec<IpAddr> {
                 match (*(*current).ifa_addr).sa_family as i32 {
                     libc::AF_INET => {
                         let sa: *mut libc::sockaddr_in = mem::transmute((*current).ifa_addr);
+                        // Note the to_be (big endian) conversion. Rust's From
+                        // implementation assumes big-endian input, not machine
+                        // endianness.
                         let addr = Ipv4Addr::from((*sa).sin_addr.s_addr.to_be());
                         addrs.push(IpAddr::from(addr));
                     }
