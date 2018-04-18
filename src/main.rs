@@ -365,9 +365,8 @@ fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &str) {
 }
 
 fn run_cast() {
-    for cast in mindec::cast::enumerate_casts_devices() {
-        println!("{:?}", cast);
-    }
+    let mut cs = mindec::cast::CastSession::new();
+    cs.join()
 }
 
 fn print_usage() {

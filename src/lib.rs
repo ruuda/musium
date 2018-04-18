@@ -17,6 +17,7 @@ extern crate unicode_normalization;
 // place either. Ideally Mindec should be entirely separate from driving a
 // Chromecast. But on the other hand, it should be integrated with the server.
 extern crate mdns;
+extern crate rust_cast;
 
 mod flat_tree; // TODO: Rename.
 
