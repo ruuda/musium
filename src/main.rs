@@ -8,7 +8,6 @@
 extern crate claxon;
 extern crate futures;
 extern crate hyper;
-extern crate mdns;
 extern crate mindec;
 extern crate serde_json;
 extern crate walkdir;
@@ -365,58 +364,9 @@ fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &str) {
     }
 }
 
-/// Returns the name of the Chromecast device as present in the TXT record.
-fn get_name_from_txt_record(txts: &[String]) -> Option<String> {
-    // The TXT record has the following format:
-    //
-    // rs=
-    // nf=1
-    // bs=<something uppercase hex>
-    // st=0
-    // ca=2052
-    // fn=<user-chosen chromecast name>
-    // ic=/setup/icon.png
-    // md=Chromecast Audio
-    // ve=05
-    // rm=<something uppercase hex>
-    // cd=<something uppercase hex>
-    // id=<something lowercase hex>
-    //
-    // We take the device name from the fn record.
-    for txt in txts {
-        if txt.starts_with("fn=") {
-            return Some(String::from(&txt[3..]))
-        }
-    }
-    None
-}
-
 fn run_cast() {
-    use mdns::{Record, RecordKind};
-    use std::net::IpAddr;
-    for response in mdns::discover::all("_googlecast._tcp.local").unwrap() {
-        let mut response = response.unwrap();
-        let mut addr: Option<IpAddr> = None;
-        let mut name: Option<String> = None;
-
-        for record in response.records() {
-            match record.kind {
-                RecordKind::A(addr_v4) => addr = Some(addr_v4.into()),
-                RecordKind::AAAA(addr_v6) => addr = Some(addr_v6.into()),
-                RecordKind::TXT(ref txts) => name = get_name_from_txt_record(&txts[..]),
-                _ => {}
-            }
-        }
-        match (addr, name) {
-            (Some(addr), Some(name)) => {
-                println!("Found {} at {}.", name, addr);
-                break
-            }
-            (Some(addr), _) => {
-                println!("Found nameless cast at {}.", addr);
-            }
-            _ => continue,
-        }
+    for cast in mindec::cast::enumerate_casts_devices() {
+        println!("{:?}", cast);
     }
 }
 

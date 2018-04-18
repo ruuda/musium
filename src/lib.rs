@@ -13,7 +13,14 @@ extern crate crossbeam;
 extern crate serde_json;
 extern crate unicode_normalization;
 
+// TODO: This does not really belong here, but I can't really think of a better
+// place either. Ideally Mindec should be entirely separate from driving a
+// Chromecast. But on the other hand, it should be integrated with the server.
+extern crate mdns;
+
 mod flat_tree; // TODO: Rename.
+
+pub mod cast;
 
 use std::ascii::AsciiExt;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
