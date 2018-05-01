@@ -324,6 +324,13 @@ fn generate_thumbnail(cache_dir: &str, album_id: AlbumId, filename: &str) -> cla
     if let Some(cover) = reader.into_pictures().pop() {
         let mut out_fname: PathBuf = PathBuf::from(cache_dir);
         out_fname.push(format!("{}.jpg", album_id));
+
+        // Early-out on existing files. The user would need to clear the cache
+        // manually.
+        if out_fname.is_file() {
+            return Ok(())
+        }
+
         println!("{:?} <- {}", &out_fname, filename);
         let mut convert = Command::new("convert")
             // Read from stdin.
