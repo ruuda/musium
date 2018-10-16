@@ -1083,7 +1083,25 @@ impl MemoryMetaIndex {
             if let Some(&(prev_id, ref prev)) = artists.last() {
                 if prev_id == id {
                     if let Some(detail) = artists_different(&strings, id, prev, &artist) {
-                        let issue = detail.for_file("TODO: Get filename".into());
+                        // Try to blame the inconsistency to a specific file. At
+                        // this point we no longer know the exact file that the
+                        // data came from, but we can at least point to one file
+                        // for which this artist occured, and it will be one
+                        // side of the conflict.
+
+                        // Locate the the first album by this artist. The unwrap
+                        // is safe, because if we have the artist, then it is
+                        // the artist of at least one album, and at this point
+                        // we have all albums.
+                        let album_id = albums.iter().find(|a| a.1.artist_id == id).unwrap().0;
+
+                        // Then find the first track on that album.
+                        let track_id = get_track_id(album_id, 0, 0);
+                        let fname = match tracks.binary_search_by_key(&track_id, |t| t.0) {
+                            Ok(i) => tracks[i].1.filename,
+                            Err(i) => tracks[i].1.filename,
+                        };
+                        let issue = detail.for_file(filenames[fname.0 as usize].to_string());
                         issues.push(issue);
                     }
                     return // Like `continue`, returns from the closure.
