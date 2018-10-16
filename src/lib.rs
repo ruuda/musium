@@ -1053,7 +1053,16 @@ impl MemoryMetaIndex {
             if let Some(&(prev_id, ref prev)) = albums.last() {
                 if prev_id == id {
                     if let Some(detail) = albums_different(&strings, id, prev, &album) {
-                        let issue = detail.for_file("TODO: Get filename".into());
+                        // Locate the first track in this album, so we can blame
+                        // the mismatch on a particular file. This might not be
+                        // the right file if there are discrepancies within an
+                        // album, but at least we locate the right album.
+                        let track_id = get_track_id(id, 0, 0);
+                        let fname = match tracks.binary_search_by_key(&track_id, |t| t.0) {
+                            Ok(i) => tracks[i].1.filename,
+                            Err(i) => tracks[i].1.filename,
+                        };
+                        let issue = detail.for_file(filenames[fname.0 as usize].to_string());
                         issues.push(issue);
                     }
                     return // Like `continue`, returns from the closure.
