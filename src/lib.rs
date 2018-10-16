@@ -1057,6 +1057,8 @@ impl MemoryMetaIndex {
                         // the mismatch on a particular file. This might not be
                         // the right file if there are discrepancies within an
                         // album, but at least we locate the right album.
+                        // TODO: Actually, we should look for a track in the
+                        // builder that is to blame to find a track to blame.
                         let track_id = get_track_id(id, 0, 0);
                         let fname = match tracks.binary_search_by_key(&track_id, |t| t.0) {
                             Ok(i) => tracks[i].1.filename,
@@ -1093,6 +1095,8 @@ impl MemoryMetaIndex {
                         // is safe, because if we have the artist, then it is
                         // the artist of at least one album, and at this point
                         // we have all albums.
+                        // TODO: Actually, we should look for an album in the
+                        // builder that is to blame to find a track to blame.
                         let album_id = albums.iter().find(|a| a.1.artist_id == id).unwrap().0;
 
                         // Then find the first track on that album.
