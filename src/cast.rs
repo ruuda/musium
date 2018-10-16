@@ -128,7 +128,7 @@ impl<'a> CastImpl<'a> {
         device.connection.connect("receiver-0").ok()?;
         let def = CastDeviceApp::DefaultMediaReceiver;
         let app = device.receiver.launch_app(&def).ok()?;
-        device.connection.connect(app.transport_id.as_ref()).ok()?;
+        device.connection.connect(&app.transport_id[..]).ok()?;
         let status = device.receiver.get_status().ok()?;
         println!("Status {:?}", status);
 
