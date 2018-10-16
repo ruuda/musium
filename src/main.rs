@@ -344,6 +344,9 @@ fn generate_thumbnail(cache_dir: &str, album_id: AlbumId, filename: &str) -> cla
             // pixel-perfect on a high-DPI display, or on a mobile phone.
             .args(&["-distort", "Resize", "140x140!"])
             .args(&["-colorspace", "sRGB"])
+            // Remove EXIF metadata, including the colour profile if there was
+            // any -- we convert to sRGB anyway.
+            .args(&["-strip"])
             .args(&["-quality", "95"])
             .arg(out_fname)
             .stdin(Stdio::piped())
