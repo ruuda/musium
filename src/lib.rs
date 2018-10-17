@@ -78,23 +78,23 @@ use unicode_normalization::UnicodeNormalization;
 // 0.1% at that number of artists. The lowest multiple of 8 that I can get away
 // with is 48 bits.
 
-#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct TrackId(u64);
 
 // TODO: Field should not be pub.
-#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct AlbumId(pub u64);
 
 // TODO: Field should not be pub.
-#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ArtistId(pub u64);
 
 /// Index into a byte array that contains length-prefixed strings.
-#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct StringRef(u32);
 
 /// Index into a byte array that contains length-prefixed strings.
-#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FilenameRef(u32);
 
 impl TrackId {
@@ -524,9 +524,21 @@ struct BuildMetaIndex {
     words_track_title: BTreeSet<(String, TrackId)>,
     words_album_title: BTreeSet<(String, AlbumId)>,
     words_album_artist: BTreeSet<(String, ArtistId)>,
+
     // When the track artist differs from the album artist, the words that occur
     // in the track artist but not in the album artist, are included here.
     words_track_artist: BTreeSet<(String, TrackId)>,
+
+    // For album and artist data, store the file from which the metadata was
+    // taken. This is later used for error reporting when the builders are
+    // merged. If there are inconsistencies at that point, we need to be able to
+    // attribute the album or artist metadata in this builder to a specific
+    // file. If all files agree then it's an arbitrary one, but if there was
+    // already inconsistent data in this builder's input, we need to remember
+    // which file we chose. Values are indices into the `filenames` vector.
+    album_sources: HashMap<AlbumId, FilenameRef>,
+    artist_sources: HashMap<ArtistId, FilenameRef>,
+
     // TODO: This option, to drop it when processing is done, is a bit of a
     // hack. It would be nice to not have it in the builder at all.
     progress: Option<SyncSender<Progress>>,
@@ -712,6 +724,8 @@ impl BuildMetaIndex {
             words_album_title: BTreeSet::new(),
             words_album_artist: BTreeSet::new(),
             words_track_artist: BTreeSet::new(),
+            album_sources: HashMap::new(),
+            artist_sources: HashMap::new(),
             progress: Some(progress),
         }
     }
@@ -902,6 +916,11 @@ impl BuildMetaIndex {
         self.tracks.insert(track_id, track);
         self.albums.insert(album_id, album);
         self.artists.insert(artist_id, artist);
+
+        // Track the files that the current metadata is based on, used
+        // later for error reporting in the case of inconsistencies.
+        self.album_sources.insert(album_id, FilenameRef(filename_id));
+        self.artist_sources.insert(artist_id, FilenameRef(filename_id));
     }
 }
 
@@ -1053,18 +1072,10 @@ impl MemoryMetaIndex {
             if let Some(&(prev_id, ref prev)) = albums.last() {
                 if prev_id == id {
                     if let Some(detail) = albums_different(&strings, id, prev, &album) {
-                        // Locate the first track in this album, so we can blame
-                        // the mismatch on a particular file. This might not be
-                        // the right file if there are discrepancies within an
-                        // album, but at least we locate the right album.
-                        // TODO: Actually, we should look for a track in the
-                        // builder that is to blame to find a track to blame.
-                        let track_id = get_track_id(id, 0, 0);
-                        let fname = match tracks.binary_search_by_key(&track_id, |t| t.0) {
-                            Ok(i) => tracks[i].1.filename,
-                            Err(i) => tracks[i].1.filename,
-                        };
-                        let issue = detail.for_file(filenames[fname.0 as usize].to_string());
+                        // Report the file where the conflicting data came from.
+                        let fname_index = builders[i].album_sources[&id];
+                        let filename = builders[i].filenames[fname_index.0 as usize].clone();
+                        let issue = detail.for_file(filename);
                         issues.push(issue);
                     }
                     return // Like `continue`, returns from the closure.
@@ -1085,27 +1096,10 @@ impl MemoryMetaIndex {
             if let Some(&(prev_id, ref prev)) = artists.last() {
                 if prev_id == id {
                     if let Some(detail) = artists_different(&strings, id, prev, &artist) {
-                        // Try to blame the inconsistency to a specific file. At
-                        // this point we no longer know the exact file that the
-                        // data came from, but we can at least point to one file
-                        // for which this artist occured, and it will be one
-                        // side of the conflict.
-
-                        // Locate the the first album by this artist. The unwrap
-                        // is safe, because if we have the artist, then it is
-                        // the artist of at least one album, and at this point
-                        // we have all albums.
-                        // TODO: Actually, we should look for an album in the
-                        // builder that is to blame to find a track to blame.
-                        let album_id = albums.iter().find(|a| a.1.artist_id == id).unwrap().0;
-
-                        // Then find the first track on that album.
-                        let track_id = get_track_id(album_id, 0, 0);
-                        let fname = match tracks.binary_search_by_key(&track_id, |t| t.0) {
-                            Ok(i) => tracks[i].1.filename,
-                            Err(i) => tracks[i].1.filename,
-                        };
-                        let issue = detail.for_file(filenames[fname.0 as usize].to_string());
+                        // Report the file where the conflicting data came from.
+                        let fname_index = builders[i].artist_sources[&id];
+                        let filename = builders[i].filenames[fname_index.0 as usize].clone();
+                        let issue = detail.for_file(filename);
                         issues.push(issue);
                     }
                     return // Like `continue`, returns from the closure.
