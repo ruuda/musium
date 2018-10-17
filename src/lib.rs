@@ -895,32 +895,43 @@ impl BuildMetaIndex {
             name_for_sort: StringRef(f_album_artist_for_sort),
         };
 
+        let mut add_album = true;
+        let mut add_artist = true;
+
         // Check for consistency if duplicates occur.
         if self.tracks.get(&track_id).is_some() {
+            // TODO: This should report an `Issue`, not panic.
             panic!("Duplicate track {}, file {}.", track_id, filename);
         }
+
         if let Some(existing_album) = self.albums.get(&album_id) {
             if let Some(detail) = albums_different(&self.strings, album_id, existing_album, &album) {
                 let issue = detail.for_file(filename_string.clone());
                 self.progress.as_mut().unwrap().send(Progress::Issue(issue)).unwrap();
             }
+            add_album = false;
         }
+
         if let Some(existing_artist) = self.artists.get(&artist_id) {
             if let Some(detail) = artists_different(&self.strings, artist_id, existing_artist, &artist) {
                 let issue = detail.for_file(filename_string.clone());
                 self.progress.as_mut().unwrap().send(Progress::Issue(issue)).unwrap();
             }
+            add_artist = false;
         }
 
         self.filenames.push(filename_string);
         self.tracks.insert(track_id, track);
-        self.albums.insert(album_id, album);
-        self.artists.insert(artist_id, artist);
 
-        // Track the files that the current metadata is based on, used
-        // later for error reporting in the case of inconsistencies.
-        self.album_sources.insert(album_id, FilenameRef(filename_id));
-        self.artist_sources.insert(artist_id, FilenameRef(filename_id));
+        if add_album {
+            self.albums.insert(album_id, album);
+            self.album_sources.insert(album_id, FilenameRef(filename_id));
+        }
+
+        if add_artist {
+            self.artists.insert(artist_id, artist);
+            self.artist_sources.insert(artist_id, FilenameRef(filename_id));
+        }
     }
 }
 
