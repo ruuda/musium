@@ -697,6 +697,10 @@ fn normalize_words(title: &str, dest: &mut Vec<String>) {
                 push_word(dest, &mut word);
                 dest.push("infinity".to_string());
             }
+            '¥' => {
+                push_word(dest, &mut word);
+                dest.push("yen".to_string());
+            }
             // Drop characters that we don't care for, keep characters that we
             // definitely care for.
             _ if drop.contains(ch) => {}
