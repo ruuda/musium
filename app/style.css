@@ -30,7 +30,7 @@ a
   text-decoration: none;
 }
 
-#album-list, #track-list
+#album-list
 {
   padding-top: 0.5em;
   padding-bottom: 0.5em;
@@ -38,91 +38,26 @@ a
 
 #album-list
 {
-  width: 23em;
-  height: calc(100% - 1em);
-  position: fixed;
-  overflow-y: scroll;
-  padding-right: 1em;
-  border-right: 1px solid #eee;
+  list-style-type: none;
 }
 
-#album-list::-webkit-scrollbar
+#album-list li
 {
-  background-color: transparent;
-  width: 0.2em;
+  overflow: hidden;
+  padding-left: 0.5em;
+  padding-top: 0.25em;
+  padding-bottom: 0.25em;
 }
 
-/*
-#album-list:hover::-webkit-scrollbar
+#album-list img
 {
-  background-color: #fafafa;
-  width: 0.8em;
-}
-*/
-
-#album-list::-webkit-scrollbar-thumb
-{
-  background-color: #aaa;
+  width: 3em;
+  height: 3em;
+  float: left;
+  margin-right: 0.5em;
 }
 
-#track-list
+#album-list strong
 {
-  height: calc(100% - 0.5em);
-  position: fixed;
-  overflow-y: auto;
-  left: 25.5em;
-  width: calc(100% - 25.5em);
-}
-
-.album, .track
-{
-  padding: 0.5em;
-  padding-left: 5.9em;
-}
-
-.album h2
-{
-  font-weight: 700;
-}
-
-.date
-{
-  color: #aaa;
-}
-
-.album img
-{
-  position: absolute;
-  width: 3.9em;
-  height: 3.9em;
-  margin-left: -4.9em;
-}
-
-.track h3
-{
-  display: inline;
-  font-weight: 700;
-}
-
-.parens
-{
-  font-weight: 400;
-}
-
-.tracknumber, .duration
-{
-  text-align: right;
-  width: 4em;
-  margin-left: -5em;
-  position: absolute;
-}
-
-.track p
-{
-  color: #aaa;
-}
-
-.duration
-{
-  color: #ddd;
+  display: block;
 }

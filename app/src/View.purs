@@ -36,12 +36,14 @@ render state =
     , HH.button
       [ HE.onClick \_ -> Just BeginLoad ]
       [ HH.text "Load" ]
-    , HH.ul_ (map renderAlbum state.albums)
+    , HH.ul
+      [ HP.id_ "album-list" ]
+      (map renderAlbum state.albums)
     ]
 
 renderAlbum :: forall m. Album -> H.ComponentHTML Action () m
 renderAlbum (Album album) =
-  HH.div_
+  HH.li_
     [ HH.img
       [ HP.src $ "http://localhost:8233/thumb/" <> album.id
       , HP.alt $ album.title <> " by " <> album.artist

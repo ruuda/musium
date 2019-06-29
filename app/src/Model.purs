@@ -7,6 +7,7 @@ import Prelude
 
 import Affjax as Http
 import Affjax.ResponseFormat as Http.ResponseFormat
+import Data.Array (sortWith)
 import Data.Argonaut.Decode (decodeJson, getField) as Json
 import Data.Argonaut.Decode.Class (class DecodeJson)
 import Data.Either (Either (..))
@@ -42,4 +43,4 @@ getAlbums = do
     Left err -> fatal $ "Failed to retrieve albums: " <> Http.printResponseFormatError err
     Right json -> case Json.decodeJson json of
       Left err -> fatal $ "Failed to parse albums: " <> err
-      Right albums -> pure albums
+      Right albums -> pure $ sortWith (\(Album a) -> a.date) albums
