@@ -5,6 +5,7 @@ import Effect.Aff.Class (class MonadAff)
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
+import Halogen.HTML.Properties as HP
 import Prelude
 
 import Model (Album (..))
@@ -41,7 +42,11 @@ render state =
 renderAlbum :: forall m. Album -> H.ComponentHTML Action () m
 renderAlbum (Album album) =
   HH.div_
-    [ HH.strong_ [ HH.text album.title ]
+    [ HH.img
+      [ HP.src $ "http://localhost:8233/thumb/" <> album.id
+      , HP.alt $ album.title <> " by " <> album.artist
+      ]
+    , HH.strong_ [ HH.text album.title ]
     , HH.text " "
     , HH.span_ [ HH.text album.artist ]
     ]
