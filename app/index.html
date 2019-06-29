@@ -7,14 +7,54 @@
   </head>
   <body>
     <p id="loading">Loading ...</p>
+    <button id="play">Play</button>
   </body>
   <script type="text/javascript" src="app.js"></script>
   <script type="text/javascript">
-    window.onload = function() {
-      while (document.body.firstChild) {
-        document.body.removeChild(document.body.firstChild);
+    let initializeCastApi = function() {
+      cast.framework.CastContext.getInstance().setOptions({
+        receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+        autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+      });
+      let castButton = document.createElement("google-cast-launcher");
+      document.body.appendChild(castButton);
+    };
+    window.__onGCastApiAvailable = function(isAvailable) {
+      if (isAvailable) {
+        initializeCastApi();
       }
-      PS.Main.main();
+    };
+    window.onload = function() {
+      // while (document.body.firstChild) {
+      //   document.body.removeChild(document.body.firstChild);
+      // }
+      // PS.Main.main();
+    };
+    document.getElementById("play").onclick = function() {
+      let meta = new chrome.cast.media.MusicTrackMediaMetadata();
+      meta.albumArtist = 'Technimatic';
+      meta.albumName = 'Desire Paths';
+      meta.artist = 'Technimatic feat. Pat Fulgoni';
+      meta.discNumber = 1;
+      meta.releaseDate = '2014-07-27';
+      meta.title = 'Like a Memory';
+      meta.trackNumber = 12;
+      meta.images = [new chrome.cast.Image('http://192.168.1.103:8233/cover/f9df42d70229110c')];
+
+      let mediaInfo = new chrome.cast.media.MediaInfo(
+        // TODO: Localhost does get access to cast, but an IP does not?
+        'http://192.168.1.103:8233/track/f9df42d70229110c.flac',
+        'audio/flac',
+      );
+      mediaInfo.metadata = meta;
+
+      let request = new chrome.cast.media.LoadRequest(mediaInfo);
+      let castSession = cast.framework.CastContext.getInstance().getCurrentSession();
+      castSession.loadMedia(request).then(
+        function() { console.log('Load succeed'); },
+        function(errorCode) { console.log('Error code: ' + errorCode); }
+      );
     };
   </script>
+  <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
 </html>
