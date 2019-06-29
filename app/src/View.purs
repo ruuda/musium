@@ -54,7 +54,7 @@ renderAlbum (Album album) =
   HH.li
     [ HE.onClick \_ -> Just LoadAlbum ]
     [ HH.img
-      [ HP.src $ "http://localhost:8233/thumb/" <> album.id
+      [ HP.src $ "/thumb/" <> album.id
       , HP.alt $ album.title <> " by " <> album.artist
       ]
     , HH.strong_ [ HH.text album.title ]

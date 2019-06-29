@@ -38,7 +38,7 @@ instance decodeJsonAlbum :: DecodeJson Album where
 
 getAlbums :: Aff (Array Album)
 getAlbums = do
-  response <- Http.get Http.ResponseFormat.json "http://localhost:8233/albums"
+  response <- Http.get Http.ResponseFormat.json "/albums"
   case response.body of
     Left err -> fatal $ "Failed to retrieve albums: " <> Http.printResponseFormatError err
     Right json -> case Json.decodeJson json of
