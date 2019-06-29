@@ -12,38 +12,47 @@ import Model (Album (..))
 import Model as Model
 
 type State =
-  { albums :: Array Album
+  { isLoaded :: Boolean
+  , albums :: Array Album
   }
 
 data Action
   = BeginLoad
+  | LoadAlbum
 
 component :: forall f i o m. MonadAff m => H.Component HH.HTML f i o m
 component =
   H.mkComponent
     { initialState
     , render
-    , eval: H.mkEval $ H.defaultEval { handleAction = handleAction }
+    , eval: H.mkEval $ H.defaultEval
+      { handleAction = handleAction
+      , initialize = Just BeginLoad
+      }
     }
 
 initialState :: forall i. i -> State
-initialState = const { albums: [] }
+initialState = const
+  { isLoaded: false
+  , albums: []
+  }
 
 render :: forall m. State -> H.ComponentHTML Action () m
 render state =
-  HH.div_
-    [ HH.h1_ [ HH.text "Albums" ]
-    , HH.button
-      [ HE.onClick \_ -> Just BeginLoad ]
-      [ HH.text "Load" ]
-    , HH.ul
-      [ HP.id_ "album-list" ]
-      (map renderAlbum state.albums)
-    ]
+  if not state.isLoaded
+    then
+      HH.p_ [ HH.text "Loading albums ..." ]
+    else
+      HH.div_
+        [ HH.ul
+          [ HP.id_ "album-list" ]
+          (map renderAlbum state.albums)
+        ]
 
 renderAlbum :: forall m. Album -> H.ComponentHTML Action () m
 renderAlbum (Album album) =
-  HH.li_
+  HH.li
+    [ HE.onClick \_ -> Just LoadAlbum ]
     [ HH.img
       [ HP.src $ "http://localhost:8233/thumb/" <> album.id
       , HP.alt $ album.title <> " by " <> album.artist
@@ -57,4 +66,5 @@ handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action () o
 handleAction = case _ of
   BeginLoad -> do
     albums <- H.liftAff Model.getAlbums
-    H.modify_ $ _ { albums = albums }
+    H.modify_ $ _ { isLoaded = true, albums = albums }
+  LoadAlbum -> pure unit
