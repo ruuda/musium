@@ -4,7 +4,11 @@
   "source": "https://github.com/purescript/package-sets.git",
   "depends": [
     "affjax",
+    "argonaut",
+    "argonaut-codecs",
     "console",
-    "prelude"
+    "foldable-traversable",
+    "prelude",
+    "transformers"
   ]
 }
