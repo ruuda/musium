@@ -10,9 +10,11 @@
   </body>
   <script type="text/javascript" src="output/main.js"></script>
   <script type="text/javascript">
-    PS.Main.greet();
-    while (document.body.firstChild) {
-      document.body.removeChild(document.body.firstChild);
-    }
+    window.onload = function() {
+      PS.Main.main();
+      while (document.body.firstChild) {
+        document.body.removeChild(document.body.firstChild);
+      }
+    };
   </script>
 </html>

@@ -1,11 +1,11 @@
 module Main where
 
 import Effect (Effect)
-import Effect.Console (log)
+import Effect.Console as Console
 import Prelude
 
 greet :: String -> String
 greet name = "Hello, " <> name <> "!"
 
 main :: Effect Unit
-main = log (greet "World")
+main = Console.log (greet "World")
