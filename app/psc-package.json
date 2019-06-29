@@ -8,6 +8,7 @@
     "argonaut-codecs",
     "console",
     "foldable-traversable",
+    "halogen",
     "prelude",
     "transformers"
   ]
