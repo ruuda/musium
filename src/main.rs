@@ -69,6 +69,25 @@ impl MetaServer {
         Box::new(futures::future::ok(response))
     }
 
+    fn handle_static_file(&self, fname: &str, mime_type: &str) -> BoxFuture {
+        let mut data = Vec::new();
+        let mut file = match fs::File::open(fname) {
+            Ok(f) => f,
+            Err(..) => return self.handle_error("Failed to read static file."),
+        };
+        match file.read_to_end(&mut data) {
+            Ok(..) => {}
+            Err(..) => return self.handle_error("Failed to read cached thumbnail."),
+        }
+        let mime = mime_type.parse::<mime::Mime>().unwrap();
+        let response = Response::new()
+            .with_header(AccessControlAllowOrigin::Any)
+            .with_header(ContentType(mime))
+            .with_header(ContentLength(data.len() as u64))
+            .with_body(data);
+        Box::new(futures::future::ok(response))
+    }
+
     fn handle_track_cover(&self, _request: &Request, id: &str) -> BoxFuture {
         // TODO: DRY this track id parsing and loadong part.
         let track_id = match TrackId::parse(id) {
@@ -253,6 +272,7 @@ impl Service for MetaServer {
 
         // A very basic router. See also docs/api.md for an overview.
         match (request.method(), p0, p1) {
+            // API endpoints.
             (&Get, Some("cover"),  Some(t)) => self.handle_track_cover(&request, t),
             (&Get, Some("thumb"),  Some(t)) => self.handle_thumb(&request, t),
             (&Get, Some("track"),  Some(t)) => self.handle_track(&request, t),
@@ -260,6 +280,11 @@ impl Service for MetaServer {
             (&Get, Some("albums"), None)    => self.handle_albums(&request),
             (&Get, Some("artist"), Some(a)) => self.handle_artist(&request, a),
             (&Get, Some("search"), None)    => self.handle_search(&request),
+            // Web endpoints.
+            (&Get, None,              None) => self.handle_static_file("app/index.html", "text/html"),
+            (&Get, Some("style.css"), None) => self.handle_static_file("app/style.css", "text/css"),
+            (&Get, Some("app.js"),    None) => self.handle_static_file("app/output/app.js", "text/javascript"),
+            // Fallback.
             (&Get, _, _) => self.handle_not_found(),
             _ => self.handle_bad_request("Expected a GET request."),
         }
