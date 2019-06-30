@@ -13,7 +13,7 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Prelude
 
-import Model (Album, Track)
+import Model (Album, Track (..))
 import Model as Model
 
 type State =
@@ -57,7 +57,13 @@ render state =
       , HH.span_ [ HH.text album.artist ]
       ] <> case state.tracks of
         Nothing -> []
-        Just tracks -> [ HH.text "OPEN" ]
+        Just tracks ->
+          [ HH.ul_ $ map renderTrack tracks ]
+
+renderTrack :: forall m. Track -> H.ComponentHTML Action () m
+renderTrack (Track track) =
+  HH.li_
+    [ HH.text track.title ]
 
 handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action () o m Unit
 handleAction = case _ of
