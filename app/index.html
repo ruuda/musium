@@ -25,10 +25,10 @@
       }
     };
     window.onload = function() {
-      // while (document.body.firstChild) {
-      //   document.body.removeChild(document.body.firstChild);
-      // }
-      // PS.Main.main();
+       while (document.body.firstChild) {
+         document.body.removeChild(document.body.firstChild);
+       }
+       PS.Main.main();
     };
     document.getElementById("play").onclick = function() {
       let meta = new chrome.cast.media.MusicTrackMediaMetadata();

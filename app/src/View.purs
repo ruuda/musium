@@ -2,13 +2,14 @@ module View (component) where
 
 import Data.Maybe (Maybe (..))
 import Effect.Aff.Class (class MonadAff)
+import Effect.Class.Console as Console
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Prelude
 
-import Model (Album (..))
+import Model (Album (..), AlbumId)
 import Model as Model
 
 type State =
@@ -18,7 +19,7 @@ type State =
 
 data Action
   = BeginLoad
-  | LoadAlbum
+  | LoadAlbum AlbumId
 
 component :: forall f i o m. MonadAff m => H.Component HH.HTML f i o m
 component =
@@ -52,9 +53,9 @@ render state =
 renderAlbum :: forall m. Album -> H.ComponentHTML Action () m
 renderAlbum (Album album) =
   HH.li
-    [ HE.onClick \_ -> Just LoadAlbum ]
+    [ HE.onClick \_ -> Just (LoadAlbum album.id) ]
     [ HH.img
-      [ HP.src $ "/thumb/" <> album.id
+      [ HP.src (Model.thumbUrl album.id)
       , HP.alt $ album.title <> " by " <> album.artist
       ]
     , HH.strong_ [ HH.text album.title ]
@@ -67,4 +68,5 @@ handleAction = case _ of
   BeginLoad -> do
     albums <- H.liftAff Model.getAlbums
     H.modify_ $ _ { isLoaded = true, albums = albums }
-  LoadAlbum -> pure unit
+  LoadAlbum albumId -> do
+    H.liftAff $ Console.log $ "load album" <> (show albumId)

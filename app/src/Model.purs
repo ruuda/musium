@@ -1,6 +1,8 @@
 module Model
   ( Album (..)
+  , AlbumId (..)
   , getAlbums
+  , thumbUrl
   ) where
 
 import Prelude
@@ -18,8 +20,16 @@ import Control.Monad.Error.Class (class MonadThrow, throwError)
 fatal :: forall m a. MonadThrow Error m => String -> m a
 fatal = error >>> throwError
 
-data Album = Album
-  { id :: String
+newtype AlbumId = AlbumId String
+
+instance showAlbumId :: Show AlbumId where
+  show (AlbumId id) = id
+
+thumbUrl :: AlbumId -> String
+thumbUrl (AlbumId id) = "/thumb/" <> id
+
+newtype Album = Album
+  { id :: AlbumId
   , title :: String
   , artist :: String
   , sortArtist :: String
@@ -29,7 +39,7 @@ data Album = Album
 instance decodeJsonAlbum :: DecodeJson Album where
   decodeJson json = do
     obj        <- Json.decodeJson json
-    id         <- Json.getField obj "id"
+    id         <- map AlbumId $ Json.getField obj "id"
     title      <- Json.getField obj "title"
     artist     <- Json.getField obj "artist"
     sortArtist <- Json.getField obj "sort_artist"
