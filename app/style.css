@@ -8,9 +8,9 @@
 
 html
 {
-  font-size: 18px;
+  font-size: 16px;
   font-family: 'Work Sans';
-  line-height: 1.3em;
+  line-height: 1.5em;
 }
 
 body
@@ -32,32 +32,82 @@ a
 
 #album-list
 {
-  padding-top: 0.25em;
-  padding-bottom: 0.25em;
+  padding-bottom: 0.5em;
 }
 
-#album-list
+#album-list, .track-list
 {
   list-style-type: none;
 }
 
-#album-list li
+#album-list > li
 {
-  overflow: hidden;
-  padding-left: 0.5em;
-  padding-top: 0.25em;
-  padding-bottom: 0.25em;
+  padding-top: 1em;
 }
 
 #album-list img
 {
   width: 3em;
   height: 3em;
+  padding-left: 1em;
   float: left;
-  margin-right: 0.5em;
 }
 
-#album-list strong
+#album-list .album-header, .track-list .track-header
+{
+  margin-left: 4.5rem;
+  margin-right: 1rem;
+}
+
+.track-list
+{
+  margin-top: 1em;
+  padding-top: 0.5em;
+  padding-bottom: 1em;
+  background-color: #fdfdfd;
+  border-top: 0.8pt solid #eee;
+  border-bottom: 0.8pt solid #eee;
+}
+
+.track-list > li
+{
+  padding-top: 0.5em;
+}
+
+.title, .artist, .album-artist
 {
   display: block;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.album-header .title
+{
+  font-weight: 600;
+}
+
+.track-header .artist, .duration
+{
+  font-size: 0.75rem;
+  color: #aaa;
+}
+
+.track-duration
+{
+  float: left;
+  padding-left: 1em;
+  text-align: right;
+  width: 2.75em;
+}
+
+.track
+{
+  display: block;
+  font-weight: 700;
+}
+
+.track, .duration
+{
+  color: #ccc;
 }
