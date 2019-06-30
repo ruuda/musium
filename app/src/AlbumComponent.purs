@@ -13,13 +13,12 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Prelude
 
-import Model (Album)
+import Model (Album, Track)
 import Model as Model
 
 type State =
   { album  :: Album
-  , isOpen :: Boolean
-  , tracks :: Array Int
+  , tracks :: Maybe (Array Track)
   }
 
 data Action = Toggle
@@ -39,8 +38,7 @@ component =
 initialState :: Album -> State
 initialState album =
   { album: album
-  , isOpen: false
-  , tracks: []
+  , tracks: Nothing
   }
 
 render :: forall m. State -> H.ComponentHTML Action () m
@@ -57,11 +55,16 @@ render state =
       , HH.strong_ [ HH.text album.title ]
       , HH.text " "
       , HH.span_ [ HH.text album.artist ]
-      ] <> if not state.isOpen
-        then []
-        else [ HH.text "OPEN" ]
+      ] <> case state.tracks of
+        Nothing -> []
+        Just tracks -> [ HH.text "OPEN" ]
 
 handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action () o m Unit
 handleAction = case _ of
   Toggle -> do
-    H.modify_ $ \state -> state { isOpen = not state.isOpen }
+    { tracks, album } <- H.get
+    case tracks of
+      Nothing -> do
+        tracks <- H.liftAff $ Model.getTracks (unwrap album).id
+        H.modify_ $ _ { tracks = Just tracks }
+      Just tracks -> H.modify_ $ _ { tracks = Nothing }

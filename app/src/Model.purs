@@ -1,7 +1,10 @@
 module Model
   ( Album (..)
   , AlbumId (..)
+  , Track (..)
+  , TrackId (..)
   , getAlbums
+  , getTracks
   , thumbUrl
   ) where
 
@@ -10,6 +13,7 @@ import Prelude
 import Affjax as Http
 import Affjax.ResponseFormat as Http.ResponseFormat
 import Data.Array (sortWith)
+import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (decodeJson, getField) as Json
 import Data.Argonaut.Decode.Class (class DecodeJson)
 import Data.Either (Either (..))
@@ -28,6 +32,14 @@ derive instance albumIdOrd :: Ord AlbumId
 
 instance showAlbumId :: Show AlbumId where
   show (AlbumId id) = id
+
+newtype TrackId = TrackId String
+
+derive instance trackIdEq :: Eq TrackId
+derive instance trackIdOrd :: Ord TrackId
+
+instance showTrackId :: Show TrackId where
+  show (TrackId id) = id
 
 thumbUrl :: AlbumId -> String
 thumbUrl (AlbumId id) = "/thumb/" <> id
@@ -60,3 +72,39 @@ getAlbums = do
     Right json -> case Json.decodeJson json of
       Left err -> fatal $ "Failed to parse albums: " <> err
       Right albums -> pure $ sortWith (\(Album a) -> a.date) albums
+
+newtype Track = Track
+  { id :: TrackId
+  , discNumber :: Int
+  , trackNumber :: Int
+  , title :: String
+  , artist :: String
+  , durationSeconds :: Int
+  }
+
+derive instance newtypeTrack :: Newtype Track _
+
+instance decodeJsonTrack :: DecodeJson Track where
+  decodeJson json = do
+    obj             <- Json.decodeJson json
+    id              <- map TrackId $ Json.getField obj "id"
+    discNumber      <- Json.getField obj "disc_number"
+    trackNumber     <- Json.getField obj "track_number"
+    title           <- Json.getField obj "title"
+    artist          <- Json.getField obj "artist"
+    durationSeconds <- Json.getField obj "duration_seconds"
+    pure $ Track { id, discNumber, trackNumber, title, artist, durationSeconds }
+
+decodeAlbumTracks :: Json -> Either String (Array Track)
+decodeAlbumTracks json = do
+  obj <- Json.decodeJson json
+  Json.getField obj "tracks"
+
+getTracks :: AlbumId -> Aff (Array Track)
+getTracks (AlbumId aid) = do
+  response <- Http.get Http.ResponseFormat.json $ "/album/" <> aid
+  case response.body of
+    Left err -> fatal $ "Failed to retrieve tracks: " <> Http.printResponseFormatError err
+    Right json -> case decodeAlbumTracks json of
+      Left err -> fatal $ "Failed to parse tracks: " <> err
+      Right tracks -> pure tracks
