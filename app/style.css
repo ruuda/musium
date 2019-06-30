@@ -8,9 +8,9 @@
 
 html
 {
-  font-size: 18px;
+  font-size: 16px;
   font-family: 'Work Sans';
-  line-height: 1.3em;
+  line-height: 1.5em;
 }
 
 body
@@ -30,99 +30,84 @@ a
   text-decoration: none;
 }
 
-#album-list, #track-list
+#album-list
 {
-  padding-top: 0.5em;
   padding-bottom: 0.5em;
 }
 
-#album-list
+#album-list, .track-list
 {
-  width: 23em;
-  height: calc(100% - 1em);
-  position: fixed;
-  overflow-y: scroll;
-  padding-right: 1em;
-  border-right: 1px solid #eee;
+  list-style-type: none;
 }
 
-#album-list::-webkit-scrollbar
+#album-list > li
 {
-  background-color: transparent;
-  width: 0.2em;
+  padding-top: 1em;
 }
 
-/*
-#album-list:hover::-webkit-scrollbar
+#album-list img
 {
-  background-color: #fafafa;
-  width: 0.8em;
-}
-*/
-
-#album-list::-webkit-scrollbar-thumb
-{
-  background-color: #aaa;
+  width: 3em;
+  height: 3em;
+  padding-left: 1em;
+  float: left;
 }
 
-#track-list
+#album-list .album-header, .track-list .track-header
 {
-  height: calc(100% - 0.5em);
-  position: fixed;
-  overflow-y: auto;
-  left: 25.5em;
-  width: calc(100% - 25.5em);
+  margin-left: 4.5rem;
+  margin-right: 1rem;
 }
 
-.album, .track
+.track-list
 {
-  padding: 0.5em;
-  padding-left: 5.9em;
+  margin-top: 1em;
+  padding-top: 0.5em;
+  padding-bottom: 1em;
+  background-color: #fdfdfd;
+  border-top: 0.8pt solid #eee;
+  border-bottom: 0.8pt solid #eee;
 }
 
-.album h2
+.track-list > li
 {
-  font-weight: 700;
+  padding-top: 0.5em;
 }
 
-.date
+.title, .artist, .album-artist
 {
+  display: block;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.album-header .title
+{
+  font-weight: 600;
+}
+
+.track-header .artist, .duration
+{
+  font-size: 0.75rem;
   color: #aaa;
 }
 
-.album img
+.track-duration
 {
-  position: absolute;
-  width: 3.9em;
-  height: 3.9em;
-  margin-left: -4.9em;
-}
-
-.track h3
-{
-  display: inline;
-  font-weight: 700;
-}
-
-.parens
-{
-  font-weight: 400;
-}
-
-.tracknumber, .duration
-{
+  float: left;
+  padding-left: 1em;
   text-align: right;
-  width: 4em;
-  margin-left: -5em;
-  position: absolute;
+  width: 2.75em;
 }
 
-.track p
+.track
 {
-  color: #aaa;
+  display: block;
+  font-weight: 700;
 }
 
-.duration
+.track, .duration
 {
-  color: #ddd;
+  color: #ccc;
 }
