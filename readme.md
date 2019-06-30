@@ -43,12 +43,17 @@ Mindec is **not**:
 The library and server are written in [Rust][rust] and build with Cargo:
 
     cargo build --release
-    target/release/mindec ~/music
+    mkdir /tmp/cover-thumbs
+    target/release/mindec cache ~/music /tmp/cover-thumbs
+    target/release/mindec serve ~/music /tmp/cover-thumbs
 
-The webapp is written in [Elm][elm]:
+The webapp is written in [Purescript][purescript]:
 
     cd app
-    elm reactor --address 0.0.0.0 --port 8000
+    make
+    stat output/app.js
+
+The server will serve `app.js` and other static files alongside the API.
 
 ## Querying
 
@@ -72,7 +77,7 @@ use Mindec in your GPLv2-licensed software, you can add an [exception][except]
 to your copyright notice. Please do not open an issue if you disagree with the
 choice of license.
 
-[rust]:    https://rust-lang.org
-[elm]:     http://elm-lang.org
-[apache2]: https://www.apache.org/licenses/LICENSE-2.0
-[except]:  https://www.gnu.org/licenses/gpl-faq.html#GPLIncompatibleLibs
+[rust]:       https://rust-lang.org
+[purescript]: http://www.purescript.org/
+[apache2]:    https://www.apache.org/licenses/LICENSE-2.0
+[except]:     https://www.gnu.org/licenses/gpl-faq.html#GPLIncompatibleLibs
