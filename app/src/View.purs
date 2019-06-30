@@ -12,6 +12,8 @@ import Prelude
 import Model (Album (..), AlbumId)
 import Model as Model
 
+import AlbumComponent as AlbumComponent
+
 type State =
   { isLoaded :: Boolean
   , albums :: Array Album

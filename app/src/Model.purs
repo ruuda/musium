@@ -13,6 +13,7 @@ import Data.Array (sortWith)
 import Data.Argonaut.Decode (decodeJson, getField) as Json
 import Data.Argonaut.Decode.Class (class DecodeJson)
 import Data.Either (Either (..))
+import Data.Newtype (class Newtype)
 import Effect.Aff (Aff)
 import Effect.Exception (Error, error)
 import Control.Monad.Error.Class (class MonadThrow, throwError)
@@ -35,6 +36,8 @@ newtype Album = Album
   , sortArtist :: String
   , date :: String
   }
+
+derive instance newtypeAlbum :: Newtype Album _
 
 instance decodeJsonAlbum :: DecodeJson Album where
   decodeJson json = do
