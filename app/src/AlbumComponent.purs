@@ -1,8 +1,12 @@
-module AlbumComponent (component) where
+module AlbumComponent
+  ( Slot
+  , component
+  ) where
 
 import Data.Maybe (Maybe (..))
 import Effect.Aff.Class (class MonadAff)
 import Data.Newtype (unwrap)
+import Data.Const (Const)
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
@@ -19,6 +23,8 @@ type State =
   }
 
 data Action = Toggle
+
+type Slot = H.Slot (Const Void) Void
 
 component :: forall f o m. MonadAff m => H.Component HH.HTML f Album o m
 component =

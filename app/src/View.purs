@@ -1,11 +1,11 @@
 module View (component) where
 
 import Data.Maybe (Maybe (..))
+import Data.Symbol (SProxy (..))
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class.Console as Console
 import Halogen as H
 import Halogen.HTML as HH
-import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Prelude
 
@@ -22,6 +22,10 @@ type State =
 data Action
   = BeginLoad
   | LoadAlbum AlbumId
+
+type Slots =
+  ( album :: AlbumComponent.Slot AlbumId
+  )
 
 component :: forall f i o m. MonadAff m => H.Component HH.HTML f i o m
 component =
@@ -40,7 +44,7 @@ initialState = const
   , albums: []
   }
 
-render :: forall m. State -> H.ComponentHTML Action () m
+render :: forall m. MonadAff m => State -> H.ComponentHTML Action Slots m
 render state =
   if not state.isLoaded
     then
@@ -52,20 +56,11 @@ render state =
           (map renderAlbum state.albums)
         ]
 
-renderAlbum :: forall m. Album -> H.ComponentHTML Action () m
-renderAlbum (Album album) =
-  HH.li
-    [ HE.onClick \_ -> Just (LoadAlbum album.id) ]
-    [ HH.img
-      [ HP.src (Model.thumbUrl album.id)
-      , HP.alt $ album.title <> " by " <> album.artist
-      ]
-    , HH.strong_ [ HH.text album.title ]
-    , HH.text " "
-    , HH.span_ [ HH.text album.artist ]
-    ]
+renderAlbum :: forall m. MonadAff m => Album -> H.ComponentHTML Action Slots m
+renderAlbum album@(Album { id }) =
+  HH.slot (SProxy :: SProxy "album") (id) AlbumComponent.component album absurd
 
-handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action () o m Unit
+handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action Slots o m Unit
 handleAction = case _ of
   BeginLoad -> do
     albums <- H.liftAff Model.getAlbums

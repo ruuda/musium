@@ -23,6 +23,9 @@ fatal = error >>> throwError
 
 newtype AlbumId = AlbumId String
 
+derive instance albumIdEq :: Eq AlbumId
+derive instance albumIdOrd :: Ord AlbumId
+
 instance showAlbumId :: Show AlbumId where
   show (AlbumId id) = id
 
