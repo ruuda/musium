@@ -11,6 +11,7 @@ module AlbumComponent
   ) where
 
 import Data.Maybe (Maybe (..))
+import Effect (Effect)
 import Effect.Aff.Class (class MonadAff)
 import Data.Newtype (unwrap)
 import Data.Const (Const)
@@ -21,8 +22,9 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Prelude
 
-import Model (Album, Track (..))
+import Model (Album (..), Track (..))
 import Model as Model
+import Cast as Cast
 
 data TrackList
   = Hidden
@@ -34,7 +36,9 @@ type State =
   , tracks :: Maybe (Array Track)
   }
 
-data Action = Toggle
+data Action
+  = Toggle
+  | PlayTrack Track
 
 type Slot = H.Slot (Const Void) Void
 
@@ -88,7 +92,8 @@ renderTrack (Track track) =
     span class_ content =
       HH.span [HP.class_ (ClassName class_)] [content]
   in
-    HH.li_
+    HH.li
+      [ HE.onClick \_ -> Just $ PlayTrack (Track track) ] $
       [ HH.div
         [ HP.class_ (ClassName "track-duration") ]
         [ span "track" $ HH.text $ show track.trackNumber
@@ -110,3 +115,22 @@ handleAction = case _ of
         tracks <- H.liftAff $ Model.getTracks (unwrap album).id
         H.modify_ $ _ { tracks = Just tracks }
       Just tracks -> H.modify_ $ _ { tracks = Nothing }
+
+  PlayTrack track -> do
+    album <- H.gets _.album
+    H.liftEffect $ playTrack album track
+
+playTrack :: Album -> Track -> Effect Unit
+playTrack (Album album) (Track track) =
+  Cast.playTrack
+    { discNumber:  track.discNumber
+    , trackNumber: track.trackNumber
+    , title:       track.title
+    , artist:      track.artist
+    , albumTitle:  album.title
+    , albumArtist: album.artist
+    , releaseDate: album.date
+                   -- TODO: Find a way to make urls work on the local network.
+    , imageUrl:    "http://192.168.1.103:8233" <> Model.coverUrl track.id
+    , trackUrl:    "http://192.168.1.103:8233" <> Model.trackUrl track.id
+    }

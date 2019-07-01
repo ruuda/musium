@@ -13,6 +13,8 @@ module Model
   , getAlbums
   , getTracks
   , thumbUrl
+  , coverUrl
+  , trackUrl
   , formatDurationSeconds
   ) where
 
@@ -52,6 +54,12 @@ instance showTrackId :: Show TrackId where
 
 thumbUrl :: AlbumId -> String
 thumbUrl (AlbumId id) = "/thumb/" <> id
+
+coverUrl :: TrackId -> String
+coverUrl (TrackId id) = "/cover/" <> id
+
+trackUrl :: TrackId -> String
+trackUrl (TrackId id) = "/track/" <> id <> ".flac"
 
 newtype Album = Album
   { id :: AlbumId
