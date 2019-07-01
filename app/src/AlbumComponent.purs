@@ -26,18 +26,20 @@ import Model (Album (..), Track (..))
 import Model as Model
 import Cast as Cast
 
-data TrackList
-  = Hidden
+data LazyData a
+  = Uninitialized
   | Loading
-  | Open (Array Track)
+  | Available a
 
 type State =
   { album  :: Album
-  , tracks :: Maybe (Array Track)
+  , tracks :: LazyData (Array Track)
+  , isOpen :: Boolean
   }
 
 data Action
   = Toggle
+  | BeginLoad
   | PlayTrack Track
 
 type Slot = H.Slot (Const Void) Void
@@ -55,17 +57,27 @@ component =
 initialState :: Album -> State
 initialState album =
   { album: album
-  , tracks: Nothing
+  , tracks: Uninitialized
+  , isOpen: false
   }
 
 render :: forall m. State -> H.ComponentHTML Action () m
 render state =
   let
     album = unwrap state.album
+    expandedClass = if state.isOpen
+      then [(ClassName "expanded")]
+      else [(ClassName "collapsed")]
   in
     HH.li_ $
       [ HH.div
-        [ HE.onClick \_ -> Just Toggle ]
+        [ HE.onClick $ const $ Just Toggle
+          -- Begin loading eagerly on touch or mouse down,
+          -- don't wait for the click. TODO: We could even
+          -- start loading as the element scrolls into view.
+        , HE.onMouseDown $ const $ Just BeginLoad
+        , HE.onTouchStart $ const $ Just BeginLoad
+        ]
         [ HH.img
           [ HP.src (Model.thumbUrl album.id)
           , HP.alt $ album.title <> " by " <> album.artist
@@ -81,11 +93,15 @@ render state =
           ]
         ]
       ] <> case state.tracks of
-        Nothing -> []
-        Just tracks ->
+        Available tracks ->
           [ HH.ul
-            [ HP.class_ (ClassName "track-list") ]
-            (map renderTrack tracks)
+            [ HP.classes $ [ClassName "track-list"] <> expandedClass ]
+            ( map renderTrack tracks )
+          ]
+        _ ->
+          [ HH.ul
+            [ HP.classes $ [ClassName "track-list"] <> expandedClass ]
+            [ HH.li_ [] ]
           ]
 
 renderTrack :: forall m. Track -> H.ComponentHTML Action () m
@@ -110,13 +126,19 @@ renderTrack (Track track) =
 
 handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action () o m Unit
 handleAction = case _ of
-  Toggle -> do
+  BeginLoad -> do
     { tracks, album } <- H.get
     case tracks of
-      Nothing -> do
+      -- If we haven't started loading, start now.
+      -- TODO: Reflect load error in load state, allow retry.
+      Uninitialized -> do
+        H.modify_ $ _ { tracks = Loading }
         tracks <- H.liftAff $ Model.getTracks (unwrap album).id
-        H.modify_ $ _ { tracks = Just tracks }
-      Just tracks -> H.modify_ $ _ { tracks = Nothing }
+        H.modify_ $ _ { tracks = Available tracks }
+      _ -> pure unit
+
+  Toggle ->
+    H.modify_ $ \state -> state { isOpen = not state.isOpen }
 
   PlayTrack track -> do
     album <- H.gets _.album

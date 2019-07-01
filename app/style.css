@@ -84,6 +84,7 @@ a
 #album-list > li
 {
   padding-top: 1em;
+  cursor: default;
 }
 
 #album-list img
@@ -108,6 +109,11 @@ a
   background-color: #fdfdfd;
   border-top: 0.8pt solid #eee;
   border-bottom: 0.8pt solid #eee;
+}
+
+.track-list.collapsed
+{
+  display: none;
 }
 
 .track-list > li
