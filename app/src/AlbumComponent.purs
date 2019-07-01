@@ -92,7 +92,7 @@ renderTrack (Track track) =
       [ HH.div
         [ HP.class_ (ClassName "track-duration") ]
         [ span "track" $ HH.text $ show track.trackNumber
-        , span "duration" $ HH.text $ show track.durationSeconds
+        , span "duration" $ HH.text $ Model.formatDurationSeconds track.durationSeconds
         ]
       , HH.div
         [ HP.class_ (ClassName "track-header") ]

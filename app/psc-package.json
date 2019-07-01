@@ -9,6 +9,7 @@
     "console",
     "foldable-traversable",
     "halogen",
+    "integers",
     "prelude",
     "transformers"
   ]

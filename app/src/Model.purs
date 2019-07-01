@@ -13,6 +13,7 @@ module Model
   , getAlbums
   , getTracks
   , thumbUrl
+  , formatDurationSeconds
   ) where
 
 import Prelude
@@ -28,6 +29,7 @@ import Data.Newtype (class Newtype)
 import Effect.Aff (Aff)
 import Effect.Exception (Error, error)
 import Control.Monad.Error.Class (class MonadThrow, throwError)
+import Data.Int (quot, rem)
 
 fatal :: forall m a. MonadThrow Error m => String -> m a
 fatal = error >>> throwError
@@ -115,3 +117,23 @@ getTracks (AlbumId aid) = do
     Right json -> case decodeAlbumTracks json of
       Left err -> fatal $ "Failed to parse tracks: " <> err
       Right tracks -> pure tracks
+
+-- Format a duration of a track in HH:MM:SS format.
+-- Examples:
+--    7 ->    0:07
+--   23 ->    0:23
+--   61 ->    1:01
+-- 3607 -> 1:00:07
+formatDurationSeconds :: Int -> String
+formatDurationSeconds dtSeconds =
+  let
+    seconds    = rem dtSeconds 60
+    dtMinutes  = div dtSeconds 60
+    minutes    = rem dtMinutes 60
+    dtHours    = div dtMinutes 60
+    hours      = dtHours
+    show2 x    = if x < 10 then "0" <> show x else show x
+  in
+    if dtHours > 0
+      then show hours <> ":" <> show2 minutes <> ":" <> show2 seconds
+      else                      show  minutes <> ":" <> show2 seconds
