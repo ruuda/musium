@@ -13,6 +13,7 @@ import Effect.Aff.Class (class MonadAff)
 import Effect.Class.Console as Console
 import Halogen as H
 import Halogen.HTML as HH
+import Halogen.HTML.Core (ClassName (..))
 import Halogen.HTML.Properties as HP
 import Prelude
 
@@ -55,7 +56,14 @@ render :: forall m. MonadAff m => State -> H.ComponentHTML Action Slots m
 render state =
   if not state.isLoaded
     then
-      HH.p_ [ HH.text "Loading albums ..." ]
+      HH.div
+        [ HP.id_ "loader"
+        , HP.class_ (ClassName "spinner")
+        ]
+        [ HH.div_ []
+        , HH.div_ []
+        , HH.p_ [ HH.text "Loading albums …" ]
+        ]
     else
       HH.div_
         [ HH.ul

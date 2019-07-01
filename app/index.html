@@ -6,8 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
   </head>
   <body>
-    <p id="loading">Loading ...</p>
-    <button id="play">Play</button>
+    <div id="loader" class="spinner">
+      <div></div>
+      <div></div>
+      <p>Loading app …</p>
+    </div>
   </body>
   <script type="text/javascript" src="app.js"></script>
   <script type="text/javascript">
@@ -17,7 +20,7 @@
         autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
       });
       let castButton = document.createElement("google-cast-launcher");
-      document.body.appendChild(castButton);
+      // document.body.appendChild(castButton);
     };
     window.__onGCastApiAvailable = function(isAvailable) {
       if (isAvailable) {
@@ -25,9 +28,8 @@
       }
     };
     window.onload = function() {
-       while (document.body.firstChild) {
-         document.body.removeChild(document.body.firstChild);
-       }
+      let loader = document.getElementById('loader');
+       document.body.removeChild(loader);
        PS.Main.main();
     };
     document.getElementById("play").onclick = function() {

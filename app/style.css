@@ -30,6 +30,47 @@ a
   text-decoration: none;
 }
 
+#loader
+{
+  position: absolute;
+  top: 50%;
+  left: 50%;
+}
+
+#loader > p
+{
+  margin-left: -5em;
+  width: 10em;
+  text-align: center;
+  margin-top: 2rem;
+  font-size: 0.8em;
+  color: #aaa;
+}
+
+.spinner > div
+{
+  position: absolute;
+  margin-left: -1.3em;
+  margin-top: -1.3em;
+  width: 2em;
+  height: 2em;
+  border-radius: 50%;
+  border: 0.3em solid;
+  border-color: #ccc transparent transparent transparent;
+  animation: spinner 1.4s cubic-bezier(0.6, 0, 0.4, 1) infinite;
+}
+
+.spinner > div:nth-child(2)
+{
+  animation-delay: 0.7s;
+}
+
+@keyframes spinner
+{
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 #album-list
 {
   padding-bottom: 0.5em;
