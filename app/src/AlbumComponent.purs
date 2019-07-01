@@ -63,20 +63,22 @@ render state =
   let
     album = unwrap state.album
   in
-    HH.li
-      [ HE.onClick \_ -> Just Toggle ] $
-      [ HH.img
-        [ HP.src (Model.thumbUrl album.id)
-        , HP.alt $ album.title <> " by " <> album.artist
-        ]
-      , HH.div
-        [ HP.class_ (ClassName "album-header") ]
-        [ HH.span
-          [ HP.class_ (ClassName "title") ]
-          [ HH.text album.title ]
-        , HH.span
-          [ HP.class_ (ClassName "album-artist") ]
-          [ HH.text album.artist ]
+    HH.li_ $
+      [ HH.div
+        [ HE.onClick \_ -> Just Toggle ]
+        [ HH.img
+          [ HP.src (Model.thumbUrl album.id)
+          , HP.alt $ album.title <> " by " <> album.artist
+          ]
+        , HH.div
+          [ HP.class_ (ClassName "album-header") ]
+          [ HH.span
+            [ HP.class_ (ClassName "title") ]
+            [ HH.text album.title ]
+          , HH.span
+            [ HP.class_ (ClassName "album-artist") ]
+            [ HH.text album.artist ]
+          ]
         ]
       ] <> case state.tracks of
         Nothing -> []
