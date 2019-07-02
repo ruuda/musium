@@ -7,6 +7,27 @@
 
 "use strict";
 
+exports.makeQueueItem = function(track) {
+  var meta = new chrome.cast.media.MusicTrackMediaMetadata();
+  meta.discNumber  = track.discNumber;
+  meta.trackNumber = track.trackNumber;
+  meta.title       = track.title;
+  meta.artist      = track.artist;
+  meta.albumName   = track.albumTitle;
+  meta.albumArtist = track.albumArtist;
+  meta.releaseDate = track.releaseDate;
+  meta.images = [new chrome.cast.Image(track.imageUrl)];
+
+  var mediaInfo = new chrome.cast.media.MediaInfo(track.trackUrl, 'audio/flac');
+  mediaInfo.metadata = meta;
+
+  var preloadSeconds = 10.0;
+  var queueItem = new chrome.cast.media.QueueItem(mediaInfo);
+  queueItem.preloadTime = preloadSeconds;
+
+  return queueItem;
+};
+
 exports.playTrack = function(track) {
   // Pure part: set up the track metadata and load request.
   var meta = new chrome.cast.media.MusicTrackMediaMetadata();
@@ -40,6 +61,42 @@ exports.playTrack = function(track) {
     } else {
       context.requestSession().then(
         function() { doPlay(context.getCurrentSession()); },
+        function(errorCode) { console.log('Error code: ' + errorCode); }
+      );
+    }
+  };
+};
+
+exports.queueTrack = function(queueItem) {
+  function doEnqueue(castSession) {
+    // If there is a media session, then we can enqueue a new item.
+    // But if there isn't, then we need to issue a load request to enqueue
+    // the first item.
+    var media = castSession.getMediaSession();
+    if (media) {
+      media.queueAppendItem(
+        queueItem,
+        function() { console.log('Load succeed'); },
+        function(errorCode) { console.log('Error code: ' + errorCode); }
+      );
+    } else {
+      var request = new chrome.cast.media.LoadRequest(queueItem.media);
+      castSession.loadMedia(request).then(
+        function() { console.log('Load succeed'); },
+        function(errorCode) { console.log('Error code: ' + errorCode); }
+      );
+    }
+  };
+
+  // Effectful part: actually send the load request.
+  return function() {
+    var context = cast.framework.CastContext.getInstance();
+    var castSession = context.getCurrentSession();
+    if (castSession) {
+      doEnqueue(castSession);
+    } else {
+      context.requestSession().then(
+        function() { doEnqueue(context.getCurrentSession()); },
         function(errorCode) { console.log('Error code: ' + errorCode); }
       );
     }

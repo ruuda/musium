@@ -146,15 +146,18 @@ handleAction = case _ of
 
 playTrack :: Album -> Track -> Effect Unit
 playTrack (Album album) (Track track) =
-  Cast.playTrack
-    { discNumber:  track.discNumber
-    , trackNumber: track.trackNumber
-    , title:       track.title
-    , artist:      track.artist
-    , albumTitle:  album.title
-    , albumArtist: album.artist
-    , releaseDate: album.date
-                   -- TODO: Find a way to make urls work on the local network.
-    , imageUrl:    "http://192.168.1.103:8233" <> Model.coverUrl track.id
-    , trackUrl:    "http://192.168.1.103:8233" <> Model.trackUrl track.id
-    }
+  let
+    queueItem = Cast.makeQueueItem
+      { discNumber:  track.discNumber
+      , trackNumber: track.trackNumber
+      , title:       track.title
+      , artist:      track.artist
+      , albumTitle:  album.title
+      , albumArtist: album.artist
+      , releaseDate: album.date
+                     -- TODO: Find a way to make urls work on the local network.
+      , imageUrl:    "http://192.168.1.103:8233" <> Model.coverUrl track.id
+      , trackUrl:    "http://192.168.1.103:8233" <> Model.trackUrl track.id
+      }
+  in
+    Cast.queueTrack queueItem

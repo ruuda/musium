@@ -7,7 +7,10 @@
 
 module Cast
   ( MusicTrackMetadata
+  , makeQueueItem
+  , QueueItem
   , playTrack
+  , queueTrack
   ) where
 
 import Effect (Effect)
@@ -25,4 +28,8 @@ type MusicTrackMetadata =
   , trackUrl    :: String
   }
 
+foreign import data QueueItem :: Type
+
+foreign import makeQueueItem :: MusicTrackMetadata -> QueueItem
 foreign import playTrack :: MusicTrackMetadata -> Effect Unit
+foreign import queueTrack :: QueueItem -> Effect Unit
