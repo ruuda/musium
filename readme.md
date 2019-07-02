@@ -1,6 +1,6 @@
 # Mindec
 
-Music metadata indexer.
+Music metadata indexer and mediaserver.
 
 TODO: Add hipster build status badges.
 
@@ -28,7 +28,7 @@ Mindec *the server* can be used to:
 Mindec *the webapp* can be used to:
 
  * Browse your music library.
- * Play music on Chromecast (not implemented yet).
+ * Play music on Chromecast.
 
 Mindec is **not**:
 
@@ -36,7 +36,7 @@ Mindec is **not**:
    will complain about inconsistent or missing tags, but it will not fix them
    for you.
  * A database. Mindec treats the music library as read-only, and does not store
-   additional data such as playcounts itself.
+   mutable data such as playcounts itself.
 
 ## Compiling
 
