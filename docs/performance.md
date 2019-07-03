@@ -121,7 +121,7 @@ to be able to avoid the copy and extra allocation (labelled “single alloc”).
 Counterintuitively, copying the path returned by the iterator is faster than not
 copying it. It might have something to do with ordering; spending more time in
 the iterator lock is actually a good thing? Or maybe I should collect more data,
-and this is just a statistical fluctuatin. Just storing the paths is definitely
+and this is just a statistical fluctuation. Just storing the paths is definitely
 faster if the copy is avoided:
 
     copy    <- c(0.023223363, 0.022365082, 0.022318216, 0.022584837,

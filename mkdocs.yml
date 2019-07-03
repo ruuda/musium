@@ -1,0 +1,14 @@
+site_name: Mindec
+repo_url: https://github.com/ruuda/mindec
+strict: true
+theme:
+  name: null
+  custom_dir: docs/theme
+nav:
+  - Overview: index.md
+  - User Guide:
+    - Building: building.md
+    - Tagging: tagging.md
+  - API Reference: api.md
+  - Internals:
+    - Performance: performance.md
