@@ -14,15 +14,8 @@ extern crate libc;
 extern crate serde_json;
 extern crate unicode_normalization;
 
-// TODO: This does not really belong here, but I can't really think of a better
-// place either. Ideally Mindec should be entirely separate from driving a
-// Chromecast. But on the other hand, it should be integrated with the server.
-extern crate mdns;
-extern crate rust_cast;
-
 mod flat_tree; // TODO: Rename.
 
-pub mod cast;
 pub mod net;
 
 use std::ascii::AsciiExt;

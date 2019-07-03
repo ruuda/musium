@@ -399,13 +399,6 @@ fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &str) {
     }
 }
 
-fn run_cast() {
-    let addrs = mindec::net::getifaddrs();
-    println!("{:?}", addrs);
-    let mut cs = mindec::cast::CastSession::new();
-    cs.join()
-}
-
 fn print_usage() {
     println!("usage: ");
     println!("  mindec serve /path/to/music/library /path/to/cache");
@@ -434,9 +427,6 @@ fn main() {
         "cache" => {
             let index = make_index(&dir);
             generate_thumbnails(&index, &cache_dir);
-        }
-        "cast" => {
-            run_cast();
         }
         _ => {
             print_usage();
