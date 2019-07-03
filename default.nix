@@ -12,7 +12,7 @@ in
   pkgs.buildEnv {
     name = "mindec-devenv";
     paths = [
-      pkgs.cargo
+      pkgs.rustup
       pkgs.psc-package
       pkgs.purescript
     ];

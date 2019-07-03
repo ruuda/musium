@@ -1,0 +1,24 @@
+language: nix
+
+# Do not spam me with build status emails.
+notifications:
+  email: false
+
+install:
+  # Make the pinned build environment available on the PATH.
+  - export PATH=$(nix-build --no-out-link)/bin:$PATH
+
+script:
+  - cargo build
+  - cargo test
+  - make -C app
+
+cache:
+  directories:
+    - $TRAVIS_HOME/.cargo/
+    - $TRAVIS_HOME/.rustup/
+    - target
+    - app/.psc-package
+
+before_cache:
+  - rm -fr "$TRAVIS_HOME/.cargo/registry/src"
