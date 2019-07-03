@@ -4,3 +4,6 @@
 # Editor files
 *.swp
 *.swo
+
+# Nix output
+/result
