@@ -4,8 +4,6 @@ version = "0.0.0"
 authors = ["Ruud van Asseldonk <dev@veniogames.com>"]
 
 [dependencies]
-# claxon              = "0.4"
-claxon                = { path = "../claxon" }
 crossbeam             = "0.3"
 futures               = "0.1"
 hyper                 = "0.11"
@@ -17,6 +15,10 @@ rust_cast             = "0.11.0"
 serde_json            = "1.0"
 unicode-normalization = "0.1.5"
 walkdir               = "2.2.8"
+
+[dependencies.claxon]
+git = "https://github.com/ruuda/claxon"
+rev = "f3cd5ddaf7ffd56edfa4a218a924a776d4792bdd"
 
 [dev-dependencies]
 criterion = "0.2"
