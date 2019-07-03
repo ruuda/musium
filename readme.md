@@ -2,7 +2,7 @@
 
 Music metadata indexer and mediaserver.
 
-TODO: Add hipster build status badges.
+[![Build Status][ci-img]][ci]
 
 Mindec is:
 
@@ -77,6 +77,8 @@ use Mindec in your GPLv2-licensed software, you can add an [exception][except]
 to your copyright notice. Please do not open an issue if you disagree with the
 choice of license.
 
+[ci-img]:     https://travis-ci.org/ruuda/mindec.svg?branch=master
+[ci]:         https://travis-ci.org/ruuda/mindec
 [rust]:       https://rust-lang.org
 [purescript]: http://www.purescript.org/
 [apache2]:    https://www.apache.org/licenses/LICENSE-2.0
