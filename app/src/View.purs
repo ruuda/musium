@@ -7,13 +7,16 @@
 
 module View (component) where
 
+import Data.Array as Array
 import Data.Maybe (Maybe (..))
+import Data.String as String
 import Data.Symbol (SProxy (..))
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class.Console as Console
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Core (ClassName (..))
+import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Prelude
 
@@ -65,11 +68,28 @@ render state =
         , HH.p_ [ HH.text "Loading albums …" ]
         ]
     else
-      HH.div_
-        [ HH.ul
-          [ HP.id_ "album-list" ]
-          (map renderAlbum state.albums)
-        ]
+      let
+        -- TODO: Turn into a component with onTouchEnter and onTouchLeave for style.
+        yearButton year = HH.a
+          [ HP.href $ "#" <> year ]
+          [ HH.p
+            [ HP.class_ $ ClassName "year-pointer" ]
+            [ HH.text year ]
+          ]
+        years
+          = Array.nub
+          $ map Model.originalReleaseYear
+          $ state.albums
+        scrollbar = HH.div
+          [ HP.id_ "album-list-scroll" ]
+          ( map yearButton years )
+      in
+        HH.div_
+          [ HH.ul
+            [ HP.id_ "album-list" ]
+            (map renderAlbum state.albums)
+          , scrollbar
+          ]
 
 renderAlbum :: forall m. MonadAff m => Album -> H.ComponentHTML Action Slots m
 renderAlbum album@(Album { id }) =

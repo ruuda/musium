@@ -158,3 +158,40 @@ a
 {
   color: #ccc;
 }
+
+#album-list-scroll
+{
+  position: fixed;
+  width: 2em;
+  background-color: red;
+  top: 1em;
+  right: 0;
+  height: calc(100% - 3.5em);
+  display: flex;
+  flex-direction: column;
+}
+
+#album-list-scroll a
+{
+  flex-grow: 1;
+}
+
+.year-pointer
+{
+  position: absolute;
+  width: 2.4em;
+  left: -4em;
+  background-color: #fff;
+  color: #888;
+  border: 0.8pt solid #888;
+  border-radius: 0.25rem;
+  font-size: 2em;
+  padding: 0.5rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+#album-list-scroll a:hover .year-pointer
+{
+  opacity: 1;
+}

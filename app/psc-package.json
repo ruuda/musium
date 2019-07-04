@@ -11,6 +11,7 @@
     "halogen",
     "integers",
     "prelude",
+    "strings",
     "transformers"
   ]
 }

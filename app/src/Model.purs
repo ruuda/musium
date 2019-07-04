@@ -16,6 +16,7 @@ module Model
   , coverUrl
   , trackUrl
   , formatDurationSeconds
+  , originalReleaseYear
   ) where
 
 import Prelude
@@ -24,13 +25,14 @@ import Affjax as Http
 import Affjax.ResponseFormat as Http.ResponseFormat
 import Data.Array (sortWith)
 import Data.Argonaut.Core (Json)
+import Control.Monad.Error.Class (class MonadThrow, throwError)
 import Data.Argonaut.Decode (decodeJson, getField) as Json
 import Data.Argonaut.Decode.Class (class DecodeJson)
 import Data.Either (Either (..))
 import Data.Newtype (class Newtype)
+import Data.String as String
 import Effect.Aff (Aff)
 import Effect.Exception (Error, error)
-import Control.Monad.Error.Class (class MonadThrow, throwError)
 import Data.Int (quot, rem)
 
 fatal :: forall m a. MonadThrow Error m => String -> m a
@@ -145,3 +147,7 @@ formatDurationSeconds dtSeconds =
     if dtHours > 0
       then show hours <> ":" <> show2 minutes <> ":" <> show2 seconds
       else                      show  minutes <> ":" <> show2 seconds
+
+originalReleaseYear :: Album -> String
+originalReleaseYear (Album album) = String.take 4 album.date
+
