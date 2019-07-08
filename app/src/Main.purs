@@ -23,8 +23,8 @@ mainAlt = HA.runHalogenAff do
 main :: Effect Unit
 main = do
     p <- Dom.createElement "p"
-    Dom.appendText p "PS main starting ..."
-    Dom.appendChild Dom.body p
+    Dom.appendText "PS main starting ..." p
+    Dom.appendChild p Dom.body
     br <- Dom.createElement "br"
-    Dom.appendChild p br
-    Dom.appendText p "PS main done."
+    Dom.appendChild br p
+    Dom.appendText "PS main done." p

@@ -13,13 +13,13 @@ exports.createElement = function(tagName) {
   }
 }
 
-exports.appendChildImpl = function(container, child) {
+exports.appendChildImpl = function(child, container) {
   return function() {
     container.appendChild(child);
   }
 }
 
-exports.appendTextImpl = function(container, text) {
+exports.appendTextImpl = function(text, container) {
   return function() {
     container.insertAdjacentText('beforeend', text);
   }
@@ -45,3 +45,15 @@ exports.assumeElementById = function(id) {
 }
 
 exports.body = document.body;
+
+exports.setClassNameImpl = function(className, element) {
+  return function() {
+    element.className = className;
+  }
+}
+
+exports.setIdImpl = function(id, element) {
+  return function() {
+    element.id = id;
+  }
+}

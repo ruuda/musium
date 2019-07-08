@@ -22,9 +22,11 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Prelude
 
+import Cast as Cast
+import Html (Html)
+import Html as Html
 import Model (Album (..), Track (..))
 import Model as Model
-import Cast as Cast
 
 data LazyData a
   = Uninitialized
@@ -123,6 +125,16 @@ renderTrack (Track track) =
         , span "artist" $ HH.text track.artist
         ]
       ]
+
+renderTrack' :: Track -> Html Unit
+renderTrack' (Track track) =
+  Html.li "" $ do
+    Html.div "track-duration" $ do
+      Html.span "track" $ Html.text $ show track.trackNumber
+      Html.span "duration" $ Html.text $ Model.formatDurationSeconds track.durationSeconds
+    Html.div "track-header" $ do
+      Html.span "title" $ Html.text track.title
+      Html.span "artist" $ Html.text track.artist
 
 handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action () o m Unit
 handleAction = case _ of
