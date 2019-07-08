@@ -7,13 +7,19 @@
 
 module Main where
 
-import Prelude
+import Data.Array as Array
 import Effect (Effect)
+import Effect.Aff (launchAff_)
+import Effect.Class (liftEffect)
+import Effect.Class.Console as Console
 import Halogen.Aff as HA
 import Halogen.VDom.Driver (runUI)
+import Prelude
 
 import View as View
 import Dom as Dom
+import Html as Html
+import Model as Model
 
 mainAlt :: Effect Unit
 mainAlt = HA.runHalogenAff do
@@ -21,10 +27,7 @@ mainAlt = HA.runHalogenAff do
   runUI View.component unit body
 
 main :: Effect Unit
-main = do
-    p <- Dom.createElement "p"
-    Dom.appendText "PS main starting ..." p
-    Dom.appendChild p Dom.body
-    br <- Dom.createElement "br"
-    Dom.appendChild br p
-    Dom.appendText "PS main done." p
+main = launchAff_ $ do
+  albums <- Model.getAlbums
+  Console.log ("Loaded albums: " <> (show $ Array.length albums))
+  liftEffect ((View.renderAlbumList albums) `Html.appendTo` Dom.body)

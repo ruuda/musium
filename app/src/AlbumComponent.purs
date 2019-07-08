@@ -8,9 +8,11 @@
 module AlbumComponent
   ( Slot
   , component
+  , renderAlbum'
   ) where
 
 import Data.Maybe (Maybe (..))
+import Data.Foldable (traverse_)
 import Effect (Effect)
 import Effect.Aff.Class (class MonadAff)
 import Data.Newtype (unwrap)
@@ -105,6 +107,18 @@ render state =
             [ HP.classes $ [ClassName "track-list"] <> expandedClass ]
             [ HH.li_ [] ]
           ]
+
+renderAlbum' :: Album -> Html Unit
+renderAlbum' (Album album) =
+  Html.li "" $ do
+    Html.img (Model.thumbUrl album.id) (album.title <> " by " <> album.artist)
+
+    Html.div "album-header" $ do
+      Html.span "title" $ Html.text album.title
+      Html.span "album-artist" $ Html.text album.artist
+
+    -- TODO: Do request, render children.
+    Html.ul "track-list" $ traverse_ renderTrack' []
 
 renderTrack :: forall m. Track -> H.ComponentHTML Action () m
 renderTrack (Track track) =

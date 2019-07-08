@@ -13,6 +13,7 @@ module Dom
   , body
   , createElement
   , getElementById
+  , setAttribute
   , setClassName
   , setId
   ) where
@@ -31,6 +32,7 @@ foreign import createElement :: String -> Effect Element
 foreign import appendChildImpl :: Fn2 Element Element (Effect Unit)
 foreign import appendTextImpl :: Fn2 String Element (Effect Unit)
 foreign import getElementByIdImpl :: Fn3 String (Element -> Maybe Element) (Maybe Element) (Effect (Maybe Element))
+foreign import setAttributeImpl :: Fn3 String String Element (Effect Unit)
 foreign import setClassNameImpl :: Fn2 String Element (Effect Unit)
 foreign import setIdImpl :: Fn2 String Element (Effect Unit)
 
@@ -48,3 +50,6 @@ setClassName className element = runFn2 setClassNameImpl className element
 
 setId :: String -> Element -> Effect Unit
 setId id element = runFn2 setIdImpl id element
+
+setAttribute :: String -> String -> Element -> Effect Unit
+setAttribute attribute value element = runFn3 setAttributeImpl attribute value element

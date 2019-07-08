@@ -5,9 +5,13 @@
 -- you may not use this file except in compliance with the License.
 -- A copy of the License has been included in the root of the repository.
 
-module View (component) where
+module View
+  ( component
+  , renderAlbumList
+  ) where
 
 import Data.Array as Array
+import Data.Foldable (traverse_)
 import Data.Maybe (Maybe (..))
 import Data.String as String
 import Data.Symbol (SProxy (..))
@@ -22,6 +26,8 @@ import Prelude
 
 import Model (Album (..), AlbumId)
 import Model as Model
+import Html (Html)
+import Html as Html
 
 import AlbumComponent as AlbumComponent
 
@@ -90,6 +96,13 @@ render state =
             (map renderAlbum state.albums)
           , scrollbar
           ]
+
+renderAlbumList :: Array Album -> Html Unit
+renderAlbumList albums =
+  Html.div "" $
+    Html.ul "" $ do
+      Html.setId "album-list"
+      traverse_ AlbumComponent.renderAlbum' albums
 
 renderAlbum :: forall m. MonadAff m => Album -> H.ComponentHTML Action Slots m
 renderAlbum album@(Album { id }) =

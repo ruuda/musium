@@ -46,6 +46,12 @@ exports.assumeElementById = function(id) {
 
 exports.body = document.body;
 
+exports.setAttributeImpl = function(attribute, value, element) {
+  return function() {
+    element.setAttribute(attribute, value);
+  }
+}
+
 exports.setClassNameImpl = function(className, element) {
   return function() {
     element.className = className;

@@ -7,11 +7,15 @@
 
 module Html
   ( Html
-  , node
-  , text
+  , appendTo
   , div
-  , span
+  , img
   , li
+  , node
+  , span
+  , text
+  , ul
+  , setId
   ) where
 
 import Control.Monad.Reader.Trans (ReaderT (..))
@@ -37,11 +41,24 @@ node tagName className (ReaderT children) =
 text :: String -> Html Unit
 text value = ReaderT $ \container -> Dom.appendText value container
 
+setId :: String -> Html Unit
+setId id = ReaderT $ \container -> Dom.setId id container
+
 div :: String -> Html Unit -> Html Unit
 div className children = node "div" className children
 
 span :: String -> Html Unit -> Html Unit
 span className children = node "span" className children
 
+ul :: String -> Html Unit -> Html Unit
+ul className children = node "ul" className children
+
 li :: String -> Html Unit -> Html Unit
 li className children = node "li" className children
+
+img :: String -> String -> Html Unit
+img src alt = ReaderT $ \container -> do
+  self <- Dom.createElement "img"
+  Dom.setAttribute "src" src self
+  Dom.setAttribute "alt" alt self
+  Dom.appendChild self container
