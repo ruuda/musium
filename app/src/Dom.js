@@ -52,14 +52,28 @@ exports.setAttributeImpl = function(attribute, value, element) {
   }
 }
 
-exports.setClassNameImpl = function(className, element) {
+exports.addClassImpl = function(className, element) {
   return function() {
-    element.className = className;
+    element.classList.add(className);
+  }
+}
+
+exports.removeClassImpl = function(className, element) {
+  return function() {
+    element.classList.remove(className);
   }
 }
 
 exports.setIdImpl = function(id, element) {
   return function() {
     element.id = id;
+  }
+}
+
+exports.addEventListenerImpl = function(eventName, callback, element) {
+  return function() {
+    element.addEventListener(eventName, function(evt) {
+      callback();
+    });
   }
 }

@@ -7,15 +7,17 @@
 
 module Html
   ( Html
+  , addClass
   , appendTo
   , div
   , img
   , li
   , node
+  , onClick
+  , setId
   , span
   , text
   , ul
-  , setId
   ) where
 
 import Control.Monad.Reader.Trans (ReaderT (..))
@@ -30,11 +32,10 @@ type Html a = ReaderT Element Effect a
 appendTo :: Html Unit -> Element -> Effect Unit
 appendTo (ReaderT f) container = f container
 
-node :: String -> String -> Html Unit -> Html Unit
-node tagName className (ReaderT children) =
+node :: String -> Html Unit -> Html Unit
+node tagName (ReaderT children) =
   ReaderT $ \container -> do
     self <- Dom.createElement tagName
-    Dom.setClassName className self
     children self
     Dom.appendChild self container
 
@@ -44,17 +45,24 @@ text value = ReaderT $ \container -> Dom.appendText value container
 setId :: String -> Html Unit
 setId id = ReaderT $ \container -> Dom.setId id container
 
-div :: String -> Html Unit -> Html Unit
-div className children = node "div" className children
+addClass :: String -> Html Unit
+addClass className = ReaderT $ \container -> Dom.addClass className container
 
-span :: String -> Html Unit -> Html Unit
-span className children = node "span" className children
+onClick :: Html Unit -> Html Unit
+onClick (ReaderT callback) = ReaderT $ \container ->
+  Dom.addEventListener "click" (callback container) container
 
-ul :: String -> Html Unit -> Html Unit
-ul className children = node "ul" className children
+div :: Html Unit -> Html Unit
+div children = node "div" children
 
-li :: String -> Html Unit -> Html Unit
-li className children = node "li" className children
+span :: Html Unit -> Html Unit
+span children = node "span" children
+
+ul :: Html Unit -> Html Unit
+ul children = node "ul" children
+
+li :: Html Unit -> Html Unit
+li children = node "li" children
 
 img :: String -> String -> Html Unit
 img src alt = ReaderT $ \container -> do

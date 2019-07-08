@@ -11,12 +11,16 @@ module AlbumComponent
   , renderAlbum'
   ) where
 
-import Data.Maybe (Maybe (..))
-import Data.Foldable (traverse_)
-import Effect (Effect)
-import Effect.Aff.Class (class MonadAff)
-import Data.Newtype (unwrap)
+import Data.Array as Array
 import Data.Const (Const)
+import Data.Foldable (traverse_)
+import Data.Maybe (Maybe (..))
+import Data.Newtype (unwrap)
+import Effect (Effect)
+import Effect.Aff (launchAff_)
+import Effect.Aff.Class (class MonadAff)
+import Effect.Class (liftEffect)
+import Effect.Class.Console as Console
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Core (ClassName (..))
@@ -110,15 +114,26 @@ render state =
 
 renderAlbum' :: Album -> Html Unit
 renderAlbum' (Album album) =
-  Html.li "" $ do
-    Html.img (Model.thumbUrl album.id) (album.title <> " by " <> album.artist)
-
-    Html.div "album-header" $ do
-      Html.span "title" $ Html.text album.title
-      Html.span "album-artist" $ Html.text album.artist
-
+  Html.li $ do
+    Html.div $ do
+      Html.img (Model.thumbUrl album.id) (album.title <> " by " <> album.artist)
+      Html.div $ do
+        Html.addClass "album-header"
+        Html.span $ do
+          Html.addClass "title"
+          Html.text album.title
+        Html.span $ do
+          Html.addClass "artist"
+          Html.text album.artist
+        Html.onClick $ do
+          liftEffect $ launchAff_ $ do
+            tracks <- Model.getTracks album.id
+            Console.log $ "Received tracks: " <> (show $ Array.length tracks)
     -- TODO: Do request, render children.
-    Html.ul "track-list" $ traverse_ renderTrack' []
+    Html.ul $ do
+      Html.addClass "track-list"
+      Html.addClass "collapsed"
+      traverse_ renderTrack' []
 
 renderTrack :: forall m. Track -> H.ComponentHTML Action () m
 renderTrack (Track track) =
@@ -142,13 +157,23 @@ renderTrack (Track track) =
 
 renderTrack' :: Track -> Html Unit
 renderTrack' (Track track) =
-  Html.li "" $ do
-    Html.div "track-duration" $ do
-      Html.span "track" $ Html.text $ show track.trackNumber
-      Html.span "duration" $ Html.text $ Model.formatDurationSeconds track.durationSeconds
-    Html.div "track-header" $ do
-      Html.span "title" $ Html.text track.title
-      Html.span "artist" $ Html.text track.artist
+  Html.li $ do
+    Html.div $ do
+      Html.addClass "track-duration"
+      Html.span $ do
+        Html.addClass "track"
+        Html.text $ show track.trackNumber
+      Html.span $ do
+        Html.addClass "duration"
+        Html.text $ Model.formatDurationSeconds track.durationSeconds
+    Html.div $ do
+      Html.addClass "track-header"
+      Html.span $ do
+        Html.addClass "title"
+        Html.text track.title
+      Html.span $ do
+        Html.addClass "artist"
+        Html.text track.artist
 
 handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action () o m Unit
 handleAction = case _ of

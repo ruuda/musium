@@ -99,8 +99,8 @@ render state =
 
 renderAlbumList :: Array Album -> Html Unit
 renderAlbumList albums =
-  Html.div "" $
-    Html.ul "" $ do
+  Html.div $
+    Html.ul $ do
       Html.setId "album-list"
       traverse_ AlbumComponent.renderAlbum' albums
 
