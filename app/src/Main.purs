@@ -12,19 +12,12 @@ import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
-import Halogen.Aff as HA
-import Halogen.VDom.Driver (runUI)
 import Prelude
 
 import View as View
 import Dom as Dom
 import Html as Html
 import Model as Model
-
-mainAlt :: Effect Unit
-mainAlt = HA.runHalogenAff do
-  body <- HA.awaitBody
-  runUI View.component unit body
 
 main :: Effect Unit
 main = launchAff_ $ do

@@ -8,7 +8,6 @@
     "argonaut-codecs",
     "console",
     "foldable-traversable",
-    "halogen",
     "integers",
     "prelude",
     "strings",
