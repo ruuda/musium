@@ -139,7 +139,7 @@ renderAlbum' (Album album) =
     isOpenVar <- liftEffect $ Var.create false
 
     local (const header) $ do
-      Html.onClick $ liftEffect $ do
+      Html.onClick $ do
         let
           doOpen = do
             Var.set isOpenVar true
@@ -167,7 +167,7 @@ renderAlbum' (Album album) =
                 Html.appendTo trackList $ do
                   Html.removeClass "collapsed"
                   Html.addClass "expanded"
-                  traverse_ renderTrack' tracks
+                  traverse_ (renderTrack' $ Album album) tracks
 
 renderTrack :: forall m. Track -> H.ComponentHTML Action () m
 renderTrack (Track track) =
@@ -189,8 +189,8 @@ renderTrack (Track track) =
         ]
       ]
 
-renderTrack' :: Track -> Html Unit
-renderTrack' (Track track) =
+renderTrack' :: Album -> Track -> Html Unit
+renderTrack' album (Track track) =
   Html.li $ do
     Html.div $ do
       Html.addClass "track-duration"
@@ -208,6 +208,8 @@ renderTrack' (Track track) =
       Html.span $ do
         Html.addClass "artist"
         Html.text track.artist
+
+    Html.onClick $ playTrack album (Track track)
 
 handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action () o m Unit
 handleAction = case _ of

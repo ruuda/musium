@@ -53,9 +53,9 @@ addClass className = ReaderT $ \container -> Dom.addClass className container
 removeClass :: String -> Html Unit
 removeClass className = ReaderT $ \container -> Dom.removeClass className container
 
-onClick :: Html Unit -> Html Unit
-onClick (ReaderT callback) = ReaderT $ \container ->
-  Dom.addEventListener "click" (callback container) container
+onClick :: Effect Unit -> Html Unit
+onClick callback = ReaderT $ \container ->
+  Dom.addEventListener "click" callback container
 
 div :: forall a. Html a -> Html a
 div children = node "div" children
