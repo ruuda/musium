@@ -34,6 +34,8 @@ import Html (Html)
 import Html as Html
 import Model (Album (..), Track (..))
 import Model as Model
+import Var (Var)
+import Var as Var
 
 data LazyData a
   = Uninitialized
@@ -133,15 +135,39 @@ renderAlbum' (Album album) =
       Html.addClass "collapsed"
       ask
 
+    isLoadedVar <- liftEffect $ Var.create false
+    isOpenVar <- liftEffect $ Var.create false
+
     local (const header) $ do
-      Html.onClick $ do
-        liftEffect $ launchAff_ $ do
-          tracks <- Model.getTracks album.id
-          Console.log $ "Received tracks: " <> (show $ Array.length tracks)
-          liftEffect $ Html.appendTo trackList $ do
-            Html.removeClass "collapsed"
-            Html.addClass "expanded"
-            traverse_ renderTrack' tracks
+      Html.onClick $ liftEffect $ do
+        let
+          doOpen = do
+            Var.set isOpenVar true
+            Html.appendTo trackList $ do
+              Html.removeClass "collapsed"
+              Html.addClass "expanded"
+          doClose = do
+            Var.set isOpenVar false
+            Html.appendTo trackList $ do
+              Html.removeClass "expanded"
+              Html.addClass "collapsed"
+
+        loaded <- Var.get isLoadedVar
+        if loaded
+          then do
+            isOpen <- Var.get isOpenVar
+            if isOpen then doClose else doOpen
+          else do
+            launchAff_ $ do
+              tracks <- Model.getTracks album.id
+              Console.log $ "Received tracks: " <> (show $ Array.length tracks)
+              liftEffect $ do
+                Var.set isLoadedVar true
+                Var.set isOpenVar true
+                Html.appendTo trackList $ do
+                  Html.removeClass "collapsed"
+                  Html.addClass "expanded"
+                  traverse_ renderTrack' tracks
 
 renderTrack :: forall m. Track -> H.ComponentHTML Action () m
 renderTrack (Track track) =
