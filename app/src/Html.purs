@@ -14,6 +14,7 @@ module Html
   , li
   , node
   , onClick
+  , removeClass
   , setId
   , span
   , text
@@ -29,15 +30,16 @@ import Prelude
 -- An effect that builds nodes and appends them to the parent.
 type Html a = ReaderT Element Effect a
 
-appendTo :: Html Unit -> Element -> Effect Unit
-appendTo (ReaderT f) container = f container
+appendTo :: Element -> Html Unit -> Effect Unit
+appendTo container (ReaderT f) = f container
 
-node :: String -> Html Unit -> Html Unit
+node :: forall a. String -> Html a -> Html a
 node tagName (ReaderT children) =
   ReaderT $ \container -> do
     self <- Dom.createElement tagName
-    children self
+    result <- children self
     Dom.appendChild self container
+    pure result
 
 text :: String -> Html Unit
 text value = ReaderT $ \container -> Dom.appendText value container
@@ -48,20 +50,23 @@ setId id = ReaderT $ \container -> Dom.setId id container
 addClass :: String -> Html Unit
 addClass className = ReaderT $ \container -> Dom.addClass className container
 
+removeClass :: String -> Html Unit
+removeClass className = ReaderT $ \container -> Dom.removeClass className container
+
 onClick :: Html Unit -> Html Unit
 onClick (ReaderT callback) = ReaderT $ \container ->
   Dom.addEventListener "click" (callback container) container
 
-div :: Html Unit -> Html Unit
+div :: forall a. Html a -> Html a
 div children = node "div" children
 
-span :: Html Unit -> Html Unit
+span :: forall a. Html a -> Html a
 span children = node "span" children
 
-ul :: Html Unit -> Html Unit
+ul :: forall a. Html a -> Html a
 ul children = node "ul" children
 
-li :: Html Unit -> Html Unit
+li :: forall a. Html a -> Html a
 li children = node "li" children
 
 img :: String -> String -> Html Unit

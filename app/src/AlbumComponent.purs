@@ -11,6 +11,7 @@ module AlbumComponent
   , renderAlbum'
   ) where
 
+import Control.Monad.Reader.Class (ask, local)
 import Data.Array as Array
 import Data.Const (Const)
 import Data.Foldable (traverse_)
@@ -115,7 +116,7 @@ render state =
 renderAlbum' :: Album -> Html Unit
 renderAlbum' (Album album) =
   Html.li $ do
-    Html.div $ do
+    header <- Html.div $ do
       Html.img (Model.thumbUrl album.id) (album.title <> " by " <> album.artist)
       Html.div $ do
         Html.addClass "album-header"
@@ -125,15 +126,22 @@ renderAlbum' (Album album) =
         Html.span $ do
           Html.addClass "artist"
           Html.text album.artist
-        Html.onClick $ do
-          liftEffect $ launchAff_ $ do
-            tracks <- Model.getTracks album.id
-            Console.log $ "Received tracks: " <> (show $ Array.length tracks)
-    -- TODO: Do request, render children.
-    Html.ul $ do
+      ask
+
+    trackList <- Html.ul $ do
       Html.addClass "track-list"
       Html.addClass "collapsed"
-      traverse_ renderTrack' []
+      ask
+
+    local (const header) $ do
+      Html.onClick $ do
+        liftEffect $ launchAff_ $ do
+          tracks <- Model.getTracks album.id
+          Console.log $ "Received tracks: " <> (show $ Array.length tracks)
+          liftEffect $ Html.appendTo trackList $ do
+            Html.removeClass "collapsed"
+            Html.addClass "expanded"
+            traverse_ renderTrack' tracks
 
 renderTrack :: forall m. Track -> H.ComponentHTML Action () m
 renderTrack (Track track) =
