@@ -6,7 +6,7 @@
 -- A copy of the License has been included in the root of the repository.
 
 module AlbumComponent
-  ( renderAlbum'
+  ( renderAlbum
   ) where
 
 import Control.Monad.Reader.Class (ask, local)
@@ -25,8 +25,8 @@ import Model (Album (..), Track (..))
 import Model as Model
 import Var as Var
 
-renderAlbum' :: Album -> Html Unit
-renderAlbum' (Album album) =
+renderAlbum :: Album -> Html Unit
+renderAlbum (Album album) =
   Html.li $ do
     header <- Html.div $ do
       Html.img (Model.thumbUrl album.id) (album.title <> " by " <> album.artist)
@@ -77,10 +77,10 @@ renderAlbum' (Album album) =
                 Html.appendTo trackList $ do
                   Html.removeClass "collapsed"
                   Html.addClass "expanded"
-                  traverse_ (renderTrack' $ Album album) tracks
+                  traverse_ (renderTrack $ Album album) tracks
 
-renderTrack' :: Album -> Track -> Html Unit
-renderTrack' album (Track track) =
+renderTrack :: Album -> Track -> Html Unit
+renderTrack album (Track track) =
   Html.li $ do
     Html.div $ do
       Html.addClass "track-duration"

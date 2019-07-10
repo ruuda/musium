@@ -23,4 +23,4 @@ renderAlbumList albums =
   Html.div $
     Html.ul $ do
       Html.setId "album-list"
-      traverse_ AlbumComponent.renderAlbum' albums
+      traverse_ AlbumComponent.renderAlbum albums
