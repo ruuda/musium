@@ -8,6 +8,9 @@
 "use strict";
 
 exports.makeQueueItem = function(track) {
+  // TODO: Better handling of Cast being unavailable.
+  if (!window.hasCast) return null;
+
   var meta = new chrome.cast.media.MusicTrackMediaMetadata();
   meta.discNumber  = track.discNumber;
   meta.trackNumber = track.trackNumber;
@@ -29,6 +32,9 @@ exports.makeQueueItem = function(track) {
 };
 
 exports.playTrack = function(track) {
+  // TODO: Better handling of Cast being unavailable.
+  if (!window.hasCast) return null;
+
   // Pure part: set up the track metadata and load request.
   var meta = new chrome.cast.media.MusicTrackMediaMetadata();
   meta.discNumber = track.discNumber;
@@ -68,6 +74,9 @@ exports.playTrack = function(track) {
 };
 
 exports.queueTrack = function(queueItem) {
+  // TODO: Better handling of Cast being unavailable.
+  if (!window.hasCast) return null;
+
   function doEnqueue(castSession) {
     // If there is a media session, then we can enqueue a new item.
     // But if there isn't, then we need to issue a load request to enqueue

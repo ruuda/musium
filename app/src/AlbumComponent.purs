@@ -43,7 +43,6 @@ renderAlbum (Album album) =
 
     trackList <- Html.ul $ do
       Html.addClass "track-list"
-      Html.addClass "collapsed"
       ask
 
     isLoadedVar <- liftEffect $ Var.create false
@@ -55,13 +54,11 @@ renderAlbum (Album album) =
           doOpen = do
             Var.set isOpenVar true
             Html.appendTo trackList $ do
-              Html.removeClass "collapsed"
               Html.addClass "expanded"
           doClose = do
             Var.set isOpenVar false
             Html.appendTo trackList $ do
               Html.removeClass "expanded"
-              Html.addClass "collapsed"
 
         loaded <- Var.get isLoadedVar
         if loaded
@@ -76,9 +73,8 @@ renderAlbum (Album album) =
                 Var.set isLoadedVar true
                 Var.set isOpenVar true
                 Html.appendTo trackList $ do
-                  Html.removeClass "collapsed"
-                  Html.addClass "expanded"
                   traverse_ (renderTrack $ Album album) tracks
+                  Html.addClass "expanded"
 
 renderTrack :: Album -> Track -> Html Unit
 renderTrack album (Track track) =

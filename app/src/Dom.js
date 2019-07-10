@@ -74,6 +74,7 @@ exports.addEventListenerImpl = function(eventName, callback, element) {
   return function() {
     element.addEventListener(eventName, function(evt) {
       callback();
+      return false;
     });
   }
 }
