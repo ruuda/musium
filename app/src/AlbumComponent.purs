@@ -28,6 +28,7 @@ import Var as Var
 renderAlbum :: Album -> Html Unit
 renderAlbum (Album album) =
   Html.li $ do
+    Html.addClass "album"
     header <- Html.div $ do
       Html.img (Model.thumbUrl album.id) (album.title <> " by " <> album.artist)
       Html.div $ do
@@ -82,10 +83,11 @@ renderAlbum (Album album) =
 renderTrack :: Album -> Track -> Html Unit
 renderTrack album (Track track) =
   Html.li $ do
+    Html.addClass "track"
     Html.div $ do
       Html.addClass "track-duration"
       Html.span $ do
-        Html.addClass "track"
+        Html.addClass "track-number"
         Html.text $ show track.trackNumber
       Html.span $ do
         Html.addClass "duration"

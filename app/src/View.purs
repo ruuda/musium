@@ -30,10 +30,9 @@ buildTree n build xs =
       $ map (\i -> traverse_ build $ Array.slice (i * n) ((i + 1) * n) xs)
       $ Array.range 0 (Array.length xs / n)
 
-
 renderAlbumList :: Array Album -> Html Unit
 renderAlbumList albums =
   Html.div $
     Html.ul $ do
       Html.setId "album-list"
-      buildTree 10 AlbumComponent.renderAlbum albums
+      buildTree 15 AlbumComponent.renderAlbum albums

@@ -81,13 +81,13 @@ a
   list-style-type: none;
 }
 
-#album-list > li
+.album
 {
   padding-top: 1em;
   cursor: default;
 }
 
-#album-list img
+.album img
 {
   width: 3em;
   height: 3em;
@@ -95,7 +95,7 @@ a
   float: left;
 }
 
-#album-list .album-header, .track-list .track-header
+.album-header, .track-header
 {
   margin-left: 4.5rem;
   margin-right: 1rem;
@@ -109,14 +109,15 @@ a
   background-color: #fdfdfd;
   border-top: 0.8pt solid #eee;
   border-bottom: 0.8pt solid #eee;
-}
-
-.track-list.collapsed
-{
   display: none;
 }
 
-.track-list > li
+.track-list.expanded
+{
+  display: block;
+}
+
+.track
 {
   padding-top: 0.5em;
 }
@@ -148,13 +149,13 @@ a
   width: 2.75em;
 }
 
-.track
+.track-number
 {
   display: block;
   font-weight: 700;
 }
 
-.track, .duration
+.track-number, .duration
 {
   color: #ccc;
 }
