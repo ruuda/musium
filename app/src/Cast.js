@@ -31,83 +31,60 @@ exports.makeQueueItem = function(track) {
   return queueItem;
 };
 
-exports.playTrack = function(track) {
-  // TODO: Better handling of Cast being unavailable.
-  if (!window.hasCast) return null;
+exports.getCastSessionImpl = function(onError, onSuccess) {
+  if (!window.hasCast) onError("unavailable");
 
-  // Pure part: set up the track metadata and load request.
-  var meta = new chrome.cast.media.MusicTrackMediaMetadata();
-  meta.discNumber = track.discNumber;
-  meta.trackNumber = track.trackNumber;
-  meta.title = track.title;
-  meta.artist = track.artist;
-  meta.albumName = track.albumTitle;
-  meta.albumArtist = track.albumArtist;
-  meta.releaseDate = track.releaseDate;
-  meta.images = [new chrome.cast.Image(track.imageUrl)];
+  var context = cast.framework.CastContext.getInstance();
+  var castSession = context.getCurrentSession();
 
-  var mediaInfo = new chrome.cast.media.MediaInfo(track.trackUrl, 'audio/flac');
-  mediaInfo.metadata = meta;
-
-  var request = new chrome.cast.media.LoadRequest(mediaInfo);
-
-  function doPlay(castSession) {
-    castSession.loadMedia(request).then(
-      function() { console.log('Load succeed'); },
-      function(errorCode) { console.log('Error code: ' + errorCode); }
+  if (castSession) {
+    onSuccess(castSession);
+  } else {
+    context.requestSession().then(
+      function() { onSuccess(context.getCurrentSession()); },
+      onError
     );
   };
 
-  // Effectful part: actually send the load request.
-  return function() {
-    var context = cast.framework.CastContext.getInstance();
-    var castSession = context.getCurrentSession();
-    if (castSession) {
-      doPlay(castSession);
-    } else {
-      context.requestSession().then(
-        function() { doPlay(context.getCurrentSession()); },
-        function(errorCode) { console.log('Error code: ' + errorCode); }
-      );
-    }
+  return function(cancelError, cancelerError, cancelerSuccess) {
+    console.error('TODO: How to mplement cancellation?');
   };
 };
 
-exports.queueTrack = function(queueItem) {
-  // TODO: Better handling of Cast being unavailable.
-  if (!window.hasCast) return null;
+exports.getMediaSessionImpl = function(just, nothing, castSession) {
+  var mediaSession = castSession.getMediaSession();
+  if (mediaSession) {
+    return just(mediaSession);
+  } else {
+    return nothing;
+  }
+}
 
-  function doEnqueue(castSession) {
-    // If there is a media session, then we can enqueue a new item.
-    // But if there isn't, then we need to issue a load request to enqueue
-    // the first item.
-    var media = castSession.getMediaSession();
-    if (media) {
-      media.queueAppendItem(
-        queueItem,
-        function() { console.log('Load succeed'); },
-        function(errorCode) { console.log('Error code: ' + errorCode); }
-      );
-    } else {
-      var request = new chrome.cast.media.LoadRequest(queueItem.media);
-      castSession.loadMedia(request).then(
-        function() { console.log('Load succeed'); },
-        function(errorCode) { console.log('Error code: ' + errorCode); }
-      );
-    }
-  };
+exports.queueTrackImpl = function(unit, mediaSession, queueItem) {
+  return function(onError, onSuccess) {
+    mediaSession.queueAppendItem(
+      queueItem,
+      function() { onSuccess(unit) },
+      onError
+    );
 
-  // Effectful part: actually send the load request.
-  return function() {
-    var context = cast.framework.CastContext.getInstance();
-    var castSession = context.getCurrentSession();
-    if (castSession) {
-      doEnqueue(castSession);
-    } else {
-      context.requestSession().then(
-        function() { doEnqueue(context.getCurrentSession()); },
-        function(errorCode) { console.log('Error code: ' + errorCode); }
-      );
-    }
+    return function(cancelError, cancelerError, cancelerSuccess) {
+      console.error('TODO: How to mplement cancellation?');
+    };
   };
 };
+
+exports.playTrackImpl = function(unit, castSession, queueItem) {
+  return function(onError, onSuccess) {
+    var request = new chrome.cast.media.LoadRequest(queueItem.media);
+
+    castSession.loadMedia(request).then(
+      function() { onSuccess(unit); },
+      onError
+    );
+
+    return function(cancelError, cancelerError, cancelerSuccess) {
+      console.error('TODO: How to mplement cancellation?');
+    };
+  };
+}

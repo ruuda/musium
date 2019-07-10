@@ -12,8 +12,8 @@ module AlbumComponent
 import Control.Monad.Reader.Class (ask, local)
 import Data.Array as Array
 import Data.Foldable (traverse_)
-import Effect (Effect)
-import Effect.Aff (launchAff_)
+import Data.Maybe (Maybe (..))
+import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Prelude
@@ -97,9 +97,9 @@ renderTrack album (Track track) =
         Html.addClass "artist"
         Html.text track.artist
 
-    Html.onClick $ playTrack album (Track track)
+    Html.onClick $ launchAff_ $ playTrack album (Track track)
 
-playTrack :: Album -> Track -> Effect Unit
+playTrack :: Album -> Track -> Aff Unit
 playTrack (Album album) (Track track) =
   let
     queueItem = Cast.makeQueueItem
@@ -114,5 +114,14 @@ playTrack (Album album) (Track track) =
       , imageUrl:    "http://192.168.1.103:8233" <> Model.coverUrl track.id
       , trackUrl:    "http://192.168.1.103:8233" <> Model.trackUrl track.id
       }
-  in
-    Cast.queueTrack queueItem
+  in do
+    session <- Cast.getCastSession
+    case Cast.getMediaSession session of
+      -- If there is an existing media session, enqueue the track,
+      -- but if there is none, play it directly.
+      Just media -> do
+        Cast.queueTrack media queueItem
+        Console.log $ "Queued " <> track.title
+      Nothing -> do
+        Cast.playTrack session queueItem
+        Console.log $ "Playing " <> track.title <> " immediately."
