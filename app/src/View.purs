@@ -9,17 +9,10 @@ module View
   ( renderAlbumList
   ) where
 
-import Data.Array as Array
 import Data.Foldable (traverse_)
-import Data.Maybe (Maybe (..))
-import Data.String as String
-import Data.Symbol (SProxy (..))
-import Effect.Aff.Class (class MonadAff)
-import Effect.Class.Console as Console
 import Prelude
 
-import Model (Album (..), AlbumId)
-import Model as Model
+import Model (Album)
 import Html (Html)
 import Html as Html
 

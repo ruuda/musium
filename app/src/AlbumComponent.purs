@@ -11,13 +11,9 @@ module AlbumComponent
 
 import Control.Monad.Reader.Class (ask, local)
 import Data.Array as Array
-import Data.Const (Const)
 import Data.Foldable (traverse_)
-import Data.Maybe (Maybe (..))
-import Data.Newtype (unwrap)
 import Effect (Effect)
 import Effect.Aff (launchAff_)
-import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Prelude
@@ -27,7 +23,6 @@ import Html (Html)
 import Html as Html
 import Model (Album (..), Track (..))
 import Model as Model
-import Var (Var)
 import Var as Var
 
 renderAlbum' :: Album -> Html Unit
