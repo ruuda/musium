@@ -10,12 +10,32 @@ let
   pkgs = import (import ./nixpkgs-pinned.nix) {
     config.android_sdk.accept_license = true;
   };
+  apk = pkgs.androidenv.buildApp {
+    name = "mindec";
+    src = ./app3;
+    release = false;
+    platformVersions = [ "28" ];
+    includeNDK = false;
+  };
+  emulate = pkgs.androidenv.emulateApp {
+    name = "emulate-mindec";
+    platformVersion = "28";
+    abiVersion = "x86_64";
+    systemImageType = "default";
+    useGoogleAPIs = false;
+    app = apk;
+    package = "nl.ruuda.mindec";
+    activity = "MainActivity";
+  };
 in
   pkgs.buildEnv {
     name = "mindec-devenv";
     paths = [
+      apk
+      emulate
+      pkgs.androidenv.androidPkgs_9_0.androidsdk
+      pkgs.ant
       pkgs.mkdocs
       pkgs.rustup
-      pkgs.androidenv.androidPkgs_9_0.androidsdk
     ];
   }

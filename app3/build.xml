@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project name="Mindec" default="help">
+  <property name="target" value="android-28"/>
+  <property name="sdk.dir" value="/nix/store/12dkka1xgna5m1w11hq40yraicxsfvbn-androidsdk/libexec/android-sdk"/>
+  <import file="${sdk.dir}/tools/ant/build.xml" />
+</project>
