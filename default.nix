@@ -7,14 +7,15 @@
 # with build tools available by running `nix run` in the root of the repository.
 
 let
-  pkgs = import (import ./nixpkgs-pinned.nix) {};
+  pkgs = import (import ./nixpkgs-pinned.nix) {
+    config.android_sdk.accept_license = true;
+  };
 in
   pkgs.buildEnv {
     name = "mindec-devenv";
     paths = [
       pkgs.mkdocs
-      pkgs.psc-package
-      pkgs.purescript
       pkgs.rustup
+      pkgs.androidenv.androidPkgs_9_0.androidsdk
     ];
   }
