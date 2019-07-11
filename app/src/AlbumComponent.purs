@@ -127,7 +127,8 @@ playTrack (Album album) (Track track) =
       }
   in do
     session <- Cast.getCastSession
-    case Cast.getMediaSession session of
+    medsess <- liftEffect $ Cast.getMediaSession session
+    case medsess of
       -- If there is an existing media session, enqueue the track,
       -- but if there is none, play it directly.
       Just media -> do

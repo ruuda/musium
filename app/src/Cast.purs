@@ -17,12 +17,12 @@ module Cast
   , queueTrack
   ) where
 
-import Effect (Effect)
-import Prelude
-import Effect.Aff (Aff)
-import Effect.Aff.Compat (EffectFnAff, fromEffectFnAff)
 import Data.Function.Uncurried (Fn3, runFn3)
 import Data.Maybe (Maybe (Just, Nothing))
+import Effect (Effect)
+import Effect.Aff (Aff)
+import Effect.Aff.Compat (EffectFnAff, fromEffectFnAff)
+import Prelude
 
 type MusicTrackMetadata =
   { discNumber  :: Int
@@ -41,16 +41,17 @@ foreign import data CastSession :: Type
 foreign import data MediaSession :: Type
 
 foreign import makeQueueItem :: MusicTrackMetadata -> QueueItem
+foreign import getQueueItems :: MediaSession -> Effect (Array QueueItem)
 
 foreign import getCastSessionImpl :: EffectFnAff CastSession
-foreign import getMediaSessionImpl :: Fn3 (MediaSession -> Maybe MediaSession) (Maybe MediaSession) CastSession (Maybe MediaSession)
+foreign import getMediaSessionImpl :: Fn3 (MediaSession -> Maybe MediaSession) (Maybe MediaSession) CastSession (Effect (Maybe MediaSession))
 foreign import playTrackImpl :: Fn3 Unit CastSession QueueItem (EffectFnAff Unit)
 foreign import queueTrackImpl :: Fn3 Unit MediaSession QueueItem (EffectFnAff Unit)
 
 getCastSession :: Aff CastSession
 getCastSession = fromEffectFnAff getCastSessionImpl
 
-getMediaSession :: CastSession -> Maybe MediaSession
+getMediaSession :: CastSession -> Effect (Maybe MediaSession)
 getMediaSession castSession = runFn3 getMediaSessionImpl Just Nothing castSession
 
 playTrack :: CastSession -> QueueItem -> Aff Unit

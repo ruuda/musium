@@ -52,13 +52,15 @@ exports.getCastSessionImpl = function(onError, onSuccess) {
 };
 
 exports.getMediaSessionImpl = function(just, nothing, castSession) {
-  var mediaSession = castSession.getMediaSession();
-  if (mediaSession) {
-    return just(mediaSession);
-  } else {
-    return nothing;
-  }
-}
+  return function() {
+    var mediaSession = castSession.getMediaSession();
+    if (mediaSession) {
+      return just(mediaSession);
+    } else {
+      return nothing;
+    }
+  };
+};
 
 exports.queueTrackImpl = function(unit, mediaSession, queueItem) {
   return function(onError, onSuccess) {
@@ -87,4 +89,10 @@ exports.playTrackImpl = function(unit, castSession, queueItem) {
       console.error('TODO: How to mplement cancellation?');
     };
   };
-}
+};
+
+exports.getQueueItems = function(mediaSession) {
+  return function() {
+    return mediaSession.items;
+  };
+};
