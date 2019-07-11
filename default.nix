@@ -35,6 +35,7 @@ in
       emulate
       pkgs.androidenv.androidPkgs_9_0.androidsdk
       pkgs.ant
+      pkgs.gradle
       pkgs.mkdocs
       pkgs.rustup
     ];
