@@ -11,7 +11,7 @@ install:
 script:
   - cargo build
   - cargo test
-  - make -C app
+  - gradle build --project-dir app3
   - mkdocs build
 
 cache:
