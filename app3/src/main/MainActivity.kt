@@ -4,15 +4,14 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.widget.TextView;
 
-public class MainActivity extends Activity
-{
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
+class MainActivity : Activity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState);
 
-        TextView label = new TextView(this);
+        val label = TextView(this);
         label.setText("Mindec");
 
         setContentView(label);
     }
 }
+

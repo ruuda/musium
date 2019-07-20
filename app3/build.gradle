@@ -18,6 +18,13 @@ android {
     versionName "0.0.0"
     applicationId "nl.ruuda.mindec"
   }
+
+  // Use a less deeply nested source tree than the overly verbose Java default;
+  // just put everything in src/main.
+  sourceSets {
+    main.java.srcDirs += 'src/main'
+    test.java.srcDirs += 'src/test'
+  }
 }
 
 ext.anko_version = '0.10.8'
