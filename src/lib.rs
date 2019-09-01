@@ -638,7 +638,7 @@ fn normalize_words(title: &str, dest: &mut Vec<String>) {
     // is unlikely to contain a lot of information about the title. (Deadmau5
     // can go and use some normal titles next time.) We remove accents to make
     // searching easier without having to type the exact accent.
-    let drop = "“”‘’'\"()[]«»,❦\u{300}\u{301}\u{302}\u{303}\u{307}\u{308}\u{327}";
+    let drop = "“”‘’'\"()[]«»,❦\u{300}\u{301}\u{302}\u{303}\u{304}\u{307}\u{308}\u{327}";
     let keep = "$€#&=*%∆";
 
     // Cut words at the following punctuation characters, but still include them
