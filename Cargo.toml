@@ -19,6 +19,12 @@ rev = "f3cd5ddaf7ffd56edfa4a218a924a776d4792bdd"
 [dev-dependencies]
 criterion = "0.2"
 
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
 [[bench]]
 name = "main"
 harness = false
