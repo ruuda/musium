@@ -352,6 +352,7 @@ dependencies = [
  "crossbeam",
  "libc",
  "nix",
+ "noblit",
  "serde_json",
  "sqlite",
  "sqlite3-sys",
@@ -373,6 +374,11 @@ dependencies = [
  "libc",
  "void",
 ]
+
+[[package]]
+name = "noblit"
+version = "0.0.0"
+source = "git+https://github.com/ruuda/noblit?rev=4cca4a109042eccb19e50627033e2689a03a5823#4cca4a109042eccb19e50627033e2689a03a5823"
 
 [[package]]
 name = "num-integer"

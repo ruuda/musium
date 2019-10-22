@@ -27,6 +27,10 @@ rev = "1f868774a250f5937ae70c868d77d1b1479f1831"
 version = "0.12.0"
 default-features = false
 
+[dependencies.noblit]
+git = "https://github.com/ruuda/noblit"
+rev = "4cca4a109042eccb19e50627033e2689a03a5823"
+
 [dev-dependencies]
 criterion = "0.2"
 

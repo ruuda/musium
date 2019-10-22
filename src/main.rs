@@ -889,6 +889,10 @@ fn main() {
             let index = make_index(&config.library_path);
             match_listens(&index, in_path, out_path).unwrap();
         }
+        "noblit" => {
+            let index = make_index(&config.library_path);
+            // TODO: Insert into Noblit DB.
+        }
         _ => {
             print_usage();
             process::exit(1);
