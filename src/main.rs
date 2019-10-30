@@ -7,6 +7,7 @@
 
 extern crate claxon;
 extern crate musium;
+extern crate noblit;
 extern crate serde_json;
 extern crate tiny_http;
 extern crate url;
@@ -824,6 +825,39 @@ fn match_listens(
     Ok(())
 }
 
+fn build_noblit_db(index: &MemoryMetaIndex) {
+    use noblit::database::{Database, self};
+    use noblit::datom::{Datom, Value};
+    use noblit::memory_store::{MemoryStore, MemoryPool};
+    use noblit::query::{Query, QueryMut, QueryAttribute, QueryValue};
+    use noblit::query_plan::{Evaluator, QueryPlan};
+    use noblit::store::{PageSize4096};
+
+    type MemoryStore4096 = MemoryStore<PageSize4096>;
+    type QueryEngine<'a> = database::QueryEngine<'a, MemoryStore4096, MemoryPool>;
+
+    let store: MemoryStore4096 = MemoryStore::new();
+    let pool = MemoryPool::new();
+    let mut db = Database::new(store, pool).unwrap();
+
+
+    // Insert a bit of test data: a new attribute "level" in transaction 0,
+    // and a few entities with different levels in transaction 1.
+    let db_attr_name = db.builtins.attribute_db_attribute_name;
+    let db_attr_type = db.builtins.attribute_db_attribute_type;
+    let db_attr_unique = db.builtins.attribute_db_attribute_unique;
+    let db_attr_many = db.builtins.attribute_db_attribute_many;
+    let db_type_uint64 = db.builtins.entity_db_type_uint64;
+    let db_type_string = db.builtins.entity_db_type_string;
+
+    let mut datoms = Vec::new();
+    let t0 = db.create_transaction(&mut datoms);
+    let eid_level = db.create_entity(&mut datoms, db_attr_name, Value::from_str_inline("level"), t0);
+    datoms.push(Datom::assert(eid_level, db_attr_type, Value::from_eid(db_type_uint64), t0));
+    datoms.push(Datom::assert(eid_level, db_attr_unique, Value::from_bool(false), t0));
+    datoms.push(Datom::assert(eid_level, db_attr_many, Value::from_bool(false), t0));
+}
+
 fn print_usage() {
     println!("Usage:\n");
     println!("  musium serve musium.conf");
@@ -891,7 +925,7 @@ fn main() {
         }
         "noblit" => {
             let index = make_index(&config.library_path);
-            // TODO: Insert into Noblit DB.
+            build_noblit_db(&index);
         }
         _ => {
             print_usage();
