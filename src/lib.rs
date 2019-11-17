@@ -18,7 +18,6 @@ mod flat_tree; // TODO: Rename.
 
 pub mod net;
 
-use std::ascii::AsciiExt;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::collections::btree_map;
 use std::fmt;
@@ -1204,28 +1203,36 @@ impl MemoryMetaIndex {
             for progress in rx_progress {
                 match progress {
                     Progress::Issue(issue) => {
-                        if printed_count { write!(out, "\r"); }
-                        writeln!(out, "{}\n", issue);
+                        if printed_count { write!(out, "\r")?; }
+                        writeln!(out, "{}\n", issue)?;
                         printed_count = false;
                     }
                     Progress::Indexed(n) => {
                         count += n;
-                        if printed_count { write!(out, "\r"); }
-                        write!(out, "{} tracks indexed", count);
-                        out.flush().unwrap();
+                        if printed_count { write!(out, "\r")?; }
+                        write!(out, "{} tracks indexed", count)?;
+                        out.flush()?;
                         printed_count = true;
                     }
                 }
             }
-            if printed_count { writeln!(out, ""); }
-        });
+            if printed_count { writeln!(out, "").unwrap(); }
+
+            // We return `Ok` here so the return type of the scope closure is
+            // `io::Result`, which allows using `?` above; that's a bit nicer
+            // than unwrapping everywhere. We do unwrap the result below though,
+            // because `out` is likely stdout, so printing a nice error would
+            // fail anyway.
+            let result: io::Result<()> = Ok(());
+            result
+        }).unwrap();
 
         let mut issues = Vec::new();
         let memory_index = MemoryMetaIndex::new(&builders, &mut issues);
 
         // Report issues that resulted from merging.
         for issue in &issues {
-            writeln!(out, "{}\n", issue);
+            writeln!(out, "{}\n", issue).unwrap();
         }
 
         Ok(memory_index)

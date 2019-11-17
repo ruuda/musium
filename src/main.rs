@@ -323,12 +323,12 @@ fn make_index(dir: &str) -> MemoryMetaIndex {
             // instant, but indexing tends to happen with cold caches.
             k += 1;
             if k % 64 == 0 {
-                write!(&mut lock, "\r{} files discovered", k);
+                write!(&mut lock, "\r{} files discovered", k).unwrap();
                 lock.flush().unwrap();
             }
             paths.push(p);
         }
-        writeln!(&mut lock, "\r{} files discovered", k);
+        writeln!(&mut lock, "\r{} files discovered", k).unwrap();
 
         index = mindec::MemoryMetaIndex::from_paths(paths.iter(), &mut lock);
     };
@@ -380,7 +380,7 @@ fn generate_thumbnail(cache_dir: &str, album_id: AlbumId, filename: &str) -> cla
             .expect("Failed to spawn Imagemagick's 'convert'.");
         {
             let mut stdin = convert.stdin.as_mut().expect("Failed to open stdin.");
-            stdin.write_all(cover.data());
+            stdin.write_all(cover.data()).unwrap();
         }
         // TODO: Use a custom error type, remove all `expect()`s.
         convert.wait().expect("Failed to run Imagemagick's 'convert'.");
