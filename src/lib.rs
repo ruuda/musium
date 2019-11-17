@@ -1194,7 +1194,7 @@ impl MemoryMetaIndex {
         crossbeam::scope(|scope| {
             for builder in builders.iter_mut() {
                 let mtx = &mutex;
-                scope.spawn(move || MemoryMetaIndex::process(mtx, builder));
+                scope.spawn(move |_| MemoryMetaIndex::process(mtx, builder));
             }
 
             // Print issues live as indexing happens.
@@ -1225,7 +1225,7 @@ impl MemoryMetaIndex {
             // fail anyway.
             let result: io::Result<()> = Ok(());
             result
-        }).unwrap();
+        }).unwrap().unwrap();
 
         let mut issues = Vec::new();
         let memory_index = MemoryMetaIndex::new(&builders, &mut issues);
