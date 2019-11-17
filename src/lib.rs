@@ -1327,8 +1327,8 @@ impl MetaIndex for MemoryMetaIndex {
 
 #[cfg(test)]
 mod tests {
-    use super::{Date, MetaIndex, MemoryMetaIndex};
-    use super::{parse_date, parse_uuid};
+    use super::{Date};
+    use super::{parse_date};
 
     #[test]
     fn parse_date_parses_year() {
