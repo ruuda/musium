@@ -439,6 +439,66 @@ impl StringDeduper {
     pub fn get(&self, index: u32) -> &str {
         &self.strings[index as usize]
     }
+
+    /// Replace most straigt quotes (') in strings with typographer’s quotes (‘ and ’).
+    ///
+    /// Although some tags use typographer’s quotes, most do not, also on
+    /// Musicbrainz. But the typographer’s quotes look nicer, especially in Work
+    /// Sans, which is used for Mindec’s library browser. So apply a heuristic
+    /// to replace most straigh quotes with curly ones.
+    ///
+    /// This is a heuristic, it is not perfect. In particular, this function
+    /// mistakes apostrophes before a word, for opening quotes. The tags must be
+    /// edited to sidestep this shortcoming.
+    pub fn upgrade_quotes(&mut self) {
+        for s in self.strings.iter_mut() {
+            // NOTE: We could use memchr for this if it turns out to be a
+            // bottleneck.
+            let mut from = 0;
+            while let Some(off) = &s[from..].find("'") {
+                let i = from + off;
+
+                let before = if i > 0 { s.as_bytes()[i - 1] } else { b' ' };
+                let after = if i < s.len() - 1 { s.as_bytes()[i + 1] } else { b' ' };
+
+                let after_word = after == b' ' || after == b',' || after == b')';
+                let after_letter = before.is_ascii_alphabetic();
+                let after_digit = before.is_ascii_digit();
+                let before_word = before == b' ';
+                let before_letter = after.is_ascii_alphabetic();
+                let before_digit = after.is_ascii_digit();
+
+                let replacement = match () {
+                    // Contractions like n’t, names like O’Neil.
+                    _ if after_letter && before_letter => Some("’"),
+                    // Abbreviations like dreamin’.
+                    _ if after_letter && after_word => Some("’"),
+                    // Usually years or other numbers, like 80’s or 5’s.
+                    _ if after_digit && before_letter => Some("’"),
+                    // Usually years, like ’93.
+                    _ if before_word && before_digit => Some("’"),
+                    // Often opening quote, but it can also be a contraction,
+                    // like ’cause, ’em, or ’til, and then this gets it wrong
+                    // ... To remove all doubt, your tags.
+                    _ if before_word && before_letter => Some("‘"),
+                    // What remains in my collection are things like contractions
+                    // in non-ascii words (e.g. C’était), and quotes after
+                    // numbers, which I think stands for a length in feet.
+                    // Non-ascii letters are difficult to detect, and for the
+                    // numbers, the straight quote is appropriate, so we'll
+                    // leave it at this.
+                    _ => None
+                };
+
+                if let Some(r) = replacement {
+                    s.replace_range(i..i + 1, r);
+                    from = i + r.len();
+                } else {
+                    from = i + "'".len();
+                }
+            }
+        }
+    }
 }
 
 /// Return an issue if the two albums are not equal.
@@ -1119,6 +1179,8 @@ impl MemoryMetaIndex {
         //println!("{} files indexed.", filenames.len());
         //println!("{} strings, {} tracks, {} albums, {} artists.",
         //         strings.strings.len(), tracks.len(), albums.len(), artists.len());
+
+        strings.upgrade_quotes();
 
         MemoryMetaIndex {
             artist_bookmarks: Bookmarks::new(artists.iter().map(|p| (p.0).0)),
