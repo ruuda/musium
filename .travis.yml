@@ -4,9 +4,13 @@ language: nix
 notifications:
   email: false
 
-install:
+before_install:
   # Make the pinned build environment available on the PATH.
   - export PATH=$(nix-build --no-out-link)/bin:$PATH
+
+install:
+  # Trigger Rustup to download and install the Rust toolchain.
+  - cargo --version
 
 script:
   - cargo build
