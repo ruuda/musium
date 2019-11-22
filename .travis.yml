@@ -4,6 +4,12 @@ language: nix
 notifications:
   email: false
 
+cache:
+  directories:
+    - $TRAVIS_HOME/.cargo/
+    - target
+    - app/.psc-package
+
 before_install:
   # Make the pinned build environment available on the PATH.
   - export PATH=$(nix-build --no-out-link)/bin:$PATH
@@ -17,13 +23,6 @@ script:
   - cargo test
   - make -C app
   - mkdocs build
-
-cache:
-  directories:
-    - $TRAVIS_HOME/.cargo/
-    - $TRAVIS_HOME/.rustup/
-    - target
-    - app/.psc-package
 
 before_cache:
   - rm -fr "$TRAVIS_HOME/.cargo/registry/src"
