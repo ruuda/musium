@@ -246,8 +246,17 @@ impl MetaServer {
         Box::new(futures::future::ok(response))
     }
 
-    fn handle_search(&self, _request: &Request) -> BoxFuture {
-        let response = Response::new().with_body("Search");
+    fn handle_search(&self, request: &Request) -> BoxFuture {
+        let query = match request.query() {
+            Some(q) if q.starts_with("q=") => &q[2..],
+            _ => return self.handle_bad_request("Invalid search query."),
+        };
+        let body = query.to_string();
+        let response = Response::new()
+            .with_header(AccessControlAllowOrigin::Any)
+            .with_header(ContentType::json())
+            .with_header(ContentLength(body.len() as u64))
+            .with_body(body);
         Box::new(futures::future::ok(response))
     }
 }
