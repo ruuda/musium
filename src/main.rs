@@ -251,15 +251,30 @@ impl MetaServer {
             Some(q) if q.starts_with("q=") => &q[2..],
             _ => return self.handle_bad_request("Invalid search query."),
         };
+        // TODO: Url-decode the query part.
+
         let mut words = Vec::new();
         mindec::normalize_words(query, &mut words);
 
-        let body = query.to_string();
+        let mut artists = Vec::new();
+        let mut albums = Vec::new();
+        let mut tracks = Vec::new();
+
+        for word in words {
+            // TODO: Take intersection of word results, instead of append.
+            self.index.search_artist(&word, &mut artists);
+            self.index.search_album(&word, &mut albums);
+            self.index.search_track(&word, &mut tracks);
+        }
+
+        let buffer = Vec::new();
+        let mut w = io::Cursor::new(buffer);
+        self.index.write_search_results_json(&mut w, &artists, &albums, &tracks).unwrap();
+
         let response = Response::new()
             .with_header(AccessControlAllowOrigin::Any)
             .with_header(ContentType::json())
-            .with_header(ContentLength(body.len() as u64))
-            .with_body(body);
+            .with_body(w.into_inner());
         Box::new(futures::future::ok(response))
     }
 }

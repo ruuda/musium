@@ -214,6 +214,32 @@ pub trait MetaIndex {
     /// Look up an artist by id.
     fn get_artist(&self, ArtistId) -> Option<&Artist>;
 
+    /// Search for artists where the word occurs in the name.
+    ///
+    /// The results are guaranteed to be sorted on ascending artist id.
+    /// TODO: Would be nice to have one or more slices of ids (one for each
+    /// prefix).
+    fn search_artist(&self, word: &str, into: &mut Vec<ArtistId>);
+
+    /// Search for albums where the word occurs in the title.
+    ///
+    /// The results are guaranteed to be sorted on ascending album id.
+    /// TODO: Would be nice to have one or more slices of ids (one for each
+    /// prefix).
+    fn search_album(&self, word: &str, into: &mut Vec<AlbumId>);
+
+    /// Search for tracks where the word occurs in the title track artist.
+    ///
+    /// A word in the track artist will only match on words that are not also
+    /// part of the album artist. That is, this search will not turn up all
+    /// tracks by an artist, only those for which `search_album` would not
+    /// already find the entire album.
+    ///
+    /// The results are guaranteed to be sorted on ascending album id.
+    /// TODO: Would be nice to have one or more slices of ids (one for each
+    /// prefix).
+    fn search_track(&self, word: &str, into: &mut Vec<TrackId>);
+
     /// Write a json representation of the album list to the writer.
     fn write_albums_json<W: Write>(&self, mut w: W) -> io::Result<()> {
         write!(w, "[")?;
@@ -265,6 +291,66 @@ pub trait MetaIndex {
             first = false;
         }
         write!(w, "]}}")
+    }
+
+    fn write_search_results_json<W: Write>(
+        &self,
+        mut w: W,
+        artists: &[ArtistId],
+        albums: &[AlbumId],
+        tracks: &[TrackId],
+    ) -> io::Result<()> {
+        write!(w, r#"{{"artists":["#)?;
+        let mut first = true;
+        for &aid in artists {
+            if !first { write!(w, ",")?; }
+            self.write_search_artist_json(&mut w, aid)?;
+            first = false;
+        }
+        write!(w, r#"],"albums":["#)?;
+        let mut first = true;
+        for &aid in albums {
+            if !first { write!(w, ",")?; }
+            self.write_search_album_json(&mut w, aid)?;
+            first = false;
+        }
+        write!(w, r#"],"tracks":["#)?;
+        let mut first = true;
+        for &tid in tracks {
+            if !first { write!(w, ",")?; }
+            self.write_search_track_json(&mut w, tid)?;
+            first = false;
+        }
+        write!(w, r#"]}}"#)
+    }
+
+    fn write_search_artist_json<W: Write>(&self, mut w: W, id: ArtistId) -> io::Result<()> {
+        let artist = self.get_artist(id).unwrap();
+        write!(w, r#"{{"id":"{}","name":"#, id)?;
+        serde_json::to_writer(&mut w, self.get_string(artist.name))?;
+        write!(w, r#"}}"#)
+    }
+
+    fn write_search_album_json<W: Write>(&self, mut w: W, id: AlbumId) -> io::Result<()> {
+        let album = self.get_album(id).unwrap();
+        let artist = self.get_artist(album.artist_id).unwrap();
+        write!(w, r#"{{"id":"{}","title":"#, id)?;
+        serde_json::to_writer(&mut w, self.get_string(album.title))?;
+        write!(w, r#","artist":"#)?;
+        serde_json::to_writer(&mut w, self.get_string(artist.name))?;
+        write!(w, r#"}}"#)
+    }
+
+    fn write_search_track_json<W: Write>(&self, mut w: W, id: TrackId) -> io::Result<()> {
+        let track = self.get_track(id).unwrap();
+        let album = self.get_album(track.album_id).unwrap();
+        write!(w, r#"{{"id":"{}","title":"#, id)?;
+        serde_json::to_writer(&mut w, self.get_string(track.title))?;
+        write!(w, r#","album":"#)?;
+        serde_json::to_writer(&mut w, self.get_string(album.title))?;
+        write!(w, r#","artist":"#)?;
+        serde_json::to_writer(&mut w, self.get_string(track.artist))?;
+        write!(w, r#"}}"#)
     }
 }
 
@@ -1054,6 +1140,12 @@ pub struct MemoryMetaIndex {
     track_bookmarks: Bookmarks,
     strings: Vec<String>,
     filenames: Vec<String>,
+
+    // TODO: Use an optimized data structure to represent those.
+    words_track_title: BTreeSet<(String, TrackId)>,
+    words_album_title: BTreeSet<(String, AlbumId)>,
+    words_album_artist: BTreeSet<(String, ArtistId)>,
+    words_track_artist: BTreeSet<(String, TrackId)>,
 }
 
 /// Invokes `process` for all elements in the builder, in sorted order.
@@ -1112,6 +1204,10 @@ impl MemoryMetaIndex {
         let mut tracks: Vec<(TrackId, Track)> = Vec::new();
         let mut strings = StringDeduper::new();
         let mut filenames = Vec::new();
+        let mut words_track_title = BTreeSet::new();
+        let mut words_album_title = BTreeSet::new();
+        let mut words_album_artist = BTreeSet::new();
+        let mut words_track_artist = BTreeSet::new();
 
         for_each_sorted(builders, |b| b.tracks.iter(), |i, id, mut track| {
             // Give the track the final stringrefs, into the merged arrays.
@@ -1176,6 +1272,13 @@ impl MemoryMetaIndex {
             artists.push((id, artist));
         });
 
+        for builder in builders {
+            words_track_title.extend(builder.words_track_title.iter().cloned());
+            words_album_title.extend(builder.words_album_title.iter().cloned());
+            words_album_artist.extend(builder.words_album_artist.iter().cloned());
+            words_track_artist.extend(builder.words_track_artist.iter().cloned());
+        }
+
         //println!("{} files indexed.", filenames.len());
         //println!("{} strings, {} tracks, {} albums, {} artists.",
         //         strings.strings.len(), tracks.len(), albums.len(), artists.len());
@@ -1191,6 +1294,10 @@ impl MemoryMetaIndex {
             tracks: tracks,
             strings: strings.into_vec(),
             filenames: filenames,
+            words_track_title: words_track_title,
+            words_album_title: words_album_title,
+            words_album_artist: words_album_artist,
+            words_track_artist: words_track_artist,
         }
     }
 
@@ -1384,6 +1491,42 @@ impl MetaIndex for MemoryMetaIndex {
             .ok()
             // TODO: Remove bounds check.
             .map(|idx| &slice[idx].1)
+    }
+
+    fn search_artist(&self, word: &str, into: &mut Vec<ArtistId>) {
+        // TODO: This is very inefficient, switch to a good data structure for
+        // lookups.
+        let min = (word.to_string(), ArtistId(u64::MIN));
+        let max = (word.to_string(), ArtistId(u64::MAX));
+        for (_word, id) in self.words_album_artist.range(min..max) {
+            into.push(*id);
+        }
+    }
+
+    fn search_album(&self, word: &str, into: &mut Vec<AlbumId>) {
+        // TODO: This is very inefficient, switch to a good data structure for
+        // lookups.
+        let min = (word.to_string(), AlbumId(u64::MIN));
+        let max = (word.to_string(), AlbumId(u64::MAX));
+        for (_word, id) in self.words_album_title.range(min..max) {
+            into.push(*id);
+        }
+    }
+
+    fn search_track(&self, word: &str, into: &mut Vec<TrackId>) {
+        // TODO: This is very inefficient, switch to a good data structure for
+        // lookups.
+        let min = (word.to_string(), TrackId(u64::MIN));
+        let max = (word.to_string(), TrackId(u64::MAX));
+        for (_word, id) in self.words_track_title.range(min..max) {
+            into.push(*id);
+        }
+        let min = (word.to_string(), TrackId(u64::MIN));
+        let max = (word.to_string(), TrackId(u64::MAX));
+        for (_word, id) in self.words_track_artist.range(min..max) {
+            into.push(*id);
+        }
+        into.sort();
     }
 }
 
