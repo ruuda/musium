@@ -15,7 +15,7 @@
 // So what are the options? A binary search would need 12 or 13 = log2(8000)
 // lookups to locate a word, and if these are all behind a pointer, that is 24
 // cache misses (12 for the binary search random indexing; 12 for the pointer
-// chase to sthe string). Note that the time to search depends on the number
+// chase to the string). Note that the time to search depends on the number
 // words in the index, not on the size of the query word. (Lexicographic
 // comparison of the words is practically free, because the strings will fit in
 // a cache line, even though in theory the comparison takes time proportional to

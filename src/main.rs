@@ -251,6 +251,9 @@ impl MetaServer {
             Some(q) if q.starts_with("q=") => &q[2..],
             _ => return self.handle_bad_request("Invalid search query."),
         };
+        let mut words = Vec::new();
+        mindec::normalize_words(query, &mut words);
+
         let body = query.to_string();
         let response = Response::new()
             .with_header(AccessControlAllowOrigin::Any)

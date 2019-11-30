@@ -687,7 +687,7 @@ fn push_word(dest: &mut Vec<String>, word: &mut String) {
 /// things that have the same semantic meaning, such as replacing superscripts
 /// with normal digits. Finally (not part of the KD normalization), everything
 /// is lowercased, and accents and some punctuation are removed.
-fn normalize_words(title: &str, dest: &mut Vec<String>) {
+pub fn normalize_words(title: &str, dest: &mut Vec<String>) {
     // We assume that in the majority of the cases, the transformations
     // below do not change the number of bytes.
     let mut word = String::new();
