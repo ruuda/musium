@@ -31,7 +31,12 @@ buildTree n build xs =
       $ Array.range 0 (Array.length xs / n)
 
 renderAlbumList :: Array Album -> Html Unit
-renderAlbumList albums =
+renderAlbumList albums = do
+  Html.div $ do
+    Html.setId "search"
+    Html.input "search" $ do
+      Html.setId "search-box"
+
   Html.div $
     Html.ul $ do
       Html.setId "album-list"

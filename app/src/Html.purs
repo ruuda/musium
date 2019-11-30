@@ -11,6 +11,7 @@ module Html
   , appendTo
   , div
   , img
+  , input
   , li
   , node
   , onClick
@@ -75,3 +76,9 @@ img src alt = ReaderT $ \container -> do
   Dom.setAttribute "src" src self
   Dom.setAttribute "alt" alt self
   Dom.appendChild self container
+
+input :: forall a. String -> Html a -> Html a
+input placeholder (ReaderT children) =
+  node "input" $ ReaderT $ \self -> do
+    Dom.setAttribute "placeholder" placeholder self
+    children self
