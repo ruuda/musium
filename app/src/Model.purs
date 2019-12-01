@@ -10,13 +10,17 @@ module Model
   , AlbumId (..)
   , Track (..)
   , TrackId (..)
+  , SearchAlbum (..)
+  , SearchResults (..)
+  , SearchTrack (..)
+  , coverUrl
+  , formatDurationSeconds
   , getAlbums
   , getTracks
-  , thumbUrl
-  , coverUrl
-  , trackUrl
-  , formatDurationSeconds
   , originalReleaseYear
+  , search
+  , thumbUrl
+  , trackUrl
   ) where
 
 import Prelude

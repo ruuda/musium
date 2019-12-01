@@ -9,12 +9,16 @@ module View
   ( renderAlbumList
   ) where
 
+import Control.Monad.Reader.Class (ask, local)
 import Data.Array as Array
 import Data.Foldable (traverse_)
+import Effect.Aff (launchAff_)
+import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Prelude
 
 import Model (Album)
+import Model as Model
 import Html (Html)
 import Html as Html
 
@@ -35,13 +39,27 @@ renderAlbumList :: Array Album -> Html Unit
 renderAlbumList albums = do
   Html.div $ do
     Html.setId "search"
-    Html.div $ do
-      Html.setId "search-area"
+    searchBox <- Html.div $ do
+      Html.setId "search-query"
       Html.input "search" $ do
         Html.setId "search-box"
-        Html.onInput $ \input ->
-          Console.log $ "Search: " <> input
+        ask
 
+    resultsBox <- Html.div $ do
+      Html.setId "search-results"
+      Html.ul $ ask
+
+    local (const searchBox) $ do
+      Html.onInput $ \query -> do
+        Console.log $ "Search: " <> query
+        launchAff_ $ do
+          Model.SearchResults result <- Model.search query
+          Console.log $ "Received albums: " <> (show $ Array.length $ result.albums)
+          Console.log $ "Received tracks: " <> (show $ Array.length $ result.tracks)
+          liftEffect $ do
+            Html.appendTo resultsBox $ do
+              traverse_ (\(Model.SearchAlbum album) -> Html.ul $ Html.text album.title) result.albums
+              traverse_ (\(Model.SearchTrack track) -> Html.ul $ Html.text track.title) result.tracks
 
   Html.div $
     Html.ul $ do
