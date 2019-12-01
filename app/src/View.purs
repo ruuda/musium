@@ -57,7 +57,8 @@ renderAlbumList albums = do
           Console.log $ "Received albums: " <> (show $ Array.length $ result.albums)
           Console.log $ "Received tracks: " <> (show $ Array.length $ result.tracks)
           liftEffect $ do
-            Html.appendTo resultsBox $ do
+            Html.withElement resultsBox $ do
+              Html.clear
               traverse_ (\(Model.SearchAlbum album) -> Html.ul $ Html.text album.title) result.albums
               traverse_ (\(Model.SearchTrack track) -> Html.ul $ Html.text track.title) result.tracks
 

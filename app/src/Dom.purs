@@ -13,6 +13,7 @@ module Dom
   , appendText
   , assumeElementById
   , body
+  , clearElement
   , createElement
   , getValue
   , getElementById
@@ -30,6 +31,7 @@ foreign import data Element :: Type
 
 foreign import assumeElementById :: String -> Effect Element
 foreign import body :: Element
+foreign import clearElement :: Element -> Effect Unit
 foreign import createElement :: String -> Effect Element
 foreign import getValue :: Element -> Effect String
 

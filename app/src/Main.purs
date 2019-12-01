@@ -23,4 +23,4 @@ main :: Effect Unit
 main = launchAff_ $ do
   albums <- Model.getAlbums
   Console.log ("Loaded albums: " <> (show $ Array.length albums))
-  liftEffect $ Html.appendTo Dom.body $ View.renderAlbumList albums
+  liftEffect $ Html.withElement Dom.body $ View.renderAlbumList albums

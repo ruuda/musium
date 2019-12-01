@@ -53,11 +53,11 @@ renderAlbum (Album album) =
         let
           doOpen = do
             Var.set isOpenVar true
-            Html.appendTo trackList $ do
+            Html.withElement trackList $ do
               Html.addClass "expanded"
           doClose = do
             Var.set isOpenVar false
-            Html.appendTo trackList $ do
+            Html.withElement trackList $ do
               Html.removeClass "expanded"
 
         loaded <- Var.get isLoadedVar
@@ -72,7 +72,7 @@ renderAlbum (Album album) =
               liftEffect $ do
                 Var.set isLoadedVar true
                 Var.set isOpenVar true
-                Html.appendTo trackList $ do
+                Html.withElement trackList $ do
                   traverse_ (renderTrack $ Album album) tracks
                   Html.addClass "expanded"
 
@@ -100,13 +100,13 @@ renderTrack album (Track track) =
     trackElement <- ask
 
     Html.onClick $ do
-      Html.appendTo trackElement $ Html.addClass "queueing"
+      Html.withElement trackElement $ Html.addClass "queueing"
       launchAff_ $ do
         playTrack album (Track track)
         -- TODO: Remove class after track is no longer in queue.
         -- Also change playing status. Or maybe this is the wrong
         -- place to update this.
-        liftEffect $ Html.appendTo trackElement $ do
+        liftEffect $ Html.withElement trackElement $ do
           Html.addClass "queued"
           Html.removeClass "queueing"
 

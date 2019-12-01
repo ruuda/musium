@@ -19,6 +19,14 @@ exports.appendChildImpl = function(child, container) {
   }
 }
 
+exports.clearElement = function(container) {
+  return function() {
+    while (container.hasChildNodes()) {
+      container.removeChild(container.lastChild);
+    }
+  }
+}
+
 exports.appendTextImpl = function(text, container) {
   return function() {
     container.insertAdjacentText('beforeend', text);

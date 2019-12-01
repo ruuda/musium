@@ -8,7 +8,7 @@
 module Html
   ( Html
   , addClass
-  , appendTo
+  , clear
   , div
   , img
   , input
@@ -21,6 +21,7 @@ module Html
   , span
   , text
   , ul
+  , withElement
   ) where
 
 import Control.Monad.Reader.Trans (ReaderT (..))
@@ -32,8 +33,11 @@ import Prelude
 -- An effect that builds nodes and appends them to the parent.
 type Html a = ReaderT Element Effect a
 
-appendTo :: Element -> Html Unit -> Effect Unit
-appendTo container (ReaderT f) = f container
+withElement :: Element -> Html Unit -> Effect Unit
+withElement container (ReaderT f) = f container
+
+clear :: Html Unit
+clear = ReaderT $ \container -> Dom.clearElement container
 
 node :: forall a. String -> Html a -> Html a
 node tagName (ReaderT children) =
