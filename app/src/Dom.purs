@@ -14,6 +14,7 @@ module Dom
   , assumeElementById
   , body
   , createElement
+  , getValue
   , getElementById
   , removeClass
   , setAttribute
@@ -30,6 +31,7 @@ foreign import data Element :: Type
 foreign import assumeElementById :: String -> Effect Element
 foreign import body :: Element
 foreign import createElement :: String -> Effect Element
+foreign import getValue :: Element -> Effect String
 
 foreign import addClassImpl :: Fn2 String Element (Effect Unit)
 foreign import addEventListenerImpl :: Fn3 String (Effect Unit) Element (Effect Unit)

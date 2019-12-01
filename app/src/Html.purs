@@ -15,6 +15,7 @@ module Html
   , li
   , node
   , onClick
+  , onInput
   , removeClass
   , setId
   , span
@@ -57,6 +58,15 @@ removeClass className = ReaderT $ \container -> Dom.removeClass className contai
 onClick :: Effect Unit -> Html Unit
 onClick callback = ReaderT $ \container ->
   Dom.addEventListener "click" callback container
+
+onInput :: (String -> Effect Unit) -> Html Unit
+onInput callback = ReaderT $ \container ->
+  let
+    getValueAndCall = do
+      value <- Dom.getValue container
+      callback value
+  in
+    Dom.addEventListener "input" getValueAndCall container
 
 div :: forall a. Html a -> Html a
 div children = node "div" children

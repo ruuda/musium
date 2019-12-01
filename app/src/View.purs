@@ -11,6 +11,7 @@ module View
 
 import Data.Array as Array
 import Data.Foldable (traverse_)
+import Effect.Class.Console as Console
 import Prelude
 
 import Model (Album)
@@ -34,8 +35,13 @@ renderAlbumList :: Array Album -> Html Unit
 renderAlbumList albums = do
   Html.div $ do
     Html.setId "search"
-    Html.input "search" $ do
-      Html.setId "search-box"
+    Html.div $ do
+      Html.setId "search-area"
+      Html.input "search" $ do
+        Html.setId "search-box"
+        Html.onInput $ \input ->
+          Console.log $ "Search: " <> input
+
 
   Html.div $
     Html.ul $ do
