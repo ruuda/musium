@@ -93,7 +93,7 @@ a
   cursor: default;
 }
 
-.album img
+.album img, .track img
 {
   width: 3em;
   height: 3em;

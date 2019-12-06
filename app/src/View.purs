@@ -39,7 +39,7 @@ renderSearchAlbum :: SearchAlbum -> Html Unit
 renderSearchAlbum (SearchAlbum album) = do
   Html.li $ do
     Html.addClass "album"
-    -- TODO: Add the img here.
+    Html.img (Model.thumbUrl album.id) (album.title <> " by " <> album.artist)
     Html.div $ do
       Html.addClass "album-header"
       Html.span $ do
@@ -53,6 +53,8 @@ renderSearchTrack :: SearchTrack -> Html Unit
 renderSearchTrack (SearchTrack track) = do
   Html.li $ do
     Html.addClass "track"
+    -- TODO: Turn album rendering into re-usable function.
+    Html.img (Model.thumbUrl track.albumId) track.album
     Html.div $ do
       Html.addClass "track-header"
       Html.span $ do
