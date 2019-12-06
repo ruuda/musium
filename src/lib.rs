@@ -346,7 +346,7 @@ pub trait MetaIndex {
         let album = self.get_album(track.album_id).unwrap();
         write!(w, r#"{{"id":"{}","title":"#, id)?;
         serde_json::to_writer(&mut w, self.get_string(track.title))?;
-        write!(w, r#","album":"#)?;
+        write!(w, r#","album_id":"{}","album":"#, track.album_id)?;
         serde_json::to_writer(&mut w, self.get_string(album.title))?;
         write!(w, r#","artist":"#)?;
         serde_json::to_writer(&mut w, self.get_string(track.artist))?;
