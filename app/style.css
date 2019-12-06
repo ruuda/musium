@@ -239,3 +239,8 @@ a
   width: 100%;
   background: transparent;
 }
+
+#album-list.searching
+{
+  display: none;
+}

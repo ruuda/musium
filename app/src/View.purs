@@ -17,7 +17,7 @@ import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Prelude
 
-import Model (Album)
+import Model (Album, SearchAlbum (..), SearchTrack (..))
 import Model as Model
 import Html (Html)
 import Html as Html
@@ -35,34 +35,67 @@ buildTree n build xs =
       $ map (\i -> traverse_ build $ Array.slice (i * n) ((i + 1) * n) xs)
       $ Array.range 0 (Array.length xs / n)
 
+renderSearchAlbum :: SearchAlbum -> Html Unit
+renderSearchAlbum (SearchAlbum album) = do
+  Html.li $ do
+    Html.addClass "album"
+    -- TODO: Add the img here.
+    Html.div $ do
+      Html.addClass "album-header"
+      Html.span $ do
+        Html.addClass "title"
+        Html.text album.title
+      Html.span $ do
+        Html.addClass "artist"
+        Html.text album.artist
+
+renderSearchTrack :: SearchTrack -> Html Unit
+renderSearchTrack (SearchTrack track) = do
+  Html.li $ do
+    Html.addClass "track"
+    Html.div $ do
+      Html.addClass "track-header"
+      Html.span $ do
+        Html.addClass "title"
+        Html.text track.title
+      Html.span $ do
+        Html.addClass "artist"
+        Html.text track.artist
+
 renderAlbumList :: Array Album -> Html Unit
 renderAlbumList albums = do
-  Html.div $ do
+  searchBox <- Html.div $ do
     Html.setId "search"
-    searchBox <- Html.div $ do
+    Html.div $ do
       Html.setId "search-query"
       Html.input "search" $ do
         Html.setId "search-box"
         ask
 
-    resultsBox <- Html.div $ do
-      Html.setId "search-results"
-      Html.ul $ ask
+  searchResultsList <- Html.ul $ do
+    Html.setId "search-results"
+    ask
 
-    local (const searchBox) $ do
-      Html.onInput $ \query -> do
-        Console.log $ "Search: " <> query
-        launchAff_ $ do
-          Model.SearchResults result <- Model.search query
-          Console.log $ "Received albums: " <> (show $ Array.length $ result.albums)
-          Console.log $ "Received tracks: " <> (show $ Array.length $ result.tracks)
-          liftEffect $ do
-            Html.withElement resultsBox $ do
-              Html.clear
-              traverse_ (\(Model.SearchAlbum album) -> Html.ul $ Html.text album.title) result.albums
-              traverse_ (\(Model.SearchTrack track) -> Html.ul $ Html.text track.title) result.tracks
+  albumList <- Html.ul $ do
+    Html.setId "album-list"
+    buildTree 15 AlbumComponent.renderAlbum albums
+    ask
 
-  Html.div $
-    Html.ul $ do
-      Html.setId "album-list"
-      buildTree 15 AlbumComponent.renderAlbum albums
+  local (const searchBox) $ do
+    Html.onInput $ \query -> do
+      -- Fire off the search query and render it when it comes in.
+      launchAff_ $ do
+        Model.SearchResults result <- Model.search query
+        Console.log $ "Received albums: " <> (show $ Array.length $ result.albums)
+        Console.log $ "Received tracks: " <> (show $ Array.length $ result.tracks)
+        liftEffect $ do
+          Html.withElement searchResultsList $ do
+            Html.clear
+            traverse_ renderSearchAlbum result.albums
+            traverse_ renderSearchTrack result.tracks
+
+      -- Collapse the album list while searching.
+      Html.withElement albumList $
+        case query of
+          "" -> Html.removeClass "searching"
+          _ -> Html.addClass "searching"
