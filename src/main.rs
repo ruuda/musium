@@ -10,6 +10,7 @@ extern crate futures;
 extern crate hyper;
 extern crate mindec;
 extern crate serde_json;
+extern crate url;
 extern crate walkdir;
 
 use std::env;
@@ -247,14 +248,23 @@ impl MetaServer {
     }
 
     fn handle_search(&self, request: &Request) -> BoxFuture {
-        let query = match request.query() {
-            Some(q) if q.starts_with("q=") => &q[2..],
-            _ => return self.handle_bad_request("Invalid search query."),
+        let raw_query = match request.query() {
+            Some(q) => q.as_ref(),
+            None => "",
         };
-        // TODO: Url-decode the query part.
+        let mut opt_query = None;
+        for (k, v) in url::form_urlencoded::parse(raw_query.as_bytes()) {
+            if k == "q" {
+                opt_query = Some(v);
+            }
+        };
+        let query = match opt_query {
+            Some(q) => q,
+            None => return self.handle_bad_request("Missing search query."),
+        };
 
         let mut words = Vec::new();
-        mindec::normalize_words(query, &mut words);
+        mindec::normalize_words(query.as_ref(), &mut words);
 
         let mut artists = Vec::new();
         let mut albums = Vec::new();
