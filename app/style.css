@@ -93,39 +93,47 @@ a
   cursor: default;
 }
 
-.album img, .track img
+.album-header
+{
+  display: grid;
+  padding-left: 1em;
+  padding-right: 1em;
+  grid-column-gap: 0.5em;
+  grid-template-columns: 3em 1fr;
+  grid-template-rows: 1.5em 1.5em;
+  grid-template-areas:
+    "thumb title"
+    "thumb subtitle";
+}
+
+img.thumb
 {
   width: 3em;
   height: 3em;
-  padding-left: 1em;
-  float: left;
-}
-
-.album-header, .track-header
-{
-  margin-left: 4.5rem;
-  margin-right: 1rem;
+  grid-area: thumb;
 }
 
 .track-list
 {
   margin-top: 1em;
-  padding-top: 0.5em;
-  padding-bottom: 1em;
+  padding: 1em;
   background-color: #fdfdfd;
   border-top: 0.8pt solid #eee;
   border-bottom: 0.8pt solid #eee;
   display: none;
+  grid-gap: 0.5em;
+  grid-template-columns: 3em 1fr;
 }
 
 .track-list.expanded
 {
-  display: block;
+  display: grid;
 }
 
 .track
 {
   padding-top: 0.5em;
+  display: contents;
 }
 
 .title, .artist, .album-artist
@@ -149,10 +157,8 @@ a
 
 .track-duration
 {
-  float: left;
-  padding-left: 1em;
   text-align: right;
-  width: 2.75em;
+  padding-right: 0.25em;
 }
 
 .track-number

@@ -84,12 +84,14 @@ ul children = node "ul" children
 li :: forall a. Html a -> Html a
 li children = node "li" children
 
-img :: String -> String -> Html Unit
-img src alt = ReaderT $ \container -> do
+img :: forall a. String -> String -> Html a -> Html a
+img src alt (ReaderT children) = ReaderT $ \container -> do
   self <- Dom.createElement "img"
   Dom.setAttribute "src" src self
   Dom.setAttribute "alt" alt self
+  result <- children self
   Dom.appendChild self container
+  pure result
 
 input :: forall a. String -> Html a -> Html a
 input placeholder (ReaderT children) =

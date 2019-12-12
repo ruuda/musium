@@ -30,15 +30,15 @@ renderAlbum (Album album) =
   Html.li $ do
     Html.addClass "album"
     header <- Html.div $ do
-      Html.img (Model.thumbUrl album.id) (album.title <> " by " <> album.artist)
-      Html.div $ do
-        Html.addClass "album-header"
-        Html.span $ do
-          Html.addClass "title"
-          Html.text album.title
-        Html.span $ do
-          Html.addClass "artist"
-          Html.text album.artist
+      Html.addClass "album-header"
+      Html.img (Model.thumbUrl album.id) (album.title <> " by " <> album.artist) $ do
+        Html.addClass "thumb"
+      Html.span $ do
+        Html.addClass "title"
+        Html.text album.title
+      Html.span $ do
+        Html.addClass "artist"
+        Html.text album.artist
       ask
 
     trackList <- Html.ul $ do
