@@ -17,10 +17,11 @@ import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Prelude
 
-import Model (Album, SearchAlbum (..), SearchTrack (..))
-import Model as Model
+import Dom as Dom
 import Html (Html)
 import Html as Html
+import Model (Album, SearchAlbum (..), SearchTrack (..))
+import Model as Model
 
 import AlbumComponent as AlbumComponent
 
@@ -64,17 +65,19 @@ renderSearchTrack (SearchTrack track) = do
 
 renderAlbumList :: Array Album -> Html Unit
 renderAlbumList albums = do
-  searchBox <- Html.div $ do
+  { searchBox, searchResultsList } <- Html.div $ do
     Html.setId "search"
-    Html.div $ do
+    searchBox <- Html.div $ do
       Html.setId "search-query"
       Html.input "search" $ do
         Html.setId "search-box"
         ask
 
-  searchResultsList <- Html.ul $ do
-    Html.setId "search-results"
-    ask
+    searchResultsList <- Html.ul $ do
+      Html.setId "search-results"
+      ask
+
+    pure { searchBox, searchResultsList }
 
   albumList <- Html.ul $ do
     Html.setId "album-list"
@@ -95,7 +98,7 @@ renderAlbumList albums = do
             traverse_ renderSearchTrack result.tracks
 
       -- Collapse the album list while searching.
-      Html.withElement albumList $
+      Html.withElement Dom.body $
         case query of
-          "" -> Html.removeClass "searching"
-          _ -> Html.addClass "searching"
+        "" -> do Html.removeClass "searching"
+        _  -> do Html.addClass "searching"
