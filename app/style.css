@@ -76,19 +76,19 @@ ul
   list-style-type: none;
 }
 
-#album-list
+#album-list, #search-results
 {
   padding-bottom: 1em;
 }
 
 .album-container
 {
-  padding-top: 1em;
   cursor: default;
 }
 
-.album
+.album, .track
 {
+  padding-top: 1em;
   display: grid;
   padding-left: 1em;
   padding-right: 1em;
@@ -96,8 +96,8 @@ ul
   grid-template-columns: 3em 1fr;
   grid-template-rows: 1.5em 1.5em;
   grid-template-areas:
-    "thumb title"
-    "thumb artist"
+    "number   title"
+    "duration artist"
   ;
 }
 
@@ -105,7 +105,6 @@ img.thumb
 {
   width: 3em;
   height: 3em;
-  grid-area: thumb;
 }
 
 .title, .artist
@@ -126,8 +125,8 @@ img.thumb
 .track-list
 {
   margin-top: 1em;
-  padding: 1em;
-  padding-bottom: 0.5em;
+  padding-top: 0.5em;
+  padding-bottom: 1em;
   background-color: #fdfdfd;
   border-top: 0.8pt solid #eee;
   border-bottom: 0.8pt solid #eee;
@@ -139,17 +138,9 @@ img.thumb
   display: block;
 }
 
-.track
+.track-list .track
 {
-  display: grid;
-  margin-bottom: 0.5em;
-  grid-column-gap: 0.5em;
-  grid-template-columns: 3em 1fr;
-  grid-template-rows: 1.5em 1.5em;
-  grid-template-areas:
-    "number   title"
-    "duration artist"
-  ;
+  padding-top: 0.5em;
 }
 
 .duration, .track-number
