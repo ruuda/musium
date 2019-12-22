@@ -371,7 +371,12 @@ fn make_index(dir: &str) -> MemoryMetaIndex {
     };
 
     let index = index.expect("Failed to build index.");
-    println!("Index has {} tracks.", index.len());
+    println!(
+        "Index has {} artists, {} albums, and {} tracks.",
+        index.get_artists().len(),
+        index.get_albums().len(),
+        index.len()
+    );
     index
 }
 
