@@ -277,9 +277,17 @@ impl MetaServer {
             self.index.search_track(&word, &mut tracks);
         }
 
+        // Artist search results are not that interesting, instead we show all
+        // albums by matching artists.
+        for &artist_id in &artists {
+            for &(_artist_id, album_id) in self.index.get_albums_by_artist(artist_id) {
+                albums.push(album_id);
+            }
+        }
+
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        self.index.write_search_results_json(&mut w, &artists, &albums, &tracks).unwrap();
+        self.index.write_search_results_json(&mut w, &albums, &tracks).unwrap();
 
         let response = Response::new()
             .with_header(AccessControlAllowOrigin::Any)

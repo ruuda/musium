@@ -304,18 +304,10 @@ pub trait MetaIndex {
     fn write_search_results_json<W: Write>(
         &self,
         mut w: W,
-        artists: &[ArtistId],
         albums: &[AlbumId],
         tracks: &[TrackId],
     ) -> io::Result<()> {
-        write!(w, r#"{{"artists":["#)?;
-        let mut first = true;
-        for &aid in artists {
-            if !first { write!(w, ",")?; }
-            self.write_search_artist_json(&mut w, aid)?;
-            first = false;
-        }
-        write!(w, r#"],"albums":["#)?;
+        write!(w, r#"{{"albums":["#)?;
         let mut first = true;
         for &aid in albums {
             if !first { write!(w, ",")?; }
@@ -330,13 +322,6 @@ pub trait MetaIndex {
             first = false;
         }
         write!(w, r#"]}}"#)
-    }
-
-    fn write_search_artist_json<W: Write>(&self, mut w: W, id: ArtistId) -> io::Result<()> {
-        let artist = self.get_artist(id).unwrap();
-        write!(w, r#"{{"id":"{}","name":"#, id)?;
-        serde_json::to_writer(&mut w, self.get_string(artist.name))?;
-        write!(w, r#"}}"#)
     }
 
     fn write_search_album_json<W: Write>(&self, mut w: W, id: AlbumId) -> io::Result<()> {
@@ -1540,33 +1525,36 @@ impl MetaIndex for MemoryMetaIndex {
     fn get_albums_by_artist(&self, artist_id: ArtistId) -> &[(ArtistId, AlbumId)] {
         // Use the bookmarks to narrow down the range of artists that we need to
         // look though.
-        let candidates = self
+        let mut candidates = self
             .albums_by_artist_bookmarks
             .range(&self.albums_by_artist[..], artist_id.0);
 
-        // Within that slice, do a binary search to locate the start index of the
-        // artist. Likely it would be faster to just do a linear search, until
-        // you get to a few thousand album artists. But I haven't measured, and
-        // therefore my default is to go with the thing that has better
-        // complexity.
-        let begin = match candidates.binary_search_by_key(&artist_id, |pair| pair.0) {
-            Ok(i) => i,
-            Err(i) => i,
-        };
-        let elements = &candidates[begin..];
+        // Within that slice, we do a linear search for the start of the artist.
+        // For a library with ~400 artists like mine, there will only be one or
+        // two artists in the slice anyway, and most artists have few (no more
+        // than a dozen) albums. We could use a binary search for better
+        // complexity, but the one in `slice` is not suitable for this (it does
+        // not return the *first* index with the key, only *a* index), so I'll
+        // go with the easy thing for now.
+        let begin = candidates
+            .iter()
+            .position(|&(elem_artist_id, _album_id)| elem_artist_id == artist_id)
+            .unwrap_or(candidates.len());
+        candidates = &candidates[begin..];
 
         // Then do a linear scan over the albums to find the first albums that
         // does not belong to the artist any more. We could do another binary
         // search to locate the end, but typically artists have few albums, so
         // we go with a predictible memory access pattern here.
-        let end = elements
+        let end = candidates
             .iter()
             .position(|&(elem_artist_id, _album_id)| elem_artist_id != artist_id)
-            .unwrap_or(elements.len());
+            .unwrap_or(candidates.len());
+        candidates = &candidates[..end];
 
         // Only the albums for the desired artist are in this slice, and they
         // are already sorted on ascending release date.
-        &elements[..end]
+        &candidates[..end]
     }
 
     fn search_artist(&self, word: &str, into: &mut Vec<ArtistId>) {
