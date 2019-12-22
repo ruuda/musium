@@ -214,6 +214,14 @@ pub trait MetaIndex {
     /// Look up an artist by id.
     fn get_artist(&self, ArtistId) -> Option<&Artist>;
 
+    /// Return all albums by the given artist.
+    ///
+    /// The albums are sorted by ascending release date.
+    ///
+    /// Includes the artist too, because the associations are stored as a flat
+    /// array of (artist id, album id) pairs.
+    fn get_albums_by_artist(&self, ArtistId) -> &[(ArtistId, AlbumId)];
+
     /// Search for artists where the word occurs in the name.
     ///
     /// The results are guaranteed to be sorted on ascending artist id.
@@ -1135,9 +1143,15 @@ pub struct MemoryMetaIndex {
     artists: Vec<(ArtistId, Artist)>,
     albums: Vec<(AlbumId, Album)>,
     tracks: Vec<(TrackId, Track)>,
+    // Per artist, all albums, ordered by ascending release date.
+    albums_by_artist: Vec<(ArtistId, AlbumId)>,
+
+    // Bookmarks for quick indexing into the above arrays.
     artist_bookmarks: Bookmarks,
     album_bookmarks: Bookmarks,
     track_bookmarks: Bookmarks,
+    albums_by_artist_bookmarks: Bookmarks,
+
     strings: Vec<String>,
     filenames: Vec<String>,
 
@@ -1193,6 +1207,30 @@ fn for_each_sorted<'a, P, I, T, F>(
     for candidate in candidates {
         debug_assert!(candidate.is_none());
     }
+}
+
+/// Build the sorted mapping of artist id to album id.
+///
+/// Entries are sorted by artist id first, so we can use bookmarks and do a
+/// binary search. Albums for a single artist are ordered by ascending release
+/// date.
+fn build_albums_by_artist_index(albums: &[(AlbumId, Album)]) -> Vec<(ArtistId, AlbumId)> {
+    let mut entries_with_date = Vec::with_capacity(albums.len());
+    let mut entries = Vec::with_capacity(albums.len());
+
+    for &(album_id, ref album) in albums {
+        entries_with_date.push((album.artist_id, album_id, album.original_release_date));
+    }
+
+    entries_with_date.sort_by_key(|&(artist_id, album_id, release_date)|
+        (artist_id, release_date, album_id)
+    );
+
+    for (artist_id, album_id, _release_date) in entries_with_date {
+        entries.push((artist_id, album_id));
+    }
+
+    entries
 }
 
 impl MemoryMetaIndex {
@@ -1279,19 +1317,23 @@ impl MemoryMetaIndex {
             words_track_artist.extend(builder.words_track_artist.iter().cloned());
         }
 
-        //println!("{} files indexed.", filenames.len());
-        //println!("{} strings, {} tracks, {} albums, {} artists.",
-        //         strings.strings.len(), tracks.len(), albums.len(), artists.len());
-
         strings.upgrade_quotes();
+
+        // Albums know their artist; build the reverse mapping so we can look up
+        // albums by a given artist. We could build it incrementally and merge
+        // it, but instead of doing that and having to worry about duplicates,
+        // we can just build it once at the end.
+        let albums_by_artist = build_albums_by_artist_index(&albums[..]);
 
         MemoryMetaIndex {
             artist_bookmarks: Bookmarks::new(artists.iter().map(|p| (p.0).0)),
             album_bookmarks: Bookmarks::new(albums.iter().map(|p| (p.0).0)),
             track_bookmarks: Bookmarks::new(tracks.iter().map(|p| (p.0).0)),
+            albums_by_artist_bookmarks: Bookmarks::new(albums_by_artist.iter().map(|p| (p.0).0)),
             artists: artists,
             albums: albums,
             tracks: tracks,
+            albums_by_artist: albums_by_artist,
             strings: strings.into_vec(),
             filenames: filenames,
             words_track_title: words_track_title,
@@ -1450,6 +1492,7 @@ impl MetaIndex for MemoryMetaIndex {
         // if it exists. Otherwise binary search would find the first track
         // after it.
         let tid = get_track_id(id, 0, 0);
+        // TODO: Use bookmarks for this.
         let begin = match self.tracks.binary_search_by_key(&tid, |pair| pair.0) {
             Ok(i) => i,
             Err(i) => i,
@@ -1491,6 +1534,39 @@ impl MetaIndex for MemoryMetaIndex {
             .ok()
             // TODO: Remove bounds check.
             .map(|idx| &slice[idx].1)
+    }
+
+    #[inline]
+    fn get_albums_by_artist(&self, artist_id: ArtistId) -> &[(ArtistId, AlbumId)] {
+        // Use the bookmarks to narrow down the range of artists that we need to
+        // look though.
+        let candidates = self
+            .albums_by_artist_bookmarks
+            .range(&self.albums_by_artist[..], artist_id.0);
+
+        // Within that slice, do a binary search to locate the start index of the
+        // artist. Likely it would be faster to just do a linear search, until
+        // you get to a few thousand album artists. But I haven't measured, and
+        // therefore my default is to go with the thing that has better
+        // complexity.
+        let begin = match candidates.binary_search_by_key(&artist_id, |pair| pair.0) {
+            Ok(i) => i,
+            Err(i) => i,
+        };
+        let elements = &candidates[begin..];
+
+        // Then do a linear scan over the albums to find the first albums that
+        // does not belong to the artist any more. We could do another binary
+        // search to locate the end, but typically artists have few albums, so
+        // we go with a predictible memory access pattern here.
+        let end = elements
+            .iter()
+            .position(|&(elem_artist_id, _album_id)| elem_artist_id != artist_id)
+            .unwrap_or(elements.len());
+
+        // Only the albums for the desired artist are in this slice, and they
+        // are already sorted on ascending release date.
+        &elements[..end]
     }
 
     fn search_artist(&self, word: &str, into: &mut Vec<ArtistId>) {
