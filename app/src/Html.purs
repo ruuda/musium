@@ -18,6 +18,7 @@ module Html
   , onInput
   , removeClass
   , setId
+  , setTitle
   , span
   , text
   , ul
@@ -52,6 +53,9 @@ text value = ReaderT $ \container -> Dom.appendText value container
 
 setId :: String -> Html Unit
 setId id = ReaderT $ \container -> Dom.setId id container
+
+setTitle :: String -> Html Unit
+setTitle title = ReaderT $ \self -> Dom.setAttribute "title" title self
 
 addClass :: String -> Html Unit
 addClass className = ReaderT $ \container -> Dom.addClass className container

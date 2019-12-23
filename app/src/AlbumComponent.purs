@@ -41,7 +41,8 @@ renderAlbum (Album album) =
         Html.addClass "artist"
         Html.text $ album.artist <> " "
         Html.span $ do
-          Html.addClass "year"
+          Html.addClass "date"
+          Html.setTitle album.date
           -- The date is of the form YYYY-MM-DD in ascii, so we can safely take
           -- the first 4 characters to get the year.
           Html.text (CodeUnits.take 4 album.date)
