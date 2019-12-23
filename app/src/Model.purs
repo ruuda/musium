@@ -97,6 +97,7 @@ newtype SearchAlbum = SearchAlbum
   { id :: AlbumId
   , title :: String
   , artist :: String
+  , date :: String
   }
 
 newtype SearchTrack = SearchTrack
@@ -118,7 +119,8 @@ instance decodeJsonSearchAlbum :: DecodeJson SearchAlbum where
     id         <- map AlbumId $ Json.getField obj "id"
     title      <- Json.getField obj "title"
     artist     <- Json.getField obj "artist"
-    pure $ SearchAlbum { id, title, artist }
+    date       <- Json.getField obj "date"
+    pure $ SearchAlbum { id, title, artist, date }
 
 instance decodeJsonSearchTrack :: DecodeJson SearchTrack where
   decodeJson json = do

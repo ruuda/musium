@@ -12,6 +12,7 @@ module View
 import Control.Monad.Reader.Class (ask, local)
 import Data.Array as Array
 import Data.Foldable (traverse_)
+import Data.String.CodeUnits as CodeUnits
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
@@ -36,6 +37,7 @@ buildTree n build xs =
       $ map (\i -> traverse_ build $ Array.slice (i * n) ((i + 1) * n) xs)
       $ Array.range 0 (Array.length xs / n)
 
+-- TODO: Dedeplicate between here and album component.
 renderSearchAlbum :: SearchAlbum -> Html Unit
 renderSearchAlbum (SearchAlbum album) = do
   Html.li $ do
@@ -47,7 +49,13 @@ renderSearchAlbum (SearchAlbum album) = do
       Html.text album.title
     Html.span $ do
       Html.addClass "artist"
-      Html.text album.artist
+      Html.text $ album.artist <> " "
+      Html.span $ do
+        Html.addClass "date"
+        Html.setTitle album.date
+        -- The date is of the form YYYY-MM-DD in ascii, so we can safely take
+        -- the first 4 characters to get the year.
+        Html.text (CodeUnits.take 4 album.date)
 
 renderSearchTrack :: SearchTrack -> Html Unit
 renderSearchTrack (SearchTrack track) = do

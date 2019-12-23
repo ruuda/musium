@@ -331,7 +331,7 @@ pub trait MetaIndex {
         serde_json::to_writer(&mut w, self.get_string(album.title))?;
         write!(w, r#","artist":"#)?;
         serde_json::to_writer(&mut w, self.get_string(artist.name))?;
-        write!(w, r#"}}"#)
+        write!(w, r#","date":"{}"}}"#, album.original_release_date)
     }
 
     fn write_search_track_json<W: Write>(&self, mut w: W, id: TrackId) -> io::Result<()> {
