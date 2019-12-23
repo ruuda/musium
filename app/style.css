@@ -122,6 +122,12 @@ img.thumb
   font-weight: 600;
 }
 
+.year
+{
+  padding-left: 0.2em;
+  color: #ccc;
+}
+
 .track-list
 {
   margin-top: 1em;

@@ -13,6 +13,7 @@ import Control.Monad.Reader.Class (ask, local)
 import Data.Array as Array
 import Data.Foldable (traverse_)
 import Data.Maybe (Maybe (..))
+import Data.String.CodeUnits as CodeUnits
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
@@ -38,7 +39,12 @@ renderAlbum (Album album) =
         Html.text album.title
       Html.span $ do
         Html.addClass "artist"
-        Html.text album.artist
+        Html.text $ album.artist <> " "
+        Html.span $ do
+          Html.addClass "year"
+          -- The date is of the form YYYY-MM-DD in ascii, so we can safely take
+          -- the first 4 characters to get the year.
+          Html.text (CodeUnits.take 4 album.date)
       ask
 
     trackList <- Html.ul $ do
