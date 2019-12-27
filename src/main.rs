@@ -390,6 +390,16 @@ fn make_index(dir: &str) -> MemoryMetaIndex {
 
 fn generate_thumbnail(cache_dir: &str, album_id: AlbumId, filename: &str) -> claxon::Result<()> {
     use std::process::{Command, Stdio};
+
+    let mut out_fname: PathBuf = PathBuf::from(cache_dir);
+    out_fname.push(format!("{}.jpg", album_id));
+
+    // Early-out on existing files. The user would need to clear the cache
+    // manually.
+    if out_fname.is_file() {
+        return Ok(())
+    }
+
     let opts = claxon::FlacReaderOptions {
         metadata_only: true,
         read_picture: claxon::ReadPicture::CoverAsVec,
@@ -397,15 +407,6 @@ fn generate_thumbnail(cache_dir: &str, album_id: AlbumId, filename: &str) -> cla
     };
     let reader = claxon::FlacReader::open_ext(filename, opts)?;
     if let Some(cover) = reader.into_pictures().pop() {
-        let mut out_fname: PathBuf = PathBuf::from(cache_dir);
-        out_fname.push(format!("{}.jpg", album_id));
-
-        // Early-out on existing files. The user would need to clear the cache
-        // manually.
-        if out_fname.is_file() {
-            return Ok(())
-        }
-
         println!("{:?} <- {}", &out_fname, filename);
         let mut convert = Command::new("convert")
             // Read from stdin.
