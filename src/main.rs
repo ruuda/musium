@@ -442,12 +442,13 @@ fn generate_thumbnail(cache_dir: &str, album_id: AlbumId, filename: &str) -> cla
 
         // TODO: Pipeline, we can already start the next "convert" while Guetzli
         // runs.
-        Command::new("guetzli")
-            .args(&["--quality", "96"])
-            .arg(&out_fname_png)
+        Command::new("/opt/mozjpeg/bin/cjpeg")
+            .args(&["-quality", "93"])
+            .args(&["-baseline", "-outfile"])
             .arg(&out_fname_jpg)
-            .spawn().expect("Failed to spawn Guetzli.")
-            .wait().expect("Failed to run Guetzli.");
+            .arg(&out_fname_png)
+            .spawn().expect("Failed to spawn Mozjpeg.")
+            .wait().expect("Failed to run Mozjpeg.");
 
         // Delete the intermediate png file.
         fs::remove_file(&out_fname_png).expect("Failed to delete intermediate file.");
