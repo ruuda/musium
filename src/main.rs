@@ -391,12 +391,15 @@ fn make_index(dir: &str) -> MemoryMetaIndex {
 fn generate_thumbnail(cache_dir: &str, album_id: AlbumId, filename: &str) -> claxon::Result<()> {
     use std::process::{Command, Stdio};
 
-    let mut out_fname: PathBuf = PathBuf::from(cache_dir);
-    out_fname.push(format!("{}.jpg", album_id));
+    let mut out_fname_jpg: PathBuf = PathBuf::from(cache_dir);
+    out_fname_jpg.push(format!("{}.jpg", album_id));
+
+    let mut out_fname_png: PathBuf = PathBuf::from(cache_dir);
+    out_fname_png.push(format!("{}.png", album_id));
 
     // Early-out on existing files. The user would need to clear the cache
     // manually.
-    if out_fname.is_file() {
+    if out_fname_jpg.is_file() {
         return Ok(())
     }
 
@@ -407,7 +410,7 @@ fn generate_thumbnail(cache_dir: &str, album_id: AlbumId, filename: &str) -> cla
     };
     let reader = claxon::FlacReader::open_ext(filename, opts)?;
     if let Some(cover) = reader.into_pictures().pop() {
-        println!("{:?} <- {}", &out_fname, filename);
+        println!("{:?} <- {}", &out_fname_jpg, filename);
         let mut convert = Command::new("convert")
             // Read from stdin.
             .arg("-")
@@ -423,8 +426,9 @@ fn generate_thumbnail(cache_dir: &str, album_id: AlbumId, filename: &str) -> cla
             // Remove EXIF metadata, including the colour profile if there was
             // any -- we convert to sRGB anyway.
             .args(&["-strip"])
-            .args(&["-quality", "95"])
-            .arg(out_fname)
+            // Write lossless, we will later compress to jpeg with Guetzli,
+            // which has a better compressor.
+            .arg(&out_fname_png)
             .stdin(Stdio::piped())
             .stdout(Stdio::inherit())
             .spawn()
@@ -435,6 +439,18 @@ fn generate_thumbnail(cache_dir: &str, album_id: AlbumId, filename: &str) -> cla
         }
         // TODO: Use a custom error type, remove all `expect()`s.
         convert.wait().expect("Failed to run Imagemagick's 'convert'.");
+
+        // TODO: Pipeline, we can already start the next "convert" while Guetzli
+        // runs.
+        Command::new("guetzli")
+            .args(&["--quality", "96"])
+            .arg(&out_fname_png)
+            .arg(&out_fname_jpg)
+            .spawn().expect("Failed to spawn Guetzli.")
+            .wait().expect("Failed to run Guetzli.");
+
+        // Delete the intermediate png file.
+        fs::remove_file(&out_fname_png).expect("Failed to delete intermediate file.");
     }
     Ok(())
 }
