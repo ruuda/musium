@@ -12,3 +12,4 @@ nav:
   - API Reference: api.md
   - Internals:
     - Performance: performance.md
+    - Thumbnails: thumbnails.md
