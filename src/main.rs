@@ -414,6 +414,12 @@ fn generate_thumbnail(cache_dir: &str, album_id: AlbumId, filename: &str) -> cla
         let mut convert = Command::new("convert")
             // Read from stdin.
             .arg("-")
+            // Some cover arts have an alpha channel, but we are going to encode
+            // to jpeg which does not support it. First blend the image with a
+            // black background, then drop the alpha channel.
+            .args(&["-background", "black", "-alpha", "remove", "-alpha", "off"])
+            // Resize in a linear color space, sRGB is not suitable for it
+            // because it is nonlinear.
             .args(&["-colorspace", "LAB"])
             // Lanczos2 is a bit less sharp than Cosine, but less sharp edges
             // means that the image compresses better, and less artifacts. But
