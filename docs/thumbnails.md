@@ -41,6 +41,7 @@ The cumulative size of all 1216 compressed thumbnails for various encoders:
 |     12,889,658 | Imagemagick | 95      |
 |     13,049,795 | Mozjpeg     | 93      |
 |     13,605,461 | Guetzli     | 97      |
+|     14,157,834 | Mozjpeg     | 94      |
 |     14,254,799 | Imagemagick | 96      |
 |     14,988,104 | Mozjpeg     | 95      |
 |     19,531,105 | Mozjpeg     | 97      |
@@ -56,6 +57,55 @@ Because the default of Imagemagick at quality 95 was a bit arbitrary, we can
 instead compare the 3 options that are closest together in terms of size, for a
 fairer comparison.
 
-* Guetzli 96, Mozjpeg 92, Imagemagick 95, with a gap of   963,107 bytes.
-* Imagemagick 95, Mozjpeg 93, Guetzli 97, with a gap of   715,803 bytes.
-* Guetzli 97, Imagemagick 96, Mozjpeg 95, with a gap of 1,382,643 bytes.
+* Guetzli 96, Mozjpeg 92, Imagemagick 95, with a gap of 963,107 bytes.
+* Imagemagick 95, Mozjpeg 93, Guetzli 97, with a gap of 715,803 bytes.
+* Guetzli 97, Mozjpeg 94, Imagemagick 96, with a gap of 649,338 bytes.
+
+This means we will involve Imagemagick at quality 96 instead of 95, so the
+artefacts are not as bad, but they are still fairly apparent.
+
+## Comparison
+
+Below is a comparison of the thumbnails where artefacts were most apparent in
+the images encoded by Imagemagick. This is not a general comparison of the
+encoders; the focus is specifically on images where Imagemagick performed badly.
+One things that most of these images have in common, is that they contain solid
+areas of bright red with sharp edges.
+
+| Guetzli 97 | Mozjpeg 95 | Imagemagick 96 |
+|------------|------------|----------------|
+| ![guetzli-q97](thumbnails/42b34b571ec0446c-guetzli-q97.jpg) | ![mozjpeg-q95](thumbnails/42b34b571ec0446c-mozjpeg-q95.jpg) | ![imagemagick-q96](thumbnails/42b34b571ec0446c-imagemagick-q96.jpg) |
+| ![guetzli-q97](thumbnails/7844675595370e04-guetzli-q97.jpg) | ![mozjpeg-q95](thumbnails/7844675595370e04-mozjpeg-q95.jpg) | ![imagemagick-q96](thumbnails/7844675595370e04-imagemagick-q96.jpg) |
+| ![guetzli-q97](thumbnails/1a0d31b44fe33359-guetzli-q97.jpg) | ![mozjpeg-q95](thumbnails/1a0d31b44fe33359-mozjpeg-q95.jpg) | ![imagemagick-q96](thumbnails/1a0d31b44fe33359-imagemagick-q96.jpg) |
+| ![guetzli-q97](thumbnails/292eec08f76c8998-guetzli-q97.jpg) | ![mozjpeg-q95](thumbnails/292eec08f76c8998-mozjpeg-q95.jpg) | ![imagemagick-q96](thumbnails/292eec08f76c8998-imagemagick-q96.jpg) |
+| ![guetzli-q97](thumbnails/233427df1d053306-guetzli-q97.jpg) | ![mozjpeg-q95](thumbnails/233427df1d053306-mozjpeg-q95.jpg) | ![imagemagick-q96](thumbnails/233427df1d053306-imagemagick-q96.jpg) |
+| ![guetzli-q97](thumbnails/37a2d1aae9b6ddac-guetzli-q97.jpg) | ![mozjpeg-q95](thumbnails/37a2d1aae9b6ddac-mozjpeg-q95.jpg) | ![imagemagick-q96](thumbnails/37a2d1aae9b6ddac-imagemagick-q96.jpg) |
+| ![guetzli-q97](thumbnails/e82593ba643ff972-guetzli-q97.jpg) | ![mozjpeg-q95](thumbnails/e82593ba643ff972-mozjpeg-q95.jpg) | ![imagemagick-q96](thumbnails/e82593ba643ff972-imagemagick-q96.jpg) |
+| ![guetzli-q97](thumbnails/025d4f1a77340cf4-guetzli-q97.jpg) | ![mozjpeg-q95](thumbnails/025d4f1a77340cf4-mozjpeg-q95.jpg) | ![imagemagick-q96](thumbnails/025d4f1a77340cf4-imagemagick-q96.jpg) |
+| ![guetzli-q97](thumbnails/bb796ceaa0c6ffa1-guetzli-q97.jpg) | ![mozjpeg-q95](thumbnails/bb796ceaa0c6ffa1-mozjpeg-q95.jpg) | ![imagemagick-q96](thumbnails/bb796ceaa0c6ffa1-imagemagick-q96.jpg) |
+| ![guetzli-q97](thumbnails/4baf4134335d43fb-guetzli-q97.jpg) | ![mozjpeg-q95](thumbnails/4baf4134335d43fb-mozjpeg-q95.jpg) | ![imagemagick-q96](thumbnails/4baf4134335d43fb-imagemagick-q96.jpg) |
+| ![guetzli-q97](thumbnails/1d8b48dcd0766fe2-guetzli-q97.jpg) | ![mozjpeg-q95](thumbnails/1d8b48dcd0766fe2-mozjpeg-q95.jpg) | ![imagemagick-q96](thumbnails/1d8b48dcd0766fe2-imagemagick-q96.jpg) |
+| ![guetzli-q97](thumbnails/bf691b17d5c99348-guetzli-q97.jpg) | ![mozjpeg-q95](thumbnails/bf691b17d5c99348-mozjpeg-q95.jpg) | ![imagemagick-q96](thumbnails/bf691b17d5c99348-imagemagick-q96.jpg) |
+| ![guetzli-q97](thumbnails/663089923e708352-guetzli-q97.jpg) | ![mozjpeg-q95](thumbnails/663089923e708352-mozjpeg-q95.jpg) | ![imagemagick-q96](thumbnails/663089923e708352-imagemagick-q96.jpg) |
+| ![guetzli-q97](thumbnails/f772122e1146e8cf-guetzli-q97.jpg) | ![mozjpeg-q95](thumbnails/f772122e1146e8cf-mozjpeg-q95.jpg) | ![imagemagick-q96](thumbnails/f772122e1146e8cf-imagemagick-q96.jpg) |
+| ![guetzli-q97](thumbnails/f7c153f2b16dcdc7-guetzli-q97.jpg) | ![mozjpeg-q95](thumbnails/f7c153f2b16dcdc7-mozjpeg-q95.jpg) | ![imagemagick-q96](thumbnails/f7c153f2b16dcdc7-imagemagick-q96.jpg) |
+| ![guetzli-q97](thumbnails/d85da9ae7d2eb123-guetzli-q97.jpg) | ![mozjpeg-q95](thumbnails/d85da9ae7d2eb123-mozjpeg-q95.jpg) | ![imagemagick-q96](thumbnails/d85da9ae7d2eb123-imagemagick-q96.jpg) |
+
+A few things stand out visually:
+
+ * Both Guetzli and Mozjpeg perform much better than Imagemagick.
+ * Where Imagemagick creates blurry edges, Mozjpeg creates sharp edges, but at
+   the cost of ringing artefacts. Guetzli produces sharp edges without much
+   ringing.
+
+## Throughput
+
+This comparison does not include timing information, but while running the
+various compressors, it was clear that Guetzli is much slower than either
+Imagemagick or Mozjpeg. For Mindec this is not a big problem, because generating
+thumbnails tends to be <abbr>IO</abbr>-bound when the files are one a a spinning
+disk. As long as Guetzli is faster than the disk, it is fast enough.
+
+## Conclusion
+
+We should compress thumbnails with Guetzli to minimize visible artefacts.
