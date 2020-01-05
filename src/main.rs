@@ -825,16 +825,17 @@ fn match_listens(
     Ok(())
 }
 
-fn build_noblit_db(index: &MemoryMetaIndex) {
-    use noblit::database::{Database};
-    use noblit::datom::{Value};
-    use noblit::memory_store::{MemoryStore, MemoryHeap};
-    use noblit::query::{Query};
-    use noblit::store::{PageSize4096};
-    use noblit::temp_heap::Temporaries;
+use noblit::database;
+use noblit::binary::Cursor;
+use noblit::datom::Value;
+use noblit::memory_store::{MemoryStore, MemoryHeap};
+use noblit::store::{PageSize4096};
+use noblit::temp_heap::Temporaries;
 
-    type MemoryStore4096 = MemoryStore<PageSize4096>;
+type MemoryStore4096 = MemoryStore<PageSize4096>;
+type Database = database::Database<MemoryStore4096, MemoryHeap>;
 
+fn build_noblit_db(index: &MemoryMetaIndex) -> Database {
     let store: MemoryStore4096 = MemoryStore::new();
     let heap = MemoryHeap::new();
     let mut db = Database::new(store, heap).unwrap();
@@ -948,6 +949,35 @@ fn build_noblit_db(index: &MemoryMetaIndex) {
     tx.assert(track_artist, db_attr_many, Value::from_bool(false));
 
     db.commit(&tmps, tx).unwrap();
+
+    db
+}
+
+fn run_noblit_query(cursor: &mut Cursor, database: &Database) {
+    use noblit::parse;
+    use noblit::types;
+    use noblit::query_plan::{Evaluator, QueryPlan};
+
+    let mut temporaries = Temporaries::new();
+    let mut query = parse::parse_query(cursor, &mut temporaries).expect("Failed to parse query.");
+
+    let view = database.view(temporaries);
+
+    // Resolve named attributes to id-based attributes, and plan the query.
+    query.fix_attributes(&view);
+    let plan = QueryPlan::new(query, &view);
+
+    // Evaluate the query, and pretty-print the results in a table.
+    let eval = Evaluator::new(&plan, &view);
+    let rows: Vec<_> = eval.collect();
+    let stdout = io::stdout();
+    types::draw_table(
+        &mut stdout.lock(),
+        view.heap(),
+        plan.select.iter().map(|&v| &plan.variable_names[v.0 as usize][..]),
+        rows.iter().map(|ref row| &row[..]),
+        &plan.select_types[..],
+    ).unwrap();
 }
 
 fn print_usage() {
@@ -1017,7 +1047,11 @@ fn main() {
         }
         "noblit" => {
             let index = make_index(&config.library_path);
-            build_noblit_db(&index);
+            let db = build_noblit_db(&index);
+            let mut cursor = Cursor::new(io::stdin());
+            while let Ok(0) = cursor.take_u8() {
+                run_noblit_query(&mut cursor, &db);
+            }
         }
         _ => {
             print_usage();
