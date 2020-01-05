@@ -911,23 +911,26 @@ fn build_noblit_db(index: &MemoryMetaIndex) -> Database {
     tx.assert(eid_album_title, db_attr_many, Value::from_bool(false));
     let album_title = Aid(eid_album_title.0);
 
-    let album_year = tx.create_entity();
-    tx.assert(album_year, db_attr_name, value_from_str(&mut tmps, "album.year"));
-    tx.assert(album_year, db_attr_type, Value::from_eid(db_type_uint64));
-    tx.assert(album_year, db_attr_unique, Value::from_bool(false));
-    tx.assert(album_year, db_attr_many, Value::from_bool(false));
+    let eid_album_year = tx.create_entity();
+    tx.assert(eid_album_year, db_attr_name, value_from_str(&mut tmps, "album.year"));
+    tx.assert(eid_album_year, db_attr_type, Value::from_eid(db_type_uint64));
+    tx.assert(eid_album_year, db_attr_unique, Value::from_bool(false));
+    tx.assert(eid_album_year, db_attr_many, Value::from_bool(false));
+    let album_year = Aid(eid_album_year.0);
 
-    let album_month = tx.create_entity();
-    tx.assert(album_month, db_attr_name, value_from_str(&mut tmps, "album.month"));
-    tx.assert(album_month, db_attr_type, Value::from_eid(db_type_uint64));
-    tx.assert(album_month, db_attr_unique, Value::from_bool(false));
-    tx.assert(album_month, db_attr_many, Value::from_bool(false));
+    let eid_album_month = tx.create_entity();
+    tx.assert(eid_album_month, db_attr_name, value_from_str(&mut tmps, "album.month"));
+    tx.assert(eid_album_month, db_attr_type, Value::from_eid(db_type_uint64));
+    tx.assert(eid_album_month, db_attr_unique, Value::from_bool(false));
+    tx.assert(eid_album_month, db_attr_many, Value::from_bool(false));
+    let album_month = Aid(eid_album_month.0);
 
-    let album_day = tx.create_entity();
-    tx.assert(album_day, db_attr_name, value_from_str(&mut tmps, "album.day"));
-    tx.assert(album_day, db_attr_type, Value::from_eid(db_type_uint64));
-    tx.assert(album_day, db_attr_unique, Value::from_bool(false));
-    tx.assert(album_day, db_attr_many, Value::from_bool(false));
+    let eid_album_day = tx.create_entity();
+    tx.assert(eid_album_day, db_attr_name, value_from_str(&mut tmps, "album.day"));
+    tx.assert(eid_album_day, db_attr_type, Value::from_eid(db_type_uint64));
+    tx.assert(eid_album_day, db_attr_unique, Value::from_bool(false));
+    tx.assert(eid_album_day, db_attr_many, Value::from_bool(false));
+    let album_day = Aid(eid_album_day.0);
 
     let track_id = tx.create_entity();
     tx.assert(track_id, db_attr_name, value_from_str(&mut tmps, "track.id"));
@@ -991,6 +994,9 @@ fn build_noblit_db(index: &MemoryMetaIndex) -> Database {
         tx.assert(eid, album_id, value_from_u64(&mut tmps, mindec_album_id.0));
         tx.assert(eid, album_title, value_from_str(&mut tmps, index.get_string(album.title)));
         tx.assert(eid, album_artist, Value::from_eid(artist_eid));
+        tx.assert(eid, album_year, Value::from_u64_inline(album.original_release_date.year as u64));
+        tx.assert(eid, album_month, Value::from_u64_inline(album.original_release_date.month as u64));
+        tx.assert(eid, album_day, Value::from_u64_inline(album.original_release_date.day as u64));
         album_id_map.insert(mindec_album_id, eid);
     }
     db.commit(&tmps, tx).unwrap();

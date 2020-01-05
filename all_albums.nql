@@ -3,6 +3,9 @@ where
   ab album.title title
   ab album.artist ar
   ar artist.name artist
+  ab album.year year
+  ab album.month month
+  ab album.day day
 select
-  ab, id, title, artist
+  ab, id, title, artist, year, month, day
 
