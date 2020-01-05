@@ -826,36 +826,128 @@ fn match_listens(
 }
 
 fn build_noblit_db(index: &MemoryMetaIndex) {
-    use noblit::database::{Database, self};
-    use noblit::datom::{Datom, Value};
-    use noblit::memory_store::{MemoryStore, MemoryPool};
-    use noblit::query::{Query, QueryMut, QueryAttribute, QueryValue};
-    use noblit::query_plan::{Evaluator, QueryPlan};
+    use noblit::database::{Database};
+    use noblit::datom::{Value};
+    use noblit::memory_store::{MemoryStore, MemoryHeap};
+    use noblit::query::{Query};
     use noblit::store::{PageSize4096};
+    use noblit::temp_heap::Temporaries;
 
     type MemoryStore4096 = MemoryStore<PageSize4096>;
-    type QueryEngine<'a> = database::QueryEngine<'a, MemoryStore4096, MemoryPool>;
 
     let store: MemoryStore4096 = MemoryStore::new();
-    let pool = MemoryPool::new();
-    let mut db = Database::new(store, pool).unwrap();
+    let heap = MemoryHeap::new();
+    let mut db = Database::new(store, heap).unwrap();
 
-
-    // Insert a bit of test data: a new attribute "level" in transaction 0,
-    // and a few entities with different levels in transaction 1.
+    let db_attr_many = db.builtins.attribute_db_attribute_many;
     let db_attr_name = db.builtins.attribute_db_attribute_name;
     let db_attr_type = db.builtins.attribute_db_attribute_type;
     let db_attr_unique = db.builtins.attribute_db_attribute_unique;
-    let db_attr_many = db.builtins.attribute_db_attribute_many;
-    let db_type_uint64 = db.builtins.entity_db_type_uint64;
+    let db_type_ref = db.builtins.entity_db_type_ref;
     let db_type_string = db.builtins.entity_db_type_string;
+    let db_type_uint64 = db.builtins.entity_db_type_uint64;
 
-    let mut datoms = Vec::new();
-    let t0 = db.create_transaction(&mut datoms);
-    let eid_level = db.create_entity(&mut datoms, db_attr_name, Value::from_str_inline("level"), t0);
-    datoms.push(Datom::assert(eid_level, db_attr_type, Value::from_eid(db_type_uint64), t0));
-    datoms.push(Datom::assert(eid_level, db_attr_unique, Value::from_bool(false), t0));
-    datoms.push(Datom::assert(eid_level, db_attr_many, Value::from_bool(false), t0));
+    let mut tmps = Temporaries::new();
+
+    // TODO: Put this somewhere in Noblit.
+    fn value_from_str(tmps: &mut Temporaries, val: &str) -> Value {
+        match Value::from_str(val) {
+            Some(v) => v,
+            None => {
+                let cid = tmps.push_string(val.to_string());
+                Value::from_const_bytes(cid)
+            }
+        }
+    }
+
+    // Build a transaction to set up the schema.
+    let mut tx = db.begin();
+
+    let artist_id = tx.create_entity();
+    tx.assert(artist_id, db_attr_name, value_from_str(&mut tmps, "artist.id"));
+    tx.assert(artist_id, db_attr_type, Value::from_eid(db_type_uint64));
+    tx.assert(artist_id, db_attr_unique, Value::from_bool(true));
+    tx.assert(artist_id, db_attr_many, Value::from_bool(false));
+
+    let artist_name = tx.create_entity();
+    tx.assert(artist_name, db_attr_name, value_from_str(&mut tmps, "artist.name"));
+    tx.assert(artist_name, db_attr_type, Value::from_eid(db_type_string));
+    tx.assert(artist_name, db_attr_unique, Value::from_bool(false));
+    tx.assert(artist_name, db_attr_many, Value::from_bool(false));
+
+    let album_id = tx.create_entity();
+    tx.assert(album_id, db_attr_name, value_from_str(&mut tmps, "album.id"));
+    tx.assert(album_id, db_attr_type, Value::from_eid(db_type_uint64));
+    tx.assert(album_id, db_attr_unique, Value::from_bool(true));
+    tx.assert(album_id, db_attr_many, Value::from_bool(false));
+
+    let album_artist = tx.create_entity();
+    tx.assert(album_artist, db_attr_name, value_from_str(&mut tmps, "album.artist"));
+    tx.assert(album_artist, db_attr_type, Value::from_eid(db_type_ref));
+    tx.assert(album_artist, db_attr_unique, Value::from_bool(false));
+    tx.assert(album_artist, db_attr_many, Value::from_bool(false));
+
+    let album_title = tx.create_entity();
+    tx.assert(album_title, db_attr_name, value_from_str(&mut tmps, "album.title"));
+    tx.assert(album_title, db_attr_type, Value::from_eid(db_type_string));
+    tx.assert(album_title, db_attr_unique, Value::from_bool(false));
+    tx.assert(album_title, db_attr_many, Value::from_bool(false));
+
+    let album_year = tx.create_entity();
+    tx.assert(album_year, db_attr_name, value_from_str(&mut tmps, "album.year"));
+    tx.assert(album_year, db_attr_type, Value::from_eid(db_type_uint64));
+    tx.assert(album_year, db_attr_unique, Value::from_bool(false));
+    tx.assert(album_year, db_attr_many, Value::from_bool(false));
+
+    let album_month = tx.create_entity();
+    tx.assert(album_month, db_attr_name, value_from_str(&mut tmps, "album.month"));
+    tx.assert(album_month, db_attr_type, Value::from_eid(db_type_uint64));
+    tx.assert(album_month, db_attr_unique, Value::from_bool(false));
+    tx.assert(album_month, db_attr_many, Value::from_bool(false));
+
+    let album_day = tx.create_entity();
+    tx.assert(album_day, db_attr_name, value_from_str(&mut tmps, "album.day"));
+    tx.assert(album_day, db_attr_type, Value::from_eid(db_type_uint64));
+    tx.assert(album_day, db_attr_unique, Value::from_bool(false));
+    tx.assert(album_day, db_attr_many, Value::from_bool(false));
+
+    let track_id = tx.create_entity();
+    tx.assert(track_id, db_attr_name, value_from_str(&mut tmps, "track.id"));
+    tx.assert(track_id, db_attr_type, Value::from_eid(db_type_uint64));
+    tx.assert(track_id, db_attr_unique, Value::from_bool(true));
+    tx.assert(track_id, db_attr_many, Value::from_bool(false));
+
+    let track_album = tx.create_entity();
+    tx.assert(track_album, db_attr_name, value_from_str(&mut tmps, "track.album"));
+    tx.assert(track_album, db_attr_type, Value::from_eid(db_type_ref));
+    tx.assert(track_album, db_attr_unique, Value::from_bool(false));
+    tx.assert(track_album, db_attr_many, Value::from_bool(false));
+
+    let track_disc = tx.create_entity();
+    tx.assert(track_disc, db_attr_name, value_from_str(&mut tmps, "track.disc"));
+    tx.assert(track_disc, db_attr_type, Value::from_eid(db_type_uint64));
+    tx.assert(track_disc, db_attr_unique, Value::from_bool(false));
+    tx.assert(track_disc, db_attr_many, Value::from_bool(false));
+
+    let track_number = tx.create_entity();
+    tx.assert(track_number, db_attr_name, value_from_str(&mut tmps, "track.number"));
+    tx.assert(track_number, db_attr_type, Value::from_eid(db_type_uint64));
+    tx.assert(track_number, db_attr_unique, Value::from_bool(false));
+    tx.assert(track_number, db_attr_many, Value::from_bool(false));
+
+    let track_title = tx.create_entity();
+    tx.assert(track_title, db_attr_name, value_from_str(&mut tmps, "track.title"));
+    tx.assert(track_title, db_attr_type, Value::from_eid(db_type_string));
+    tx.assert(track_title, db_attr_unique, Value::from_bool(false));
+    tx.assert(track_title, db_attr_many, Value::from_bool(false));
+
+    let track_artist = tx.create_entity();
+    tx.assert(track_artist, db_attr_name, value_from_str(&mut tmps, "track.artist"));
+    tx.assert(track_artist, db_attr_type, Value::from_eid(db_type_string));
+    tx.assert(track_artist, db_attr_unique, Value::from_bool(false));
+    tx.assert(track_artist, db_attr_many, Value::from_bool(false));
+
+    db.commit(&tmps, tx).unwrap();
 }
 
 fn print_usage() {
