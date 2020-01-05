@@ -108,6 +108,11 @@ impl TrackId {
     pub fn parse(src: &str) -> Option<TrackId> {
         u64::from_str_radix(src, 16).ok().map(TrackId)
     }
+
+    /// Remove the type-safe wrapper, return the underlying `u64`.
+    pub fn as_u64(&self) -> u64 {
+        self.0
+    }
 }
 
 impl AlbumId {

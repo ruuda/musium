@@ -932,41 +932,47 @@ fn build_noblit_db(index: &MemoryMetaIndex) -> Database {
     tx.assert(eid_album_day, db_attr_many, Value::from_bool(false));
     let album_day = Aid(eid_album_day.0);
 
-    let track_id = tx.create_entity();
-    tx.assert(track_id, db_attr_name, value_from_str(&mut tmps, "track.id"));
-    tx.assert(track_id, db_attr_type, Value::from_eid(db_type_uint64));
-    tx.assert(track_id, db_attr_unique, Value::from_bool(true));
-    tx.assert(track_id, db_attr_many, Value::from_bool(false));
+    let eid_track_id = tx.create_entity();
+    tx.assert(eid_track_id, db_attr_name, value_from_str(&mut tmps, "track.id"));
+    tx.assert(eid_track_id, db_attr_type, Value::from_eid(db_type_uint64));
+    tx.assert(eid_track_id, db_attr_unique, Value::from_bool(true));
+    tx.assert(eid_track_id, db_attr_many, Value::from_bool(false));
+    let track_id = Aid(eid_track_id.0);
 
-    let track_album = tx.create_entity();
-    tx.assert(track_album, db_attr_name, value_from_str(&mut tmps, "track.album"));
-    tx.assert(track_album, db_attr_type, Value::from_eid(db_type_ref));
-    tx.assert(track_album, db_attr_unique, Value::from_bool(false));
-    tx.assert(track_album, db_attr_many, Value::from_bool(false));
+    let eid_track_album = tx.create_entity();
+    tx.assert(eid_track_album, db_attr_name, value_from_str(&mut tmps, "track.album"));
+    tx.assert(eid_track_album, db_attr_type, Value::from_eid(db_type_ref));
+    tx.assert(eid_track_album, db_attr_unique, Value::from_bool(false));
+    tx.assert(eid_track_album, db_attr_many, Value::from_bool(false));
+    let track_album = Aid(eid_track_album.0);
 
-    let track_disc = tx.create_entity();
-    tx.assert(track_disc, db_attr_name, value_from_str(&mut tmps, "track.disc"));
-    tx.assert(track_disc, db_attr_type, Value::from_eid(db_type_uint64));
-    tx.assert(track_disc, db_attr_unique, Value::from_bool(false));
-    tx.assert(track_disc, db_attr_many, Value::from_bool(false));
+    let eid_track_disc = tx.create_entity();
+    tx.assert(eid_track_disc, db_attr_name, value_from_str(&mut tmps, "track.disc"));
+    tx.assert(eid_track_disc, db_attr_type, Value::from_eid(db_type_uint64));
+    tx.assert(eid_track_disc, db_attr_unique, Value::from_bool(false));
+    tx.assert(eid_track_disc, db_attr_many, Value::from_bool(false));
+    let track_disc = Aid(eid_track_disc.0);
 
-    let track_number = tx.create_entity();
-    tx.assert(track_number, db_attr_name, value_from_str(&mut tmps, "track.number"));
-    tx.assert(track_number, db_attr_type, Value::from_eid(db_type_uint64));
-    tx.assert(track_number, db_attr_unique, Value::from_bool(false));
-    tx.assert(track_number, db_attr_many, Value::from_bool(false));
+    let eid_track_number = tx.create_entity();
+    tx.assert(eid_track_number, db_attr_name, value_from_str(&mut tmps, "track.number"));
+    tx.assert(eid_track_number, db_attr_type, Value::from_eid(db_type_uint64));
+    tx.assert(eid_track_number, db_attr_unique, Value::from_bool(false));
+    tx.assert(eid_track_number, db_attr_many, Value::from_bool(false));
+    let track_number = Aid(eid_track_number.0);
 
-    let track_title = tx.create_entity();
-    tx.assert(track_title, db_attr_name, value_from_str(&mut tmps, "track.title"));
-    tx.assert(track_title, db_attr_type, Value::from_eid(db_type_string));
-    tx.assert(track_title, db_attr_unique, Value::from_bool(false));
-    tx.assert(track_title, db_attr_many, Value::from_bool(false));
+    let eid_track_title = tx.create_entity();
+    tx.assert(eid_track_title, db_attr_name, value_from_str(&mut tmps, "track.title"));
+    tx.assert(eid_track_title, db_attr_type, Value::from_eid(db_type_string));
+    tx.assert(eid_track_title, db_attr_unique, Value::from_bool(false));
+    tx.assert(eid_track_title, db_attr_many, Value::from_bool(false));
+    let track_title = Aid(eid_track_title.0);
 
-    let track_artist = tx.create_entity();
-    tx.assert(track_artist, db_attr_name, value_from_str(&mut tmps, "track.artist"));
-    tx.assert(track_artist, db_attr_type, Value::from_eid(db_type_string));
-    tx.assert(track_artist, db_attr_unique, Value::from_bool(false));
-    tx.assert(track_artist, db_attr_many, Value::from_bool(false));
+    let eid_track_artist = tx.create_entity();
+    tx.assert(eid_track_artist, db_attr_name, value_from_str(&mut tmps, "track.artist"));
+    tx.assert(eid_track_artist, db_attr_type, Value::from_eid(db_type_string));
+    tx.assert(eid_track_artist, db_attr_unique, Value::from_bool(false));
+    tx.assert(eid_track_artist, db_attr_many, Value::from_bool(false));
+    let track_artist = Aid(eid_track_artist.0);
 
     db.commit(&tmps, tx).unwrap();
 
@@ -998,6 +1004,20 @@ fn build_noblit_db(index: &MemoryMetaIndex) -> Database {
         tx.assert(eid, album_month, Value::from_u64_inline(album.original_release_date.month as u64));
         tx.assert(eid, album_day, Value::from_u64_inline(album.original_release_date.day as u64));
         album_id_map.insert(mindec_album_id, eid);
+    }
+    db.commit(&tmps, tx).unwrap();
+
+    let mut tx = db.begin();
+    let mut tmps = Temporaries::new();
+    for (mindec_track_id, track) in index.get_tracks() {
+        let album_eid = album_id_map[&track.album_id];
+        let eid = tx.create_entity();
+        tx.assert(eid, track_id, value_from_u64(&mut tmps, mindec_track_id.as_u64()));
+        tx.assert(eid, track_disc, Value::from_u64_inline(track.disc_number as u64));
+        tx.assert(eid, track_number, Value::from_u64_inline(track.track_number as u64));
+        tx.assert(eid, track_title, value_from_str(&mut tmps, index.get_string(track.title)));
+        tx.assert(eid, track_artist, value_from_str(&mut tmps, index.get_string(track.artist)));
+        tx.assert(eid, track_album, Value::from_eid(album_eid));
     }
     db.commit(&tmps, tx).unwrap();
 

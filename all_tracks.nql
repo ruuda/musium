@@ -1,0 +1,11 @@
+where
+  t track.id id
+  t track.disc disc
+  t track.number number
+  t track.artist artist
+  t track.title title
+  t track.album ab
+  ab album.title album
+  ab album.year year
+select
+  t, id, disc, number, title, artist, album, year
