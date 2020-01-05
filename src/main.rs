@@ -825,13 +825,14 @@ fn match_listens(
     Ok(())
 }
 
-use noblit::database;
 use noblit::binary::Cursor;
+use noblit::database;
+use noblit::datom::Aid;
 use noblit::datom::Value;
+use noblit::heap::SizedHeap;
 use noblit::memory_store::{MemoryStore, MemoryHeap};
 use noblit::store::{PageSize4096};
 use noblit::temp_heap::Temporaries;
-use noblit::datom::Aid;
 
 type MemoryStore4096 = MemoryStore<PageSize4096>;
 type Database = database::Database<MemoryStore4096, MemoryHeap>;
@@ -1020,6 +1021,26 @@ fn build_noblit_db(index: &MemoryMetaIndex) -> Database {
         tx.assert(eid, track_album, Value::from_eid(album_eid));
     }
     db.commit(&tmps, tx).unwrap();
+
+    // Print some metrics about the database, just informational.
+    let store_len = db.get_store().as_bytes().len();
+    let heap_len = db.get_heap().len();
+    println!(
+        "Database size: {} bytes ({} bytes store, {} bytes heap).",
+        store_len as u64 + heap_len,
+        store_len,
+        heap_len
+    );
+
+    let eavt_height = db.view(Temporaries::new()).eavt().height();
+    let avet_height = db.view(Temporaries::new()).avet().height();
+    let aevt_height = db.view(Temporaries::new()).aevt().height();
+    println!(
+        "Database index height: {} EAVT, {} AVET, {} AEVT.",
+        eavt_height,
+        avet_height,
+        aevt_height
+    );
 
     db
 }
