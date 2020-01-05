@@ -831,6 +831,7 @@ use noblit::datom::Value;
 use noblit::memory_store::{MemoryStore, MemoryHeap};
 use noblit::store::{PageSize4096};
 use noblit::temp_heap::Temporaries;
+use noblit::datom::Aid;
 
 type MemoryStore4096 = MemoryStore<PageSize4096>;
 type Database = database::Database<MemoryStore4096, MemoryHeap>;
@@ -848,7 +849,6 @@ fn build_noblit_db(index: &MemoryMetaIndex) -> Database {
     let db_type_string = db.builtins.entity_db_type_string;
     let db_type_uint64 = db.builtins.entity_db_type_uint64;
 
-    let mut tmps = Temporaries::new();
 
     // TODO: Put this somewhere in Noblit.
     fn value_from_str(tmps: &mut Temporaries, val: &str) -> Value {
@@ -860,21 +860,33 @@ fn build_noblit_db(index: &MemoryMetaIndex) -> Database {
             }
         }
     }
+    fn value_from_u64(tmps: &mut Temporaries, val: u64) -> Value {
+        match Value::from_u64(val) {
+            Some(v) => v,
+            None => {
+                let cid = tmps.push_u64(val);
+                Value::from_const_u64(cid)
+            }
+        }
+    }
 
     // Build a transaction to set up the schema.
     let mut tx = db.begin();
+    let mut tmps = Temporaries::new();
 
-    let artist_id = tx.create_entity();
-    tx.assert(artist_id, db_attr_name, value_from_str(&mut tmps, "artist.id"));
-    tx.assert(artist_id, db_attr_type, Value::from_eid(db_type_uint64));
-    tx.assert(artist_id, db_attr_unique, Value::from_bool(true));
-    tx.assert(artist_id, db_attr_many, Value::from_bool(false));
+    let eid_artist_id = tx.create_entity();
+    tx.assert(eid_artist_id, db_attr_name, value_from_str(&mut tmps, "artist.id"));
+    tx.assert(eid_artist_id, db_attr_type, Value::from_eid(db_type_uint64));
+    tx.assert(eid_artist_id, db_attr_unique, Value::from_bool(true));
+    tx.assert(eid_artist_id, db_attr_many, Value::from_bool(false));
+    let artist_id = Aid(eid_artist_id.0);
 
-    let artist_name = tx.create_entity();
-    tx.assert(artist_name, db_attr_name, value_from_str(&mut tmps, "artist.name"));
-    tx.assert(artist_name, db_attr_type, Value::from_eid(db_type_string));
-    tx.assert(artist_name, db_attr_unique, Value::from_bool(false));
-    tx.assert(artist_name, db_attr_many, Value::from_bool(false));
+    let eid_artist_name = tx.create_entity();
+    tx.assert(eid_artist_name, db_attr_name, value_from_str(&mut tmps, "artist.name"));
+    tx.assert(eid_artist_name, db_attr_type, Value::from_eid(db_type_string));
+    tx.assert(eid_artist_name, db_attr_unique, Value::from_bool(false));
+    tx.assert(eid_artist_name, db_attr_many, Value::from_bool(false));
+    let artist_name = Aid(eid_artist_name.0);
 
     let album_id = tx.create_entity();
     tx.assert(album_id, db_attr_name, value_from_str(&mut tmps, "album.id"));
@@ -947,6 +959,17 @@ fn build_noblit_db(index: &MemoryMetaIndex) -> Database {
     tx.assert(track_artist, db_attr_type, Value::from_eid(db_type_string));
     tx.assert(track_artist, db_attr_unique, Value::from_bool(false));
     tx.assert(track_artist, db_attr_many, Value::from_bool(false));
+
+    db.commit(&tmps, tx).unwrap();
+
+    let mut tx = db.begin();
+    let mut tmps = Temporaries::new();
+
+    for (mindec_artist_id, artist) in index.get_artists() {
+        let eid = tx.create_entity();
+        tx.assert(eid, artist_id, value_from_u64(&mut tmps, mindec_artist_id.0));
+        tx.assert(eid, artist_name, value_from_str(&mut tmps, index.get_string(artist.name)));
+    }
 
     db.commit(&tmps, tx).unwrap();
 

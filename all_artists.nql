@@ -1,0 +1,5 @@
+where
+  a artist.id id
+  a artist.name name
+select
+  a, id, name
