@@ -837,6 +837,8 @@ type MemoryStore4096 = MemoryStore<PageSize4096>;
 type Database = database::Database<MemoryStore4096, MemoryHeap>;
 
 fn build_noblit_db(index: &MemoryMetaIndex) -> Database {
+    use std::collections::HashMap;
+
     let store: MemoryStore4096 = MemoryStore::new();
     let heap = MemoryHeap::new();
     let mut db = Database::new(store, heap).unwrap();
@@ -888,23 +890,26 @@ fn build_noblit_db(index: &MemoryMetaIndex) -> Database {
     tx.assert(eid_artist_name, db_attr_many, Value::from_bool(false));
     let artist_name = Aid(eid_artist_name.0);
 
-    let album_id = tx.create_entity();
-    tx.assert(album_id, db_attr_name, value_from_str(&mut tmps, "album.id"));
-    tx.assert(album_id, db_attr_type, Value::from_eid(db_type_uint64));
-    tx.assert(album_id, db_attr_unique, Value::from_bool(true));
-    tx.assert(album_id, db_attr_many, Value::from_bool(false));
+    let eid_album_id = tx.create_entity();
+    tx.assert(eid_album_id, db_attr_name, value_from_str(&mut tmps, "album.id"));
+    tx.assert(eid_album_id, db_attr_type, Value::from_eid(db_type_uint64));
+    tx.assert(eid_album_id, db_attr_unique, Value::from_bool(true));
+    tx.assert(eid_album_id, db_attr_many, Value::from_bool(false));
+    let album_id = Aid(eid_album_id.0);
 
-    let album_artist = tx.create_entity();
-    tx.assert(album_artist, db_attr_name, value_from_str(&mut tmps, "album.artist"));
-    tx.assert(album_artist, db_attr_type, Value::from_eid(db_type_ref));
-    tx.assert(album_artist, db_attr_unique, Value::from_bool(false));
-    tx.assert(album_artist, db_attr_many, Value::from_bool(false));
+    let eid_album_artist = tx.create_entity();
+    tx.assert(eid_album_artist, db_attr_name, value_from_str(&mut tmps, "album.artist"));
+    tx.assert(eid_album_artist, db_attr_type, Value::from_eid(db_type_ref));
+    tx.assert(eid_album_artist, db_attr_unique, Value::from_bool(false));
+    tx.assert(eid_album_artist, db_attr_many, Value::from_bool(false));
+    let album_artist = Aid(eid_album_artist.0);
 
-    let album_title = tx.create_entity();
-    tx.assert(album_title, db_attr_name, value_from_str(&mut tmps, "album.title"));
-    tx.assert(album_title, db_attr_type, Value::from_eid(db_type_string));
-    tx.assert(album_title, db_attr_unique, Value::from_bool(false));
-    tx.assert(album_title, db_attr_many, Value::from_bool(false));
+    let eid_album_title = tx.create_entity();
+    tx.assert(eid_album_title, db_attr_name, value_from_str(&mut tmps, "album.title"));
+    tx.assert(eid_album_title, db_attr_type, Value::from_eid(db_type_string));
+    tx.assert(eid_album_title, db_attr_unique, Value::from_bool(false));
+    tx.assert(eid_album_title, db_attr_many, Value::from_bool(false));
+    let album_title = Aid(eid_album_title.0);
 
     let album_year = tx.create_entity();
     tx.assert(album_year, db_attr_name, value_from_str(&mut tmps, "album.year"));
@@ -962,15 +967,32 @@ fn build_noblit_db(index: &MemoryMetaIndex) -> Database {
 
     db.commit(&tmps, tx).unwrap();
 
+    // We need to map Mindec ids to Noblit entity ids to be able to link the
+    // entities together later. We could (and should) make Noblit do the lookup,
+    // but for now this is easier.
+    let mut artist_id_map = HashMap::new();
+    let mut album_id_map = HashMap::new();
+
     let mut tx = db.begin();
     let mut tmps = Temporaries::new();
-
     for (mindec_artist_id, artist) in index.get_artists() {
         let eid = tx.create_entity();
         tx.assert(eid, artist_id, value_from_u64(&mut tmps, mindec_artist_id.0));
         tx.assert(eid, artist_name, value_from_str(&mut tmps, index.get_string(artist.name)));
+        artist_id_map.insert(mindec_artist_id, eid);
     }
+    db.commit(&tmps, tx).unwrap();
 
+    let mut tx = db.begin();
+    let mut tmps = Temporaries::new();
+    for (mindec_album_id, album) in index.get_albums() {
+        let artist_eid = artist_id_map[&album.artist_id];
+        let eid = tx.create_entity();
+        tx.assert(eid, album_id, value_from_u64(&mut tmps, mindec_album_id.0));
+        tx.assert(eid, album_title, value_from_str(&mut tmps, index.get_string(album.title)));
+        tx.assert(eid, album_artist, Value::from_eid(artist_eid));
+        album_id_map.insert(mindec_album_id, eid);
+    }
     db.commit(&tmps, tx).unwrap();
 
     db

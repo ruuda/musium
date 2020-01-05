@@ -1,0 +1,8 @@
+where
+  ab album.id id
+  ab album.title title
+  ab album.artist ar
+  ar artist.name artist
+select
+  ab, id, title, artist
+
