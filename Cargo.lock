@@ -378,7 +378,7 @@ dependencies = [
 [[package]]
 name = "noblit"
 version = "0.0.0"
-source = "git+https://github.com/ruuda/noblit?rev=0e014a4a0743ccf65b3d297f72b0057c915eafc2#0e014a4a0743ccf65b3d297f72b0057c915eafc2"
+source = "git+https://github.com/ruuda/noblit?rev=ec9fd19b463b10dc99c6226375b7c2b748c6058e#ec9fd19b463b10dc99c6226375b7c2b748c6058e"
 
 [[package]]
 name = "num-integer"

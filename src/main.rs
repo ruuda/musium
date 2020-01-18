@@ -825,7 +825,6 @@ fn match_listens(
     Ok(())
 }
 
-use noblit::binary::Cursor;
 use noblit::database;
 use noblit::datom::Aid;
 use noblit::datom::Value;
@@ -1045,33 +1044,6 @@ fn build_noblit_db(index: &MemoryMetaIndex) -> Database {
     db
 }
 
-fn run_noblit_query(cursor: &mut Cursor, database: &Database) {
-    use noblit::parse;
-    use noblit::types;
-    use noblit::query_plan::{Evaluator, QueryPlan};
-
-    let mut temporaries = Temporaries::new();
-    let mut query = parse::parse_query(cursor, &mut temporaries).expect("Failed to parse query.");
-
-    let view = database.view(temporaries);
-
-    // Resolve named attributes to id-based attributes, and plan the query.
-    query.fix_attributes(&view);
-    let plan = QueryPlan::new(query, &view);
-
-    // Evaluate the query, and pretty-print the results in a table.
-    let eval = Evaluator::new(&plan, &view);
-    let rows: Vec<_> = eval.collect();
-    let stdout = io::stdout();
-    types::draw_table(
-        &mut stdout.lock(),
-        view.heap(),
-        plan.select.iter().map(|&v| &plan.variable_names[v.0 as usize][..]),
-        rows.iter().map(|ref row| &row[..]),
-        &plan.select_types[..],
-    ).unwrap();
-}
-
 fn print_usage() {
     println!("Usage:\n");
     println!("  musium serve musium.conf");
@@ -1140,10 +1112,9 @@ fn main() {
         "noblit" => {
             let index = make_index(&config.library_path);
             let db = build_noblit_db(&index);
-            let mut cursor = Cursor::new(io::stdin());
-            while let Ok(0) = cursor.take_u8() {
-                run_noblit_query(&mut cursor, &db);
-            }
+            let f = fs::File::create("mindec.ndb").unwrap();
+            noblit::disk::write_packed(&db, &mut io::BufWriter::new(f)).unwrap();
+            println!("Database written to 'mindec.ndb'.");
         }
         _ => {
             print_usage();
