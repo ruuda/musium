@@ -69,7 +69,7 @@ artefacts are not as bad, but they are still fairly apparent.
 Below is a comparison of the thumbnails where artefacts were most apparent in
 the images encoded by Imagemagick. This is not a general comparison of the
 encoders; the focus is specifically on images where Imagemagick performed badly.
-One things that most of these images have in common, is that they contain solid
+One thing that most of these images have in common, is that they contain solid
 areas of bright red with sharp edges.
 
 | Guetzli 97 | Mozjpeg 95 | Imagemagick 96 |
