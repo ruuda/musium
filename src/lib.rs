@@ -304,10 +304,18 @@ pub trait MetaIndex {
     fn write_search_results_json<W: Write>(
         &self,
         mut w: W,
+        artists: &[ArtistId],
         albums: &[AlbumId],
         tracks: &[TrackId],
     ) -> io::Result<()> {
-        write!(w, r#"{{"albums":["#)?;
+        write!(w, r#"{{"artists":["#)?;
+        let mut first = true;
+        for &aid in artists {
+            if !first { write!(w, ",")?; }
+            self.write_search_artist_json(&mut w, aid)?;
+            first = false;
+        }
+        write!(w, r#"],"albums":["#)?;
         let mut first = true;
         for &aid in albums {
             if !first { write!(w, ",")?; }
@@ -319,6 +327,21 @@ pub trait MetaIndex {
         for &tid in tracks {
             if !first { write!(w, ",")?; }
             self.write_search_track_json(&mut w, tid)?;
+            first = false;
+        }
+        write!(w, r#"]}}"#)
+    }
+
+    fn write_search_artist_json<W: Write>(&self, mut w: W, id: ArtistId) -> io::Result<()> {
+        let artist = self.get_artist(id).unwrap();
+        let albums = self.get_albums_by_artist(id);
+        write!(w, r#"{{"id":"{}","name":"#, id)?;
+        serde_json::to_writer(&mut w, self.get_string(artist.name))?;
+        write!(w, r#","albums":["#)?;
+        let mut first = true;
+        for &(_artist_id, album_id) in albums {
+            if !first { write!(w, ",")?; }
+            write!(w, r#""{}""#, album_id)?;
             first = false;
         }
         write!(w, r#"]}}"#)
