@@ -41,14 +41,13 @@ renderSearchArtist :: SearchArtist -> Html Unit
 renderSearchArtist (SearchArtist artist) = do
   Html.li $ do
     Html.addClass "artist"
-    Html.span $ do
-      Html.addClass "title"
+    Html.div $ do
+      Html.addClass "name"
       Html.text artist.name
-    Html.span $ do
+    Html.div $ do
       Html.addClass "discography"
       for_ artist.albums $ \albumId -> do
-        Html.img (Model.thumbUrl albumId) ("An album by " <> artist.name) $ do
-          Html.addClass "disco-thumb"
+        Html.img (Model.thumbUrl albumId) ("An album by " <> artist.name) $ pure unit
 
 -- TODO: Deduplicate between here and album component.
 renderSearchAlbum :: SearchAlbum -> Html Unit

@@ -225,6 +225,44 @@ img.thumb
   overflow-y: auto;
 }
 
+#search-results h2
+{
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.2em;
+  font-weight: 600;
+  font-size: 1em;
+  margin: 0.5em;
+  margin-left: 1em;
+  color: #ccc;
+}
+
+#search-artists li
+{
+  padding-left: 1em;
+  padding-right: 1em;
+  padding-bottom: 0.5em;
+}
+
+#search-artists .name
+{
+  display: inline;
+}
+
+#search-artists .discography
+{
+  display: inline;
+  margin-left: 1em;
+  top: 0.3em;
+  position: relative;
+}
+
+#search-artists .discography img
+{
+  height: 1.5em;
+  margin-top: 0.2em;
+  margin-right: 0.2em;
+}
+
 /* Hide the album list while searching, but do not set it to "display: none".
  * This avoids style recalculations, and preserves the scroll position. */
 .searching #album-list { visibility: hidden }
