@@ -10,6 +10,7 @@ module Html
   , addClass
   , clear
   , div
+  , h2
   , img
   , input
   , li
@@ -78,6 +79,9 @@ onInput callback = ReaderT $ \container ->
 
 div :: forall a. Html a -> Html a
 div children = node "div" children
+
+h2 :: forall a. Html a -> Html a
+h2 children = node "h2" children
 
 span :: forall a. Html a -> Html a
 span children = node "span" children

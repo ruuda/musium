@@ -86,7 +86,7 @@ renderSearchTrack (SearchTrack track) = do
 
 renderAlbumList :: Array Album -> Html Unit
 renderAlbumList albums = do
-  { searchBox, searchResultsList } <- Html.div $ do
+  { searchBox, searchResultsBox } <- Html.div $ do
     Html.setId "search"
     searchBox <- Html.div $ do
       Html.setId "search-query"
@@ -94,11 +94,11 @@ renderAlbumList albums = do
         Html.setId "search-box"
         ask
 
-    searchResultsList <- Html.ul $ do
+    searchResultsBox <- Html.div $ do
       Html.setId "search-results"
       ask
 
-    pure { searchBox, searchResultsList }
+    pure { searchBox, searchResultsBox }
 
   albumList <- Html.ul $ do
     Html.setId "album-list"
@@ -110,14 +110,30 @@ renderAlbumList albums = do
       -- Fire off the search query and render it when it comes in.
       launchAff_ $ do
         Model.SearchResults result <- Model.search query
-        Console.log $ "Received albums: " <> (show $ Array.length $ result.albums)
-        Console.log $ "Received tracks: " <> (show $ Array.length $ result.tracks)
+        Console.log $ "Received artists: " <> (show $ Array.length $ result.artists)
+        Console.log $ "Received albums:  " <> (show $ Array.length $ result.albums)
+        Console.log $ "Received tracks:  " <> (show $ Array.length $ result.tracks)
         liftEffect $ do
-          Html.withElement searchResultsList $ do
+          Html.withElement searchResultsBox $ do
             Html.clear
-            traverse_ renderSearchArtist result.artists
-            traverse_ renderSearchAlbum result.albums
-            traverse_ renderSearchTrack result.tracks
+
+            when (not $ Array.null result.artists) $ do
+              Html.h2 $ Html.text "Artists"
+              Html.div $ do
+                Html.setId "search-artists"
+                Html.ul $ for_ result.artists renderSearchArtist
+
+            when (not $ Array.null result.albums) $ do
+              Html.h2 $ Html.text "Albums"
+              Html.div $ do
+                Html.setId "search-albums"
+                Html.ul $ for_ result.albums renderSearchAlbum
+
+            when (not $ Array.null result.tracks) $ do
+              Html.h2 $ Html.text "Tracks"
+              Html.div $ do
+                Html.setId "search-tracks"
+                Html.ul $ for_ result.tracks renderSearchTrack
 
       -- Collapse the album list while searching.
       Html.withElement Dom.body $
