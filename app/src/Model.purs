@@ -6,10 +6,12 @@
 -- A copy of the License has been included in the root of the repository.
 
 module Model
-  ( Album (..)
+  ( ArtistId (..)
+  , Album (..)
   , AlbumId (..)
   , Track (..)
   , TrackId (..)
+  , SearchArtist (..)
   , SearchAlbum (..)
   , SearchResults (..)
   , SearchTrack (..)
@@ -40,6 +42,11 @@ import Data.Int (rem)
 
 fatal :: forall m a. MonadThrow Error m => String -> m a
 fatal = error >>> throwError
+
+newtype ArtistId = ArtistId String
+
+derive instance artistIdEq :: Eq ArtistId
+derive instance artistIdOrd :: Ord ArtistId
 
 newtype AlbumId = AlbumId String
 
@@ -93,6 +100,12 @@ getAlbums = do
       Left err -> fatal $ "Failed to parse albums: " <> err
       Right albums -> pure $ sortWith (\(Album a) -> a.date) albums
 
+newtype SearchArtist = SearchArtist
+  { id :: ArtistId
+  , name :: String
+  , albums :: Array AlbumId
+  }
+
 newtype SearchAlbum = SearchAlbum
   { id :: AlbumId
   , title :: String
@@ -109,9 +122,18 @@ newtype SearchTrack = SearchTrack
   }
 
 newtype SearchResults = SearchResults
-  { albums :: Array SearchAlbum
+  { artists :: Array SearchArtist
+  , albums :: Array SearchAlbum
   , tracks :: Array SearchTrack
   }
+
+instance decodeJsonSearchArtist :: DecodeJson SearchArtist where
+  decodeJson json = do
+    obj     <- Json.decodeJson json
+    id      <- map ArtistId $ Json.getField obj "id"
+    name    <- Json.getField obj "name"
+    albums  <- map (map AlbumId) $ Json.getField obj "albums"
+    pure $ SearchArtist { id, name, albums }
 
 instance decodeJsonSearchAlbum :: DecodeJson SearchAlbum where
   decodeJson json = do
@@ -134,10 +156,11 @@ instance decodeJsonSearchTrack :: DecodeJson SearchTrack where
 
 instance decodeJsonSearchResults :: DecodeJson SearchResults where
   decodeJson json = do
-    obj    <- Json.decodeJson json
-    albums <- Json.getField obj "albums"
-    tracks <- Json.getField obj "tracks"
-    pure $ SearchResults { albums, tracks }
+    obj     <- Json.decodeJson json
+    artists <- Json.getField obj "artists"
+    albums  <- Json.getField obj "albums"
+    tracks  <- Json.getField obj "tracks"
+    pure $ SearchResults { artists, albums, tracks }
 
 search :: String -> Aff SearchResults
 search query = do
