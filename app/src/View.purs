@@ -11,7 +11,7 @@ module View
 
 import Control.Monad.Reader.Class (ask, local)
 import Data.Array as Array
-import Data.Foldable (traverse_)
+import Data.Foldable (for_, traverse_)
 import Data.String.CodeUnits as CodeUnits
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
@@ -21,7 +21,7 @@ import Prelude
 import Dom as Dom
 import Html (Html)
 import Html as Html
-import Model (Album, SearchAlbum (..), SearchTrack (..))
+import Model (Album, SearchArtist (..), SearchAlbum (..), SearchTrack (..))
 import Model as Model
 
 import AlbumComponent as AlbumComponent
@@ -37,7 +37,20 @@ buildTree n build xs =
       $ map (\i -> traverse_ build $ Array.slice (i * n) ((i + 1) * n) xs)
       $ Array.range 0 (Array.length xs / n)
 
--- TODO: Dedeplicate between here and album component.
+renderSearchArtist :: SearchArtist -> Html Unit
+renderSearchArtist (SearchArtist artist) = do
+  Html.li $ do
+    Html.addClass "artist"
+    Html.span $ do
+      Html.addClass "title"
+      Html.text artist.name
+    Html.span $ do
+      Html.addClass "discography"
+      for_ artist.albums $ \albumId -> do
+        Html.img (Model.thumbUrl albumId) ("An album by " <> artist.name) $ do
+          Html.addClass "disco-thumb"
+
+-- TODO: Deduplicate between here and album component.
 renderSearchAlbum :: SearchAlbum -> Html Unit
 renderSearchAlbum (SearchAlbum album) = do
   Html.li $ do
@@ -102,6 +115,7 @@ renderAlbumList albums = do
         liftEffect $ do
           Html.withElement searchResultsList $ do
             Html.clear
+            traverse_ renderSearchArtist result.artists
             traverse_ renderSearchAlbum result.albums
             traverse_ renderSearchTrack result.tracks
 
