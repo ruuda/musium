@@ -54,6 +54,8 @@ impl<T> MemoryWordIndex<T> {
         // If the query prefix is a true prefix of the key, then the two order
         // equal. If it is not a prefix, then lexicographic ordering of the full
         // key also determines its ordering relative to the prefix.
+        // TODO: I think this is equivalent to a memcmp of the bytewise prefix.
+        // Does it compile down to that, and it not, can be do that instead?
         if key.starts_with(prefix) {
             cmp::Ordering::Equal
         } else {
