@@ -23,11 +23,15 @@ pub struct Values {
 
 /// An index that associates one or more items with string keys.
 pub trait WordIndex {
+    type Item;
+
     /// Return the number of words in the index.
     fn len(&self) -> usize;
 
     /// Return the value ranges for all keys of which `prefix` is a prefix.
     fn search_prefix(&self, prefix: &str) -> &[Values];
+
+    fn get_values(&self, range: Values) -> &[Self::Item];
 }
 
 struct MemoryWordIndex<T> {
@@ -106,12 +110,9 @@ impl<T> MemoryWordIndex<T> {
     fn cmp_prefix(&self, prefix: &str, index: usize) -> cmp::Ordering {
         let key = self.get_key(self.key_slices[index]);
 
-        // Compare bytes, up to the shortest of the two.
+        // Compare bytes, limiting the key if it is longer.
         let n = cmp::min(prefix.len(), key.len());
-        let lhs = &prefix[..n];
-        let rhs = &key[..n];
-
-        lhs.cmp(rhs)
+        prefix.cmp(&key[..n])
     }
 
     /// Return the index of the first key that has the given prefix.
@@ -158,8 +159,14 @@ impl<T> MemoryWordIndex<T> {
 }
 
 impl<T> WordIndex for MemoryWordIndex<T> {
+    type Item = T;
+
     fn len(&self) -> usize {
         self.key_slices.len()
+    }
+
+    fn get_values(&self, range: Values) -> &[T] {
+        self.get_values(range)
     }
 
     fn search_prefix(&self, prefix: &str) -> &[Values] {
@@ -217,5 +224,80 @@ mod test {
         assert_eq!(index.value_slices[0], Values { offset: 0, len: 2});
         assert_eq!(index.value_slices[1], Values { offset: 2, len: 3});
         assert_eq!(index.value_slices[2], Values { offset: 5, len: 1});
+    }
+
+    #[test]
+    fn test_search_prefix_shorter() {
+        let mut elems = BTreeSet::new();
+        elems.insert(("appendix".to_string(), 1));
+        elems.insert(("asterisk".to_string(), 2));
+        elems.insert(("asterism".to_string(), 3));
+        elems.insert(("asterism".to_string(), 4));
+        elems.insert(("astrology".to_string(), 5));
+        elems.insert(("astronomy".to_string(), 6));
+        elems.insert(("attribute".to_string(), 7));
+        elems.insert(("borealis".to_string(), 8));
+
+        let index = MemoryWordIndex::new(&elems);
+
+        let vs: Vec<_> = index
+            .search_prefix("aste")
+            .iter()
+            .flat_map(|&v| index.get_values(v).iter().cloned())
+            .collect();
+        assert_eq!(vs, vec![2, 3, 4]);
+
+        let vs: Vec<_> = index
+            .search_prefix("ast")
+            .iter()
+            .flat_map(|&v| index.get_values(v).iter().cloned())
+            .collect();
+        assert_eq!(vs, vec![2, 3, 4, 5, 6]);
+
+        let vs: Vec<_> = index
+            .search_prefix("a")
+            .iter()
+            .flat_map(|&v| index.get_values(v).iter().cloned())
+            .collect();
+        assert_eq!(vs, vec![2, 3, 4, 5, 6, 7]);
+
+        let vs: Vec<_> = index
+            .search_prefix("")
+            .iter()
+            .flat_map(|&v| index.get_values(v).iter().cloned())
+            .collect();
+        assert_eq!(vs, vec![2, 3, 4, 5, 6, 7, 8]);
+    }
+
+    #[test]
+    fn test_search_prefix_longer() {
+        let mut elems = BTreeSet::new();
+        elems.insert(("a".to_string(), 1));
+        elems.insert(("as".to_string(), 2));
+        elems.insert(("tea".to_string(), 3));
+        elems.insert(("the".to_string(), 4));
+        elems.insert(("theo".to_string(), 5));
+        elems.insert(("theremin".to_string(), 6));
+        elems.insert(("thermos".to_string(), 7));
+
+        let index = MemoryWordIndex::new(&elems);
+
+        let vs: Vec<_> = index
+            .search_prefix("theo")
+            .iter()
+            .flat_map(|&v| index.get_values(v).iter().cloned())
+            .collect();
+        assert_eq!(vs, vec![5]);
+
+        assert_eq!(index.search_prefix("theorem"), &[]);
+        assert_eq!(index.search_prefix("thermometer"), &[]);
+        assert_eq!(index.search_prefix("astronomy"), &[]);
+
+        let vs: Vec<_> = index
+            .search_prefix("as")
+            .iter()
+            .flat_map(|&v| index.get_values(v).iter().cloned())
+            .collect();
+        assert_eq!(vs, vec![2]);
     }
 }
