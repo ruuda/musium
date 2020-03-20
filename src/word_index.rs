@@ -337,4 +337,23 @@ mod test {
             .collect();
         assert_eq!(vs, vec![2]);
     }
+
+    #[test]
+    fn test_search_prefix_regression() {
+        // This test failed once on real index data.
+
+        let mut elems = BTreeSet::new();
+        elems.insert(("hybrid".to_string(), 1));
+        elems.insert(("minds".to_string(), 2));
+        elems.insert(("tycho".to_string(), 3));
+
+        let index = MemoryWordIndex::new(&elems);
+
+        let vs: Vec<_> = index
+            .search_prefix("hy")
+            .iter()
+            .flat_map(|&v| index.get_values(v).iter().cloned())
+            .collect();
+        assert_eq!(vs, vec![1]);
+    }
 }
