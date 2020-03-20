@@ -1167,10 +1167,11 @@ pub struct MemoryMetaIndex {
     strings: Vec<String>,
     filenames: Vec<String>,
 
-    words_track_title: MemoryWordIndex<TrackId>,
-    words_album_title: MemoryWordIndex<AlbumId>,
-    words_album_artist: MemoryWordIndex<ArtistId>,
-    words_track_artist: MemoryWordIndex<TrackId>,
+    // TODO: Don't make these pub, this is just for debug printing stats.
+    pub words_track_title: MemoryWordIndex<TrackId>,
+    pub words_album_title: MemoryWordIndex<AlbumId>,
+    pub words_album_artist: MemoryWordIndex<ArtistId>,
+    pub words_track_artist: MemoryWordIndex<TrackId>,
 }
 
 /// Invokes `process` for all elements in the builder, in sorted order.

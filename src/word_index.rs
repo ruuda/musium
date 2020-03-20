@@ -6,6 +6,8 @@
 // A copy of the License has been included in the root of the repository.
 
 use std::cmp;
+use std::mem;
+use std::fmt;
 
 #[repr(align(8))]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -39,6 +41,28 @@ pub struct MemoryWordIndex<T> {
     key_slices: Vec<Key>,
     value_data: Vec<T>,
     value_slices: Vec<Values>,
+}
+
+pub struct WordIndexSize {
+    key_data_bytes: usize,
+    value_data_bytes: usize,
+    slice_bytes: usize,
+    num_keys: usize,
+    num_values: usize,
+}
+
+impl fmt::Display for WordIndexSize {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f,
+            "{:3} keys, {:3} values, {:3} kB ({:3} kB keys, {:3} kB values, {:3} kB slices)",
+            self.num_keys,
+            self.num_values,
+            (self.key_data_bytes + self.value_data_bytes + self.slice_bytes) / 1000,
+            self.key_data_bytes / 1000,
+            self.value_data_bytes / 1000,
+            self.slice_bytes / 1000,
+        )
+    }
 }
 
 impl<T> MemoryWordIndex<T> {
@@ -97,6 +121,19 @@ impl<T> MemoryWordIndex<T> {
             key_slices: key_slices,
         }
     }
+
+    pub fn size(&self) -> WordIndexSize {
+        WordIndexSize {
+            key_data_bytes: self.key_data.len(),
+            value_data_bytes: self.value_data.len() * mem::size_of::<T>(),
+            slice_bytes:
+                self.key_slices.len() * mem::size_of::<Key>() +
+                self.value_slices.len() * mem::size_of::<Values>(),
+            num_keys: self.key_slices.len(),
+            num_values: self.value_data.len(),
+        }
+    }
+
 
     fn get_key(&self, key: Key) -> &str {
         &self.key_data[key.offset as usize..key.offset as usize + key.len as usize]
