@@ -8,14 +8,14 @@
 use std::cmp;
 
 #[repr(align(8))]
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 struct Key {
     offset: u32,
     len: u32,
 }
 
 #[repr(align(8))]
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Values {
     offset: u32,
     len: u32,
@@ -38,6 +38,7 @@ struct MemoryWordIndex<T> {
 }
 
 impl<T> MemoryWordIndex<T> {
+    /// Build a memory word index from a sorted sequence of (word, value) pairs.
     fn new<'a, I>(elements: I) -> MemoryWordIndex<T>
     where
         I: IntoIterator<Item = &'a (String, T)>,
@@ -165,5 +166,56 @@ impl<T> WordIndex for MemoryWordIndex<T> {
         let min = self.find_lower(prefix);
         let max = self.find_upper(prefix);
         &self.value_slices[min..max]
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{MemoryWordIndex, Key, Values, WordIndex};
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn test_build_word_index_all_unique() {
+        let mut elems = BTreeSet::new();
+        elems.insert(("A".to_string(), 2));
+        elems.insert(("BB".to_string(), 3));
+        elems.insert(("C".to_string(), 5));
+
+        let index = MemoryWordIndex::new(&elems);
+
+        assert_eq!(&index.key_data, "ABBC");
+        assert_eq!(&index.value_data, &[2, 3, 5]);
+
+        assert_eq!(index.key_slices[0], Key { offset: 0, len: 1});
+        assert_eq!(index.key_slices[1], Key { offset: 1, len: 2});
+        assert_eq!(index.key_slices[2], Key { offset: 3, len: 1});
+
+        assert_eq!(index.value_slices[0], Values { offset: 0, len: 1});
+        assert_eq!(index.value_slices[1], Values { offset: 1, len: 1});
+        assert_eq!(index.value_slices[2], Values { offset: 2, len: 1});
+    }
+
+    #[test]
+    fn test_build_word_index_many_per_word() {
+        let mut elems = BTreeSet::new();
+        elems.insert(("A".to_string(), 2));
+        elems.insert(("A".to_string(), 5));
+        elems.insert(("B".to_string(), 2));
+        elems.insert(("B".to_string(), 5));
+        elems.insert(("B".to_string(), 7));
+        elems.insert(("C".to_string(), 11));
+
+        let index = MemoryWordIndex::new(&elems);
+
+        assert_eq!(&index.key_data, "ABC");
+        assert_eq!(&index.value_data, &[2, 5, 2, 5, 7, 11]);
+
+        assert_eq!(index.key_slices[0], Key { offset: 0, len: 1});
+        assert_eq!(index.key_slices[1], Key { offset: 1, len: 1});
+        assert_eq!(index.key_slices[2], Key { offset: 2, len: 1});
+
+        assert_eq!(index.value_slices[0], Values { offset: 0, len: 2});
+        assert_eq!(index.value_slices[1], Values { offset: 2, len: 3});
+        assert_eq!(index.value_slices[2], Values { offset: 5, len: 1});
     }
 }
