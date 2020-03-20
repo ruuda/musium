@@ -34,7 +34,7 @@ pub trait WordIndex {
     fn get_values(&self, range: Values) -> &[Self::Item];
 }
 
-struct MemoryWordIndex<T> {
+pub struct MemoryWordIndex<T> {
     key_data: String,
     key_slices: Vec<Key>,
     value_data: Vec<T>,
@@ -43,7 +43,7 @@ struct MemoryWordIndex<T> {
 
 impl<T> MemoryWordIndex<T> {
     /// Build a memory word index from a sorted sequence of (word, value) pairs.
-    fn new<'a, I>(elements: I) -> MemoryWordIndex<T>
+    pub fn new<'a, I>(elements: I) -> MemoryWordIndex<T>
     where
         I: IntoIterator<Item = &'a (String, T)>,
         T: 'a + Copy

@@ -34,6 +34,8 @@ use std::u64;
 
 use unicode_normalization::UnicodeNormalization;
 
+use word_index::{MemoryWordIndex, WordIndex};
+
 // Stats of my personal music library at this point:
 //
 //     11.5k tracks
@@ -1165,11 +1167,10 @@ pub struct MemoryMetaIndex {
     strings: Vec<String>,
     filenames: Vec<String>,
 
-    // TODO: Use an optimized data structure to represent those.
-    words_track_title: BTreeSet<(String, TrackId)>,
-    words_album_title: BTreeSet<(String, AlbumId)>,
-    words_album_artist: BTreeSet<(String, ArtistId)>,
-    words_track_artist: BTreeSet<(String, TrackId)>,
+    words_track_title: MemoryWordIndex<TrackId>,
+    words_album_title: MemoryWordIndex<AlbumId>,
+    words_album_artist: MemoryWordIndex<ArtistId>,
+    words_track_artist: MemoryWordIndex<TrackId>,
 }
 
 /// Invokes `process` for all elements in the builder, in sorted order.
@@ -1346,10 +1347,10 @@ impl MemoryMetaIndex {
             albums_by_artist: albums_by_artist,
             strings: strings.into_vec(),
             filenames: filenames,
-            words_track_title: words_track_title,
-            words_album_title: words_album_title,
-            words_album_artist: words_album_artist,
-            words_track_artist: words_track_artist,
+            words_track_title: MemoryWordIndex::new(&words_track_title),
+            words_album_title: MemoryWordIndex::new(&words_album_title),
+            words_album_artist: MemoryWordIndex::new(&words_album_artist),
+            words_track_artist: MemoryWordIndex::new(&words_track_artist),
         }
     }
 
@@ -1583,37 +1584,23 @@ impl MetaIndex for MemoryMetaIndex {
     }
 
     fn search_artist(&self, word: &str, into: &mut Vec<ArtistId>) {
-        // TODO: This is very inefficient, switch to a good data structure for
-        // lookups.
-        let min = (word.to_string(), ArtistId(u64::MIN));
-        let max = (word.to_string(), ArtistId(u64::MAX));
-        for (_word, id) in self.words_album_artist.range(min..max) {
-            into.push(*id);
+        for range in self.words_album_artist.search_prefix(word) {
+            into.extend_from_slice(self.words_album_artist.get_values(*range));
         }
     }
 
     fn search_album(&self, word: &str, into: &mut Vec<AlbumId>) {
-        // TODO: This is very inefficient, switch to a good data structure for
-        // lookups.
-        let min = (word.to_string(), AlbumId(u64::MIN));
-        let max = (word.to_string(), AlbumId(u64::MAX));
-        for (_word, id) in self.words_album_title.range(min..max) {
-            into.push(*id);
+        for range in self.words_album_title.search_prefix(word) {
+            into.extend_from_slice(self.words_album_title.get_values(*range));
         }
     }
 
     fn search_track(&self, word: &str, into: &mut Vec<TrackId>) {
-        // TODO: This is very inefficient, switch to a good data structure for
-        // lookups.
-        let min = (word.to_string(), TrackId(u64::MIN));
-        let max = (word.to_string(), TrackId(u64::MAX));
-        for (_word, id) in self.words_track_title.range(min..max) {
-            into.push(*id);
+        for range in self.words_track_title.search_prefix(word) {
+            into.extend_from_slice(self.words_track_title.get_values(*range));
         }
-        let min = (word.to_string(), TrackId(u64::MIN));
-        let max = (word.to_string(), TrackId(u64::MAX));
-        for (_word, id) in self.words_track_artist.range(min..max) {
-            into.push(*id);
+        for range in self.words_track_artist.search_prefix(word) {
+            into.extend_from_slice(self.words_track_artist.get_values(*range));
         }
         into.sort();
     }
