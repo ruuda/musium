@@ -153,7 +153,11 @@ impl<T> MemoryWordIndex<T> {
     }
 
     /// Return the index of the first key that has the given prefix.
+    ///
+    /// If no key has the prefix, returns the index of the key before which to
+    /// insert to keep the order sorted.
     fn find_lower(&self, prefix: &str) -> usize {
+        // Invariant: keys[min] <= prefix <= keys[max].
         let mut min = 0;
         let mut max = self.key_slices.len();
         while max - min > 1 {
@@ -168,13 +172,25 @@ impl<T> MemoryWordIndex<T> {
                 cmp::Ordering::Greater => min = i,
             }
         }
-        // Min is now the last key less than the prefix,
-        // max is the first key greater or equal.
-        max
+
+        // From the invariant alone, we can't tell if min or max is the answer,
+        // we need to check min itself too (max can't be checked, it may be out
+        // of bounds). If prefix would sort before the min, return 0 for the
+        // lower bound, not -1. The upper bound will also be 0, so the slice has
+        // length zero.
+        match self.cmp_prefix(prefix, min) {
+            cmp::Ordering::Less => 0,
+            cmp::Ordering::Equal => min,
+            cmp::Ordering::Greater => max,
+        }
     }
 
     /// Return the index of the first key after those with the given prefix.
+    ///
+    /// If no key has the prefix, returns the index of the key before which to
+    /// insert to keep the order sorted.
     fn find_upper(&self, prefix: &str) -> usize {
+        // Invariant: keys[min] < keys[max], prefix < keys[max].
         let mut min = 0;
         let mut max = self.key_slices.len();
         while max - min > 1 {
@@ -189,9 +205,16 @@ impl<T> MemoryWordIndex<T> {
                 cmp::Ordering::Greater => min = i,
             }
         }
-        // Min is now the last key less than or equal to the prefix,
-        // max is the first key greater.
-        max
+
+        // From the invariant alone, we can't tell if min or max is the answer,
+        // we need to check min itself too (max can't be checked, it may be out
+        // of bounds). If prefix would sort before the min, return 0 for the
+        // upper bound, so the slice has length zero.
+        match self.cmp_prefix(prefix, min) {
+            cmp::Ordering::Less => 0,
+            cmp::Ordering::Equal => max,
+            cmp::Ordering::Greater => max,
+        }
     }
 }
 
@@ -296,14 +319,14 @@ mod test {
             .iter()
             .flat_map(|&v| index.get_values(v).iter().cloned())
             .collect();
-        assert_eq!(vs, vec![2, 3, 4, 5, 6, 7]);
+        assert_eq!(vs, vec![1, 2, 3, 4, 5, 6, 7]);
 
         let vs: Vec<_> = index
             .search_prefix("")
             .iter()
             .flat_map(|&v| index.get_values(v).iter().cloned())
             .collect();
-        assert_eq!(vs, vec![2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(vs, vec![1, 2, 3, 4, 5, 6, 7, 8]);
     }
 
     #[test]
@@ -339,6 +362,57 @@ mod test {
     }
 
     #[test]
+    fn test_search_bounds() {
+        // This test failed once on real index data.
+
+        let mut elems = BTreeSet::new();
+        elems.insert(("hybrid".to_string(), 1));
+        elems.insert(("hypotenuse".to_string(), 2));
+        elems.insert(("minds".to_string(), 3));
+        elems.insert(("tycho".to_string(), 4));
+
+        let index = MemoryWordIndex::new(&elems);
+
+        // "a" would be before element 0, spans 0..0.
+        assert_eq!(index.find_lower("a"), 0);
+        assert_eq!(index.find_upper("a"), 0);
+
+        // "h" spans 0..2
+        assert_eq!(index.find_lower("h"), 0);
+        assert_eq!(index.find_upper("h"), 2);
+
+        // "hy" also still
+        assert_eq!(index.find_lower("hy"), 0);
+        assert_eq!(index.find_upper("hy"), 2);
+
+        // "hyb" matches only 0, "hyp" only 1.
+        assert_eq!(index.find_lower("hyb"), 0);
+        assert_eq!(index.find_upper("hyb"), 1);
+        assert_eq!(index.find_lower("hyp"), 1);
+        assert_eq!(index.find_upper("hyp"), 2);
+
+        // "k" would fall between 1 and 2, so 2..2.
+        assert_eq!(index.find_lower("k"), 2);
+        assert_eq!(index.find_upper("k"), 2);
+
+        // "m" hits 2 exactly.
+        assert_eq!(index.find_lower("m"), 2);
+        assert_eq!(index.find_upper("m"), 3);
+
+        // "o" would fall between 2 and 3, so 3..3.
+        assert_eq!(index.find_lower("o"), 3);
+        assert_eq!(index.find_upper("o"), 3);
+
+        // "ty" hits 3 exactly.
+        assert_eq!(index.find_lower("ty"), 3);
+        assert_eq!(index.find_upper("ty"), 4);
+
+        // "v" is past the end.
+        assert_eq!(index.find_lower("v"), 4);
+        assert_eq!(index.find_upper("v"), 4);
+    }
+
+    #[test]
     fn test_search_prefix_regression() {
         // This test failed once on real index data.
 
@@ -349,11 +423,17 @@ mod test {
 
         let index = MemoryWordIndex::new(&elems);
 
+        assert_eq!(index.find_lower("hy"), 0);
+        assert_eq!(index.find_upper("hy"), 1);
+
         let vs: Vec<_> = index
             .search_prefix("hy")
             .iter()
             .flat_map(|&v| index.get_values(v).iter().cloned())
             .collect();
         assert_eq!(vs, vec![1]);
+
+        assert_eq!(index.find_lower("e"), 0);
+        assert_eq!(index.find_upper("e"), 0);
     }
 }
