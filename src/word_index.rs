@@ -23,7 +23,6 @@ pub struct Values {
 
 /// An index that associates one or more items with string keys.
 pub trait WordIndex {
-
     /// Return the number of words in the index.
     fn len(&self) -> usize;
 
@@ -32,35 +31,86 @@ pub trait WordIndex {
 }
 
 struct MemoryWordIndex<T> {
+    key_data: String,
     key_slices: Vec<Key>,
+    value_data: Vec<T>,
     value_slices: Vec<Values>,
-    keys: String,
-    values: Vec<T>,
 }
 
 impl<T> MemoryWordIndex<T> {
+    fn new<'a, I>(elements: I) -> MemoryWordIndex<T>
+    where
+        I: IntoIterator<Item = &'a (String, T)>,
+        T: 'a + Copy
+    {
+        let mut key_data = String::new();
+        let mut value_data = Vec::new();
+
+        let mut key_slices = Vec::new();
+        let mut value_slices = Vec::new();
+
+        let mut prev_word = "";
+        let mut values = Values {
+            offset: 0,
+            len: 0,
+        };
+
+        for &(ref word, value) in elements {
+            if word != prev_word {
+                // Finish up the previous value slice, if any.
+                if values.len > 0 {
+                    value_slices.push(values);
+                }
+
+                let word_slice = Key {
+                    offset: key_data.len() as u32,
+                    len: word.len() as u32,
+                };
+
+                key_data.push_str(word);
+                key_slices.push(word_slice);
+
+                values = Values {
+                    offset: value_data.len() as u32,
+                    len: 0,
+                };
+
+                prev_word = word;
+            }
+
+            value_data.push(value);
+            values.len += 1;
+        }
+
+        // Finish up the last word.
+        value_slices.push(values);
+
+        MemoryWordIndex {
+            value_data: value_data,
+            value_slices: value_slices,
+            key_data: key_data,
+            key_slices: key_slices,
+        }
+    }
+
     fn get_key(&self, key: Key) -> &str {
-        &self.keys[key.offset as usize..key.offset as usize + key.len as usize]
+        &self.key_data[key.offset as usize..key.offset as usize + key.len as usize]
     }
 
     fn get_values(&self, range: Values) -> &[T] {
-        &self.values[range.offset as usize..range.offset as usize + range.len as usize]
+        &self.value_data[range.offset as usize..range.offset as usize + range.len as usize]
     }
 
     /// Compare `prefix` to the same-length prefix of the `index`-th key.
     fn cmp_prefix(&self, prefix: &str, index: usize) -> cmp::Ordering {
         let key = self.get_key(self.key_slices[index]);
 
-        // If the query prefix is a true prefix of the key, then the two order
-        // equal. If it is not a prefix, then lexicographic ordering of the full
-        // key also determines its ordering relative to the prefix.
-        // TODO: I think this is equivalent to a memcmp of the bytewise prefix.
-        // Does it compile down to that, and it not, can be do that instead?
-        if key.starts_with(prefix) {
-            cmp::Ordering::Equal
-        } else {
-            prefix.cmp(key)
-        }
+        // Compare bytes, up to the shortest of the two.
+        let n = cmp::min(prefix.len(), key.len());
+        let lhs = &prefix[..n];
+        let rhs = &key[..n];
+
+        lhs.cmp(rhs)
     }
 
     /// Return the index of the first key that has the given prefix.
