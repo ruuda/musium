@@ -277,9 +277,23 @@ impl MetaServer {
             self.index.search_track(&word, &mut tracks);
         }
 
+        // Cap the number of search results we serve. We can easily produce many
+        // many results (especially when searching for "t", a prefix of "the",
+        // or when searching "a"). Searching is quite fast, but parsing and
+        // rendering the results in the frontend is slow, and having this many
+        // results is not useful anyway, so we cap them.
+        let n_artists = artists.len().min(100);
+        let n_albums = albums.len().min(100);
+        let n_tracks = tracks.len().min(100);
+
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        self.index.write_search_results_json(&mut w, &artists, &albums, &tracks).unwrap();
+        self.index.write_search_results_json(
+            &mut w,
+            &artists[..n_artists],
+            &albums[..n_albums],
+            &tracks[..n_tracks],
+        ).unwrap();
 
         let response = Response::new()
             .with_header(AccessControlAllowOrigin::Any)

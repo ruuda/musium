@@ -54,7 +54,7 @@ pub struct WordIndexSize {
 impl fmt::Display for WordIndexSize {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f,
-            "{:3} keys, {:3} values, {:3} kB ({:3} kB keys, {:3} kB values, {:3} kB slices)",
+            "{:4} keys, {:5} values, {:3} kB ({:3} kB keys, {:3} kB values, {:3} kB slices)",
             self.num_keys,
             self.num_values,
             (self.key_data_bytes + self.value_data_bytes + self.slice_bytes) / 1000,
