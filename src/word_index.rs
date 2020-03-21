@@ -149,7 +149,7 @@ impl<T> MemoryWordIndex<T> {
 
         // Compare bytes, limiting the key if it is longer.
         let n = cmp::min(prefix.len(), key.len());
-        prefix.cmp(&key[..n])
+        prefix.as_bytes().cmp(&key.as_bytes()[..n])
     }
 
     /// Return the index of the first key that has the given prefix.
@@ -435,5 +435,31 @@ mod test {
 
         assert_eq!(index.find_lower("e"), 0);
         assert_eq!(index.find_upper("e"), 0);
+    }
+
+    #[test]
+    fn test_search_multibyte_key() {
+        let mut elems = BTreeSet::new();
+        elems.insert(("abacus".to_string(), 1));
+        elems.insert(("zenith".to_string(), 2));
+        elems.insert(("クリスタル".to_string(), 3));
+
+        let index = MemoryWordIndex::new(&elems);
+
+        assert_eq!(index.find_lower("z"), 1);
+        assert_eq!(index.find_upper("z"), 2);
+    }
+
+    #[test]
+    fn test_search_multibyte_needles() {
+        let mut elems = BTreeSet::new();
+        elems.insert(("abacus".to_string(), 1));
+        elems.insert(("zenith".to_string(), 2));
+        elems.insert(("クリスタル".to_string(), 3));
+
+        let index = MemoryWordIndex::new(&elems);
+
+        assert_eq!(index.find_lower("ク"), 2);
+        assert_eq!(index.find_upper("ク"), 3);
     }
 }
