@@ -126,8 +126,8 @@ playTrack (Album album) (Track track) =
       , albumArtist: album.artist
       , releaseDate: album.date
                      -- TODO: Find a way to make urls work on the local network.
-      , imageUrl:    "http://192.168.1.105:8233" <> Model.coverUrl track.id
-      , trackUrl:    "http://192.168.1.105:8233" <> Model.trackUrl track.id
+      , imageUrl:    "http://192.168.1.107:8233" <> Model.coverUrl track.id
+      , trackUrl:    "http://192.168.1.107:8233" <> Model.trackUrl track.id
       }
   in do
     session <- Cast.getCastSession
