@@ -11,7 +11,7 @@ use std::fmt;
 
 /// Packed metadata about a an entry in the word index.
 #[repr(C, align(4))]
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct WordMeta {
     /// The total length of the string in which the word occurs.
     ///
@@ -65,19 +65,32 @@ pub trait WordIndex {
     /// Return the value ranges for all keys of which `prefix` is a prefix.
     fn search_prefix(&self, prefix: &str) -> &[Values];
 
+    /// Return the values for a value range returned from a search.
     fn get_values(&self, range: Values) -> &[Self::Item];
+
+    /// Return the metadata associated with the values in the value range.
+    fn get_metas(&self, range: Values) -> &[WordMeta];
 }
 
 pub struct MemoryWordIndex<T> {
-    key_data: String,
     key_slices: Vec<Key>,
-    value_data: Vec<T>,
     value_slices: Vec<Values>,
+    key_data: String,
+    // TODO: Benchmark (Vec<T>, Vec<WordMeta>) against Vec<(T, WordMeta)>. It is
+    // not obvious which will be better for locality: in an intersection query,
+    // we expect most values to be out of the intersection, so there we avoid
+    // wasting cache on the metadata, and we can pack more values in the same
+    // cache lines. But if there is a single query word, we load everything, and
+    // having to jump around between two places is probably worse then when they
+    // are adjacent.
+    value_data: Vec<T>,
+    meta_data: Vec<WordMeta>,
 }
 
 pub struct WordIndexSize {
     key_data_bytes: usize,
     value_data_bytes: usize,
+    meta_data_bytes: usize,
     slice_bytes: usize,
     num_keys: usize,
     num_values: usize,
@@ -86,12 +99,13 @@ pub struct WordIndexSize {
 impl fmt::Display for WordIndexSize {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f,
-            "{:4} keys, {:5} values, {:3} kB ({:3} kB keys, {:3} kB values, {:3} kB slices)",
+            "{:4} keys, {:5} values, {:3} kB ({:3} kB keys, {:3} kB values, {:3} kB meta, {:3} kB slices)",
             self.num_keys,
             self.num_values,
-            (self.key_data_bytes + self.value_data_bytes + self.slice_bytes) / 1000,
+            (self.key_data_bytes + self.value_data_bytes + self.meta_data_bytes + self.slice_bytes) / 1000,
             self.key_data_bytes / 1000,
             self.value_data_bytes / 1000,
+            self.meta_data_bytes / 1000,
             self.slice_bytes / 1000,
         )
     }
@@ -101,11 +115,12 @@ impl<T> MemoryWordIndex<T> {
     /// Build a memory word index from a sorted sequence of (word, value) pairs.
     pub fn new<'a, I>(elements: I) -> MemoryWordIndex<T>
     where
-        I: IntoIterator<Item = &'a (String, T)>,
+        I: IntoIterator<Item = &'a (String, T, WordMeta)>,
         T: 'a + Copy
     {
         let mut key_data = String::new();
         let mut value_data = Vec::new();
+        let mut meta_data = Vec::new();
 
         let mut key_slices = Vec::new();
         let mut value_slices = Vec::new();
@@ -116,7 +131,7 @@ impl<T> MemoryWordIndex<T> {
             len: 0,
         };
 
-        for &(ref word, value) in elements {
+        for &(ref word, value, meta) in elements {
             if word != prev_word {
                 // Finish up the previous value slice, if any.
                 if values.len > 0 {
@@ -140,6 +155,7 @@ impl<T> MemoryWordIndex<T> {
             }
 
             value_data.push(value);
+            meta_data.push(meta);
             values.len += 1;
         }
 
@@ -147,10 +163,11 @@ impl<T> MemoryWordIndex<T> {
         value_slices.push(values);
 
         MemoryWordIndex {
-            value_data: value_data,
+            key_slices: key_slices,
             value_slices: value_slices,
             key_data: key_data,
-            key_slices: key_slices,
+            value_data: value_data,
+            meta_data: meta_data,
         }
     }
 
@@ -158,6 +175,7 @@ impl<T> MemoryWordIndex<T> {
         WordIndexSize {
             key_data_bytes: self.key_data.len(),
             value_data_bytes: self.value_data.len() * mem::size_of::<T>(),
+            meta_data_bytes: self.meta_data.len() * mem::size_of::<WordMeta>(),
             slice_bytes:
                 self.key_slices.len() * mem::size_of::<Key>() +
                 self.value_slices.len() * mem::size_of::<Values>(),
@@ -173,6 +191,10 @@ impl<T> MemoryWordIndex<T> {
 
     fn get_values(&self, range: Values) -> &[T] {
         &self.value_data[range.offset as usize..range.offset as usize + range.len as usize]
+    }
+
+    fn get_metas(&self, range: Values) -> &[WordMeta] {
+        &self.meta_data[range.offset as usize..range.offset as usize + range.len as usize]
     }
 
     /// Compare `prefix` to the same-length prefix of the `index`-th key.
@@ -261,6 +283,10 @@ impl<T> WordIndex for MemoryWordIndex<T> {
         self.get_values(range)
     }
 
+    fn get_metas(&self, range: Values) -> &[WordMeta] {
+        self.get_metas(range)
+    }
+
     fn search_prefix(&self, prefix: &str) -> &[Values] {
         let min = self.find_lower(prefix);
         let max = self.find_upper(prefix);
@@ -273,6 +299,13 @@ mod test {
     use super::{MemoryWordIndex, Key, Values, WordIndex, WordMeta};
     use std::collections::BTreeSet;
 
+    /// Dummy word metadata for use in these tests.
+    const M0: WordMeta = WordMeta {
+        total_len: 0,
+        index: 0,
+        rank: 0,
+    };
+
     #[test]
     fn test_word_meta_fits_u32() {
         use std::mem;
@@ -282,9 +315,9 @@ mod test {
     #[test]
     fn test_build_word_index_all_unique() {
         let mut elems = BTreeSet::new();
-        elems.insert(("A".to_string(), 2));
-        elems.insert(("BB".to_string(), 3));
-        elems.insert(("C".to_string(), 5));
+        elems.insert(("A".to_string(),  2, M0));
+        elems.insert(("BB".to_string(), 3, M0));
+        elems.insert(("C".to_string(),  5, M0));
 
         let index = MemoryWordIndex::new(&elems);
 
@@ -303,12 +336,12 @@ mod test {
     #[test]
     fn test_build_word_index_many_per_word() {
         let mut elems = BTreeSet::new();
-        elems.insert(("A".to_string(), 2));
-        elems.insert(("A".to_string(), 5));
-        elems.insert(("B".to_string(), 2));
-        elems.insert(("B".to_string(), 5));
-        elems.insert(("B".to_string(), 7));
-        elems.insert(("C".to_string(), 11));
+        elems.insert(("A".to_string(),  2, M0));
+        elems.insert(("A".to_string(),  5, M0));
+        elems.insert(("B".to_string(),  2, M0));
+        elems.insert(("B".to_string(),  5, M0));
+        elems.insert(("B".to_string(),  7, M0));
+        elems.insert(("C".to_string(), 11, M0));
 
         let index = MemoryWordIndex::new(&elems);
 
@@ -327,14 +360,14 @@ mod test {
     #[test]
     fn test_search_prefix_shorter() {
         let mut elems = BTreeSet::new();
-        elems.insert(("appendix".to_string(), 1));
-        elems.insert(("asterisk".to_string(), 2));
-        elems.insert(("asterism".to_string(), 3));
-        elems.insert(("asterism".to_string(), 4));
-        elems.insert(("astrology".to_string(), 5));
-        elems.insert(("astronomy".to_string(), 6));
-        elems.insert(("attribute".to_string(), 7));
-        elems.insert(("borealis".to_string(), 8));
+        elems.insert(("appendix".to_string(),  1, M0));
+        elems.insert(("asterisk".to_string(),  2, M0));
+        elems.insert(("asterism".to_string(),  3, M0));
+        elems.insert(("asterism".to_string(),  4, M0));
+        elems.insert(("astrology".to_string(), 5, M0));
+        elems.insert(("astronomy".to_string(), 6, M0));
+        elems.insert(("attribute".to_string(), 7, M0));
+        elems.insert(("borealis".to_string(),  8, M0));
 
         let index = MemoryWordIndex::new(&elems);
 
@@ -370,13 +403,13 @@ mod test {
     #[test]
     fn test_search_prefix_longer() {
         let mut elems = BTreeSet::new();
-        elems.insert(("a".to_string(), 1));
-        elems.insert(("as".to_string(), 2));
-        elems.insert(("tea".to_string(), 3));
-        elems.insert(("the".to_string(), 4));
-        elems.insert(("theo".to_string(), 5));
-        elems.insert(("theremin".to_string(), 6));
-        elems.insert(("thermos".to_string(), 7));
+        elems.insert(("a".to_string(),        1, M0));
+        elems.insert(("as".to_string(),       2, M0));
+        elems.insert(("tea".to_string(),      3, M0));
+        elems.insert(("the".to_string(),      4, M0));
+        elems.insert(("theo".to_string(),     5, M0));
+        elems.insert(("theremin".to_string(), 6, M0));
+        elems.insert(("thermos".to_string(),  7, M0));
 
         let index = MemoryWordIndex::new(&elems);
 
@@ -404,10 +437,10 @@ mod test {
         // This test failed once on real index data.
 
         let mut elems = BTreeSet::new();
-        elems.insert(("hybrid".to_string(), 1));
-        elems.insert(("hypotenuse".to_string(), 2));
-        elems.insert(("minds".to_string(), 3));
-        elems.insert(("tycho".to_string(), 4));
+        elems.insert(("hybrid".to_string(),     1, M0));
+        elems.insert(("hypotenuse".to_string(), 2, M0));
+        elems.insert(("minds".to_string(),      3, M0));
+        elems.insert(("tycho".to_string(),      4, M0));
 
         let index = MemoryWordIndex::new(&elems);
 
@@ -455,9 +488,9 @@ mod test {
         // This test failed once on real index data.
 
         let mut elems = BTreeSet::new();
-        elems.insert(("hybrid".to_string(), 1));
-        elems.insert(("minds".to_string(), 2));
-        elems.insert(("tycho".to_string(), 3));
+        elems.insert(("hybrid".to_string(), 1, M0));
+        elems.insert(("minds".to_string(),  2, M0));
+        elems.insert(("tycho".to_string(),  3, M0));
 
         let index = MemoryWordIndex::new(&elems);
 
@@ -478,9 +511,9 @@ mod test {
     #[test]
     fn test_search_multibyte_key() {
         let mut elems = BTreeSet::new();
-        elems.insert(("abacus".to_string(), 1));
-        elems.insert(("zenith".to_string(), 2));
-        elems.insert(("クリスタル".to_string(), 3));
+        elems.insert(("abacus".to_string(),     1, M0));
+        elems.insert(("zenith".to_string(),     2, M0));
+        elems.insert(("クリスタル".to_string(), 3, M0));
 
         let index = MemoryWordIndex::new(&elems);
 
@@ -491,9 +524,9 @@ mod test {
     #[test]
     fn test_search_multibyte_needles() {
         let mut elems = BTreeSet::new();
-        elems.insert(("abacus".to_string(), 1));
-        elems.insert(("zenith".to_string(), 2));
-        elems.insert(("クリスタル".to_string(), 3));
+        elems.insert(("abacus".to_string(),     1, M0));
+        elems.insert(("zenith".to_string(),     2, M0));
+        elems.insert(("クリスタル".to_string(), 3, M0));
 
         let index = MemoryWordIndex::new(&elems);
 
