@@ -13,13 +13,15 @@ single query, without the need to select what you are searching for, and without
 the need for separate browsers for artists, albums, and tracks, with independent
 search functions.
 
-
 ## Minimal results
 
 Search should find everything that is relevant, but nothing more. For example,
 when searching for “queen”, we should show the artist Queen, but not every
 individual track by that artist, otherwise “Dancing Queen” by Abba would get
-lost in that noise.
+lost in that noise. Similarly, a search for an artist should not list all albums
+by that artist, unless they are relevant results by themselves. This happens for
+self-titled albums, but also for the word “who” in “Who’s Next” by The Who, for
+instance.
 
 Consider a search for “abba dancing queen”.
 
@@ -34,6 +36,8 @@ because it includes a feat. artist, because the track is part of a compilation
 album), then we cannot reach that track through the artist search results, so
 then we do need to include the track itself, to make it discoverable.
 
+Similarly, a seac
+
 Conclusion:
 
  * Words that occur in the track artist and also in the album artist, should not
@@ -44,3 +48,29 @@ Conclusion:
    artist, should not cause the track to be excluded.
  * Words that occur in the track artist, but not in the album artist, should
    make the track show up.
+
+## Search combinations
+
+We want to support the following queries:
+
+ * Track title only, e.g. “dancing queen”
+ * Album title only, e.g. “arrival”
+ * Album artist only, e.g. “abba”
+ * Track title and artist, e.g. “abba dancing queen”
+ * Album title and artist, e.g. “abba arrival”
+
+The following queries are out of scope:
+
+ * Track title and album, e.g. “arrival dancing queen”
+ * Artist, album, and track, e.g. “abba arrival dancing queen”
+
+## Indexes
+
+Based on the above considerations, we need the following indexes:
+
+ * Album artist words.
+ * Album title + album artist words, with a marker to tell whether the entry is
+   for the album title or album artist.
+ * Track title + track artist words, with a marker to tell whether the entry is
+   for the track title or artist, and if it is for the artist, a marker to tell
+   whether the word occurs in the album artist too.
