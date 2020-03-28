@@ -9,6 +9,38 @@ use std::cmp;
 use std::mem;
 use std::fmt;
 
+/// Packed metadata about a an entry in the word index.
+#[repr(C, align(4))]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct WordMeta {
+    /// The total length of the string in which the word occurs.
+    ///
+    /// Used for ranking results: if the makes up is a greater portion of the
+    /// total string, the result is more relevant.
+    total_len: u16,
+
+    /// The 0-based word index at which the word occurs in the string.
+    ///
+    /// Used for ranking results: if the word occurs early in the string, the
+    /// result is more relevant.
+    index: u8,
+
+    /// The rank of the entry.
+    ///
+    /// The following ranks are used:
+    ///
+    /// 0. Tertiary, not shown by default. Used for words from the artist name
+    ///    in the album index, used for words from the track artist that also
+    ///    occur in the album artist in the track index.
+    /// 1. Secondary. Used for words from the track artist that do not occur in
+    ///    the album artist, in the track index.
+    /// 2. Primary, the word occurs in the album title or track title.
+    ///
+    /// This means that higher ranks are better, and an a track or album should
+    /// have at least one word of nonzero rank to be included in the results.
+    rank: u8,
+}
+
 #[repr(align(8))]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 struct Key {
@@ -238,8 +270,14 @@ impl<T> WordIndex for MemoryWordIndex<T> {
 
 #[cfg(test)]
 mod test {
-    use super::{MemoryWordIndex, Key, Values, WordIndex};
+    use super::{MemoryWordIndex, Key, Values, WordIndex, WordMeta};
     use std::collections::BTreeSet;
+
+    #[test]
+    fn test_word_meta_fits_u32() {
+        use std::mem;
+        assert_eq!(mem::size_of::<WordMeta>(), 4);
+    }
 
     #[test]
     fn test_build_word_index_all_unique() {
