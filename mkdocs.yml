@@ -11,5 +11,6 @@ nav:
     - Tagging: tagging.md
   - API Reference: api.md
   - Internals:
+    - Search: search.md
     - Performance: performance.md
     - Thumbnails: thumbnails.md
