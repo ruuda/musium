@@ -7,6 +7,7 @@
 
 use std::cmp;
 use std::collections::BinaryHeap;
+use std::iter;
 
 use word_index::{Values, WordIndex, WordMeta};
 
@@ -25,9 +26,17 @@ impl<'a, I: 'a + WordIndex> IndexIter<'a, I> {
         }
     }
 
-    pub fn peek(&self) -> Option<&I::Item> {
+    pub fn peek_value(&self) -> Option<&'a I::Item> {
         if self.begin < self.end {
             Some(self.index.get_value(self.begin))
+        } else {
+            None
+        }
+    }
+
+    pub fn peek_meta(&self) -> Option<&'a WordMeta> {
+        if self.begin < self.end {
+            Some(self.index.get_meta(self.begin))
         } else {
             None
         }
@@ -47,8 +56,8 @@ impl<'a, I: 'a + WordIndex> IndexIter<'a, I> {
 // not contain empty iterators, in that case we panic.
 impl<'a, I: 'a + WordIndex> cmp::Ord for IndexIter<'a, I> where I::Item: cmp::Ord {
     fn cmp(&self, other: &IndexIter<'a, I>) -> cmp::Ordering {
-        let v_self = self.peek().expect("Only non-empty IndexIters can be compared.");
-        let v_other = other.peek().expect("Only non-empty IndexIters can be compared.");
+        let v_self = self.peek_value().expect("Only non-empty IndexIters can be compared.");
+        let v_other = other.peek_value().expect("Only non-empty IndexIters can be compared.");
         // Note the reversed order for the max-heap.
         v_other.cmp(v_self)
     }
@@ -62,8 +71,8 @@ impl<'a, I: 'a + WordIndex> cmp::PartialOrd for IndexIter<'a, I> where I::Item: 
 
 impl<'a, I: 'a + WordIndex> cmp::PartialEq for IndexIter<'a, I> where I::Item: cmp::PartialEq {
     fn eq(&self, other: &IndexIter<'a, I>) -> bool {
-        let v_self = self.peek().expect("Only non-empty IndexIters can be compared.");
-        let v_other = other.peek().expect("Only non-empty IndexIters can be compared.");
+        let v_self = self.peek_value().expect("Only non-empty IndexIters can be compared.");
+        let v_other = other.peek_value().expect("Only non-empty IndexIters can be compared.");
         *v_self == *v_other
     }
 }
@@ -93,5 +102,26 @@ impl<'a, I: 'a + WordIndex> Union<'a, I> where I::Item: cmp::Ord {
     /// Return the number of elements in this union.
     pub fn len(&self) -> usize {
         self.value_slices.iter().map(|v| v.len as usize).sum()
+    }
+}
+
+impl<'a, I: 'a + WordIndex> iter::Iterator for Union<'a, I> where I::Item: cmp::Ord {
+    type Item = (&'a I::Item, &'a WordMeta);
+
+    fn next(&mut self) -> Option<(&'a I::Item, &'a WordMeta)> {
+        match self.iters.pop() {
+            None => None,
+            Some(mut iter) => {
+                let value = iter.peek_value().expect("Union should only store non-empty iters.");
+                let meta = iter.peek_meta().expect("Union should only store non-empty iters.");
+                iter.advance();
+
+                if !iter.is_empty() {
+                    self.iters.push(iter);
+                }
+
+                Some((value, meta))
+            }
+        }
     }
 }
