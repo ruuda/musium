@@ -64,8 +64,8 @@ struct Key {
 #[repr(align(8))]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Values {
-    offset: u32,
-    len: u32,
+    pub offset: u32,
+    pub len: u32,
 }
 
 /// An index that associates one or more items with string keys.
@@ -83,6 +83,12 @@ pub trait WordIndex {
 
     /// Return the metadata associated with the values in the value range.
     fn get_metas(&self, range: Values) -> &[WordMeta];
+
+    /// Return the values for a value from a range returned from a search.
+    fn get_value(&self, offset: u32) -> &Self::Item;
+
+    /// Return the metadata associated with the values at the offset.
+    fn get_meta(&self, offset: u32) -> &WordMeta;
 }
 
 pub struct MemoryWordIndex<T> {
@@ -202,14 +208,6 @@ impl<T> MemoryWordIndex<T> {
         &self.key_data[key.offset as usize..key.offset as usize + key.len as usize]
     }
 
-    fn get_values(&self, range: Values) -> &[T] {
-        &self.value_data[range.offset as usize..range.offset as usize + range.len as usize]
-    }
-
-    fn get_metas(&self, range: Values) -> &[WordMeta] {
-        &self.meta_data[range.offset as usize..range.offset as usize + range.len as usize]
-    }
-
     /// Compare `prefix` to the same-length prefix of the `index`-th key.
     fn cmp_prefix(&self, prefix: &str, index: usize) -> cmp::Ordering {
         let key = self.get_key(self.key_slices[index]);
@@ -293,11 +291,19 @@ impl<T> WordIndex for MemoryWordIndex<T> {
     }
 
     fn get_values(&self, range: Values) -> &[T] {
-        self.get_values(range)
+        &self.value_data[range.offset as usize..range.offset as usize + range.len as usize]
     }
 
     fn get_metas(&self, range: Values) -> &[WordMeta] {
-        self.get_metas(range)
+        &self.meta_data[range.offset as usize..range.offset as usize + range.len as usize]
+    }
+
+    fn get_value(&self, offset: u32) -> &T {
+        &self.value_data[offset as usize]
+    }
+
+    fn get_meta(&self, offset: u32) -> &WordMeta {
+        &self.meta_data[offset as usize]
     }
 
     fn search_prefix(&self, prefix: &str) -> &[Values] {
