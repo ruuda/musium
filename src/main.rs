@@ -391,10 +391,9 @@ fn make_index(dir: &str) -> MemoryMetaIndex {
         index.get_albums().len(),
         index.len()
     );
-    println!("Track title word index:  {}", index.words_track_title.size());
-    println!("Album title word index:  {}", index.words_album_title.size());
-    println!("Album artist word index: {}", index.words_album_artist.size());
-    println!("Track artist word index: {}", index.words_track_artist.size());
+    println!("Artist word index: {}", index.words_artist.size());
+    println!("Album word index:  {}", index.words_album.size());
+    println!("Track word index:  {}", index.words_track.size());
 
     index
 }

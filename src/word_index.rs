@@ -41,6 +41,19 @@ pub struct WordMeta {
     rank: u8,
 }
 
+impl WordMeta {
+    pub fn new(total_len: usize, index: usize, rank: u8) -> WordMeta {
+        WordMeta {
+            // TODO: These should not overflow for reasonable lengths and
+            // indexes, but even then, this information is only used for
+            // ordering at this time, so saturating narrowing would be fine too.
+            total_len: total_len as u16,
+            index: index as u8,
+            rank: rank
+        }
+    }
+}
+
 #[repr(align(8))]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 struct Key {
@@ -99,7 +112,7 @@ pub struct WordIndexSize {
 impl fmt::Display for WordIndexSize {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f,
-            "{:4} keys, {:5} values, {:3} kB ({:3} kB keys, {:3} kB values, {:3} kB meta, {:3} kB slices)",
+            "{:5} keys, {:5} values, {:4} kB ({:3} kB keys, {:3} kB values, {:3} kB meta, {:3} kB slices)",
             self.num_keys,
             self.num_values,
             (self.key_data_bytes + self.value_data_bytes + self.meta_data_bytes + self.slice_bytes) / 1000,

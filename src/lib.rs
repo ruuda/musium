@@ -34,7 +34,7 @@ use std::u64;
 
 use unicode_normalization::UnicodeNormalization;
 
-use word_index::{MemoryWordIndex, WordIndex};
+use word_index::{MemoryWordIndex, WordIndex, WordMeta};
 
 // Stats of my personal music library at this point:
 //
@@ -678,13 +678,10 @@ struct BuildMetaIndex {
     tracks: BTreeMap<TrackId, Track>,
     strings: StringDeduper,
     filenames: Vec<String>,
-    words_track_title: BTreeSet<(String, TrackId)>,
-    words_album_title: BTreeSet<(String, AlbumId)>,
-    words_album_artist: BTreeSet<(String, ArtistId)>,
 
-    // When the track artist differs from the album artist, the words that occur
-    // in the track artist but not in the album artist, are included here.
-    words_track_artist: BTreeSet<(String, TrackId)>,
+    words_artist: BTreeSet<(String, ArtistId, WordMeta)>,
+    words_album: BTreeSet<(String, AlbumId, WordMeta)>,
+    words_track: BTreeSet<(String, TrackId, WordMeta)>,
 
     // For album and artist data, store the file from which the metadata was
     // taken. This is later used for error reporting when the builders are
@@ -882,10 +879,9 @@ impl BuildMetaIndex {
             tracks: BTreeMap::new(),
             strings: StringDeduper::new(),
             filenames: Vec::new(),
-            words_track_title: BTreeSet::new(),
-            words_album_title: BTreeSet::new(),
-            words_album_artist: BTreeSet::new(),
-            words_track_artist: BTreeSet::new(),
+            words_artist: BTreeSet::new(),
+            words_album: BTreeSet::new(),
+            words_track: BTreeSet::new(),
             album_sources: HashMap::new(),
             artist_sources: HashMap::new(),
             progress: Some(progress),
@@ -994,12 +990,50 @@ impl BuildMetaIndex {
         // Split the title, album, and album artist, on words, and add those to
         // the indexes, to allow finding the track/album/artist later by word.
         let mut words = Vec::new();
-        normalize_words(&self.strings.get(f_title), &mut words);
-        for w in words.drain(..) { self.words_track_title.insert((w, track_id)); }
-        normalize_words(&self.strings.get(f_album), &mut words);
-        for w in words.drain(..) { self.words_album_title.insert((w, album_id)); }
-        normalize_words(&self.strings.get(f_album_artist), &mut words);
-        for w in words.drain(..) { self.words_album_artist.insert((w, artist_id)); }
+        let mut words_album_artist = Vec::new();
+
+        {
+            let track_title = &self.strings.get(f_title);
+            let album_title = &self.strings.get(f_album);
+            let album_artist = &self.strings.get(f_album_artist);
+            let track_artist = &self.strings.get(f_track_artist);
+
+            // Fill the indexes with the words that occur in the titles. The artist
+            // is also present in the album and track indexes, but with rank 0, such
+            // that including the artist in the search terms would not make the
+            // intersection empty.
+            normalize_words(album_artist, &mut words_album_artist);
+            for (i, w) in words_album_artist.iter().enumerate() {
+                let meta_rank_2 = WordMeta::new(album_artist.len(), i, 2);
+                let meta_rank_0 = WordMeta::new(album_artist.len(), i, 0);
+                self.words_artist.insert((w.clone(), artist_id, meta_rank_2));
+                self.words_album.insert((w.clone(),  album_id,  meta_rank_0));
+                self.words_track.insert((w.clone(),  track_id,  meta_rank_0));
+            }
+            normalize_words(album_title, &mut words);
+            for (i, w) in words.drain(..).enumerate() {
+                let meta_rank_2 = WordMeta::new(album_title.len(), i, 2);
+                self.words_album.insert((w, album_id, meta_rank_2));
+            }
+            normalize_words(track_title, &mut words);
+            for (i, w) in words.drain(..).enumerate() {
+                let meta_rank_2 = WordMeta::new(track_title.len(), i, 2);
+                self.words_track.insert((w, track_id, meta_rank_2));
+            }
+
+            // Extend the track index with the words that occur uniquely in the
+            // track artist, and not in the album artist. For example, feat.
+            // artists, but also the full artist on complication albums. These get
+            // rank 1 to set them apart from album artist words (rank 0) and title
+            // words (rank 2).
+            normalize_words(track_artist, &mut words);
+            for (i, w) in words.drain(..).enumerate() {
+                if !words_album_artist.contains(&w) {
+                    let meta_rank_1 = WordMeta::new(track_artist.len(), i, 1);
+                    self.words_track.insert((w, track_id, meta_rank_1));
+                }
+            }
+        }
 
         // Normalize the sort artist too. Generally, the only thing it is useful
         // for is to turn e.g. "The Who" into "Who, The". (Data from Musicbrainz
@@ -1018,20 +1052,6 @@ impl BuildMetaIndex {
         let sort_artist = words.join(" ");
         let f_album_artist_for_sort = self.strings.insert(&sort_artist);
         words.clear();
-
-        // If the track artist differs from the album artist, add words for the
-        // track artist, but only for the words that do not occur in the album
-        // artist. This allows looking up e.g. a "feat. artist", without
-        // polluting the index with every track by that artist.
-        if f_track_artist != f_album_artist {
-            normalize_words(&self.strings.get(f_track_artist), &mut words);
-            for w in words.drain(..) {
-                let pair = (w, artist_id);
-                if !self.words_album_artist.contains(&pair) {
-                    self.words_track_artist.insert((pair.0, track_id));
-                }
-            }
-        }
 
         // TODO: Check for u16 overflow.
         // TODO: Warn if `streaminfo.samples` is None.
@@ -1168,10 +1188,9 @@ pub struct MemoryMetaIndex {
     filenames: Vec<String>,
 
     // TODO: Don't make these pub, this is just for debug printing stats.
-    pub words_track_title: MemoryWordIndex<TrackId>,
-    pub words_album_title: MemoryWordIndex<AlbumId>,
-    pub words_album_artist: MemoryWordIndex<ArtistId>,
-    pub words_track_artist: MemoryWordIndex<TrackId>,
+    pub words_artist: MemoryWordIndex<ArtistId>,
+    pub words_album: MemoryWordIndex<AlbumId>,
+    pub words_track: MemoryWordIndex<TrackId>,
 }
 
 /// Invokes `process` for all elements in the builder, in sorted order.
@@ -1254,10 +1273,9 @@ impl MemoryMetaIndex {
         let mut tracks: Vec<(TrackId, Track)> = Vec::new();
         let mut strings = StringDeduper::new();
         let mut filenames = Vec::new();
-        let mut words_track_title = BTreeSet::new();
-        let mut words_album_title = BTreeSet::new();
-        let mut words_album_artist = BTreeSet::new();
-        let mut words_track_artist = BTreeSet::new();
+        let mut words_artist = BTreeSet::new();
+        let mut words_album = BTreeSet::new();
+        let mut words_track = BTreeSet::new();
 
         for_each_sorted(builders, |b| b.tracks.iter(), |i, id, mut track| {
             // Give the track the final stringrefs, into the merged arrays.
@@ -1323,10 +1341,9 @@ impl MemoryMetaIndex {
         });
 
         for builder in builders {
-            words_track_title.extend(builder.words_track_title.iter().cloned());
-            words_album_title.extend(builder.words_album_title.iter().cloned());
-            words_album_artist.extend(builder.words_album_artist.iter().cloned());
-            words_track_artist.extend(builder.words_track_artist.iter().cloned());
+            words_artist.extend(builder.words_artist.iter().cloned());
+            words_album.extend(builder.words_album.iter().cloned());
+            words_track.extend(builder.words_track.iter().cloned());
         }
 
         strings.upgrade_quotes();
@@ -1348,10 +1365,9 @@ impl MemoryMetaIndex {
             albums_by_artist: albums_by_artist,
             strings: strings.into_vec(),
             filenames: filenames,
-            words_track_title: MemoryWordIndex::new(&words_track_title),
-            words_album_title: MemoryWordIndex::new(&words_album_title),
-            words_album_artist: MemoryWordIndex::new(&words_album_artist),
-            words_track_artist: MemoryWordIndex::new(&words_track_artist),
+            words_artist: MemoryWordIndex::new(&words_artist),
+            words_album: MemoryWordIndex::new(&words_album),
+            words_track: MemoryWordIndex::new(&words_track),
         }
     }
 
@@ -1585,25 +1601,21 @@ impl MetaIndex for MemoryMetaIndex {
     }
 
     fn search_artist(&self, word: &str, into: &mut Vec<ArtistId>) {
-        for range in self.words_album_artist.search_prefix(word) {
-            into.extend_from_slice(self.words_album_artist.get_values(*range));
+        for range in self.words_artist.search_prefix(word) {
+            into.extend_from_slice(self.words_artist.get_values(*range));
         }
     }
 
     fn search_album(&self, word: &str, into: &mut Vec<AlbumId>) {
-        for range in self.words_album_title.search_prefix(word) {
-            into.extend_from_slice(self.words_album_title.get_values(*range));
+        for range in self.words_album.search_prefix(word) {
+            into.extend_from_slice(self.words_album.get_values(*range));
         }
     }
 
     fn search_track(&self, word: &str, into: &mut Vec<TrackId>) {
-        for range in self.words_track_title.search_prefix(word) {
-            into.extend_from_slice(self.words_track_title.get_values(*range));
+        for range in self.words_track.search_prefix(word) {
+            into.extend_from_slice(self.words_track.get_values(*range));
         }
-        for range in self.words_track_artist.search_prefix(word) {
-            into.extend_from_slice(self.words_track_artist.get_values(*range));
-        }
-        into.sort();
     }
 }
 
