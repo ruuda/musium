@@ -140,28 +140,39 @@ pub fn search<'a, I: 'a + WordIndex>(
     }
 
     results.sort_by_key(|&(_, meta)| {
-        (
-            // Rank exact matches above prefix matches. TODO: I don't think this
-            // is entirely what I want. For example, when searching for “time”,
-            // there are so many things containing an exact match, that titles
-            // like like “Times” or “Timeless”, which feel more relevant than
-            // “Install a Beak in the Heart That Clucks Time in Arabic” or
-            // “Don’t Threaten Me with a Good Time”, still get sorted behind
-            // them. Some mixing of priorities is required.
-            if meta.word_len as usize == word.len() { 0 } else { 1 },
-            // Everything where the word is in the title, orders before
-            // everything where the word is in the artist.
-            -(meta.rank as i8),
-            // The earlier the word occurs in the string,
-            // the more relevant it is.
-            meta.index,
-            // The larger the fraction the search word makes up of the total
-            // string, the earlier we want it to be in the sort order.
-            -(meta.word_len as i32) * 1000 / (meta.total_len as i32),
-            // If the coverage is 100%, shorter words are better.
-            // TODO: Might also mix in query word len as a fraction?
-            meta.total_len,
-        )
+        let mut penalty = 0_i32;
+
+        // Add a penalty quadratic in the excess word length. This way we still
+        // strongly prefer exact matches over prefix matches, but as the prefix
+        // gets less complete, the rank plummets.
+        let excess = meta.word_len as i32 - word.len() as i32;
+        penalty += excess * excess;
+
+        // A single excess character is better than a word that occurs later,
+        // but the word position incurs a linear penalty, so it wins in the end.
+        // Denote by "a" the factor. Then we have the following examples:
+        //
+        // * For query "time", "In Time" : "Times" = a : 1
+        // * For query "beat", "Helena Beat" : "Beating Heart" = a : 9
+        // * For query "bear", "Minus the Bear" : "Solar Bears" = 2a : a + 1
+        //
+        // We'll take a = 0.1 for now.
+        penalty = 10 * penalty + meta.index as i32;
+
+        // The rank (2 for words in title, 0 for non-unique results in the
+        // artist) acts as a multiplier, lower ranks are worse, and lead to
+        // higher penalties.
+        penalty *= 3 - meta.rank as i32;
+
+        // If we have the same penalty at this point, break ties by preferring
+        // items where the word is a greater portion of the total. We can
+        // consider the portion of the query word, or the portion of the matched
+        // word. The former puts more relevant results first in the case of
+        // exact matches, but the latter leads to stabler results during
+        // search-as-you type, because an extra character does not change the
+        // penalty. Because the penalty should already take care of putting
+        // relevant results first, we go for the latter.
+        (penalty, -100 * meta.word_len as i32 / meta.total_len as i32)
     });
 
     for (item, _meta) in results.drain(..) {
