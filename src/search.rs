@@ -131,10 +131,40 @@ pub fn search<'a, I: 'a + WordIndex>(
     word: &'a str,
     into: &mut Vec<I::Item>
 ) where I::Item: cmp::Ord + Copy {
+    let mut results = Vec::new();
     let ranges = index.search_prefix(word);
     for (item, meta) in Union::new(index, ranges) {
         if meta.rank > 0 {
-            into.push(*item);
+            results.push((*item, *meta));
         }
+    }
+
+    results.sort_by_key(|&(_, meta)| {
+        (
+            // Rank exact matches above prefix matches. TODO: I don't think this
+            // is entirely what I want. For example, when searching for “time”,
+            // there are so many things containing an exact match, that titles
+            // like like “Times” or “Timeless”, which feel more relevant than
+            // “Install a Beak in the Heart That Clucks Time in Arabic” or
+            // “Don’t Threaten Me with a Good Time”, still get sorted behind
+            // them. Some mixing of priorities is required.
+            if meta.word_len as usize == word.len() { 0 } else { 1 },
+            // Everything where the word is in the title, orders before
+            // everything where the word is in the artist.
+            -(meta.rank as i8),
+            // The earlier the word occurs in the string,
+            // the more relevant it is.
+            meta.index,
+            // The larger the fraction the search word makes up of the total
+            // string, the earlier we want it to be in the sort order.
+            -(meta.word_len as i32) * 1000 / (meta.total_len as i32),
+            // If the coverage is 100%, shorter words are better.
+            // TODO: Might also mix in query word len as a fraction?
+            meta.total_len,
+        )
+    });
+
+    for (item, _meta) in results.drain(..) {
+        into.push(item);
     }
 }

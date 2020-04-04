@@ -1005,20 +1005,20 @@ impl BuildMetaIndex {
             // intersection empty.
             normalize_words(album_artist, &mut words_album_artist);
             for (i, w) in words_album_artist.iter().enumerate() {
-                let meta_rank_2 = WordMeta::new(album_artist.len(), i, 2);
-                let meta_rank_0 = WordMeta::new(album_artist.len(), i, 0);
+                let meta_rank_2 = WordMeta::new(w.len(), album_artist.len(), i, 2);
+                let meta_rank_0 = WordMeta::new(w.len(), album_artist.len(), i, 0);
                 self.words_artist.insert((w.clone(), artist_id, meta_rank_2));
                 self.words_album.insert((w.clone(),  album_id,  meta_rank_0));
                 self.words_track.insert((w.clone(),  track_id,  meta_rank_0));
             }
             normalize_words(album_title, &mut words);
             for (i, w) in words.drain(..).enumerate() {
-                let meta_rank_2 = WordMeta::new(album_title.len(), i, 2);
+                let meta_rank_2 = WordMeta::new(w.len(), album_title.len(), i, 2);
                 self.words_album.insert((w, album_id, meta_rank_2));
             }
             normalize_words(track_title, &mut words);
             for (i, w) in words.drain(..).enumerate() {
-                let meta_rank_2 = WordMeta::new(track_title.len(), i, 2);
+                let meta_rank_2 = WordMeta::new(w.len(), track_title.len(), i, 2);
                 self.words_track.insert((w, track_id, meta_rank_2));
             }
 
@@ -1030,7 +1030,7 @@ impl BuildMetaIndex {
             normalize_words(track_artist, &mut words);
             for (i, w) in words.drain(..).enumerate() {
                 if !words_album_artist.contains(&w) {
-                    let meta_rank_1 = WordMeta::new(track_artist.len(), i, 1);
+                    let meta_rank_1 = WordMeta::new(w.len(), track_artist.len(), i, 1);
                     self.words_track.insert((w, track_id, meta_rank_1));
                 }
             }

@@ -282,9 +282,9 @@ impl MetaServer {
         // or when searching "a"). Searching is quite fast, but parsing and
         // rendering the results in the frontend is slow, and having this many
         // results is not useful anyway, so we cap them.
-        let n_artists = artists.len().min(100);
-        let n_albums = albums.len().min(100);
-        let n_tracks = tracks.len().min(100);
+        let n_artists = artists.len().min(250);
+        let n_albums = albums.len().min(250);
+        let n_tracks = tracks.len().min(250);
 
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);

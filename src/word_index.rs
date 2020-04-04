@@ -13,11 +13,14 @@ use std::fmt;
 #[repr(C, align(4))]
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct WordMeta {
+    /// The length of the word itself.
+    pub word_len: u8,
+
     /// The total length of the string in which the word occurs.
     ///
     /// Used for ranking results: if the makes up is a greater portion of the
     /// total string, the result is more relevant.
-    pub total_len: u16,
+    pub total_len: u8,
 
     /// The 0-based word index at which the word occurs in the string.
     ///
@@ -42,12 +45,18 @@ pub struct WordMeta {
 }
 
 impl WordMeta {
-    pub fn new(total_len: usize, index: usize, rank: u8) -> WordMeta {
+    pub fn new(
+        word_len: usize,
+        total_len: usize,
+        index: usize,
+        rank: u8
+    ) -> WordMeta {
         WordMeta {
             // TODO: These should not overflow for reasonable lengths and
             // indexes, but even then, this information is only used for
             // ordering at this time, so saturating narrowing would be fine too.
-            total_len: total_len as u16,
+            word_len: word_len as u8,
+            total_len: total_len as u8,
             index: index as u8,
             rank: rank
         }
