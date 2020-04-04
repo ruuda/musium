@@ -1602,21 +1602,15 @@ impl MetaIndex for MemoryMetaIndex {
     }
 
     fn search_artist(&self, word: &str, into: &mut Vec<ArtistId>) {
-        for range in self.words_artist.search_prefix(word) {
-            into.extend_from_slice(self.words_artist.get_values(*range));
-        }
+        search::search(&self.words_artist, word, into);
     }
 
     fn search_album(&self, word: &str, into: &mut Vec<AlbumId>) {
-        for range in self.words_album.search_prefix(word) {
-            into.extend_from_slice(self.words_album.get_values(*range));
-        }
+        search::search(&self.words_album, word, into);
     }
 
     fn search_track(&self, word: &str, into: &mut Vec<TrackId>) {
-        for range in self.words_track.search_prefix(word) {
-            into.extend_from_slice(self.words_track.get_values(*range));
-        }
+        search::search(&self.words_track, word, into);
     }
 }
 

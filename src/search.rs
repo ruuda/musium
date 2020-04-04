@@ -125,3 +125,14 @@ impl<'a, I: 'a + WordIndex> iter::Iterator for Union<'a, I> where I::Item: cmp::
         }
     }
 }
+
+pub fn search<'a, I: 'a + WordIndex>(
+    index: &'a I,
+    word: &'a str,
+    into: &mut Vec<I::Item>
+) where I::Item: cmp::Ord + Copy {
+    let ranges = index.search_prefix(word);
+    for (item, _meta) in Union::new(index, ranges) {
+        into.push(*item);
+    }
+}
