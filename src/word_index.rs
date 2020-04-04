@@ -17,13 +17,13 @@ pub struct WordMeta {
     ///
     /// Used for ranking results: if the makes up is a greater portion of the
     /// total string, the result is more relevant.
-    total_len: u16,
+    pub total_len: u16,
 
     /// The 0-based word index at which the word occurs in the string.
     ///
     /// Used for ranking results: if the word occurs early in the string, the
     /// result is more relevant.
-    index: u8,
+    pub index: u8,
 
     /// The rank of the entry.
     ///
@@ -38,7 +38,7 @@ pub struct WordMeta {
     ///
     /// This means that higher ranks are better, and an a track or album should
     /// have at least one word of nonzero rank to be included in the results.
-    rank: u8,
+    pub rank: u8,
 }
 
 impl WordMeta {

@@ -35,7 +35,7 @@ use std::u64;
 
 use unicode_normalization::UnicodeNormalization;
 
-use word_index::{MemoryWordIndex, WordIndex, WordMeta};
+use word_index::{MemoryWordIndex, WordMeta};
 
 // Stats of my personal music library at this point:
 //

@@ -132,7 +132,9 @@ pub fn search<'a, I: 'a + WordIndex>(
     into: &mut Vec<I::Item>
 ) where I::Item: cmp::Ord + Copy {
     let ranges = index.search_prefix(word);
-    for (item, _meta) in Union::new(index, ranges) {
-        into.push(*item);
+    for (item, meta) in Union::new(index, ranges) {
+        if meta.rank > 0 {
+            into.push(*item);
+        }
     }
 }
