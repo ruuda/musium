@@ -329,6 +329,7 @@ mod test {
 
     /// Dummy word metadata for use in these tests.
     const M0: WordMeta = WordMeta {
+        word_len: 0,
         total_len: 0,
         index: 0,
         rank: 0,
