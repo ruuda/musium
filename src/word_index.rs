@@ -45,7 +45,8 @@ use std::fmt;
 /// * 0..8: `word_len`
 /// * 8..16: `total_len`
 /// * 16..24: `index`
-/// * 24..32: `rank`
+/// * 24..30: `log_frequency`
+/// * 30..32: `rank`
 ///
 /// See getters for more details about these fields.
 #[repr(C, align(4))]
@@ -77,6 +78,16 @@ impl WordMeta {
         (self.0 >> 16) & 0xff
     }
 
+    /// Log2 of the number of values for the word.
+    ///
+    /// Used for ranking results: a word that occurs in many tracks is less
+    /// informative than a word that occurs only in a single track, so when the
+    /// prefix is still short, this pushes down common words like “to” or “was”.
+    #[inline]
+    pub fn log_frequency(self) -> u32 {
+        (self.0 >> 24) & 0b0011_1111
+    }
+
     /// The rank of the entry.
     ///
     /// The following ranks are used:
@@ -92,7 +103,7 @@ impl WordMeta {
     /// have at least one word of nonzero rank to be included in the results.
     #[inline]
     pub fn rank(self) -> u32 {
-        (self.0 >> 24) & 0xff
+        (self.0 >> 30) & 0b11
     }
 
     pub fn new(
@@ -112,8 +123,17 @@ impl WordMeta {
             | (clamp(8, word_len) << 0)
             | (clamp(8, total_len) << 8)
             | (clamp(8, index) << 16)
-            | (clamp(8, rank as usize) << 24)
+            | (clamp(8, rank as usize) << 30)
         )
+    }
+
+    /// Return a copy of the word meta, with log-frequency filled in.
+    fn set_frequency(self, frequency: u64) -> WordMeta {
+        debug_assert!(frequency > 0, "Frequency must be positive.");
+        let log2_frequency = 63 - frequency.leading_zeros();
+
+        // The 6-bit log-frequency is at offset 24.
+        WordMeta(self.0 | ((log2_frequency as u32) << 24))
     }
 }
 
@@ -214,10 +234,19 @@ impl<T> MemoryWordIndex<T> {
             len: 0,
         };
 
+        fn fixup_meta_frequency(metas: &mut [WordMeta], values: Values) {
+            let from = values.offset as usize;
+            let to = from + values.len as usize;
+            for meta in &mut metas[from..to] {
+                *meta = meta.set_frequency(values.len as u64);
+            }
+        }
+
         for &(ref word, value, meta) in elements {
             if word != prev_word {
                 // Finish up the previous value slice, if any.
                 if values.len > 0 {
+                    fixup_meta_frequency(&mut meta_data[..], values);
                     value_slices.push(values);
                 }
 
@@ -243,6 +272,7 @@ impl<T> MemoryWordIndex<T> {
         }
 
         // Finish up the last word.
+        fixup_meta_frequency(&mut meta_data[..], values);
         value_slices.push(values);
 
         MemoryWordIndex {
