@@ -136,7 +136,7 @@ pub fn search<'a, I: 'a + WordIndex>(
     let mut results = Vec::new();
     let ranges = index.search_prefix(word);
     for (item, meta) in Union::new(index, ranges) {
-        if meta.rank > 0 {
+        if meta.rank() > 0 {
             results.push((*item, *meta));
         }
     }
@@ -147,7 +147,7 @@ pub fn search<'a, I: 'a + WordIndex>(
         // Add a penalty quadratic in the excess word length. This way we still
         // strongly prefer exact matches over prefix matches, but as the prefix
         // gets less complete, the rank plummets.
-        let excess = meta.word_len as i32 - word.len() as i32;
+        let excess = meta.word_len() as i32 - word.len() as i32;
         penalty += excess * excess;
 
         // A single excess character is better than a word that occurs later,
@@ -159,12 +159,12 @@ pub fn search<'a, I: 'a + WordIndex>(
         // * For query "bear", "Minus the Bear" : "Solar Bears" = 2a : a + 1
         //
         // We'll take a = 0.1 for now.
-        penalty = 10 * penalty + meta.index as i32;
+        penalty = 10 * penalty + meta.index() as i32;
 
         // The rank (2 for words in title, 0 for non-unique results in the
         // artist) acts as a multiplier, lower ranks are worse, and lead to
         // higher penalties.
-        penalty *= 3 - meta.rank as i32;
+        penalty *= 3 - meta.rank() as i32;
 
         // If we have the same penalty at this point, break ties by preferring
         // items where the word is a greater portion of the total. We can
@@ -174,7 +174,7 @@ pub fn search<'a, I: 'a + WordIndex>(
         // search-as-you type, because an extra character does not change the
         // penalty. Because the penalty should already take care of putting
         // relevant results first, we go for the latter.
-        (penalty, -100 * meta.word_len as i32 / meta.total_len as i32)
+        (penalty, -100 * meta.word_len() as i32 / meta.total_len() as i32)
     });
 
     for (item, _meta) in results.drain(..) {

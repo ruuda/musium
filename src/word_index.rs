@@ -39,23 +39,43 @@ use std::mem;
 use std::fmt;
 
 /// Packed metadata about a an entry in the word index.
+///
+/// Fields by bit range (lower bound inclusive, upper bound exclusive):
+///
+/// * 0..8: `word_len`
+/// * 8..16: `total_len`
+/// * 16..24: `index`
+/// * 24..32: `rank`
+///
+/// See getters for more details about these fields.
 #[repr(C, align(4))]
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct WordMeta {
+pub struct WordMeta(u32);
+
+impl WordMeta {
     /// The length of the word itself.
-    pub word_len: u8,
+    #[inline]
+    pub fn word_len(self) -> u32 {
+        (self.0 >> 0) & 0xff
+    }
 
     /// The total length of the string in which the word occurs.
     ///
     /// Used for ranking results: if the makes up is a greater portion of the
     /// total string, the result is more relevant.
-    pub total_len: u8,
+    #[inline]
+    pub fn total_len(self) -> u32 {
+        (self.0 >> 8) & 0xff
+    }
 
     /// The 0-based word index at which the word occurs in the string.
     ///
     /// Used for ranking results: if the word occurs early in the string, the
     /// result is more relevant.
-    pub index: u8,
+    #[inline]
+    pub fn index(self) -> u32 {
+        (self.0 >> 16) & 0xff
+    }
 
     /// The rank of the entry.
     ///
@@ -70,25 +90,30 @@ pub struct WordMeta {
     ///
     /// This means that higher ranks are better, and an a track or album should
     /// have at least one word of nonzero rank to be included in the results.
-    pub rank: u8,
-}
+    #[inline]
+    pub fn rank(self) -> u32 {
+        (self.0 >> 24) & 0xff
+    }
 
-impl WordMeta {
     pub fn new(
         word_len: usize,
         total_len: usize,
         index: usize,
         rank: u8
     ) -> WordMeta {
-        WordMeta {
-            // TODO: These should not overflow for reasonable lengths and
-            // indexes, but even then, this information is only used for
-            // ordering at this time, so saturating narrowing would be fine too.
-            word_len: word_len as u8,
-            total_len: total_len as u8,
-            index: index as u8,
-            rank: rank
+        /// Narrow an `usize` to a `bits`-wide unsigned integer, saturating on
+        /// overflow.
+        fn clamp(bits: usize, x: usize) -> u32 {
+            x.min(1 << bits) as u32
         }
+
+        WordMeta(
+            0
+            | (clamp(8, word_len) << 0)
+            | (clamp(8, total_len) << 8)
+            | (clamp(8, index) << 16)
+            | (clamp(8, rank as usize) << 24)
+        )
     }
 }
 
