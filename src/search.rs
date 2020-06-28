@@ -11,6 +11,7 @@ use std::iter;
 
 use word_index::{Values, WordIndex, WordMeta};
 
+/// Iterator over a value range of a word index.
 struct IndexIter<'a, I: 'a + WordIndex> {
     index: &'a I,
     begin: u32,
@@ -79,6 +80,7 @@ impl<'a, I: 'a + WordIndex> cmp::PartialEq for IndexIter<'a, I> where I::Item: c
 
 impl<'a, I: 'a + WordIndex> cmp::Eq for IndexIter<'a, I> where I::Item: cmp::Eq {}
 
+/// Iterator over the union of multiple value ranges of a word index.
 struct Union<'a, I: 'a + WordIndex> {
     value_slices: &'a [Values],
     iters: BinaryHeap<IndexIter<'a, I>>

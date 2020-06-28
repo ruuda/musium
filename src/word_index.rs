@@ -5,6 +5,35 @@
 // you may not use this file except in compliance with the License.
 // A copy of the License has been included in the root of the repository.
 
+//! Defines the word index data structure and interface.
+//!
+//! The word index consists of several packed arrays of data, together with
+//! arrays of indexes into those.
+//!
+//! * The **key data** is a single long string (UTF-8) of all of the words in
+//!   the index concatenated.
+//! * The **key slices array** is an array of (offset, len) pairs that slice a
+//!   word out of the key data. Key slices are sorted in memcmp order to
+//!   facilitate a binary search for matching prefixes.
+//! * The **value data** is an array of values (the value type is a generic
+//!   type, instantiated to track id, album id, or artist id).
+//! * The **value slices array** is an array of (offset, len) pairs that slice
+//!   one or more values out of the value data. The length of the value slices
+//!   array is the same as that of the key slices array: for the key at index
+//!   _i_, the value slice at index _i_ lists all values associated with that
+//!   key.
+//! * The **medatada array** is an array of match metadata, the same length as
+//!   the value data array. For the value at index _i_, the match metadata at
+//!   index _i_ contains metadata used to rank the matched value among other
+//!   matches.
+//!
+//! Typically a search works like this:
+//!
+//! * Perform two binary searches on the key slices to find the range of keys
+//!   that have the search needle as prefix.
+//! * For each matching key, gather associated values and match metadata.
+//! * Use match metadata to rank the matches.
+
 use std::cmp;
 use std::mem;
 use std::fmt;
@@ -70,6 +99,7 @@ struct Key {
     len: u32,
 }
 
+/// A slice of values in the word index, usually all values associated with a key.
 #[repr(align(8))]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Values {
