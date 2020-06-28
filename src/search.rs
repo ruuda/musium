@@ -150,6 +150,10 @@ pub fn search<'a, I: 'a + WordIndex>(
         let excess = meta.word_len() as i32 - word.len() as i32;
         penalty += excess * excess;
 
+        // Discourage prefix matches further if the word is very common, on top
+        // of the other frequency penalty below.
+        penalty *= (meta.log_frequency() + 1) as i32;
+
         // A single excess character is better than a word that occurs later,
         // but the word position incurs a linear penalty, so it wins in the end.
         // Denote by "a" the factor. Then we have the following examples:
@@ -160,6 +164,13 @@ pub fn search<'a, I: 'a + WordIndex>(
         //
         // We'll take a = 0.1 for now.
         penalty = 10 * penalty + meta.index() as i32;
+
+        // Add a penalty for common words: users are unlikely to search for a
+        // common word, so it is better to show distinctive words (even though
+        // it may only be a prefix match and not an exact match) over common
+        // words. E.g. when typing "a", the prefix matches "Aja" or "Animals"
+        // should be more likely than "A Night at the Opera".
+        penalty += 10 * (meta.log_frequency() * meta.log_frequency()) as i32;
 
         // The rank (2 for words in title, 0 for non-unique results in the
         // artist) acts as a multiplier, lower ranks are worse, and lead to
