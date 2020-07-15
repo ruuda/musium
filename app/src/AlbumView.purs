@@ -11,7 +11,6 @@ module AlbumView
 
 import Control.Monad.Reader.Class (ask)
 import Data.Foldable (traverse_)
-import Data.String.CodeUnits as CodeUnits
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import Prelude
@@ -27,15 +26,22 @@ renderAlbum (Album album) =
     Html.addClass "album-view"
     Html.div $ do
       Html.addClass "album-info"
-      Html.img (Model.thumbUrl album.id) (album.title <> " by " <> album.artist) $ do
+      Html.div $ do
         Html.addClass "cover"
+        let alt = album.title <> " by " <> album.artist
+        -- Add 3 images: a blurred backdrop, the low-resolution thumbnail that
+        -- should already be cached for quick display, and the high-resolution
+        -- cover art on top of that.
+        Html.img (Model.thumbUrl album.id) alt $ Html.addClass "backdrop"
+        Html.img (Model.thumbUrl album.id) alt $ pure unit
+        Html.img (Model.coverUrl album.id) alt $ pure unit
       Html.hgroup $ do
         Html.h1 $ Html.text album.title
         Html.h2 $ do
           Html.span $ do
             Html.addClass "artist"
             Html.text album.artist
-          Html.text ", "
+          Html.text " ⋅ "
           Html.span $ do
             Html.addClass "date"
             Html.text album.date

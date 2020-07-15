@@ -134,7 +134,7 @@ img.thumb
   font-weight: 600;
 }
 
-.date
+.album .date
 {
   padding-left: 0.2em;
   color: #ccc;
@@ -143,8 +143,8 @@ img.thumb
 .track-list
 {
   margin-top: 1em;
-  padding-top: 0.5em;
-  padding-bottom: 1em;
+  padding-top: 1.5em;
+  padding-bottom: 1.5em;
   background-color: #fdfdfd;
   border-top: 0.8pt solid #eee;
 }
@@ -278,9 +278,27 @@ img.thumb
   padding: 1em;
 }
 
-.album-view img {
+.album-view .cover {
   width: calc(100% - 7.5em);
   margin: 3.75em;
+  position: relative;
+}
+
+.album-view .cover img {
+  position: absolute;
+  width: 100%;
+  top: 0;
+  left: 0;
+  border-radius: 0.15rem;
+}
+
+.album-view .cover img.backdrop {
+  /* This one is first, so absolute vs relative does not matter so much, except
+   * that relative ensures the parent is at least this tall. */
+  position: relative;
+  filter: brightness(0.9) blur(1.7rem);
+  opacity: 0.4;
+  transform: translateY(0.5rem);
 }
 
 .album-view hgroup {
@@ -301,4 +319,11 @@ img.thumb
   font-size: 1em;
   margin-top: 0.5rem;
   margin-left: 0.75rem;
+  color: #bbb;
+  word-spacing: 0.2em;
+}
+
+.album-view .album-info h2 .artist {
+  color: black;
+  word-spacing: 0;
 }
