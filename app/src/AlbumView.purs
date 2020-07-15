@@ -31,12 +31,14 @@ renderAlbum (Album album) =
         Html.addClass "cover"
       Html.hgroup $ do
         Html.h1 $ Html.text album.title
-        Html.h2 $ Html.text album.artist
-        Html.h3 $ do
-          Html.setTitle album.date
-          -- The date is of the form YYYY-MM-DD in ascii, so we can safely take
-          -- the first 4 characters to get the year.
-          Html.text (CodeUnits.take 4 album.date)
+        Html.h2 $ do
+          Html.span $ do
+            Html.addClass "artist"
+            Html.text album.artist
+          Html.text ", "
+          Html.span $ do
+            Html.addClass "date"
+            Html.text album.date
 
     trackList <- Html.ul $ do
       Html.addClass "track-list"

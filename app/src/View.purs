@@ -99,10 +99,12 @@ renderAlbumList albums = do
 
     pure { searchBox, searchResultsBox }
 
-  albumList <- Html.ul $ do
-    Html.setId "album-list"
-    buildTree 15 AlbumComponent.renderAlbum albums
-    ask
+  albumList <- Html.div $ do
+    Html.addClass "library-view"
+    Html.ul $ do
+      Html.setId "album-list"
+      buildTree 15 AlbumComponent.renderAlbum albums
+      ask
 
   local (const searchBox) $ do
     Html.onInput $ \query -> do

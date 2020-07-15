@@ -22,6 +22,7 @@ html
 body
 {
   color: black;
+  overflow: hidden;
 }
 
 a
@@ -74,6 +75,17 @@ a
 ul
 {
   list-style-type: none;
+}
+
+.library-view, .album-view
+{
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: absolute;
+  top: 0;
+  background-color: white;
 }
 
 #album-list
@@ -135,13 +147,6 @@ img.thumb
   padding-bottom: 1em;
   background-color: #fdfdfd;
   border-top: 0.8pt solid #eee;
-  border-bottom: 0.8pt solid #eee;
-  display: none;
-}
-
-.track-list.expanded
-{
-  display: block;
 }
 
 .track-list .track
@@ -268,3 +273,32 @@ img.thumb
 .searching #album-list { visibility: hidden }
 .searching #search-results { display: block }
 .searching #search { height: 100vh }
+
+.album-view .album-info {
+  padding: 1em;
+}
+
+.album-view img {
+  width: calc(100% - 7.5em);
+  margin: 3.75em;
+}
+
+.album-view hgroup {
+  margin-left: 3rem;
+  margin-right: 3rem;
+}
+
+.album-view .album-info h1 {
+  font-weight: 600;
+  font-size: 1.7em;
+  line-height: 1.1em;
+  margin-top: -0.75rem;
+  margin-left: 0.75rem;
+}
+
+.album-view .album-info h2 {
+  font-weight: 400;
+  font-size: 1em;
+  margin-top: 0.5rem;
+  margin-left: 0.75rem;
+}

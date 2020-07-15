@@ -44,10 +44,6 @@ renderAlbum (Album album) =
           Html.text (CodeUnits.take 4 album.date)
       ask
 
-    trackList <- Html.ul $ do
-      Html.addClass "track-list"
-      ask
-
     isLoadedVar <- liftEffect $ Var.create false
     isOpenVar <- liftEffect $ Var.create false
 
