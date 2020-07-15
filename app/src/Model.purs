@@ -67,8 +67,8 @@ instance showTrackId :: Show TrackId where
 thumbUrl :: AlbumId -> String
 thumbUrl (AlbumId id) = "/thumb/" <> id
 
-coverUrl :: TrackId -> String
-coverUrl (TrackId id) = "/cover/" <> id
+coverUrl :: AlbumId -> String
+coverUrl (AlbumId id) = "/cover/" <> id
 
 trackUrl :: TrackId -> String
 trackUrl (TrackId id) = "/track/" <> id <> ".flac"

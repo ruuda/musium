@@ -90,17 +90,13 @@ impl MetaServer {
     }
 
     fn handle_track_cover(&self, _request: &Request, id: &str) -> BoxFuture {
-        // TODO: DRY this track id parsing and loadong part.
-        let track_id = match TrackId::parse(id) {
-            Some(tid) => tid,
-            None => return self.handle_bad_request("Invalid track id."),
+        let album_id = match AlbumId::parse(id) {
+            Some(aid) => aid,
+            None => return self.handle_bad_request("Invalid album id."),
         };
 
-        let track = match self.index.get_track(track_id) {
-            Some(t) => t,
-            None => return self.handle_not_found(),
-        };
-
+        let tracks = self.index.get_album_tracks(album_id);
+        let (_track_id, track) = tracks.first().expect("Albums have at least one track.");
         let fname = self.index.get_filename(track.filename);
 
         let opts = claxon::FlacReaderOptions {
