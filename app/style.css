@@ -296,9 +296,9 @@ img.thumb
   /* This one is first, so absolute vs relative does not matter so much, except
    * that relative ensures the parent is at least this tall. */
   position: relative;
-  filter: brightness(0.9) blur(1.7rem);
+  filter: brightness(0.9) blur(1.2rem);
   opacity: 0.4;
-  transform: translateY(0.5rem);
+  transform: translateY(0.3rem);
 }
 
 .album-view hgroup {
