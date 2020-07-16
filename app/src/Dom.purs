@@ -15,8 +15,9 @@ module Dom
   , body
   , clearElement
   , createElement
-  , getValue
   , getElementById
+  , getValue
+  , removeChild
   , removeClass
   , setAttribute
   , setId
@@ -38,6 +39,7 @@ foreign import getValue :: Element -> Effect String
 foreign import addClassImpl :: Fn2 String Element (Effect Unit)
 foreign import addEventListenerImpl :: Fn3 String (Effect Unit) Element (Effect Unit)
 foreign import appendChildImpl :: Fn2 Element Element (Effect Unit)
+foreign import removeChildImpl :: Fn2 Element Element (Effect Unit)
 foreign import appendTextImpl :: Fn2 String Element (Effect Unit)
 foreign import getElementByIdImpl :: Fn3 String (Element -> Maybe Element) (Maybe Element) (Effect (Maybe Element))
 foreign import removeClassImpl :: Fn2 String Element (Effect Unit)
@@ -46,6 +48,9 @@ foreign import setIdImpl :: Fn2 String Element (Effect Unit)
 
 appendChild :: Element -> Element -> Effect Unit
 appendChild child container = runFn2 appendChildImpl child container
+
+removeChild :: Element -> Element -> Effect Unit
+removeChild child container = runFn2 removeChildImpl child container
 
 appendText :: String -> Element -> Effect Unit
 appendText text container = runFn2 appendTextImpl text container

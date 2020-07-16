@@ -23,7 +23,7 @@ import Model as Model
 renderAlbum :: Album -> Html Unit
 renderAlbum (Album album) =
   Html.div $ do
-    Html.addClass "album-view"
+    Html.setId "album-view"
     Html.div $ do
       Html.addClass "album-info"
       Html.div $ do

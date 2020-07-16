@@ -19,6 +19,12 @@ exports.appendChildImpl = function(child, container) {
   }
 }
 
+exports.removeChildImpl = function(child, container) {
+  return function() {
+    container.removeChild(child);
+  }
+}
+
 exports.clearElement = function(container) {
   return function() {
     while (container.hasChildNodes()) {
