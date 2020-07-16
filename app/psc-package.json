@@ -1,6 +1,6 @@
 {
   "name": "mindec",
-  "set": "psc-0.13.0",
+  "set": "psc-0.13.8",
   "source": "https://github.com/purescript/package-sets.git",
   "depends": [
     "aff-bus",

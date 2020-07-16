@@ -93,10 +93,10 @@ instance decodeJsonAlbum :: DecodeJson Album where
 
 getAlbums :: Aff (Array Album)
 getAlbums = do
-  response <- Http.get Http.ResponseFormat.json "/albums"
-  case response.body of
-    Left err -> fatal $ "Failed to retrieve albums: " <> Http.printResponseFormatError err
-    Right json -> case Json.decodeJson json of
+  result <- Http.get Http.ResponseFormat.json "/albums"
+  case result of
+    Left err -> fatal $ "Failed to retrieve albums: " <> Http.printError err
+    Right response -> case Json.decodeJson response.body of
       Left err -> fatal $ "Failed to parse albums: " <> err
       Right albums -> pure $ sortWith (\(Album a) -> a.date) albums
 
@@ -164,10 +164,10 @@ instance decodeJsonSearchResults :: DecodeJson SearchResults where
 
 search :: String -> Aff SearchResults
 search query = do
-  response <- Http.get Http.ResponseFormat.json ("/search?q=" <> query)
-  case response.body of
-    Left err -> fatal $ "Search failed: " <> Http.printResponseFormatError err
-    Right json -> case Json.decodeJson json of
+  result <- Http.get Http.ResponseFormat.json ("/search?q=" <> query)
+  case result of
+    Left err -> fatal $ "Search failed: " <> Http.printError err
+    Right response -> case Json.decodeJson response.body of
       Left err -> fatal $ "Failed to parse search results: " <> err
       Right results -> pure results
 
@@ -198,10 +198,10 @@ decodeAlbumTracks json = do
 
 getTracks :: AlbumId -> Aff (Array Track)
 getTracks (AlbumId aid) = do
-  response <- Http.get Http.ResponseFormat.json $ "/album/" <> aid
-  case response.body of
-    Left err -> fatal $ "Failed to retrieve tracks: " <> Http.printResponseFormatError err
-    Right json -> case decodeAlbumTracks json of
+  result <- Http.get Http.ResponseFormat.json $ "/album/" <> aid
+  case result of
+    Left err -> fatal $ "Failed to retrieve tracks: " <> Http.printError err
+    Right response -> case decodeAlbumTracks response.body of
       Left err -> fatal $ "Failed to parse tracks: " <> err
       Right tracks -> pure tracks
 
