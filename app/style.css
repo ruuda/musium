@@ -296,8 +296,8 @@ img.thumb
   /* This one is first, so absolute vs relative does not matter so much, except
    * that relative ensures the parent is at least this tall. */
   position: relative;
-  filter: brightness(0.9) blur(1.2rem);
-  opacity: 0.4;
+  filter: contrast(0.8) saturate(1.5) brightness(0.9) blur(1.2rem);
+  opacity: 0.3;
   transform: translateY(0.3rem);
 }
 
