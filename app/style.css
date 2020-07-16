@@ -312,6 +312,8 @@ img.thumb
   line-height: 1.1em;
   margin-top: -0.75rem;
   margin-left: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #album-view .album-info h2 {
