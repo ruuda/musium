@@ -10,17 +10,19 @@ module AlbumComponent
   ) where
 
 import Control.Monad.Reader.Class (ask, local)
+import Data.Maybe (Maybe (Just))
 import Data.String.CodeUnits as CodeUnits
 import Effect.Class (liftEffect)
 import Prelude
 
+import AlbumView as AlbumView
 import Dom as Dom
+import History as History
 import Html (Html)
 import Html as Html
 import Model (Album (..))
 import Model as Model
 import Var as Var
-import AlbumView as AlbumView
 
 renderAlbum :: Album -> Html Unit
 renderAlbum (Album album) =
@@ -50,3 +52,4 @@ renderAlbum (Album album) =
     local (const header) $ do
       Html.onClick $ do
         Html.withElement Dom.body $ AlbumView.renderAlbum $ Album album
+        History.pushState (Just album) (album.title <> " by " <> album.artist) ("/album/" <> show album.id)

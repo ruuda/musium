@@ -7,20 +7,27 @@
 
 module Main where
 
-import Data.Array as Array
 import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Prelude
 
-import View as View
 import Dom as Dom
+import History as History
 import Html as Html
 import Model as Model
+import View as View
 
 main :: Effect Unit
 main = launchAff_ $ do
   albums <- Model.getAlbums
-  Console.log ("Loaded albums: " <> (show $ Array.length albums))
+
+  liftEffect $ History.onPopState $ \_state -> do
+    -- TODO: Actually inspect state, also handle initial null state.
+    Console.log "History popped back to ..."
+    Html.withElement Dom.body $ do
+      Html.clear
+      View.renderAlbumList albums
+
   liftEffect $ Html.withElement Dom.body $ View.renderAlbumList albums
