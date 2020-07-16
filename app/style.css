@@ -119,7 +119,7 @@ img.thumb
   height: 3em;
 }
 
-.title, .artist
+.title, #album-list .artist
 {
   white-space: nowrap;
   text-overflow: ellipsis;
