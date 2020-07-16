@@ -3,6 +3,7 @@
   "set": "psc-0.13.0",
   "source": "https://github.com/purescript/package-sets.git",
   "depends": [
+    "aff-bus",
     "affjax",
     "argonaut",
     "argonaut-codecs",
