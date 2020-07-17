@@ -329,3 +329,24 @@ img.thumb
   color: black;
   word-spacing: 0;
 }
+
+@media(min-width: 800px) {
+  #album-view {
+    display: grid;
+    grid-template-columns: 2fr 3fr;
+  }
+
+  .track-list
+  {
+    margin-top: 0;
+    padding-top: 4rem;
+    border-top: none;
+    border-left: 0.8pt solid #eee;
+  }
+}
+
+@media(min-width: 1000px) {
+  #album-view {
+    grid-template-columns: 1fr 1fr;
+  }
+}
