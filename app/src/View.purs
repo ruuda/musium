@@ -24,8 +24,6 @@ import Html as Html
 import Model (Album, SearchArtist (..), SearchAlbum (..), SearchTrack (..))
 import Model as Model
 
-import AlbumComponent as AlbumComponent
-
 -- Like `traverse_`, but if the input array is larger than the given chunk size,
 -- split it up, with an additional <div>.
 buildTree :: forall a. Int -> (a -> Html Unit) -> Array a -> Html Unit
@@ -98,13 +96,6 @@ renderAlbumList albums = do
       ask
 
     pure { searchBox, searchResultsBox }
-
-  albumList <- Html.div $ do
-    Html.addClass "library-view"
-    Html.ul $ do
-      Html.setId "album-list"
-      buildTree 15 AlbumComponent.renderAlbum albums
-      ask
 
   local (const searchBox) $ do
     Html.onInput $ \query -> do

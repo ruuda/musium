@@ -5,11 +5,12 @@
 -- you may not use this file except in compliance with the License.
 -- A copy of the License has been included in the root of the repository.
 
-module AlbumComponent
-  ( renderAlbum
+module AlbumListView
+  ( renderAlbumList
   ) where
 
 import Control.Monad.Reader.Class (ask, local)
+import Data.Foldable (traverse_)
 import Data.Maybe (Maybe (Just))
 import Data.String.CodeUnits as CodeUnits
 import Effect.Class (liftEffect)
@@ -23,6 +24,12 @@ import Html as Html
 import Model (Album (..))
 import Model as Model
 import Var as Var
+
+renderAlbumList :: Array Album -> Html Unit
+renderAlbumList albums =
+  Html.ul $ do
+    Html.setId "album-list"
+    traverse_ renderAlbum albums
 
 renderAlbum :: Album -> Html Unit
 renderAlbum (Album album) =

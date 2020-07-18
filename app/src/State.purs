@@ -27,13 +27,14 @@ import Dom (Element)
 import Dom as Dom
 import Html as Html
 import Model (Album)
+import AlbumListView as AlbumListView
 
 data AppView
   = ViewLibrary
   | ViewAlbum Album
 
 data Event
-  = EventInitialize
+  = EventInitialize (Array Album)
   | EventSelectAlbum Album
 
 type EventBus = BusW Event
@@ -54,9 +55,9 @@ type State =
   , viewState :: ViewState
   }
 
-newAppState :: BusW Event -> Array Album -> AppState
-newAppState bus albums =
-  { albums: albums
+newAppState :: BusW Event -> AppState
+newAppState bus =
+  { albums: []
   , currentView: ViewLibrary
   , postEvent: \event -> Bus.write event bus
   }
@@ -73,18 +74,20 @@ newViewState = Html.withElement Dom.body $ do
 
   pure { albumListView, albumView }
 
-new :: BusW Event -> Array Album -> Effect State
-new bus albums = do
+new :: BusW Event -> Effect State
+new bus = do
   viewState <- newViewState
   pure
-    { appState: newAppState bus albums
+    { appState: newAppState bus
     , viewState: viewState
     }
 
 handleEvent :: Event -> AppState -> Aff AppState
 handleEvent event state = case event of
-  EventInitialize -> pure state
+  EventInitialize albums -> pure $ state { albums = albums }
   EventSelectAlbum album -> pure $ state { currentView = ViewAlbum album }
 
 updateView :: AppState -> ViewState -> Effect ViewState
-updateView appState viewState = pure viewState
+updateView appState viewState = do
+  Html.withElement viewState.albumListView $ AlbumListView.renderAlbumList appState.albums
+  pure viewState
