@@ -12,6 +12,8 @@ module State
   , State (..)
   , ViewState (..)
   , new
+  , handleEvent
+  , updateView
   ) where
 
 import Control.Monad.Reader.Class (ask)
@@ -79,10 +81,10 @@ new bus albums = do
     , viewState: viewState
     }
 
-handleEvent :: Event -> AppState -> AppState
+handleEvent :: Event -> AppState -> Aff AppState
 handleEvent event state = case event of
-  EventInitialize -> state
-  EventSelectAlbum album -> state { currentView = ViewAlbum album }
+  EventInitialize -> pure state
+  EventSelectAlbum album -> pure $ state { currentView = ViewAlbum album }
 
 updateView :: AppState -> ViewState -> Effect ViewState
 updateView appState viewState = pure viewState

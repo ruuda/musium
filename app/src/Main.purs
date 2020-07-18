@@ -10,7 +10,7 @@ module Main where
 import Data.Tuple (Tuple (Tuple))
 import Data.Maybe (Maybe (Just, Nothing))
 import Effect (Effect)
-import Effect.Aff (launchAff_)
+import Effect.Aff (Aff, launchAff_)
 import Effect.Aff.Bus as Bus
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
@@ -27,7 +27,6 @@ main = launchAff_ $ do
 
   albums <- Model.getAlbums
   Console.log "Loaded albums"
-  app <- liftEffect $ State.new busIn albums
 
   liftEffect $ History.onPopState $ \_state -> do
     -- TODO: Actually inspect state, also handle initial null state.
@@ -35,3 +34,14 @@ main = launchAff_ $ do
     case albumView of
       Just av -> Dom.removeChild av Dom.body
       Nothing -> pure unit
+
+  let
+    pump :: State.State -> Aff Unit
+    pump state = do
+      event        <- Bus.read busOut
+      newAppState  <- State.handleEvent event state.appState
+      newViewState <- liftEffect $ State.updateView newAppState state.viewState
+      pump { appState: newAppState, viewState: newViewState }
+
+  initialState <- liftEffect $ State.new busIn albums
+  pump initialState
