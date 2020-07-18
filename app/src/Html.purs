@@ -38,7 +38,7 @@ import Prelude
 -- An effect that builds nodes and appends them to the parent.
 type Html a = ReaderT Element Effect a
 
-withElement :: Element -> Html Unit -> Effect Unit
+withElement :: forall a. Element -> Html a -> Effect a
 withElement container (ReaderT f) = f container
 
 clear :: Html Unit

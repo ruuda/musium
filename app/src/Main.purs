@@ -19,11 +19,13 @@ import History as History
 import Html as Html
 import Model as Model
 import View as View
+import State as State
 
 main :: Effect Unit
 main = launchAff_ $ do
   albums <- Model.getAlbums
   Console.log "Loaded albums"
+  app <- liftEffect $ State.new albums
 
   liftEffect $ History.onPopState $ \_state -> do
     -- TODO: Actually inspect state, also handle initial null state.
