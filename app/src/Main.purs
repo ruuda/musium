@@ -7,25 +7,27 @@
 
 module Main where
 
+import Data.Tuple (Tuple (Tuple))
 import Data.Maybe (Maybe (Just, Nothing))
 import Effect (Effect)
 import Effect.Aff (launchAff_)
+import Effect.Aff.Bus as Bus
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Prelude
 
 import Dom as Dom
 import History as History
-import Html as Html
 import Model as Model
-import View as View
 import State as State
 
 main :: Effect Unit
 main = launchAff_ $ do
+  Tuple busOut busIn <- Bus.split <$> Bus.make
+
   albums <- Model.getAlbums
   Console.log "Loaded albums"
-  app <- liftEffect $ State.new albums
+  app <- liftEffect $ State.new busIn albums
 
   liftEffect $ History.onPopState $ \_state -> do
     -- TODO: Actually inspect state, also handle initial null state.
@@ -33,5 +35,3 @@ main = launchAff_ $ do
     case albumView of
       Just av -> Dom.removeChild av Dom.body
       Nothing -> pure unit
-
-  liftEffect $ Html.withElement Dom.body $ View.renderAlbumList albums

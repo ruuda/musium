@@ -8,13 +8,17 @@
 module State
   ( AppState (..)
   , AppView (..)
-  , State
+  , Event (..)
+  , State (..)
   , ViewState (..)
   , new
   ) where
 
 import Control.Monad.Reader.Class (ask)
 import Effect (Effect)
+import Effect.Aff (Aff)
+import Effect.Aff.Bus as Bus
+import Effect.Aff.Bus (BusW)
 import Prelude
 
 import Dom (Element)
@@ -30,9 +34,12 @@ data Event
   = EventInitialize
   | EventSelectAlbum Album
 
+type EventBus = BusW Event
+
 type AppState =
   { albums :: Array Album
   , currentView :: AppView
+  , postEvent :: Event -> Aff Unit
   }
 
 type ViewState =
@@ -45,10 +52,11 @@ type State =
   , viewState :: ViewState
   }
 
-newAppState :: Array Album -> AppState
-newAppState albums =
+newAppState :: BusW Event -> Array Album -> AppState
+newAppState bus albums =
   { albums: albums
   , currentView: ViewLibrary
+  , postEvent: \event -> Bus.write event bus
   }
 
 newViewState :: Effect ViewState
@@ -63,11 +71,11 @@ newViewState = Html.withElement Dom.body $ do
 
   pure { albumListView, albumView }
 
-new :: Array Album -> Effect State
-new albums = do
+new :: BusW Event -> Array Album -> Effect State
+new bus albums = do
   viewState <- newViewState
   pure
-    { appState: newAppState albums
+    { appState: newAppState bus albums
     , viewState: viewState
     }
 
