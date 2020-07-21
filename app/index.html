@@ -12,27 +12,12 @@
       <p>Loading app …</p>
     </div>
   </body>
-  <script type="text/javascript" src="app.js"></script>
+  <script type="text/javascript" src="app.js" async></script>
   <script type="text/javascript">
-    window.hasCast = false;
-    let initializeCastApi = function() {
-      let context = cast.framework.CastContext.getInstance();
-      context.setOptions({
-        receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
-        autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
-      });
-      window.hasCast = true;
-    };
-    window.__onGCastApiAvailable = function(isAvailable) {
-      if (isAvailable) {
-        initializeCastApi();
-      }
-    };
     window.onload = function() {
       let loader = document.getElementById('loader');
        document.body.removeChild(loader);
        PS.Main.main();
     };
   </script>
-  <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
 </html>
