@@ -76,12 +76,8 @@ ul
   list-style-type: none;
 }
 
-.active {
-  opacity: 1;
-}
-
 .inactive {
-  opacity: 0;
+  display: none !important;
 }
 
 .library-view, #album-view

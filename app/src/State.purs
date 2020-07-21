@@ -7,12 +7,10 @@
 
 module State
   ( AppState (..)
-  , AppView (..)
-  , State (..)
-  , ViewState (..)
+  , Elements (..)
+  , NavState (..)
   , new
   , handleEvent
-  , updateView
   ) where
 
 import Control.Monad.Reader.Class (ask)
@@ -20,6 +18,7 @@ import Effect (Effect)
 import Effect.Aff (Aff)
 import Effect.Aff.Bus (BusW)
 import Effect.Aff.Bus as Bus
+import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Prelude
 
@@ -31,37 +30,26 @@ import Html as Html
 import Model (Album)
 import AlbumListView as AlbumListView
 
-data AppView
+type EventBus = BusW Event
+
+data NavState
   = ViewLibrary
   | ViewAlbum Album
 
-type EventBus = BusW Event
-
-type AppState =
-  { albums :: Array Album
-  , currentView :: AppView
-  , postEvent :: Event -> Aff Unit
-  }
-
-type ViewState =
+type Elements =
   { albumListView :: Element
   , albumView :: Element
   }
 
-type State =
-  { appState :: AppState
-  , viewState :: ViewState
+type AppState =
+  { albums :: Array Album
+  , nav :: NavState
+  , elements :: Elements
+  , postEvent :: Event -> Aff Unit
   }
 
-newAppState :: BusW Event -> AppState
-newAppState bus =
-  { albums: []
-  , currentView: ViewLibrary
-  , postEvent: \event -> Bus.write event bus
-  }
-
-newViewState :: Effect ViewState
-newViewState = Html.withElement Dom.body $ do
+setupElements :: Effect Elements
+setupElements = Html.withElement Dom.body $ do
   albumListView <- Html.div $ do
     Html.setId "album-list-view"
     Html.addClass "active"
@@ -74,24 +62,26 @@ newViewState = Html.withElement Dom.body $ do
 
   pure { albumListView, albumView }
 
-new :: BusW Event -> Effect State
+new :: BusW Event -> Effect AppState
 new bus = do
-  viewState <- newViewState
+  elements <- setupElements
   pure
-    { appState: newAppState bus
-    , viewState: viewState
+    { albums: []
+    , nav: ViewLibrary
+    , elements: elements
+    , postEvent: \event -> Bus.write event bus
     }
 
 handleEvent :: Event -> AppState -> Aff AppState
 handleEvent event state = case event of
-  Event.Initialize albums -> pure $ state { albums = albums }
+  Event.Initialize albums -> do
+    liftEffect $ Html.withElement state.elements.albumListView $ do
+      Html.clear
+      AlbumListView.renderAlbumList state.postEvent albums
+    pure $ state { albums = albums }
+
   Event.SelectAlbum album -> do
     Console.log "Selected an album"
+    -- TODO: Render album
     -- History.pushState (Just album) (album.title <> " by " <> album.artist) ("/album/" <> show album.id)
-    pure $ state { currentView = ViewAlbum album }
-
-updateView :: AppState -> ViewState -> Effect ViewState
-updateView appState viewState = do
-  Html.withElement viewState.albumListView $ AlbumListView.renderAlbumList appState.postEvent appState.albums
-  pure viewState
-  -- Html.withElement Dom.body $ AlbumView.renderAlbum $ Album album
+    pure $ state { nav = ViewAlbum album }

@@ -21,6 +21,7 @@ import Event as Event
 import History as History
 import Model as Model
 import State as State
+import State (AppState)
 
 main :: Effect Unit
 main = launchAff_ $ do
@@ -34,7 +35,7 @@ main = launchAff_ $ do
   _fiber <- forkAff $ do
     albums <- Model.getAlbums
     Console.log "Loaded albums"
-    initialState.appState.postEvent $ Event.Initialize albums
+    initialState.postEvent $ Event.Initialize albums
 
   -- TODO: Properly integrate history.
   liftEffect $ History.onPopState $ \_state -> do
@@ -45,11 +46,10 @@ main = launchAff_ $ do
 
   -- The main loop handles events in a loop.
   let
-    pump :: State.State -> Aff Unit
+    pump :: AppState -> Aff Unit
     pump state = do
-      event        <- Bus.read busOut
-      newAppState  <- State.handleEvent event state.appState
-      newViewState <- liftEffect $ State.updateView newAppState state.viewState
-      pump { appState: newAppState, viewState: newViewState }
+      event <- Bus.read busOut
+      newState <- State.handleEvent event state
+      pump newState
 
   pump initialState
