@@ -8,7 +8,6 @@
 module Main where
 
 import Data.Tuple (Tuple (Tuple))
-import Data.Maybe (Maybe (Just, Nothing))
 import Effect (Effect)
 import Effect.Aff (Aff, forkAff, launchAff_)
 import Effect.Aff.Bus as Bus
@@ -16,12 +15,12 @@ import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Prelude
 
-import Dom as Dom
 import Event as Event
 import History as History
 import Model as Model
-import State as State
+import Navigation as Navigation
 import State (AppState)
+import State as State
 
 main :: Effect Unit
 main = launchAff_ $ do
@@ -37,12 +36,10 @@ main = launchAff_ $ do
     Console.log "Loaded albums"
     initialState.postEvent $ Event.Initialize albums
 
-  -- TODO: Properly integrate history.
-  liftEffect $ History.onPopState $ \_state -> do
-    albumView <- Dom.getElementById "album-view"
-    case albumView of
-      Just av -> Dom.removeChild av Dom.body
-      Nothing -> pure unit
+  liftEffect $ History.onPopState $ launchAff_ <<< case _ of
+    -- TODO: Avoid double pushes here.
+    Navigation.Library -> initialState.postEvent Event.OpenLibrary
+    Navigation.Album album -> initialState.postEvent $ Event.OpenAlbum album
 
   -- The main loop handles events in a loop.
   let

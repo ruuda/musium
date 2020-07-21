@@ -13,4 +13,5 @@ import Model (Album)
 
 data Event
   = Initialize (Array Album)
-  | SelectAlbum Album
+  | OpenLibrary
+  | OpenAlbum Album

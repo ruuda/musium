@@ -14,10 +14,10 @@ import Data.Function.Uncurried (Fn3, runFn3)
 import Effect (Effect)
 import Prelude
 
-foreign import pushStateImpl :: forall a. Fn3 a String String (Effect Unit)
-foreign import onPopState :: forall a. (a -> Effect Unit) -> Effect Unit
+import Navigation (Location)
 
--- TODO: Settle on a type; input and output must match, and that is easiest if I
--- just hard-code it.
-pushState :: forall a. a -> String -> String -> Effect Unit
+foreign import pushStateImpl :: Fn3 Location String String (Effect Unit)
+foreign import onPopState :: (Location -> Effect Unit) -> Effect Unit
+
+pushState :: Location -> String -> String -> Effect Unit
 pushState state title url = runFn3 pushStateImpl state title url

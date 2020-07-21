@@ -8,7 +8,6 @@
 module State
   ( AppState (..)
   , Elements (..)
-  , NavState (..)
   , new
   , handleEvent
   ) where
@@ -21,20 +20,19 @@ import Effect.Aff.Bus as Bus
 import Effect.Class (liftEffect)
 import Prelude
 
-import Dom (Element)
-import Event as Event
-import Event (Event)
-import Dom as Dom
-import Html as Html
-import Model (Album)
 import AlbumListView as AlbumListView
 import AlbumView as AlbumView
+import Dom (Element)
+import Dom as Dom
+import Event (Event)
+import Event as Event
+import History as History
+import Html as Html
+import Model (Album (..))
+import Navigation (Location)
+import Navigation as Navigation
 
 type EventBus = BusW Event
-
-data NavState
-  = ViewLibrary
-  | ViewAlbum Album
 
 type Elements =
   { albumListView :: Element
@@ -43,7 +41,7 @@ type Elements =
 
 type AppState =
   { albums :: Array Album
-  , nav :: NavState
+  , location :: Location
   , elements :: Elements
   , postEvent :: Event -> Aff Unit
   }
@@ -67,27 +65,37 @@ new bus = do
   elements <- setupElements
   pure
     { albums: []
-    , nav: ViewLibrary
+    , location: Navigation.Library
     , elements: elements
     , postEvent: \event -> Bus.write event bus
     }
 
 handleEvent :: Event -> AppState -> Aff AppState
 handleEvent event state = case event of
-  Event.Initialize albums -> do
-    liftEffect $ Html.withElement state.elements.albumListView $ do
+  Event.Initialize albums -> liftEffect $ do
+    Html.withElement state.elements.albumListView $ do
       Html.clear
       AlbumListView.renderAlbumList state.postEvent albums
     pure $ state { albums = albums }
 
-  Event.SelectAlbum album -> do
-    liftEffect $ Html.withElement state.elements.albumView $ do
+  Event.OpenAlbum (Album album) -> liftEffect $ do
+    Html.withElement state.elements.albumView $ do
       Html.removeClass "inactive"
       Html.addClass "active"
       Html.clear
-      AlbumView.renderAlbum album
-    liftEffect $ Html.withElement state.elements.albumListView $ do
+      AlbumView.renderAlbum (Album album)
+    Html.withElement state.elements.albumListView $ do
       Html.removeClass "active"
       Html.addClass "inactive"
-    -- History.pushState (Just album) (album.title <> " by " <> album.artist) ("/album/" <> show album.id)
-    pure $ state { nav = ViewAlbum album }
+    let location = Navigation.Album (Album album)
+    History.pushState location (album.title <> " by " <> album.artist) ("/album/" <> show album.id)
+    pure $ state { location = location }
+
+  Event.OpenLibrary -> liftEffect $ do
+    Html.withElement state.elements.albumView $ do
+      Html.removeClass "active"
+      Html.addClass "inactive"
+    Html.withElement state.elements.albumListView $ do
+      Html.removeClass "inactive"
+      Html.addClass "active"
+    pure state

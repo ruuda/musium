@@ -48,4 +48,4 @@ renderAlbum postEvent (Album album) =
           -- the first 4 characters to get the year.
           Html.text (CodeUnits.take 4 album.date)
 
-      Html.onClick $ void $ launchAff $ postEvent $ Event.SelectAlbum $ Album album
+      Html.onClick $ void $ launchAff $ postEvent $ Event.OpenAlbum $ Album album
