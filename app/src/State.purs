@@ -1,5 +1,5 @@
 -- Mindec -- Music metadata indexer
--- Copyright 2019 Ruud van Asseldonk
+-- Copyright 2020 Ruud van Asseldonk
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -8,7 +8,6 @@
 module State
   ( AppState (..)
   , AppView (..)
-  , Event (..)
   , State (..)
   , ViewState (..)
   , new
@@ -19,11 +18,14 @@ module State
 import Control.Monad.Reader.Class (ask)
 import Effect (Effect)
 import Effect.Aff (Aff)
-import Effect.Aff.Bus as Bus
 import Effect.Aff.Bus (BusW)
+import Effect.Aff.Bus as Bus
+import Effect.Class.Console as Console
 import Prelude
 
 import Dom (Element)
+import Event as Event
+import Event (Event)
 import Dom as Dom
 import Html as Html
 import Model (Album)
@@ -32,10 +34,6 @@ import AlbumListView as AlbumListView
 data AppView
   = ViewLibrary
   | ViewAlbum Album
-
-data Event
-  = EventInitialize (Array Album)
-  | EventSelectAlbum Album
 
 type EventBus = BusW Event
 
@@ -86,10 +84,14 @@ new bus = do
 
 handleEvent :: Event -> AppState -> Aff AppState
 handleEvent event state = case event of
-  EventInitialize albums -> pure $ state { albums = albums }
-  EventSelectAlbum album -> pure $ state { currentView = ViewAlbum album }
+  Event.Initialize albums -> pure $ state { albums = albums }
+  Event.SelectAlbum album -> do
+    Console.log "Selected an album"
+    -- History.pushState (Just album) (album.title <> " by " <> album.artist) ("/album/" <> show album.id)
+    pure $ state { currentView = ViewAlbum album }
 
 updateView :: AppState -> ViewState -> Effect ViewState
 updateView appState viewState = do
-  Html.withElement viewState.albumListView $ AlbumListView.renderAlbumList appState.albums
+  Html.withElement viewState.albumListView $ AlbumListView.renderAlbumList appState.postEvent appState.albums
   pure viewState
+  -- Html.withElement Dom.body $ AlbumView.renderAlbum $ Album album

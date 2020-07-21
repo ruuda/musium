@@ -9,33 +9,29 @@ module AlbumListView
   ( renderAlbumList
   ) where
 
-import Control.Monad.Reader.Class (ask, local)
 import Data.Foldable (traverse_)
-import Data.Maybe (Maybe (Just))
 import Data.String.CodeUnits as CodeUnits
-import Effect.Class (liftEffect)
+import Effect.Aff (Aff, launchAff)
 import Prelude
 
-import AlbumView as AlbumView
-import Dom as Dom
-import History as History
 import Html (Html)
 import Html as Html
 import Model (Album (..))
 import Model as Model
-import Var as Var
+import Event (Event)
+import Event as Event
 
-renderAlbumList :: Array Album -> Html Unit
-renderAlbumList albums =
+renderAlbumList :: (Event -> Aff Unit) -> Array Album -> Html Unit
+renderAlbumList postEvent albums =
   Html.ul $ do
     Html.setId "album-list"
-    traverse_ renderAlbum albums
+    traverse_ (renderAlbum postEvent) albums
 
-renderAlbum :: Album -> Html Unit
-renderAlbum (Album album) =
+renderAlbum :: (Event -> Aff Unit) -> Album -> Html Unit
+renderAlbum postEvent (Album album) =
   Html.li $ do
     Html.addClass "album-container"
-    header <- Html.div $ do
+    Html.div $ do
       Html.addClass "album"
       Html.img (Model.thumbUrl album.id) (album.title <> " by " <> album.artist) $ do
         Html.addClass "thumb"
@@ -51,12 +47,5 @@ renderAlbum (Album album) =
           -- The date is of the form YYYY-MM-DD in ascii, so we can safely take
           -- the first 4 characters to get the year.
           Html.text (CodeUnits.take 4 album.date)
-      ask
 
-    isLoadedVar <- liftEffect $ Var.create false
-    isOpenVar <- liftEffect $ Var.create false
-
-    local (const header) $ do
-      Html.onClick $ do
-        Html.withElement Dom.body $ AlbumView.renderAlbum $ Album album
-        History.pushState (Just album) (album.title <> " by " <> album.artist) ("/album/" <> show album.id)
+      Html.onClick $ void $ launchAff $ postEvent $ Event.SelectAlbum $ Album album

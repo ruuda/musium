@@ -17,6 +17,7 @@ import Effect.Class.Console as Console
 import Prelude
 
 import Dom as Dom
+import Event as Event
 import History as History
 import Model as Model
 import State as State
@@ -33,7 +34,7 @@ main = launchAff_ $ do
   _fiber <- forkAff $ do
     albums <- Model.getAlbums
     Console.log "Loaded albums"
-    initialState.appState.postEvent $ State.EventInitialize albums
+    initialState.appState.postEvent $ Event.Initialize albums
 
   -- TODO: Properly integrate history.
   liftEffect $ History.onPopState $ \_state -> do
