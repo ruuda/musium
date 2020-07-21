@@ -22,7 +22,6 @@ html
 body
 {
   color: black;
-  overflow: hidden;
 }
 
 a
@@ -75,6 +74,14 @@ a
 ul
 {
   list-style-type: none;
+}
+
+.active {
+  opacity: 1;
+}
+
+.inactive {
+  opacity: 0;
 }
 
 .library-view, #album-view

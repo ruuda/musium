@@ -66,10 +66,12 @@ newViewState :: Effect ViewState
 newViewState = Html.withElement Dom.body $ do
   albumListView <- Html.div $ do
     Html.setId "album-list-view"
+    Html.addClass "active"
     ask
 
   albumView <- Html.div $ do
     Html.setId "album-view"
+    Html.addClass "inactive"
     ask
 
   pure { albumListView, albumView }
