@@ -13,10 +13,14 @@ exports.pushStateImpl = function(data, title, url) {
   };
 }
 
-exports.onPopState = function(callback) {
+exports.onPopStateImpl = function(nothing, just, callback) {
   return function() {
     window.onpopstate = function(event) {
-      callback(event.state)();
+      if (Object.keys(event.state).length === 0) {
+        callback(nothing)();
+      } else {
+        callback(just(event.state))();
+      }
     };
   };
 }

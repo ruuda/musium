@@ -8,6 +8,7 @@
 module Main where
 
 import Data.Tuple (Tuple (Tuple))
+import Data.Maybe (Maybe (Nothing, Just))
 import Effect (Effect)
 import Effect.Aff (Aff, forkAff, launchAff_)
 import Effect.Aff.Bus as Bus
@@ -36,10 +37,13 @@ main = launchAff_ $ do
     Console.log "Loaded albums"
     initialState.postEvent $ Event.Initialize albums
 
+  liftEffect $ History.pushState Navigation.Library "Mindec" "/"
   liftEffect $ History.onPopState $ launchAff_ <<< case _ of
     -- TODO: Avoid double pushes here.
-    Navigation.Library -> initialState.postEvent Event.OpenLibrary
-    Navigation.Album album -> initialState.postEvent $ Event.OpenAlbum album
+    Nothing -> initialState.postEvent Event.OpenLibrary
+    Just location -> case location of
+      Navigation.Library     -> initialState.postEvent Event.OpenLibrary
+      Navigation.Album album -> initialState.postEvent $ Event.OpenAlbum album
 
   -- The main loop handles events in a loop.
   let
