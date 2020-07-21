@@ -19,7 +19,6 @@ import Effect.Aff (Aff)
 import Effect.Aff.Bus (BusW)
 import Effect.Aff.Bus as Bus
 import Effect.Class (liftEffect)
-import Effect.Class.Console as Console
 import Prelude
 
 import Dom (Element)
@@ -29,6 +28,7 @@ import Dom as Dom
 import Html as Html
 import Model (Album)
 import AlbumListView as AlbumListView
+import AlbumView as AlbumView
 
 type EventBus = BusW Event
 
@@ -81,7 +81,13 @@ handleEvent event state = case event of
     pure $ state { albums = albums }
 
   Event.SelectAlbum album -> do
-    Console.log "Selected an album"
-    -- TODO: Render album
+    liftEffect $ Html.withElement state.elements.albumView $ do
+      Html.removeClass "inactive"
+      Html.addClass "active"
+      Html.clear
+      AlbumView.renderAlbum album
+    liftEffect $ Html.withElement state.elements.albumListView $ do
+      Html.removeClass "active"
+      Html.addClass "inactive"
     -- History.pushState (Just album) (album.title <> " by " <> album.artist) ("/album/" <> show album.id)
     pure $ state { nav = ViewAlbum album }
