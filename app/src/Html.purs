@@ -20,6 +20,8 @@ module Html
   , node
   , onClick
   , onInput
+  , onScroll
+  , onResize
   , removeClass
   , setId
   , setTransform
@@ -74,6 +76,14 @@ removeClass className = ReaderT $ \container -> Dom.removeClass className contai
 onClick :: Effect Unit -> Html Unit
 onClick callback = ReaderT $ \container ->
   Dom.addEventListener "click" callback container
+
+onScroll :: Effect Unit -> Html Unit
+onScroll callback = ReaderT $ \container ->
+  Dom.onScroll callback container
+
+onResize :: Effect Unit -> Html Unit
+onResize callback = ReaderT $ \container ->
+  Dom.addEventListener "resize" callback container
 
 onInput :: (String -> Effect Unit) -> Html Unit
 onInput callback = ReaderT $ \container ->

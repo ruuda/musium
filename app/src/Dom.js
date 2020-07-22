@@ -59,6 +59,7 @@ exports.assumeElementById = function(id) {
 }
 
 exports.body = document.body;
+exports.window = window;
 
 exports.getValue = function(element) {
   return function() {
@@ -102,5 +103,15 @@ exports.addEventListenerImpl = function(eventName, callback, element) {
       callback();
       return false;
     });
+  }
+}
+
+exports.onScrollImpl = function(callback, element) {
+  return function() {
+    // For some reason, addEventListener('scroll') does not work,
+    // but this does.
+    element.onscroll = function(evt) {
+      callback();
+    };
   }
 }

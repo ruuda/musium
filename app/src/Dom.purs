@@ -22,6 +22,8 @@ module Dom
   , setAttribute
   , setId
   , setTransform
+  , window
+  , onScroll
   ) where
 
 import Data.Function.Uncurried (Fn2, runFn2, Fn3, runFn3)
@@ -36,9 +38,12 @@ foreign import body :: Element
 foreign import clearElement :: Element -> Effect Unit
 foreign import createElement :: String -> Effect Element
 foreign import getValue :: Element -> Effect String
+-- Not really an Element, but it is for the purpose of adding an event listener.
+foreign import window :: Element
 
 foreign import addClassImpl :: Fn2 String Element (Effect Unit)
 foreign import addEventListenerImpl :: Fn3 String (Effect Unit) Element (Effect Unit)
+foreign import onScrollImpl :: Fn2 (Effect Unit) Element (Effect Unit)
 foreign import appendChildImpl :: Fn2 Element Element (Effect Unit)
 foreign import appendTextImpl :: Fn2 String Element (Effect Unit)
 foreign import getElementByIdImpl :: Fn3 String (Element -> Maybe Element) (Maybe Element) (Effect (Maybe Element))
@@ -77,3 +82,6 @@ setAttribute attribute value element = runFn3 setAttributeImpl attribute value e
 
 addEventListener :: String -> Effect Unit -> Element -> Effect Unit
 addEventListener eventName callback element = runFn3 addEventListenerImpl eventName callback element
+
+onScroll :: Effect Unit -> Element -> Effect Unit
+onScroll callback element = runFn2 onScrollImpl callback element

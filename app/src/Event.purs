@@ -15,3 +15,4 @@ data Event
   = Initialize (Array Album)
   | OpenLibrary
   | OpenAlbum Album
+  | ScrollToIndex Int
