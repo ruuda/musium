@@ -80,6 +80,12 @@ ul
   display: none !important;
 }
 
+#runway-sentinel
+{
+  width: 1px;
+  height: 1px;
+}
+
 #album-list
 {
   padding-bottom: 1em;

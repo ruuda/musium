@@ -21,6 +21,7 @@ module Dom
   , removeClass
   , setAttribute
   , setId
+  , setTransform
   ) where
 
 import Data.Function.Uncurried (Fn2, runFn2, Fn3, runFn3)
@@ -39,12 +40,13 @@ foreign import getValue :: Element -> Effect String
 foreign import addClassImpl :: Fn2 String Element (Effect Unit)
 foreign import addEventListenerImpl :: Fn3 String (Effect Unit) Element (Effect Unit)
 foreign import appendChildImpl :: Fn2 Element Element (Effect Unit)
-foreign import removeChildImpl :: Fn2 Element Element (Effect Unit)
 foreign import appendTextImpl :: Fn2 String Element (Effect Unit)
 foreign import getElementByIdImpl :: Fn3 String (Element -> Maybe Element) (Maybe Element) (Effect (Maybe Element))
+foreign import removeChildImpl :: Fn2 Element Element (Effect Unit)
 foreign import removeClassImpl :: Fn2 String Element (Effect Unit)
 foreign import setAttributeImpl :: Fn3 String String Element (Effect Unit)
 foreign import setIdImpl :: Fn2 String Element (Effect Unit)
+foreign import setTransformImpl :: Fn2 String Element (Effect Unit)
 
 appendChild :: Element -> Element -> Effect Unit
 appendChild child container = runFn2 appendChildImpl child container
@@ -66,6 +68,9 @@ removeClass className element = runFn2 removeClassImpl className element
 
 setId :: String -> Element -> Effect Unit
 setId id element = runFn2 setIdImpl id element
+
+setTransform :: String -> Element -> Effect Unit
+setTransform transform element = runFn2 setTransformImpl transform element
 
 setAttribute :: String -> String -> Element -> Effect Unit
 setAttribute attribute value element = runFn3 setAttributeImpl attribute value element

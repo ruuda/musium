@@ -90,6 +90,12 @@ exports.setIdImpl = function(id, element) {
   }
 }
 
+exports.setTransformImpl = function(transform, element) {
+  return function() {
+    element.style.transform = transform;
+  }
+}
+
 exports.addEventListenerImpl = function(eventName, callback, element) {
   return function() {
     element.addEventListener(eventName, function(evt) {

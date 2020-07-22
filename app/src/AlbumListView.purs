@@ -9,6 +9,7 @@ module AlbumListView
   ( renderAlbumList
   ) where
 
+import Data.Array as Array
 import Data.Foldable (traverse_)
 import Data.String.CodeUnits as CodeUnits
 import Effect.Aff (Aff, launchAff)
@@ -22,7 +23,15 @@ import Event (Event)
 import Event as Event
 
 renderAlbumList :: (Event -> Aff Unit) -> Array Album -> Html Unit
-renderAlbumList postEvent albums =
+renderAlbumList postEvent albums = do
+  -- A sentinel element to grow the album list to the right size so the scroll
+  -- bar is correct, even though not all entries are present yet.
+  Html.div $ do
+    -- An album entry is 4em tall.
+    let height = 4 * Array.length albums
+    Html.setId "runway-sentinel"
+    Html.setTransform $ "translate(0em, " <> (show height) <> "em)"
+
   Html.ul $ do
     Html.setId "album-list"
     traverse_ (renderAlbum postEvent) albums
