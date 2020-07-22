@@ -67,6 +67,12 @@ exports.getValue = function(element) {
   }
 }
 
+exports.getScrollTop = function(element) {
+  return function() {
+    return element.scrollTop;
+  }
+}
+
 exports.setAttributeImpl = function(attribute, value, element) {
   return function() {
     element.setAttribute(attribute, value);

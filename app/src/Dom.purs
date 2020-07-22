@@ -16,6 +16,7 @@ module Dom
   , clearElement
   , createElement
   , getElementById
+  , getScrollTop
   , getValue
   , removeChild
   , removeClass
@@ -38,6 +39,7 @@ foreign import body :: Element
 foreign import clearElement :: Element -> Effect Unit
 foreign import createElement :: String -> Effect Element
 foreign import getValue :: Element -> Effect String
+foreign import getScrollTop :: Element -> Effect Number
 -- Not really an Element, but it is for the purpose of adding an event listener.
 foreign import window :: Element
 

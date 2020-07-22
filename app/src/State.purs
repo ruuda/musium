@@ -14,6 +14,7 @@ module State
 
 import Control.Monad.Reader.Class (ask)
 import Data.Array as Array
+import Data.Int as Int
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Aff.Bus (BusW)
@@ -66,8 +67,11 @@ setupElements postEvent = Html.withElement Dom.body $ do
     ask
 
   Html.onScroll $ do
-    -- TODO: Get scroll pos.
-    launchAff_ $ postEvent $ Event.ScrollToIndex 100
+    y <- Dom.getScrollTop Dom.body
+    -- Album entries are 64 pixels tall at the moment.
+    -- TODO: Find a better way to measure this.
+    let index = Int.floor $ y / 64.0
+    launchAff_ $ postEvent $ Event.ScrollToIndex index
 
   pure { albumListView, albumListRunway, albumView }
 
@@ -83,16 +87,28 @@ new bus = do
     , postEvent: postEvent
     }
 
+handleScroll :: Int -> AppState -> Effect AppState
+handleScroll i state = do
+  let
+    albumsVisible = 10
+    target =
+      { begin: max 0 (i - 10)
+      , end: min (Array.length state.albums) (i + 10 + albumsVisible)
+      }
+  scrollState <- AlbumListView.updateAlbumList
+    state.albums
+    state.postEvent
+    state.elements.albumListRunway
+    target state.albumListState
+  pure $ state { albumListState = scrollState }
+
 handleEvent :: Event -> AppState -> Aff AppState
 handleEvent event state = case event of
   Event.Initialize albums -> liftEffect $ do
     runway <- Html.withElement state.elements.albumListView $ do
       Html.clear
       AlbumListView.renderAlbumListRunway $ Array.length albums
-
-    let target = { begin: 5, end: 10 }
-    scrollState <- AlbumListView.updateAlbumList albums state.postEvent runway target state.albumListState
-    pure $ state { albums = albums, albumListState = scrollState }
+    handleScroll 0 $ state { albums = albums, elements = state.elements { albumListRunway = runway } }
 
   Event.OpenAlbum (Album album) -> liftEffect $ do
     Html.withElement state.elements.albumView $ do
@@ -116,11 +132,4 @@ handleEvent event state = case event of
       Html.addClass "active"
     pure state
 
-  Event.ScrollToIndex i -> liftEffect $ do
-    let
-      target =
-        { begin: i
-        , end: i + state.albumListState.end - state.albumListState.begin
-        }
-    scrollState <- AlbumListView.updateAlbumList state.albums state.postEvent state.elements.albumListRunway target state.albumListState
-    pure $ state { albumListState = scrollState }
+  Event.ScrollToIndex i -> liftEffect $ handleScroll i state
