@@ -94,6 +94,8 @@ ul
 .album-container
 {
   cursor: default;
+  contain: layout;
+  position: absolute;
 }
 
 .album, .track

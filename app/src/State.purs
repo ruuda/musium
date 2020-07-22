@@ -13,6 +13,7 @@ module State
   ) where
 
 import Control.Monad.Reader.Class (ask)
+import Data.Array as Array
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Effect.Aff.Bus (BusW)
@@ -36,6 +37,7 @@ type EventBus = BusW Event
 
 type Elements =
   { albumListView :: Element
+  , albumListRunway :: Element
   , albumView :: Element
   }
 
@@ -48,17 +50,19 @@ type AppState =
 
 setupElements :: Effect Elements
 setupElements = Html.withElement Dom.body $ do
-  albumListView <- Html.div $ do
+  { self: albumListView, runway: albumListRunway } <- Html.div $ do
     Html.setId "album-list-view"
     Html.addClass "active"
-    ask
+    runway <- Html.div $ ask
+    self <- ask
+    pure { self, runway }
 
   albumView <- Html.div $ do
     Html.setId "album-view"
     Html.addClass "inactive"
     ask
 
-  pure { albumListView, albumView }
+  pure { albumListView, albumListRunway, albumView }
 
 new :: BusW Event -> Effect AppState
 new bus = do
@@ -73,9 +77,16 @@ new bus = do
 handleEvent :: Event -> AppState -> Aff AppState
 handleEvent event state = case event of
   Event.Initialize albums -> liftEffect $ do
-    Html.withElement state.elements.albumListView $ do
+    runway <- Html.withElement state.elements.albumListView $ do
       Html.clear
-      AlbumListView.renderAlbumList state.postEvent albums
+      AlbumListView.renderAlbumListRunway $ Array.length albums
+
+    let
+      scrollState = { elements: [], begin: 0, end: 0 }
+      target = { begin: 5, end: 10 }
+    _ <- AlbumListView.updateAlbumList albums state.postEvent runway target scrollState
+
+    -- TODO: Store scroll state.
     pure $ state { albums = albums }
 
   Event.OpenAlbum (Album album) -> liftEffect $ do
