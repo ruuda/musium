@@ -52,6 +52,13 @@ type AppState =
   , postEvent :: Event -> Aff Unit
   }
 
+getScrollIndex :: Effect Int
+getScrollIndex = do
+  y <- Dom.getScrollTop Dom.body
+  -- Album entries are 64 pixels tall at the moment.
+  -- TODO: Find a better way to measure this.
+  pure $ Int.floor $ y / 64.0
+
 setupElements :: (Event -> Aff Unit) -> Effect Elements
 setupElements postEvent = Html.withElement Dom.body $ do
   { self: albumListView, runway: albumListRunway } <- Html.div $ do
@@ -67,10 +74,7 @@ setupElements postEvent = Html.withElement Dom.body $ do
     ask
 
   Html.onScroll $ do
-    y <- Dom.getScrollTop Dom.body
-    -- Album entries are 64 pixels tall at the moment.
-    -- TODO: Find a better way to measure this.
-    let index = Int.floor $ y / 64.0
+    index <- getScrollIndex
     launchAff_ $ postEvent $ Event.ScrollToIndex index
 
   pure { albumListView, albumListRunway, albumView }
@@ -130,6 +134,10 @@ handleEvent event state = case event of
     Html.withElement state.elements.albumListView $ do
       Html.removeClass "inactive"
       Html.addClass "active"
-    pure state
+    _index <- getScrollIndex
+    pure $ state { location = Navigation.Library }
 
-  Event.ScrollToIndex i -> liftEffect $ handleScroll i state
+  Event.ScrollToIndex i -> case state.location of
+    -- When scrolling, only update the album list if it is actually visible.
+    Navigation.Library -> liftEffect $ handleScroll i state
+    _ -> pure state
