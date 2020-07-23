@@ -83,12 +83,14 @@ ul
 #album-list
 {
   padding-bottom: 1em;
+  position: relative;
 }
 
-.album-container
+#album-list li
 {
   cursor: default;
   position: absolute;
+  width: 100%;
 }
 
 .album, .track

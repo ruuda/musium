@@ -75,7 +75,6 @@ updateAlbumList albums postEvent albumList target =
     extend :: AlbumListState -> Effect AlbumListState
     extend state = do
       element <- Html.withElement albumList $ Html.li $ do
-        Html.addClass "album-container"
         setAlbum state.end
         ask
       step $ state { end = state.end + 1, elements = Array.snoc state.elements element }
