@@ -21,6 +21,7 @@ module Dom
   , removeChild
   , removeClass
   , setAttribute
+  , setHeight
   , setId
   , setTransform
   , window
@@ -52,6 +53,7 @@ foreign import getElementByIdImpl :: Fn3 String (Element -> Maybe Element) (Mayb
 foreign import removeChildImpl :: Fn2 Element Element (Effect Unit)
 foreign import removeClassImpl :: Fn2 String Element (Effect Unit)
 foreign import setAttributeImpl :: Fn3 String String Element (Effect Unit)
+foreign import setHeightImpl :: Fn2 String Element (Effect Unit)
 foreign import setIdImpl :: Fn2 String Element (Effect Unit)
 foreign import setTransformImpl :: Fn2 String Element (Effect Unit)
 
@@ -72,6 +74,9 @@ addClass className element = runFn2 addClassImpl className element
 
 removeClass :: String -> Element -> Effect Unit
 removeClass className element = runFn2 removeClassImpl className element
+
+setHeight :: String -> Element -> Effect Unit
+setHeight h element = runFn2 setHeightImpl h element
 
 setId :: String -> Element -> Effect Unit
 setId id element = runFn2 setIdImpl id element

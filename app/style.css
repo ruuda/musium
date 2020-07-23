@@ -80,12 +80,6 @@ ul
   display: none !important;
 }
 
-#runway-sentinel
-{
-  width: 1em;
-  height: 1em;
-}
-
 #album-list
 {
   padding-bottom: 1em;
@@ -94,7 +88,6 @@ ul
 .album-container
 {
   cursor: default;
-  contain: layout;
   position: absolute;
 }
 

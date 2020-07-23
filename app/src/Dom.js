@@ -103,6 +103,12 @@ exports.setTransformImpl = function(transform, element) {
   }
 }
 
+exports.setHeightImpl = function(height, element) {
+  return function() {
+    element.style.height = height;
+  }
+}
+
 exports.addEventListenerImpl = function(eventName, callback, element) {
   return function() {
     element.addEventListener(eventName, function(evt) {

@@ -23,6 +23,7 @@ module Html
   , onScroll
   , onResize
   , removeClass
+  , setHeight
   , setId
   , setTransform
   , setTitle
@@ -57,6 +58,9 @@ node tagName (ReaderT children) =
 
 text :: String -> Html Unit
 text value = ReaderT $ \container -> Dom.appendText value container
+
+setHeight :: String -> Html Unit
+setHeight id = ReaderT $ \container -> Dom.setHeight id container
 
 setId :: String -> Html Unit
 setId id = ReaderT $ \container -> Dom.setId id container

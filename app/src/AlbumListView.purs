@@ -33,15 +33,10 @@ import Event as Event
 -- The contents are added later by 'updateAlbumList'.
 renderAlbumListRunway :: Int -> Html Element
 renderAlbumListRunway numAlbums = do
-  -- A sentinel element to grow the album list to the right size so the scroll
-  -- bar is correct, even though not all entries are present yet.
-  Html.div $ do
-    Html.setId "runway-sentinel"
-    -- An album entry is 4em tall.
-    Html.setTransform $ "translate(0em, " <> (show $ 4 * numAlbums) <> "em)"
-
   Html.ul $ do
     Html.setId "album-list"
+    -- An album entry is 4em tall.
+    Html.setHeight $ (show $ 4 * numAlbums) <> "em"
     ask
 
 -- A slice of the albums array, with inclusive begin and exclusive end indices.
