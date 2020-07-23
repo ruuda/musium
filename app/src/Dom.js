@@ -79,6 +79,13 @@ exports.setAttributeImpl = function(attribute, value, element) {
   }
 }
 
+exports.setImageImpl = function(src, alt, element) {
+  return function() {
+    element.src = src;
+    element.alt = alt;
+  }
+}
+
 exports.addClassImpl = function(className, element) {
   return function() {
     element.classList.add(className);

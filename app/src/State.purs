@@ -94,7 +94,7 @@ new bus = do
 handleScroll :: Int -> AppState -> Effect AppState
 handleScroll i state = do
   let
-    headroom = 8
+    headroom = 30
     albumsVisible = 15
     target =
       { begin: max 0 (i - headroom)

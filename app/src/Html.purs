@@ -125,8 +125,7 @@ li children = node "li" children
 img :: forall a. String -> String -> Html a -> Html a
 img src alt (ReaderT children) = ReaderT $ \container -> do
   self <- Dom.createElement "img"
-  Dom.setAttribute "src" src self
-  Dom.setAttribute "alt" alt self
+  Dom.setImage src alt self
   result <- children self
   Dom.appendChild self container
   pure result

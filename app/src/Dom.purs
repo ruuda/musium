@@ -21,6 +21,7 @@ module Dom
   , removeChild
   , removeClass
   , setAttribute
+  , setImage
   , setHeight
   , setId
   , setTransform
@@ -53,6 +54,7 @@ foreign import getElementByIdImpl :: Fn3 String (Element -> Maybe Element) (Mayb
 foreign import removeChildImpl :: Fn2 Element Element (Effect Unit)
 foreign import removeClassImpl :: Fn2 String Element (Effect Unit)
 foreign import setAttributeImpl :: Fn3 String String Element (Effect Unit)
+foreign import setImageImpl :: Fn3 String String Element (Effect Unit)
 foreign import setHeightImpl :: Fn2 String Element (Effect Unit)
 foreign import setIdImpl :: Fn2 String Element (Effect Unit)
 foreign import setTransformImpl :: Fn2 String Element (Effect Unit)
@@ -86,6 +88,9 @@ setTransform transform element = runFn2 setTransformImpl transform element
 
 setAttribute :: String -> String -> Element -> Effect Unit
 setAttribute attribute value element = runFn3 setAttributeImpl attribute value element
+
+setImage :: String -> String -> Element -> Effect Unit
+setImage src alt element = runFn3 setImageImpl src alt element
 
 addEventListener :: String -> Effect Unit -> Element -> Effect Unit
 addEventListener eventName callback element = runFn3 addEventListenerImpl eventName callback element
