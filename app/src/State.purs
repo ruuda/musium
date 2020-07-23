@@ -94,10 +94,11 @@ new bus = do
 handleScroll :: Int -> AppState -> Effect AppState
 handleScroll i state = do
   let
-    albumsVisible = 10
+    headroom = 8
+    albumsVisible = 15
     target =
-      { begin: max 0 (i - 10)
-      , end: min (Array.length state.albums) (i + 10 + albumsVisible)
+      { begin: max 0 (i - headroom)
+      , end: min (Array.length state.albums) (i + headroom + albumsVisible)
       }
   scrollState <- AlbumListView.updateAlbumList
     state.albums

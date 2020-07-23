@@ -16,6 +16,7 @@ import Control.Monad.Reader.Class (ask)
 import Data.Array as Array
 import Data.Maybe (Maybe (Just, Nothing))
 import Data.String.CodeUnits as CodeUnits
+import Data.Traversable (for_, sequence, sequence_)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff)
 import Prelude
@@ -52,10 +53,31 @@ type AlbumListState =
   , end :: Int
   }
 
+type Split =
+  { shared :: AlbumListState
+  , residue :: Array Element
+  }
+
+-- An empty album list state with 'begin' set to the given index.
+emptyAt :: Int -> AlbumListState
+emptyAt i = { elements: [], begin: i, end: i }
+
+-- Split the state into a shared part that intersects the target, and a residue
+-- that can be reused.
+split3 :: Slice -> AlbumListState -> Split
+split3 target state =
+  let
+    begin   = min state.end $ max state.begin target.begin
+    end     = max begin $ min state.end target.end
+    k1      = begin - state.begin
+    k2      = end - state.begin
+    shared  = { elements: Array.slice k1 k2 state.elements, begin: begin, end: end }
+    residue = (Array.take k1 state.elements) <> (Array.drop k2 state.elements)
+  in
+    { shared, residue }
+
+
 -- Mutate the album list DOM nodes to ensure that the desired slice is rendered.
--- Note: This is not the most efficient update, sometimes it will recycle nodes
--- only to delete them later. That can happen when shrinking the window. I think
--- that is an acceptable cost to keep this function simple.
 updateAlbumList
   :: Array Album
   -> (Event -> Aff Unit)
@@ -63,68 +85,40 @@ updateAlbumList
   -> Slice
   -> AlbumListState
   -> Effect AlbumListState
-updateAlbumList albums postEvent albumList target =
+updateAlbumList albums postEvent albumList target state = do
   let
-    setAlbum index = case Array.index albums index of
+    split = split3 target state
+
+    setAlbum index element = case Array.index albums index of
       Nothing    -> pure unit -- Logic error
-      Just album -> do
+      Just album -> Html.withElement element $ do
         Html.clear
         Html.setTransform $ "translate(0em, " <> (show $ index * 4) <> "em)"
         renderAlbum postEvent album
 
-    extend :: AlbumListState -> Effect AlbumListState
-    extend state = do
-      element <- Html.withElement albumList $ Html.li $ do
-        setAlbum state.end
-        ask
-      step $ state { end = state.end + 1, elements = Array.snoc state.elements element }
+  -- Ensure that we have precisely enough elements in the pool of <li>'s to
+  -- recycle, destroying or creating them as needed.
+  residue <- case (target.end - target.begin) - Array.length split.residue of
+      d | d < 0 -> do
+        for_ (Array.take (-d) split.residue) $ \elem -> Dom.removeChild elem albumList
+        pure (Array.drop (-d) split.residue)
+      d | d > 0 -> do
+        new <- sequence $ Array.replicate d $ Html.withElement albumList $ Html.li ask
+        pure $ split.residue <> new
+      _ -> pure split.residue
 
-    shrink :: AlbumListState -> Effect AlbumListState
-    shrink state = case Array.unsnoc state.elements of
-      Nothing -> pure state -- Logic error
-      Just { init, last } -> do
-        Dom.removeChild last albumList
-        step $ state { end = state.end - 1, elements = init }
+  let
+    n = split.shared.begin - target.begin
+    prefix = Array.take n residue
+    suffix = Array.drop n residue
 
-    moveBeginToEnd :: AlbumListState -> Effect AlbumListState
-    moveBeginToEnd state = case Array.uncons state.elements of
-      Nothing -> pure state -- Logic error
-      Just { head, tail } -> do
-        Html.withElement head $ setAlbum $ state.end
-        step $ state
-          { begin = state.begin + 1
-          , end = state.end + 1
-          , elements = Array.snoc tail head
-          }
-
-    moveEndToBegin :: AlbumListState -> Effect AlbumListState
-    moveEndToBegin state = case Array.unsnoc state.elements of
-      Nothing -> pure state -- Logic error
-      Just { init, last } -> do
-        Html.withElement last $ setAlbum $ state.begin - 1
-        step $ state
-          { begin = state.begin - 1
-          , end = state.end - 1
-          , elements = Array.cons last init
-          }
-
-    step :: AlbumListState -> Effect AlbumListState
-    step state =
-      let
-        dBegin = target.begin - state.begin
-        dEnd   = target.end - state.end
-        result
-          | dBegin == 0 && dEnd == 0  = pure state
-          | dBegin == 0 && dEnd >  0  = extend state
-          | dBegin == 0 && dEnd <  0  = shrink state
-          | Array.null state.elements = extend $ state { begin = target.begin, end = target.begin }
-          | dBegin > 0                = moveBeginToEnd state
-          | dBegin < 0                = moveEndToBegin state
-          | otherwise                 = pure state -- Unreachable
-      in
-        result
-  in
-    step
+  sequence_ $ Array.mapWithIndex (\i -> setAlbum $ target.begin + i) prefix
+  sequence_ $ Array.mapWithIndex (\i -> setAlbum $ target.end - 1 - i) suffix
+  pure
+    { begin: target.begin
+    , end: target.end
+    , elements: prefix <> split.shared.elements <> suffix
+    }
 
 renderAlbum :: (Event -> Aff Unit) -> Album -> Html Unit
 renderAlbum postEvent (Album album) = Html.div $ do
