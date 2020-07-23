@@ -112,6 +112,10 @@ img.thumb
 {
   width: 3em;
   height: 3em;
+  /* On a slow network, or when scrolling quickly, the thumbs can take some time
+   * to load. By adding a background color, we get a grey square that acts as a
+   * placeholder for the real album art. */
+  background-color: #f8f8f8;
 }
 
 .title, #album-list .artist
