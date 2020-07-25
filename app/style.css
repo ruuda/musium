@@ -118,7 +118,7 @@ img.thumb
   background-color: #f8f8f8;
 }
 
-.title, #album-list .artist
+.title, #album-list .artist, .track-list .artist
 {
   white-space: nowrap;
   text-overflow: ellipsis;
