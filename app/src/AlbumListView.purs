@@ -21,6 +21,7 @@ import Effect (Effect)
 import Effect.Aff (Aff, launchAff)
 import Effect.Class.Console as Console
 import Prelude
+import Test.Assert (assertEqual')
 
 import Dom (Element)
 import Dom as Dom
@@ -77,6 +78,10 @@ split3 target state =
   in
     { shared, residue }
 
+assertOk :: AlbumListState -> Effect Unit
+assertOk state = assertEqual'
+  "Elements array must contain as many elements as the covered range."
+  { actual: Array.length state.elements, expected: state.end - state.begin }
 
 -- Mutate the album list DOM nodes to ensure that the desired slice is rendered.
 updateAlbumList
@@ -119,11 +124,14 @@ updateAlbumList albums postEvent albumList target state = do
 
   sequence_ $ Array.mapWithIndex (\i -> setAlbum $ target.begin + i) prefix
   sequence_ $ Array.mapWithIndex (\i -> setAlbum $ target.end - 1 - i) suffix
-  pure
-    { begin: target.begin
-    , end: target.end
-    , elements: prefix <> split.shared.elements <> suffix
-    }
+  let
+    result =
+      { begin: target.begin
+      , end: target.end
+      , elements: prefix <> split.shared.elements <> suffix
+      }
+  assertOk result
+  pure result
 
 renderAlbum :: (Event -> Aff Unit) -> Album -> Html Unit
 renderAlbum postEvent (Album album) = Html.div $ do
