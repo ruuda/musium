@@ -19,6 +19,7 @@ import Data.String.CodeUnits as CodeUnits
 import Data.Traversable (for_, sequence, sequence_)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff)
+import Effect.Class.Console as Console
 import Prelude
 
 import Dom (Element)
@@ -98,7 +99,11 @@ updateAlbumList albums postEvent albumList target state = do
 
   -- Ensure that we have precisely enough elements in the pool of <li>'s to
   -- recycle, destroying or creating them as needed.
-  residue <- case (target.end - target.begin) - Array.length split.residue of
+  let
+    nTotal = target.end - target.begin
+    nShared = Array.length split.shared.elements
+    nChange = nTotal - nShared
+  residue <- case nChange - Array.length split.residue of
       d | d < 0 -> do
         for_ (Array.take (-d) split.residue) $ \elem -> Dom.removeChild elem albumList
         pure (Array.drop (-d) split.residue)
