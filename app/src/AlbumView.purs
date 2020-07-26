@@ -11,7 +11,7 @@ module AlbumView
 
 import Control.Monad.Reader.Class (ask)
 import Data.Foldable (traverse_)
-import Effect.Aff (launchAff_)
+import Effect.Aff (joinFiber, launchAff, launchAff_)
 import Effect.Class (liftEffect)
 import Prelude
 
@@ -22,6 +22,13 @@ import Model as Model
 
 renderAlbum :: Album -> Html Unit
 renderAlbum (Album album) = do
+  -- Begin loading the tracks before we add the images. The current server is
+  -- single-threaded, and the album list can be served from memory, but the
+  -- cover art needs disk access. When the disks need to spin up, it can easily
+  -- take a few seconds to serve the cover art, and we should't block the track
+  -- list on that.
+  tracksAsync <- liftEffect $ launchAff $ Model.getTracks album.id
+
   Html.div $ do
     Html.addClass "album-info"
     Html.div $ do
@@ -49,11 +56,10 @@ renderAlbum (Album album) = do
     ask
 
   liftEffect $ launchAff_ $ do
-    tracks <- Model.getTracks album.id
-    let
-      lis :: Html Unit
-      lis = traverse_ (renderTrack $ Album album) tracks
-    liftEffect $ Html.withElement trackList lis
+    tracks <- joinFiber tracksAsync
+    liftEffect
+      $ Html.withElement trackList
+      $ traverse_ (renderTrack $ Album album) tracks
 
 renderTrack :: Album -> Track -> Html Unit
 renderTrack album (Track track) =
