@@ -48,7 +48,6 @@ type Elements =
 type AppState =
   { albums :: Array Album
   , albumListState :: AlbumListState
-  , albumListEntriesPerViewport :: Int
   , navigation :: Navigation
   , elements :: Elements
   , postEvent :: Event -> Aff Unit
@@ -68,8 +67,8 @@ setupElements postEvent = Html.withElement Dom.body $ do
     Html.addClass "inactive"
     ask
 
-  Html.onScroll $ launchAff_ $ postEvent $ Event.Scroll
-  liftEffect $ Dom.onResizeWindow $ launchAff_ $ postEvent $ Event.ResizeViewport
+  Html.onScroll $ launchAff_ $ postEvent $ Event.ChangeViewport
+  liftEffect $ Dom.onResizeWindow $ launchAff_ $ postEvent $ Event.ChangeViewport
 
   pure { albumListView, albumListRunway, albumView }
 
@@ -80,25 +79,35 @@ new bus = do
   pure
     { albums: []
     , albumListState: { elements: [], begin: 0, end: 0 }
-    , albumListEntriesPerViewport: 1
-    , navigation: { location: Navigation.Library, albumListIndex: 0 }
+    , navigation: { location: Navigation.Library }
     , elements: elements
     , postEvent: postEvent
     }
 
--- Bring the album list in sync with the target state (the album list index and
+-- Bring the album list in sync with the viewport (the album list index and
 -- the number of entries per viewport).
 updateAlbumList :: AppState -> Effect AppState
-updateAlbumList state =
-  let
-    headroom = 20
-    albumsVisible = state.albumListEntriesPerViewport
-    i = state.navigation.albumListIndex
-    target =
-      { begin: max 0 (i - headroom)
-      , end: min (Array.length state.albums) (i + headroom + albumsVisible)
-      }
- in do
+updateAlbumList state = do
+  -- To determine a good target, we need to know how tall an entry is, so we
+  -- need to have at least one already. If we don't, then we take a slice of
+  -- a single item to start with, and enqueue an event to update again after
+  -- that.
+  target <- case Array.head state.albumListState.elements of
+    Nothing -> do
+      launchAff_ $ state.postEvent $ Event.ChangeViewport
+      pure { begin: 0, end: min 1 (Array.length state.albums) }
+    Just elem -> do
+      entryHeight <- Dom.getOffsetHeight elem
+      viewportHeight <- Dom.getWindowHeight
+      y <- Dom.getScrollTop Dom.body
+      let
+        i = Int.floor $ y / entryHeight
+        albumsVisible = Int.ceil $ viewportHeight / entryHeight
+        headroom = 20
+      pure
+        { begin: max 0 (i - headroom)
+        , end: min (Array.length state.albums) (i + headroom + albumsVisible)
+        }
   scrollState <- AlbumListView.updateAlbumList
     state.albums
     state.postEvent
@@ -116,7 +125,6 @@ handleEvent event state = case event of
     updateAlbumList $ state
       { albums = albums
       , elements = state.elements { albumListRunway = runway }
-      , albumListEntriesPerViewport = 1
       }
 
   Event.OpenAlbum (Album album) -> liftEffect $ do
@@ -144,33 +152,8 @@ handleEvent event state = case event of
       Html.addClass "active"
     pure $ state { navigation = state.navigation { location = Navigation.Library } }
 
-  Event.Scroll -> case state.navigation.location of
-    -- When scrolling, only update the album list index if the album list is
+  Event.ChangeViewport -> case state.navigation.location of
+    -- When scrolling or resizing, only update the album list when it is
     -- actually visible.
-    Navigation.Library ->
-      -- We can only determine the visible index if we know the height of an
-      -- entry.
-      case Array.head state.albumListState.elements of
-        Nothing -> pure state
-        Just elem -> liftEffect $ do
-          entryHeight <- Dom.getOffsetHeight elem
-          y <- Dom.getScrollTop Dom.body
-          Console.log $ "Scrolled to " <> (show y)
-          updateAlbumList $ state
-            { navigation = state.navigation
-              { albumListIndex = Int.floor $ y / entryHeight
-              }
-            }
-    _ ->
-      pure state
-
-  Event.ResizeViewport -> case Array.head state.albumListState.elements of
-    -- If we are not rendering any album list entries, then we can't measure how
-    -- many album list entries should fit on the screen.
-    Nothing -> pure state
-    Just elem -> liftEffect $ do
-      entryHeight <- Dom.getOffsetHeight elem
-      viewportHeight <- Dom.getWindowHeight
-      let entriesPerViewport = Int.ceil $ viewportHeight / entryHeight
-      Console.log $ "Resized to " <> (show entriesPerViewport)
-      updateAlbumList $ state { albumListEntriesPerViewport = entriesPerViewport }
+    Navigation.Library -> liftEffect $ updateAlbumList state
+    _ -> pure state

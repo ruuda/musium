@@ -18,5 +18,4 @@ data Location
 
 type Navigation =
   { location :: Location
-  , albumListIndex :: Int
   }
