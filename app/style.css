@@ -319,7 +319,7 @@ img.thumb
   transform: translateY(0.3rem);
 }
 
-#album-view hgroup {
+#album-view hgroup, #album-view .album-actions {
   margin-left: 3rem;
   margin-right: 3rem;
 }
@@ -346,6 +346,39 @@ img.thumb
 #album-view .album-info h2 .artist {
   color: black;
   word-spacing: 0;
+}
+
+#album-view .album-actions {
+  padding-top: 1rem;
+}
+
+#album-view .album-info button {
+  font-family: inherit;
+  font-size: inherit;
+  color: #888;
+  background-color: transparent;
+  border: none;
+  display: block;
+  position: relative;
+  padding-left: 0.75rem;
+  padding-top: 1rem;
+  cursor: pointer;
+}
+
+button::before {
+  color: #ccc;
+  width: 1em;
+  left: -0.75rem;
+  position: absolute;
+  font-weight: 700;
+}
+
+button.enqueue::before {
+  content: "↳";
+}
+
+button.play-next::before {
+  content: "↱";
 }
 
 #statusbar {

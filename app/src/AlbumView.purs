@@ -51,6 +51,15 @@ renderAlbum (Album album) = do
           Html.addClass "date"
           Html.text album.date
 
+    Html.div $ do
+      Html.addClass "album-actions"
+      Html.button $ do
+        Html.addClass "enqueue"
+        Html.text "Enqueue"
+      Html.button $ do
+        Html.addClass "play-next"
+        Html.text "Play Next"
+
   trackList <- Html.ul $ do
     Html.addClass "track-list"
     ask

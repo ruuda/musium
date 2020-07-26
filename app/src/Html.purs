@@ -8,6 +8,7 @@
 module Html
   ( Html
   , addClass
+  , button
   , clear
   , div
   , h1
@@ -21,11 +22,12 @@ module Html
   , onClick
   , onInput
   , onScroll
+  , p
   , removeClass
   , setHeight
   , setId
-  , setTransform
   , setTitle
+  , setTransform
   , span
   , text
   , ul
@@ -104,6 +106,12 @@ h2 children = node "h2" children
 
 h3 :: forall a. Html a -> Html a
 h3 children = node "h3" children
+
+p :: forall a. Html a -> Html a
+p children = node "p" children
+
+button :: forall a. Html a -> Html a
+button children = node "button" children
 
 hgroup :: forall a. Html a -> Html a
 hgroup children = node "hgroup" children
