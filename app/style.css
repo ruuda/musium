@@ -355,8 +355,17 @@ img.thumb
   position: fixed;
   bottom: 0;
   width: 100vw;
-  background-color: rgba(252, 252, 252, 0.9);
-  backdrop-filter: blur(0.4em);
+  background-color: rgba(252, 251, 251, 0.92);
+  backdrop-filter: blur(3pt) brightness(110%);
+
+  display: grid;
+  grid-column-gap: 0.75em;
+  grid-template-columns: 3em 1fr;
+  grid-template-rows: 1.5em 1.5em;
+  grid-template-areas:
+    "thumb title"
+    "thumb artist"
+  ;
 }
 
 @media (min-width: 30rem) and (max-width: 50rem) {

@@ -74,6 +74,12 @@ setupElements postEvent = Html.withElement Dom.body $ do
       (Model.thumbUrl $ Model.AlbumId "2482431964dafd1b")
       "The Dark Side of the Moon by Pink Floyd"
       (Html.addClass "thumb")
+    Html.span $ do
+      Html.addClass "title"
+      Html.text "The Great Gig in the Sky"
+    Html.span $ do
+      Html.addClass "artist"
+      Html.text $ "Pink Floyd"
     ask
 
   Html.onScroll $ launchAff_ $ postEvent $ Event.ChangeViewport
