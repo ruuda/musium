@@ -34,6 +34,7 @@ import Event as Event
 import History as History
 import Html as Html
 import Model (Album (..))
+import Model as Model
 import Navigation (Navigation)
 import Navigation as Navigation
 
@@ -69,6 +70,10 @@ setupElements postEvent = Html.withElement Dom.body $ do
 
   _statusBar <- Html.div $ do
     Html.setId "statusbar"
+    Html.img
+      (Model.thumbUrl $ Model.AlbumId "2482431964dafd1b")
+      "The Dark Side of the Moon by Pink Floyd"
+      (Html.addClass "thumb")
     ask
 
   Html.onScroll $ launchAff_ $ postEvent $ Event.ChangeViewport

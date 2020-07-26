@@ -155,7 +155,7 @@ img.thumb
 {
   margin-top: 1em;
   padding-top: 1.5em;
-  padding-bottom: 2.5rem;
+  padding-bottom: 1.5rem;
   background-color: #fdfdfd;
   border-top: 0.8pt solid #eee;
 }
@@ -349,12 +349,13 @@ img.thumb
 }
 
 #statusbar {
-  height: 4rem;
-  border-top: 0.8pt solid rgba(0, 0, 0, 0.08);
+  height: 3rem;
+  padding: 1rem;
+  border-top: 0.8pt solid rgba(0, 0, 0, 0.065);
   position: fixed;
   bottom: 0;
   width: 100vw;
-  background-color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(252, 252, 252, 0.9);
   backdrop-filter: blur(0.4em);
 }
 
@@ -411,6 +412,7 @@ img.thumb
     margin-top: 0;
     padding-top: 4rem;
     padding-left: 1rem;
+    padding-bottom: 2.5rem;
     border-top: none;
     border-left: 0.8pt solid #eee;
   }
