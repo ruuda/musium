@@ -22,6 +22,13 @@ html
 body
 {
   color: black;
+  /* Always show the scroll bar. If we don't, then when you switch from the
+   * album list to the album view, for a brief moment the track list is still
+   * loading, so the height of the page is suddenly a lot less, and the scroll
+   * bar disappears, only to re-appear when the track list loads. That causes a
+   * pop where all the content moves left. The track list popping in is not
+   * visually disturbing, but the horizontal displacement is. */
+  overflow-y: scroll;
 }
 
 a

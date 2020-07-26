@@ -91,7 +91,7 @@ updateAlbumList state = do
   -- To determine a good target, we need to know how tall an entry is, so we
   -- need to have at least one already. If we don't, then we take a slice of
   -- a single item to start with, and enqueue an event to update again after
-  -- that.
+  -- this update.
   target <- case Array.head state.albumListState.elements of
     Nothing -> do
       launchAff_ $ state.postEvent $ Event.ChangeViewport
