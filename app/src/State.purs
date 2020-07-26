@@ -67,6 +67,10 @@ setupElements postEvent = Html.withElement Dom.body $ do
     Html.addClass "inactive"
     ask
 
+  _statusBar <- Html.div $ do
+    Html.setId "statusbar"
+    ask
+
   Html.onScroll $ launchAff_ $ postEvent $ Event.ChangeViewport
   liftEffect $ Dom.onResizeWindow $ launchAff_ $ postEvent $ Event.ChangeViewport
 

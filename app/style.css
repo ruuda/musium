@@ -87,6 +87,11 @@ ul
   display: none !important;
 }
 
+#album-list-view {
+  /* Reserve room for the status bar. */
+  padding-bottom: calc(4em + 0.8pt);
+}
+
 #album-list
 {
   padding-bottom: 1em;
@@ -150,7 +155,7 @@ img.thumb
 {
   margin-top: 1em;
   padding-top: 1.5em;
-  padding-bottom: 4rem;
+  padding-bottom: 2.5rem;
   background-color: #fdfdfd;
   border-top: 0.8pt solid #eee;
 }
@@ -281,7 +286,10 @@ img.thumb
 .searching #search { height: 100vh }
 
 #album-view {
-  min-height: 100%;
+  min-height: calc(100% - 4em - 0.8pt);
+
+  /* Reserve room for the status bar. */
+  padding-bottom: calc(4em + 0.8pt);
 }
 
 #album-view .album-info {
@@ -338,6 +346,16 @@ img.thumb
 #album-view .album-info h2 .artist {
   color: black;
   word-spacing: 0;
+}
+
+#statusbar {
+  height: 4rem;
+  border-top: 0.8pt solid rgba(0, 0, 0, 0.08);
+  position: fixed;
+  bottom: 0;
+  width: 100vw;
+  background-color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(0.4em);
 }
 
 @media (min-width: 30rem) and (max-width: 50rem) {
