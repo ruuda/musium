@@ -15,6 +15,7 @@ module State
 import Control.Monad.Reader.Class (ask)
 import Data.Array as Array
 import Data.Int as Int
+import Data.Maybe (Maybe (Just, Nothing))
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Aff.Bus (BusW)
@@ -33,7 +34,7 @@ import Event as Event
 import History as History
 import Html as Html
 import Model (Album (..))
-import Navigation (Location)
+import Navigation (Navigation)
 import Navigation as Navigation
 
 type EventBus = BusW Event
@@ -47,17 +48,11 @@ type Elements =
 type AppState =
   { albums :: Array Album
   , albumListState :: AlbumListState
-  , location :: Location
+  , albumListEntriesPerViewport :: Int
+  , navigation :: Navigation
   , elements :: Elements
   , postEvent :: Event -> Aff Unit
   }
-
-getScrollIndex :: Effect Int
-getScrollIndex = do
-  y <- Dom.getScrollTop Dom.body
-  -- Album entries are 64 pixels tall at the moment.
-  -- TODO: Find a better way to measure this.
-  pure $ Int.floor $ y / 64.0
 
 setupElements :: (Event -> Aff Unit) -> Effect Elements
 setupElements postEvent = Html.withElement Dom.body $ do
@@ -73,9 +68,8 @@ setupElements postEvent = Html.withElement Dom.body $ do
     Html.addClass "inactive"
     ask
 
-  Html.onScroll $ do
-    index <- getScrollIndex
-    launchAff_ $ postEvent $ Event.ScrollToIndex index
+  Html.onScroll $ launchAff_ $ postEvent $ Event.Scroll
+  liftEffect $ Dom.onResizeWindow $ launchAff_ $ postEvent $ Event.ResizeViewport
 
   pure { albumListView, albumListRunway, albumView }
 
@@ -86,25 +80,31 @@ new bus = do
   pure
     { albums: []
     , albumListState: { elements: [], begin: 0, end: 0 }
-    , location: Navigation.Library
+    , albumListEntriesPerViewport: 1
+    , navigation: { location: Navigation.Library, albumListIndex: 0 }
     , elements: elements
     , postEvent: postEvent
     }
 
-handleScroll :: Int -> AppState -> Effect AppState
-handleScroll i state = do
+-- Bring the album list in sync with the target state (the album list index and
+-- the number of entries per viewport).
+updateAlbumList :: AppState -> Effect AppState
+updateAlbumList state =
   let
-    headroom = 30
-    albumsVisible = 15
+    headroom = 20
+    albumsVisible = state.albumListEntriesPerViewport
+    i = state.navigation.albumListIndex
     target =
       { begin: max 0 (i - headroom)
       , end: min (Array.length state.albums) (i + headroom + albumsVisible)
       }
+ in do
   scrollState <- AlbumListView.updateAlbumList
     state.albums
     state.postEvent
     state.elements.albumListRunway
-    target state.albumListState
+    target
+    state.albumListState
   pure $ state { albumListState = scrollState }
 
 handleEvent :: Event -> AppState -> Aff AppState
@@ -113,7 +113,11 @@ handleEvent event state = case event of
     runway <- Html.withElement state.elements.albumListView $ do
       Html.clear
       AlbumListView.renderAlbumListRunway $ Array.length albums
-    handleScroll 0 $ state { albums = albums, elements = state.elements { albumListRunway = runway } }
+    updateAlbumList $ state
+      { albums = albums
+      , elements = state.elements { albumListRunway = runway }
+      , albumListEntriesPerViewport = 1
+      }
 
   Event.OpenAlbum (Album album) -> liftEffect $ do
     Html.withElement state.elements.albumView $ do
@@ -124,9 +128,12 @@ handleEvent event state = case event of
     Html.withElement state.elements.albumListView $ do
       Html.removeClass "active"
       Html.addClass "inactive"
-    let location = Navigation.Album (Album album)
-    History.pushState location (album.title <> " by " <> album.artist) ("/album/" <> show album.id)
-    pure $ state { location = location }
+    let navigation = state.navigation { location = Navigation.Album (Album album) }
+    History.pushState
+      navigation.location
+      (album.title <> " by " <> album.artist)
+      ("/album/" <> show album.id)
+    pure $ state { navigation = navigation }
 
   Event.OpenLibrary -> liftEffect $ do
     Html.withElement state.elements.albumView $ do
@@ -135,10 +142,35 @@ handleEvent event state = case event of
     Html.withElement state.elements.albumListView $ do
       Html.removeClass "inactive"
       Html.addClass "active"
-    _index <- getScrollIndex
-    pure $ state { location = Navigation.Library }
+    pure $ state { navigation = state.navigation { location = Navigation.Library } }
 
-  Event.ScrollToIndex i -> case state.location of
-    -- When scrolling, only update the album list if it is actually visible.
-    Navigation.Library -> liftEffect $ handleScroll i state
-    _ -> pure state
+  Event.Scroll -> case state.navigation.location of
+    -- When scrolling, only update the album list index if the album list is
+    -- actually visible.
+    Navigation.Library ->
+      -- We can only determine the visible index if we know the height of an
+      -- entry.
+      case Array.head state.albumListState.elements of
+        Nothing -> pure state
+        Just elem -> liftEffect $ do
+          entryHeight <- Dom.getOffsetHeight elem
+          y <- Dom.getScrollTop Dom.body
+          Console.log $ "Scrolled to " <> (show y)
+          updateAlbumList $ state
+            { navigation = state.navigation
+              { albumListIndex = Int.floor $ y / entryHeight
+              }
+            }
+    _ ->
+      pure state
+
+  Event.ResizeViewport -> case Array.head state.albumListState.elements of
+    -- If we are not rendering any album list entries, then we can't measure how
+    -- many album list entries should fit on the screen.
+    Nothing -> pure state
+    Just elem -> liftEffect $ do
+      entryHeight <- Dom.getOffsetHeight elem
+      viewportHeight <- Dom.getWindowHeight
+      let entriesPerViewport = Int.ceil $ viewportHeight / entryHeight
+      Console.log $ "Resized to " <> (show entriesPerViewport)
+      updateAlbumList $ state { albumListEntriesPerViewport = entriesPerViewport }

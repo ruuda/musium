@@ -67,6 +67,16 @@ exports.getValue = function(element) {
   }
 }
 
+exports.getOffsetHeight = function(element) {
+  return function() {
+    return element.offsetHeight;
+  }
+}
+
+exports.getWindowHeight = function() {
+  return window.innerHeight;
+}
+
 exports.getScrollTop = function(element) {
   return function() {
     return element.scrollTop;
@@ -130,6 +140,14 @@ exports.onScrollImpl = function(callback, element) {
     // For some reason, addEventListener('scroll') does not work,
     // but this does.
     element.onscroll = function(evt) {
+      callback();
+    };
+  }
+}
+
+exports.onResizeWindow = function(callback) {
+  return function() {
+    window.onresize = function(evt) {
       callback();
     };
   }

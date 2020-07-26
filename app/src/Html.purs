@@ -21,7 +21,6 @@ module Html
   , onClick
   , onInput
   , onScroll
-  , onResize
   , removeClass
   , setHeight
   , setId
@@ -84,10 +83,6 @@ onClick callback = ReaderT $ \container ->
 onScroll :: Effect Unit -> Html Unit
 onScroll callback = ReaderT $ \container ->
   Dom.onScroll callback container
-
-onResize :: Effect Unit -> Html Unit
-onResize callback = ReaderT $ \container ->
-  Dom.addEventListener "resize" callback container
 
 onInput :: (String -> Effect Unit) -> Html Unit
 onInput callback = ReaderT $ \container ->

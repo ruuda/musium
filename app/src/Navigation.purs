@@ -7,6 +7,7 @@
 
 module Navigation
   ( Location (..)
+  , Navigation (..)
   ) where
 
 import Model (Album)
@@ -14,3 +15,8 @@ import Model (Album)
 data Location
   = Library
   | Album Album
+
+type Navigation =
+  { location :: Location
+  , albumListIndex :: Int
+  }

@@ -16,17 +16,19 @@ module Dom
   , clearElement
   , createElement
   , getElementById
+  , getOffsetHeight
   , getScrollTop
   , getValue
+  , getWindowHeight
+  , onScroll
+  , onResizeWindow
   , removeChild
   , removeClass
   , setAttribute
-  , setImage
   , setHeight
   , setId
+  , setImage
   , setTransform
-  , window
-  , onScroll
   ) where
 
 import Data.Function.Uncurried (Fn2, runFn2, Fn3, runFn3)
@@ -40,10 +42,11 @@ foreign import assumeElementById :: String -> Effect Element
 foreign import body :: Element
 foreign import clearElement :: Element -> Effect Unit
 foreign import createElement :: String -> Effect Element
-foreign import getValue :: Element -> Effect String
+foreign import getOffsetHeight :: Element -> Effect Number
 foreign import getScrollTop :: Element -> Effect Number
--- Not really an Element, but it is for the purpose of adding an event listener.
-foreign import window :: Element
+foreign import getValue :: Element -> Effect String
+foreign import getWindowHeight :: Effect Number
+foreign import onResizeWindow :: (Effect Unit) -> (Effect Unit)
 
 foreign import addClassImpl :: Fn2 String Element (Effect Unit)
 foreign import addEventListenerImpl :: Fn3 String (Effect Unit) Element (Effect Unit)
