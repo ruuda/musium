@@ -87,3 +87,5 @@ renderTrack album (Track track) =
     Html.div $ do
       Html.addClass "artist"
       Html.text track.artist
+    Html.button $ Html.addClass "enqueue"
+    Html.button $ Html.addClass "play-next"
