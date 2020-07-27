@@ -24,6 +24,7 @@ module Dom
   , onResizeWindow
   , removeChild
   , removeClass
+  , scrollIntoView
   , setAttribute
   , setHeight
   , setId
@@ -47,6 +48,7 @@ foreign import getScrollTop :: Element -> Effect Number
 foreign import getValue :: Element -> Effect String
 foreign import getWindowHeight :: Effect Number
 foreign import onResizeWindow :: (Effect Unit) -> (Effect Unit)
+foreign import scrollIntoView :: Element -> Effect Unit
 
 foreign import addClassImpl :: Fn2 String Element (Effect Unit)
 foreign import addEventListenerImpl :: Fn3 String (Effect Unit) Element (Effect Unit)

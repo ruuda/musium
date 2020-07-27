@@ -24,6 +24,7 @@ module Html
   , onScroll
   , p
   , removeClass
+  , scrollIntoView
   , setHeight
   , setId
   , setTitle
@@ -94,6 +95,9 @@ onInput callback = ReaderT $ \container ->
       callback value
   in
     Dom.addEventListener "input" getValueAndCall container
+
+scrollIntoView :: Html Unit
+scrollIntoView = ReaderT Dom.scrollIntoView
 
 div :: forall a. Html a -> Html a
 div children = node "div" children

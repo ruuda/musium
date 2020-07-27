@@ -83,6 +83,18 @@ exports.getScrollTop = function(element) {
   }
 }
 
+exports.scrollIntoView = function(element) {
+  return function() {
+    element.scrollIntoView({
+      // Page transitions are immediate, so scrolling should jump, it should not
+      // be smooth.
+      behavior: 'auto',
+      block: 'start',
+      inline: 'nearest',
+    });
+  }
+}
+
 exports.setAttributeImpl = function(attribute, value, element) {
   return function() {
     element.setAttribute(attribute, value);

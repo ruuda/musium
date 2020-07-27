@@ -148,6 +148,7 @@ handleEvent event state = case event of
       Html.addClass "active"
       Html.clear
       AlbumView.renderAlbum (Album album)
+      Html.scrollIntoView
     Html.withElement state.elements.albumListView $ do
       Html.removeClass "active"
       Html.addClass "inactive"
