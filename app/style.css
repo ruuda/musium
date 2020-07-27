@@ -287,10 +287,10 @@ img.thumb
 .searching #search { height: 100vh }
 
 #album-view {
-  min-height: calc(100% - 4em - 0.8pt);
+  min-height: calc(100% - 5em - 0.8pt);
 
   /* Reserve room for the status bar. */
-  padding-bottom: calc(4em + 0.8pt);
+  padding-bottom: calc(5em + 0.8pt);
 }
 
 #album-view .album-info {
