@@ -21,7 +21,7 @@ import Effect (Effect)
 import Effect.Aff (Aff, launchAff)
 import Effect.Class.Console as Console
 import Prelude
-import Test.Assert (assertEqual')
+import Test.Assert (assert', assertEqual')
 
 import Dom (Element)
 import Dom as Dom
@@ -97,10 +97,14 @@ updateAlbumList albums postEvent albumList target state = do
 
     setAlbum index element = case Array.index albums index of
       Nothing    -> pure unit -- Logic error
-      Just album -> Html.withElement element $ do
-        Html.clear
-        Html.setTransform $ "translate(0em, " <> (show $ index * 4) <> "em)"
-        renderAlbum postEvent album
+      Just album -> do
+        assert'
+          "Elements in the shared slice should not be rewritten"
+          (index < split.shared.begin || index >= split.shared.end)
+        Html.withElement element $ do
+          Html.clear
+          Html.setTransform $ "translate(0em, " <> (show $ index * 4) <> "em)"
+          renderAlbum postEvent album
 
   -- Ensure that we have precisely enough elements in the pool of <li>'s to
   -- recycle, destroying or creating them as needed.
@@ -121,9 +125,10 @@ updateAlbumList albums postEvent albumList target state = do
     n = split.shared.begin - target.begin
     prefix = Array.take n residue
     suffix = Array.drop n residue
+    m = Array.length suffix
 
   sequence_ $ Array.mapWithIndex (\i -> setAlbum $ target.begin + i) prefix
-  sequence_ $ Array.mapWithIndex (\i -> setAlbum $ target.end - 1 - i) suffix
+  sequence_ $ Array.mapWithIndex (\i -> setAlbum $ target.end - m + i) suffix
   let
     result =
       { begin: target.begin
