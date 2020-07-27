@@ -110,13 +110,13 @@ ul
   padding-top: 1em;
   display: grid;
   padding-left: 1em;
-  padding-right: 1.5em;
+  padding-right: 1em;
   grid-column-gap: 0.75em;
-  grid-template-columns: 3em 1fr 1.5em 1.5em;
+  grid-template-columns: 3em 1fr;
   grid-template-rows: 1.5em 1.5em;
   grid-template-areas:
-    "number   title  btn-enqueue btn-next"
-    "duration artist btn-enqueue btn-next"
+    "number   title"
+    "duration artist"
   ;
 }
 
@@ -199,11 +199,13 @@ img.thumb
   transition: color 0.3s ease-in-out;
 }
 
-.queueing .track-number, .queueing .track-number::before {
+.queueing .track-number, .queueing .track-number::before
+{
   color: #ccc;
 }
 
-.queued .track-number, .queued .track-number::before {
+.queued .track-number, .queued .track-number::before
+{
   color: #999;
 }
 
@@ -350,7 +352,7 @@ img.thumb
   padding-top: 1rem;
 }
 
-#album-view button {
+#album-view .album-info button {
   font-family: inherit;
   font-size: inherit;
   color: #888;
@@ -377,21 +379,6 @@ button.enqueue::before {
 
 button.play-next::before {
   content: "↱";
-}
-
-.track button.enqueue {
-  grid-area: btn-enqueue;
-}
-
-.track button.play-next {
-  grid-area: btn-next;
-}
-
-#album-view .track button::before {
-  top: 1em;
-  left: 0;
-  width: 100%;
-  text-align: center;
 }
 
 #statusbar {
