@@ -107,6 +107,7 @@ ul
 
 .album, .track
 {
+  cursor: pointer;
   padding-top: 1em;
   display: grid;
   padding-left: 1em;
