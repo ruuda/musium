@@ -17,12 +17,14 @@ import Data.Array as Array
 import Data.Int as Int
 import Data.Maybe (Maybe (Just, Nothing))
 import Effect (Effect)
+import Effect.Aff as Aff
 import Effect.Aff (Aff, launchAff_)
 import Effect.Aff.Bus (BusW)
 import Effect.Aff.Bus as Bus
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Prelude
+import Data.Time.Duration (Milliseconds (..))
 
 import AlbumListView (AlbumListState)
 import AlbumListView as AlbumListView
@@ -49,6 +51,8 @@ type Elements =
 type AppState =
   { albums :: Array Album
   , albumListState :: AlbumListState
+    -- The index of the album at the top of the viewport.
+  , albumListIndex :: Int
   , navigation :: Navigation
   , elements :: Elements
   , postEvent :: Event -> Aff Unit
@@ -94,6 +98,7 @@ new bus = do
   pure
     { albums: []
     , albumListState: { elements: [], begin: 0, end: 0 }
+    , albumListIndex: 0
     , navigation: { location: Navigation.Library }
     , elements: elements
     , postEvent: postEvent
@@ -107,21 +112,24 @@ updateAlbumList state = do
   -- need to have at least one already. If we don't, then we take a slice of
   -- a single item to start with, and enqueue an event to update again after
   -- this update.
-  target <- case Array.head state.albumListState.elements of
+  { target, index } <- case Array.head state.albumListState.elements of
     Nothing -> do
       launchAff_ $ state.postEvent $ Event.ChangeViewport
-      pure { begin: 0, end: min 1 (Array.length state.albums) }
+      pure $ { target: { begin: 0, end: min 1 (Array.length state.albums) }, index: 0 }
     Just elem -> do
       entryHeight <- Dom.getOffsetHeight elem
       viewportHeight <- Dom.getWindowHeight
       y <- Dom.getScrollTop Dom.body
       let
+        headroom = 20
         i = Int.floor $ y / entryHeight
         albumsVisible = Int.ceil $ viewportHeight / entryHeight
-        headroom = 20
-      pure
-        { begin: max 0 (i - headroom)
-        , end: min (Array.length state.albums) (i + headroom + albumsVisible)
+      pure $
+        { target:
+          { begin: max 0 (i - headroom)
+          , end: min (Array.length state.albums) (i + headroom + albumsVisible)
+          }
+        , index: i
         }
   scrollState <- AlbumListView.updateAlbumList
     state.albums
@@ -129,7 +137,7 @@ updateAlbumList state = do
     state.elements.albumListRunway
     target
     state.albumListState
-  pure $ state { albumListState = scrollState }
+  pure $ state { albumListState = scrollState, albumListIndex = index }
 
 handleEvent :: Event -> AppState -> Aff AppState
 handleEvent event state = case event of
@@ -166,6 +174,13 @@ handleEvent event state = case event of
     Html.withElement state.elements.albumListView $ do
       Html.removeClass "inactive"
       Html.addClass "active"
+    case Array.index
+      state.albumListState.elements
+      (state.albumListIndex - state.albumListState.begin)
+      of
+        -- Hmm, this does not work. Why not?
+        Just element -> liftEffect $ Html.withElement element $ Html.scrollIntoView
+        Nothing -> pure unit
     pure $ state { navigation = state.navigation { location = Navigation.Library } }
 
   Event.ChangeViewport -> case state.navigation.location of
