@@ -4,6 +4,9 @@
 {
   margin: 0;
   padding: 0;
+  /* This is more like a traditional application than a website, so I'll go with
+   * the default cursor, not a pointer. */
+  cursor: default;
 }
 
 *:focus
@@ -107,7 +110,6 @@ ul
 
 .album, .track
 {
-  cursor: pointer;
   padding-top: 1em;
   display: grid;
   padding-left: 1em;
@@ -363,7 +365,6 @@ img.thumb
   position: relative;
   padding-left: 0.75rem;
   padding-top: 1rem;
-  cursor: pointer;
 }
 
 button::before {
