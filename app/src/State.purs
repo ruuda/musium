@@ -174,13 +174,15 @@ handleEvent event state = case event of
     Html.withElement state.elements.albumListView $ do
       Html.removeClass "inactive"
       Html.addClass "active"
+
+    -- Restore the scroll position.
     case Array.index
       state.albumListState.elements
       (state.albumListIndex - state.albumListState.begin)
       of
-        -- Hmm, this does not work. Why not?
         Just element -> liftEffect $ Html.withElement element $ Html.scrollIntoView
         Nothing -> pure unit
+
     pure $ state { navigation = state.navigation { location = Navigation.Library } }
 
   Event.ChangeViewport -> case state.navigation.location of
