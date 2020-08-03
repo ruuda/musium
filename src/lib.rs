@@ -8,6 +8,7 @@
 // TODO: Remove once near-stable.
 #![allow(dead_code)]
 
+extern crate alsa;
 extern crate claxon;
 extern crate crossbeam;
 extern crate libc;
@@ -19,6 +20,7 @@ mod search;
 mod word_index;
 
 pub mod net;
+pub mod playback;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::collections::btree_map;
