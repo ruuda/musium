@@ -413,12 +413,7 @@ mod test {
     use std::collections::BTreeSet;
 
     /// Dummy word metadata for use in these tests.
-    const M0: WordMeta = WordMeta {
-        word_len: 0,
-        total_len: 0,
-        index: 0,
-        rank: 0,
-    };
+    const M0: WordMeta = WordMeta(0);
 
     #[test]
     fn test_word_meta_fits_u32() {
