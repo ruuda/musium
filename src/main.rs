@@ -358,7 +358,11 @@ fn make_index(dir: &str) -> MemoryMetaIndex {
         let mut paths = Vec::new();
         let paths_iter = wd
             .into_iter()
-            .map(|e| e.unwrap())
+            .filter_map(|e| match e {
+                Ok(entry) => Some(entry),
+                // TODO: Add a nicer way to report errors.
+                Err(err) => { eprintln!("{}", err); None }
+            })
             .filter(|e| e.file_type().is_file())
             .map(|e| e.into_path())
             .filter(|p| p.extension() == Some(flac_ext));
