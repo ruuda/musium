@@ -516,6 +516,17 @@ impl GenThumb {
             }
         }
     }
+
+    fn is_done(&mut self) -> bool {
+        let child = match self {
+            GenThumb::Resizing { ref mut child, .. } => child,
+            GenThumb::Compressing { ref mut child, .. } => child,
+        };
+        match child.try_wait() {
+            Ok(Some(_)) => true,
+            _ => false,
+        }
+    }
 }
 
 struct GenThumbs<'a> {
@@ -535,6 +546,26 @@ impl<'a> GenThumbs<'a> {
 
     fn wait_until_at_most_in_use(&mut self, max_used: usize) {
         while self.pending.len() > max_used {
+            let mut found_one = false;
+
+            // Round 1: Try to find a process that is already finished, and make
+            // progress on that.
+            for i in 0..self.pending.len() {
+                if self.pending[i].is_done() {
+                    let gen = self.pending.remove(i);
+                    if let Some(next_gen) = gen.poll() {
+                        self.pending.push(next_gen);
+                    }
+                    found_one = true;
+                    break
+                }
+            }
+
+            if found_one {
+                continue
+            }
+
+            // Round 2: All processes are still running, wait for the oldest one.
             let gen = self.pending.remove(0);
             if let Some(next_gen) = gen.poll() {
                 self.pending.push(next_gen);
