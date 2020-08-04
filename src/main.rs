@@ -398,29 +398,51 @@ fn make_index(dir: &str) -> MemoryMetaIndex {
     index
 }
 
-fn generate_thumbnail(cache_dir: &str, album_id: AlbumId, filename: &str) -> claxon::Result<()> {
-    use std::process::{Command, Stdio};
+enum GenThumb {
+    Resizing {
+        out_fname_png: PathBuf,
+        out_fname_jpg: PathBuf,
+        child: process::Child,
+    },
+    Compressing {
+        out_fname_png: PathBuf,
+        child: process::Child,
+    },
+}
 
-    let mut out_fname_jpg: PathBuf = PathBuf::from(cache_dir);
-    out_fname_jpg.push(format!("{}.jpg", album_id));
+impl GenThumb {
 
-    let mut out_fname_png: PathBuf = PathBuf::from(cache_dir);
-    out_fname_png.push(format!("{}.png", album_id));
+    /// Start an extract-and-resize operation.
+    pub fn new(cache_dir: &str, album_id: AlbumId, filename: &str) -> claxon::Result<Option<GenThumb>> {
+        use process::{Command, Stdio};
 
-    // Early-out on existing files. The user would need to clear the cache
-    // manually.
-    if out_fname_jpg.is_file() {
-        return Ok(())
-    }
+        let mut out_fname_jpg: PathBuf = PathBuf::from(cache_dir);
+        out_fname_jpg.push(format!("{}.jpg", album_id));
 
-    let opts = claxon::FlacReaderOptions {
-        metadata_only: true,
-        read_picture: claxon::ReadPicture::CoverAsVec,
-        read_vorbis_comment: false,
-    };
-    let reader = claxon::FlacReader::open_ext(filename, opts)?;
-    if let Some(cover) = reader.into_pictures().pop() {
+        let mut out_fname_png: PathBuf = PathBuf::from(cache_dir);
+        out_fname_png.push(format!("{}.png", album_id));
+
+        // Early-out on existing files. The user would need to clear the cache
+        // manually.
+        if out_fname_jpg.is_file() {
+            return Ok(None)
+        }
+
+        // TODO: Add a nicer way to report progress.
         println!("{:?} <- {}", &out_fname_jpg, filename);
+
+        let opts = claxon::FlacReaderOptions {
+            metadata_only: true,
+            read_picture: claxon::ReadPicture::CoverAsVec,
+            read_vorbis_comment: false,
+        };
+        let reader = claxon::FlacReader::open_ext(filename, opts)?;
+
+        let cover = match reader.into_pictures().pop() {
+            Some(c) => c,
+            None => return Ok(None),
+        };
+
         let mut convert = Command::new("convert")
             // Read from stdin.
             .arg("-")
@@ -448,38 +470,105 @@ fn generate_thumbnail(cache_dir: &str, album_id: AlbumId, filename: &str) -> cla
             .stdin(Stdio::piped())
             .stdout(Stdio::inherit())
             .spawn()
+            // TODO: Handle errors properly.
             .expect("Failed to spawn Imagemagick's 'convert'.");
+
         {
-            let mut stdin = convert.stdin.as_mut().expect("Failed to open stdin.");
+            let stdin = convert.stdin.as_mut().expect("Failed to open stdin.");
             stdin.write_all(cover.data()).unwrap();
         }
-        // TODO: Use a custom error type, remove all `expect()`s.
-        convert.wait().expect("Failed to run Imagemagick's 'convert'.");
 
-        // TODO: Pipeline, we can already start the next "convert" while Guetzli
-        // runs.
-        Command::new("guetzli")
-            .args(&["--quality", "97"])
-            .arg(&out_fname_png)
-            .arg(&out_fname_jpg)
-            .spawn().expect("Failed to spawn Guetzli.")
-            .wait().expect("Failed to run Guetzli.");
-
-        // Delete the intermediate png file.
-        fs::remove_file(&out_fname_png).expect("Failed to delete intermediate file.");
+        let result = GenThumb::Resizing {
+            out_fname_png: out_fname_png,
+            out_fname_jpg: out_fname_jpg,
+            child: convert
+        };
+        Ok(Some(result))
     }
-    Ok(())
+
+    /// Wait for one step of the process, start and return the next one if any.
+    pub fn poll(self) -> Option<GenThumb> {
+        use process::Command;
+        match self {
+            GenThumb::Resizing { out_fname_png, out_fname_jpg, mut child } => {
+                // TODO: Use a custom error type, remove all `expect()`s.
+                child.wait().expect("Failed to run Imagemagick's 'convert'.");
+                let guetzli = Command::new("guetzli")
+                    .args(&["--quality", "97"])
+                    .arg(&out_fname_png)
+                    .arg(&out_fname_jpg)
+                    // TODO: Handle errors properly.
+                    .spawn().expect("Failed to spawn Guetzli.");
+                let result = GenThumb::Compressing {
+                    out_fname_png: out_fname_png,
+                    child: guetzli,
+                };
+                Some(result)
+            }
+            GenThumb::Compressing { out_fname_png, mut child } => {
+                // TODO: Handle errors properly.
+                child.wait().expect("Failed to run Guetzli.");
+
+                // Delete the intermediate png file.
+                fs::remove_file(&out_fname_png).expect("Failed to delete intermediate file.");
+
+                None
+            }
+        }
+    }
 }
 
+struct GenThumbs<'a> {
+    cache_dir: &'a str,
+    pending: Vec<GenThumb>,
+    max_len: usize,
+}
+
+impl<'a> GenThumbs<'a> {
+    pub fn new(cache_dir: &'a str, max_parallelism: usize) -> GenThumbs<'a> {
+        GenThumbs {
+            cache_dir: cache_dir,
+            pending: Vec::new(),
+            max_len: max_parallelism,
+        }
+    }
+
+    fn wait_until_at_most_in_use(&mut self, max_used: usize) {
+        while self.pending.len() > max_used {
+            let gen = self.pending.remove(0);
+            if let Some(next_gen) = gen.poll() {
+                self.pending.push(next_gen);
+            }
+        }
+    }
+
+    pub fn add(&mut self, album_id: AlbumId, filename: &str) -> claxon::Result<()> {
+        let max_used = self.max_len - 1;
+        self.wait_until_at_most_in_use(max_used);
+        if let Some(gen) = GenThumb::new(self.cache_dir, album_id, filename)? {
+            self.pending.push(gen);
+        }
+        Ok(())
+    }
+
+    pub fn drain(&mut self) {
+        self.wait_until_at_most_in_use(0);
+    }
+}
+
+
 fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &str) {
+    let max_parallelism = 32;
+    let mut gen_thumbs = GenThumbs::new(cache_dir, max_parallelism);
     let mut prev_album_id = AlbumId(0);
     for &(_tid, ref track) in index.get_tracks() {
         if track.album_id != prev_album_id {
             let fname = index.get_filename(track.filename);
-            generate_thumbnail(cache_dir, track.album_id, fname).unwrap();
+            gen_thumbs.add(track.album_id, fname).expect("Failed to start thumbnail generation.");
             prev_album_id = track.album_id;
         }
     }
+    gen_thumbs.drain();
 }
 
 fn print_usage() {
