@@ -428,9 +428,6 @@ impl GenThumb {
             return Ok(None)
         }
 
-        // TODO: Add a nicer way to report progress.
-        println!("{:?} <- {}", &out_fname_jpg, filename);
-
         let opts = claxon::FlacReaderOptions {
             metadata_only: true,
             read_picture: claxon::ReadPicture::CoverAsVec,
@@ -442,6 +439,9 @@ impl GenThumb {
             Some(c) => c,
             None => return Ok(None),
         };
+
+        // TODO: Add a nicer way to report progress.
+        println!("{:?} <- {}", &out_fname_jpg, filename);
 
         let mut convert = Command::new("convert")
             // Read from stdin.
