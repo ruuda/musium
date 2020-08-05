@@ -92,7 +92,7 @@ ul
 
 #album-list-view {
   /* Reserve room for the status bar. */
-  padding-bottom: calc(4em + 0.8pt);
+  padding-bottom: calc(5em + 0.8pt);
 }
 
 #album-list
