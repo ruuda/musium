@@ -448,11 +448,25 @@ impl GenThumb {
             .arg("-")
             // Some cover arts have an alpha channel, but we are going to encode
             // to jpeg which does not support it. First blend the image with a
-            // black background, then drop the alpha channel.
-            .args(&["-background", "black", "-alpha", "remove", "-alpha", "off"])
+            // black background, then drop the alpha channel. We also need a
+            // -flatten to ensure that the subsequent distort operation uses the
+            // "Edge" virtual pixel mode, rather than sampling the black
+            // background. If it samples the black background, the edges of the
+            // thumbnail become darker, which is especially noticeable for
+            // covers with white edges, and also shows up as a "pop" in the
+            // album view when the full-resolution image loads.
+            .args(&[
+                "-background", "black",
+                "-alpha", "remove",
+                "-alpha", "off",
+                "-flatten"
+            ])
             // Resize in a linear color space, sRGB is not suitable for it
             // because it is nonlinear.
             .args(&["-colorspace", "LAB"])
+            // See also the note about -flatten above. I think Edge is the
+            // default, but let's be explicit about it.
+            .args(&["-virtual-pixel", "Edge"])
             // Lanczos2 is a bit less sharp than Cosine, but less sharp edges
             // means that the image compresses better, and less artifacts. But
             // still, Lanczos was too blurry in my opinion.
