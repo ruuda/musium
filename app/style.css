@@ -319,6 +319,14 @@ img.thumb
   border-radius: 0.15rem;
 }
 
+#album-view .cover img.lowres {
+  /* Like in the album list view, add a background color that acts as a
+   * placeholder, to show a square when the page is still loading. This does not
+   * block the backdrop, because that one uses the same source, so both should
+   * load at the same time. */
+  background-color: #f8f8f8;
+}
+
 #album-view .cover img.backdrop {
   /* This one is first, so absolute vs relative does not matter so much, except
    * that relative ensures the parent is at least this tall. */

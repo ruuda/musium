@@ -38,7 +38,7 @@ renderAlbum (Album album) = do
       -- should already be cached for quick display, and the high-resolution
       -- cover art on top of that.
       Html.img (Model.thumbUrl album.id) alt $ Html.addClass "backdrop"
-      Html.img (Model.thumbUrl album.id) alt $ pure unit
+      Html.img (Model.thumbUrl album.id) alt $ Html.addClass "lowres"
       Html.img (Model.coverUrl album.id) alt $ pure unit
     Html.hgroup $ do
       Html.h1 $ Html.text album.title
