@@ -462,8 +462,8 @@ impl GenThumb {
                 "-flatten"
             ])
             // Resize in a linear color space, sRGB is not suitable for it
-            // because it is nonlinear.
-            .args(&["-colorspace", "LAB"])
+            // because it is nonlinear. "RGB" in ImageMagick is linear.
+            .args(&["-colorspace", "RGB"])
             // See also the note about -flatten above. I think Edge is the
             // default, but let's be explicit about it.
             .args(&["-virtual-pixel", "Edge"])
