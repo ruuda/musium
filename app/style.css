@@ -303,11 +303,17 @@ img.thumb
   width: calc(100% - 7.5em);
   margin: 3.75em;
   position: relative;
+  /* Hack: the cover should be square, but there is no direct way in css to say
+   * "the height should be equal to the width". We can abuse the fact that a
+   * padding percentage is part of the width instead. */
+  padding-bottom: calc(100% - 7.5em);
+  height: 0;
 }
 
 #album-view .cover img {
   position: absolute;
   width: 100%;
+  height: 100%;
   top: 0;
   left: 0;
   border-radius: 0.15rem;
@@ -320,6 +326,9 @@ img.thumb
   filter: contrast(0.8) saturate(1.5) brightness(0.9) blur(1.2rem);
   opacity: 0.4;
   transform: translateY(0.3rem);
+
+  /* Here we need to undo the 100% hack, due to the relative positioning. */
+  height: auto;
 }
 
 #album-view hgroup, #album-view .album-actions {
