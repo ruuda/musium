@@ -645,6 +645,9 @@ fn main() {
             let index = make_index(&dir);
             generate_thumbnails(&index, &cache_dir);
         }
+        "play" => {
+            mindec::playback::main();
+        }
         _ => {
             print_usage();
             process::exit(1);
