@@ -61,8 +61,9 @@ pub fn open_device() -> Result<alsa::PCM> {
 }
 
 pub enum WriteResult {
-    Done,
     NeedMore,
+    Yield,
+    Done,
 }
 
 pub struct Block<T> {
@@ -124,14 +125,17 @@ pub fn write_samples_i16(
                 }
             }
             None => {
-                // TODO: How to pause/suspend playback?
+                // Play what is still there, then stop.
+                pcm.drain()?;
                 break
             }
         }
     }
 
     match mmap.status().state() {
-        State::Running => return Ok(WriteResult::Done),
+        State::Running => return Ok(WriteResult::Yield),
+        State::Draining => return Ok(WriteResult::Done),
+        State::Setup if blocks.len() == 0 => return Ok(WriteResult::Done),
         State::Prepared => pcm.start()?,
         State::XRun => pcm.prepare()?,
         State::Suspended => pcm.resume()?,
@@ -145,12 +149,12 @@ pub fn write_samples_i16(
 pub fn main() {
     let mut blocks = Vec::new();
 
-    for _ in 0..10 {
+    for _ in 0..2 {
         let mut block = Vec::with_capacity(88200);
         for k in 0..44100 {
             let t = (k as f32) / 100.0;
             let a = (t * 3.141592 * 2.0).sin();
-            let i = (a * (i16::MAX as f32) * 0.3) as i16;
+            let i = (a * (i16::MAX as f32) * 0.1) as i16;
             block.push(i); // L
             block.push(i); // R
         }
@@ -165,10 +169,11 @@ pub fn main() {
     loop {
         match write_samples_i16(&device, &mut mmap, &mut blocks).expect("TODO: Failed to write samples.") {
             WriteResult::NeedMore => continue,
-            WriteResult::Done => {
+            WriteResult::Yield => {
                 let max_sleep_ms = 100;
                 alsa::poll::poll(&mut fds, max_sleep_ms).expect("TODO: Failed to wait for events.");
             }
+            WriteResult::Done => break,
         }
     }
 }
