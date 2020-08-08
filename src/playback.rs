@@ -101,9 +101,7 @@ pub fn open_device(card_name: &str) -> Result<alsa::PCM> {
         hwp.set_channels(req_channels)?;
         hwp.set_rate(req_rate, alsa::ValueOr::Nearest)?;
         hwp.set_format(req_format)?;
-        println!("Set mmap interleaved");
-        hwp.set_access(alsa::pcm::Access::MMapInterleaved)?;
-        println!("After mmap interleaved");
+        hwp.set_access(alsa::pcm::Access::RWInterleaved)?;
         // TODO: Pick a good buffer size.
         hwp.set_buffer_size(2048)?;
         hwp.set_period_size(256, alsa::ValueOr::Nearest)?;
@@ -151,47 +149,41 @@ impl<T> Block<T> {
             pos: 0,
         }
     }
-}
 
-impl<T> Iterator for Block<T> where T: Copy {
-    type Item = T;
-
-    fn next(&mut self) -> Option<T> {
-        if self.pos < self.samples.len() {
-            self.pos += 1;
-            Some(self.samples[self.pos - 1])
-        } else {
-            None
-        }
+    /// Return a slice of the unconsumed samples.
+    pub fn slice(&self) -> &[T] {
+        &self.samples[self.pos..]
     }
 
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let left = self.samples.len() - self.pos;
-        (left, Some(left))
+    /// Consume n samples.
+    pub fn consume(&mut self, n: usize) {
+        self.pos += n;
+        debug_assert!(self.pos <= self.samples.len());
     }
-}
 
-impl<T> ExactSizeIterator for Block<T> where T: Copy {
-    fn len(&self) -> usize {
+    /// Return the number of unconsumed samples left.
+    pub fn len(&self) -> usize {
         self.samples.len() - self.pos
     }
 }
 
 pub fn write_samples_i16(
     pcm: &alsa::PCM,
-    mmap: &mut alsa::direct::pcm::MmapPlayback<i16>,
+    io: &mut alsa::pcm::IO<i16>,
     blocks: &mut Vec<Block<i16>>,
 ) -> Result<WriteResult> {
     use alsa::pcm::State;
 
-    while mmap.avail() > 0 {
+    while pcm.avail_update()? > 0 {
         // TODO: Use a ring buffer instead of a vec.
         match blocks.pop() {
             Some(mut block) => {
-                mmap.write(&mut block);
+                let num_channels = 2; // TODO: Don't hard-code.
+                let samples_written = io.writei(block.slice())? * num_channels;
+                block.consume(samples_written);
 
-                // If we did not consume the entire block, put it back, so we can
-                // consume the rest of it later.
+                // If we did not consume the entire block, put it back, so we
+                // can consume the rest of it later.
                 if block.len() > 0 {
                     blocks.push(block);
                 }
@@ -204,7 +196,7 @@ pub fn write_samples_i16(
         }
     }
 
-    match mmap.status().state() {
+    match pcm.state() {
         State::Running => return Ok(WriteResult::Yield),
         State::Draining => return Ok(WriteResult::Done),
         State::Setup if blocks.len() == 0 => return Ok(WriteResult::Done),
@@ -236,10 +228,13 @@ pub fn main(card_name: &str) {
     let device = open_device(card_name).expect("TODO: Failed to open device.");
     let mut fds = device.get().expect("TODO: Failed to get fds from device.");
 
-    let mut mmap = device.direct_mmap_playback::<i16>().expect("TODO: Failed to use mmap playback.");
+    // There is also "direct mode" that works with mmaps, but it is not
+    // supported by the kernel on ARM, and I want to run this on a Raspberry Pi,
+    // so for simplicity I will use the mode that is supported everywhere.
+    let mut io = device.io_i16().expect("TODO: Failed to open i16 writer.");
 
     loop {
-        match write_samples_i16(&device, &mut mmap, &mut blocks).expect("TODO: Failed to write samples.") {
+        match write_samples_i16(&device, &mut io, &mut blocks).expect("TODO: Failed to write samples.") {
             WriteResult::NeedMore => continue,
             WriteResult::Yield => {
                 let max_sleep_ms = 100;
