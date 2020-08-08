@@ -447,6 +447,9 @@ pub enum IssueDetail {
 
     /// The file does not contain exactly two channels.
     NotStereo,
+
+    /// The file does not use either 16 or 24 bits per sample.
+    UnsupportedBitDepth(u32),
 }
 
 impl IssueDetail {
@@ -474,6 +477,8 @@ impl fmt::Display for Issue {
                 write!(f, "error: failed to parse field '{}'.", field),
             IssueDetail::NotStereo =>
                 write!(f, "error: the file is not stereo"),
+            IssueDetail::UnsupportedBitDepth(bits) =>
+                write!(f, "error: {} bits per sample is not supported", bits),
             IssueDetail::AlbumTitleMismatch(_id, ref title, ref alt) =>
                 write!(f, "warning: discarded inconsistent album title '{}' in favour of '{}'.", alt, title),
             IssueDetail::AlbumReleaseDateMismatch(_id, ref date, ref alt) =>
@@ -915,6 +920,10 @@ impl BuildMetaIndex {
         self.issue(filename, IssueDetail::NotStereo);
     }
 
+    fn error_unsupported_bit_depth(&mut self, filename: String, bits: u32) {
+        self.issue(filename, IssueDetail::UnsupportedBitDepth(bits));
+    }
+
     pub fn insert(
         &mut self,
         filename: &str,
@@ -939,9 +948,16 @@ impl BuildMetaIndex {
 
         // It simplifies many things for playback if I can assume that all files
         // are stereo, so reject any non-stereo files. At the time of writing,
-        // all 16k tracks in my library are stereo.
+        // all 16k tracks in my library are stereo. The same holds for bit
+        // depths, in practice 16 or 24 bits per sample are used, so for
+        // playback I only support these.
         if streaminfo.channels != 2 {
             return self.error_not_stereo(filename_string);
+        }
+        match streaminfo.bits_per_sample {
+            16 => { /* Ok, supported. */ }
+            24 => { /* Ok, supported. */ }
+            n => return self.error_unsupported_bit_depth(filename_string, n),
         }
 
         for (tag, value) in tags {
