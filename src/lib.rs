@@ -22,6 +22,7 @@ mod word_index;
 
 pub mod net;
 pub mod playback;
+pub mod queue;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::collections::btree_map;

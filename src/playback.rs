@@ -5,6 +5,8 @@
 // you may not use this file except in compliance with the License.
 // A copy of the License has been included in the root of the repository.
 
+//! Logic for playing back audio using Alsa.
+
 use std::result;
 use std::i16;
 
