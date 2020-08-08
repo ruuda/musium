@@ -8,7 +8,6 @@
 //! Ensures that the right samples are queued for playback.
 
 use std::fs;
-use std::mem;
 
 use claxon;
 
@@ -16,6 +15,7 @@ use ::TrackId;
 
 type FlacReader = claxon::FlacReader<fs::File>;
 
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct Format {
     pub sample_rate_hz: u32,
     pub bits_per_sample: u32,
@@ -24,9 +24,13 @@ pub struct Format {
 /// A block of interleaved samples, queued for playback.
 pub struct Block {
     /// The samples, interleaved left, right.
-    samples: Box<[i32]>,
+    ///
+    /// Samples are encoded in little endian (which is native both for x86,
+    /// and ARM on the Raspberry Pi) in the number of bits per sample specified
+    /// by the format.
+    sample_bytes: Box<[u8]>,
 
-    /// The number of samples consumed.
+    /// The number of bytes consumed.
     pos: usize,
 
     /// The bit depth and sample rate of this block.
@@ -34,28 +38,32 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(format: Format, samples: Vec<i32>) -> Block {
+    pub fn new(format: Format, sample_bytes: Vec<u8>) -> Block {
         Block {
-            samples: samples.into_boxed_slice(),
+            sample_bytes: sample_bytes.into_boxed_slice(),
             pos: 0,
             format: format,
         }
     }
 
     /// Return a slice of the unconsumed samples.
-    pub fn slice(&self) -> &[i32] {
-        &self.samples[self.pos..]
+    pub fn slice(&self) -> &[u8] {
+        &self.sample_bytes[self.pos..]
+    }
+
+    pub fn format(&self) -> Format {
+        self.format
     }
 
     /// Consume n samples.
     fn consume(&mut self, n: usize) {
-        self.pos += n;
-        debug_assert!(self.pos <= self.samples.len());
+        self.pos += n * (self.format.bits_per_sample / 8) as usize;
+        debug_assert!(self.pos <= self.sample_bytes.len());
     }
 
     /// Return the number of unconsumed samples left.
     pub fn len(&self) -> usize {
-        self.samples.len() - self.pos
+        (self.sample_bytes.len() - self.pos) / (self.format.bits_per_sample / 8) as usize
     }
 
     /// Return the duration of the unconsumed samples in milliseconds.
@@ -67,7 +75,7 @@ impl Block {
 
     /// Return the size of the block (including consumed samples) in bytes.
     pub fn size_bytes(&self) -> usize {
-        self.samples.len() * mem::size_of::<i32>()
+        self.sample_bytes.len()
     }
 }
 

@@ -13,7 +13,7 @@ use alsa;
 use alsa::PollDescriptors;
 use nix::errno::Errno;
 
-use player::Player;
+use player::{Format, Player};
 
 type Result<T> = result::Result<T, alsa::Error>;
 
@@ -91,19 +91,28 @@ pub fn open_device(card_name: &str) -> Result<alsa::PCM> {
         err => return err,
     };
 
-    let req_rate = 44_100;
-    let req_channels = 2;
-    let req_format = alsa::pcm::Format::s16();
+    Ok(pcm)
+}
+
+fn set_format(pcm: &alsa::PCM, format: Format) -> Result<()> {
+    let sample_format = match format.bits_per_sample {
+        16 => alsa::pcm::Format::S16LE,
+        24 => alsa::pcm::Format::S24LE,
+        // Files with unsupported bit depths are filtered out at index time.
+        // They could still occur here if the index is outdated, but that is not
+        // something that deserves special error handling, just crash it.
+        n  => panic!("Unsupported: {} bits per sample. Please re-index.", n),
+    };
 
     {
         let hwp = alsa::pcm::HwParams::any(&pcm)?;
-        // TOOD: Confirm by first querying the device without plug: that it
+        // TOOD: Confirm by first querying the device without "plug:" that it
         // supports this sample rate and format without plugin involvement (to
         // ensure that the plugin is only responsible for channel count
         // conversion). Alternatively, do the channel conversion manually.
-        hwp.set_channels(req_channels)?;
-        hwp.set_rate(req_rate, alsa::ValueOr::Nearest)?;
-        hwp.set_format(req_format)?;
+        hwp.set_channels(2)?;
+        hwp.set_rate(format.sample_rate_hz, alsa::ValueOr::Nearest)?;
+        hwp.set_format(sample_format)?;
         hwp.set_access(alsa::pcm::Access::RWInterleaved)?;
         // TODO: Pick a good buffer size.
         hwp.set_buffer_size(2048)?;
@@ -120,51 +129,57 @@ pub fn open_device(card_name: &str) -> Result<alsa::PCM> {
         swp.set_avail_min(period_len)?;
         pcm.sw_params(&swp)?;
 
-        let actual_rate = hwp.get_rate()?;
-        let actual_channels = hwp.get_channels()?;
-        let actual_format = hwp.get_format()?;
-
-        // TODO: Raise a nice error when the format is not supported.
-        assert_eq!(actual_rate, req_rate);
-        assert_eq!(actual_channels, req_channels);
-        assert_eq!(actual_format, req_format);
+        assert_eq!(hwp.get_channels()?, 2);
+        assert_eq!(hwp.get_rate()?, format.sample_rate_hz);
+        assert_eq!(hwp.get_format()?, sample_format);
     }
 
-    Ok(pcm)
+    Ok(())
 }
 
 pub enum WriteResult {
+    ChangeFormat(Format),
+    Done,
     NeedMore,
     Yield,
-    Done,
 }
 
-
-pub fn write_samples_i32(
+pub fn write_samples(
     pcm: &alsa::PCM,
-    io: &mut alsa::pcm::IO<i32>,
+    current_format: Format,
+    io: &mut alsa::pcm::IO<u8>,
     player: &mut Player,
 ) -> Result<WriteResult> {
     use alsa::pcm::State;
 
     let mut queue_empty = false;
+    let mut next_format = None;
 
-    while pcm.avail_update()? > 0 {
+    if pcm.avail_update()? > 0 {
         let n_consumed = match player.peek_mut() {
+            Some(ref block) if current_format != block.format() => {
+                // Next block has a different sample rate or bit depth, finish
+                // what is still in the buffer, so we can switch afterwards.
+                pcm.drain()?;
+                next_format = Some(block.format());
+                0
+            }
             Some(block) => {
                 let num_channels = 2;
                 let samples_written = io.writei(block.slice())? * num_channels;
                 samples_written
             }
             None => {
-                // Play what is still there, then stop.
+                // Queue is empty, play what is still there, then stop.
                 pcm.drain()?;
                 queue_empty = true;
-                break
+                0
             }
         };
 
-        player.consume(n_consumed);
+        if n_consumed > 0 {
+            player.consume(n_consumed);
+        }
     }
 
     // If the tracks to play are on a spinning disk that is currently not
@@ -176,9 +191,17 @@ pub fn write_samples_i32(
     }
 
     match pcm.state() {
-        State::Running => return Ok(WriteResult::Yield),
-        State::Draining => return Ok(WriteResult::Done),
-        State::Setup if queue_empty => return Ok(WriteResult::Done),
+        State::Running  => return Ok(WriteResult::Yield),
+        State::Draining => match next_format {
+            Some(_) => return Ok(WriteResult::Yield),
+            None if queue_empty => return Ok(WriteResult::Done),
+            None => panic!("PCM is unexpectedly in draining state."),
+        }
+        State::Setup => match next_format {
+            Some(format) => return Ok(WriteResult::ChangeFormat(format)),
+            None if queue_empty => return Ok(WriteResult::Done),
+            None => panic!("PCM is unexpectedly in setup state."),
+        }
         State::Prepared => pcm.start()?,
         State::XRun => pcm.prepare()?,
         State::Suspended => pcm.resume()?,
@@ -193,13 +216,29 @@ pub fn main(card_name: &str) {
     let device = open_device(card_name).expect("TODO: Failed to open device.");
     let mut fds = device.get().expect("TODO: Failed to get fds from device.");
 
+    let mut format = Format {
+        sample_rate_hz: 44_100,
+        bits_per_sample: 16,
+    };
+    set_format(&device, format).expect("TODO: Failed to set format.");
+
     // There is also "direct mode" that works with mmaps, but it is not
     // supported by the kernel on ARM, and I want to run this on a Raspberry Pi,
     // so for simplicity I will use the mode that is supported everywhere.
-    let mut io = device.io_i32().expect("TODO: Failed to open i32 writer.");
+    let mut io = device.io();
 
     loop {
-        match write_samples_i32(&device, &mut io, &mut player).expect("TODO: Failed to write samples.") {
+        match write_samples(&device, format, &mut io, &mut player).expect("TODO: Failed to write samples.") {
+            WriteResult::ChangeFormat(new_format) => {
+                // Note that the docs of the "alsa" crate say that no IO should
+                // be in scope when setting the hardware params, which makes
+                // sense for the typed IO objects, because changing the hw
+                // params can change the sample format. But the IO here is just
+                // using raw bytes, the format is unchecked anyway, so that
+                // should be fine.
+                set_format(&device, new_format).expect("TODO: Failed to set format.");
+                format = new_format;
+            }
             WriteResult::NeedMore => continue,
             WriteResult::Yield => {
                 let max_sleep_ms = 100;
