@@ -14,6 +14,14 @@ use alsa::PollDescriptors;
 type Result<T> = result::Result<T, alsa::Error>;
 
 pub fn open_device() -> Result<alsa::PCM> {
+    let mut cards = alsa::card::Iter::new();
+    for res_card in cards {
+        let card = res_card?;
+        println!("Card {}:", card.get_index());
+        println!("  Name: {}", card.get_name()?);
+        println!("  Longname: {}", card.get_longname()?);
+    }
+
     // Pick the first hardware device. TODO: Make this configurable?
     // We could also pick "default", but when the default is the virtual
     // PulseAudio device, the mmap access mode is unsupported, and I don't want
@@ -31,7 +39,9 @@ pub fn open_device() -> Result<alsa::PCM> {
         hwp.set_channels(req_channels)?;
         hwp.set_rate(req_rate, alsa::ValueOr::Nearest)?;
         hwp.set_format(req_format)?;
+        println!("Set mmap interleaved");
         hwp.set_access(alsa::pcm::Access::MMapInterleaved)?;
+        println!("After mmap interleaved");
         // TODO: Pick a good buffer size.
         hwp.set_buffer_size(2048)?;
         hwp.set_period_size(256, alsa::ValueOr::Nearest)?;
