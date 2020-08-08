@@ -10,6 +10,7 @@ use std::i16;
 
 use alsa;
 use alsa::PollDescriptors;
+use nix::errno::Errno;
 
 type Result<T> = result::Result<T, alsa::Error>;
 
@@ -35,7 +36,14 @@ pub fn open_device() -> Result<alsa::PCM> {
     // to implement the fallback at this time.
     let device = "hw:0,0";
     let non_block = false;
-    let pcm = alsa::PCM::new(device, alsa::Direction::Playback, non_block)?;
+    let pcm = match alsa::PCM::new(device, alsa::Direction::Playback, non_block) {
+        Ok(pcm) => pcm,
+        Err(error) if error.errno() == Some(Errno::EBUSY) => {
+            println!("Could not open audio interface for exclusive access, it is already use.");
+            return Err(error);
+        }
+        err => return err,
+    };
 
     let req_rate = 44_100;
     let req_channels = 2;
