@@ -8,11 +8,12 @@
 //! Logic for playing back audio using Alsa.
 
 use std::result;
-use std::i16;
 
 use alsa;
 use alsa::PollDescriptors;
 use nix::errno::Errno;
+
+use player::Player;
 
 type Result<T> = result::Result<T, alsa::Error>;
 
@@ -138,70 +139,46 @@ pub enum WriteResult {
     Done,
 }
 
-pub struct Block<T> {
-    // TODO: Use boxed slice instead of vec.
-    samples: Vec<T>,
-    pos: usize,
-}
 
-impl<T> Block<T> {
-    pub fn new(samples: Vec<T>) -> Block<T> {
-        Block {
-            samples: samples,
-            pos: 0,
-        }
-    }
-
-    /// Return a slice of the unconsumed samples.
-    pub fn slice(&self) -> &[T] {
-        &self.samples[self.pos..]
-    }
-
-    /// Consume n samples.
-    pub fn consume(&mut self, n: usize) {
-        self.pos += n;
-        debug_assert!(self.pos <= self.samples.len());
-    }
-
-    /// Return the number of unconsumed samples left.
-    pub fn len(&self) -> usize {
-        self.samples.len() - self.pos
-    }
-}
-
-pub fn write_samples_i16(
+pub fn write_samples_i32(
     pcm: &alsa::PCM,
-    io: &mut alsa::pcm::IO<i16>,
-    blocks: &mut Vec<Block<i16>>,
+    io: &mut alsa::pcm::IO<i32>,
+    player: &mut Player,
 ) -> Result<WriteResult> {
     use alsa::pcm::State;
 
+    let mut queue_empty = false;
+
     while pcm.avail_update()? > 0 {
-        // TODO: Use a ring buffer instead of a vec.
-        match blocks.pop() {
-            Some(mut block) => {
+        let n_consumed = match player.peek_mut() {
+            Some(block) => {
                 let num_channels = 2;
                 let samples_written = io.writei(block.slice())? * num_channels;
-                block.consume(samples_written);
-
-                // If we did not consume the entire block, put it back, so we
-                // can consume the rest of it later.
-                if block.len() > 0 {
-                    blocks.push(block);
-                }
+                samples_written
             }
             None => {
                 // Play what is still there, then stop.
                 pcm.drain()?;
+                queue_empty = true;
                 break
             }
-        }
+        };
+
+        player.consume(n_consumed);
+    }
+
+    // If the tracks to play are on a spinning disk that is currently not
+    // spinning to save power, spinning it up could take 10 to 15 seconds, so
+    // we may already need to wake up the decoder thread now if we don't want
+    // to run out of data later. Use a safe margin of 30s.
+    if player.pending_duration_ms() < 30_000 {
+        println!("TODO: Wake up the decoder thread.");
     }
 
     match pcm.state() {
         State::Running => return Ok(WriteResult::Yield),
         State::Draining => return Ok(WriteResult::Done),
-        State::Setup if blocks.len() == 0 => return Ok(WriteResult::Done),
+        State::Setup if queue_empty => return Ok(WriteResult::Done),
         State::Prepared => pcm.start()?,
         State::XRun => pcm.prepare()?,
         State::Suspended => pcm.resume()?,
@@ -210,22 +187,8 @@ pub fn write_samples_i16(
     Ok(WriteResult::NeedMore)
 }
 
-// TODO: Continue playback following https://github.com/diwic/alsa-rs/blob/master/synth-example/src/main.rs.
-
 pub fn main(card_name: &str) {
-    let mut blocks = Vec::new();
-
-    for _ in 0..2 {
-        let mut block = Vec::with_capacity(88200);
-        for k in 0..44100 {
-            let t = (k as f32) / 100.0;
-            let a = (t * 3.141592 * 2.0).sin();
-            let i = (a * (i16::MAX as f32) * 0.1) as i16;
-            block.push(i); // L
-            block.push(i); // R
-        }
-        blocks.push(Block::new(block));
-    }
+    let mut player = Player::new();
 
     let device = open_device(card_name).expect("TODO: Failed to open device.");
     let mut fds = device.get().expect("TODO: Failed to get fds from device.");
@@ -233,10 +196,10 @@ pub fn main(card_name: &str) {
     // There is also "direct mode" that works with mmaps, but it is not
     // supported by the kernel on ARM, and I want to run this on a Raspberry Pi,
     // so for simplicity I will use the mode that is supported everywhere.
-    let mut io = device.io_i16().expect("TODO: Failed to open i16 writer.");
+    let mut io = device.io_i32().expect("TODO: Failed to open i32 writer.");
 
     loop {
-        match write_samples_i16(&device, &mut io, &mut blocks).expect("TODO: Failed to write samples.") {
+        match write_samples_i32(&device, &mut io, &mut player).expect("TODO: Failed to write samples.") {
             WriteResult::NeedMore => continue,
             WriteResult::Yield => {
                 let max_sleep_ms = 100;
