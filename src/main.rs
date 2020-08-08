@@ -620,6 +620,7 @@ fn print_usage() {
     println!("usage: ");
     println!("  mindec serve /path/to/music/library /path/to/cache");
     println!("  mindec cache /path/to/music/library /path/to/cache");
+    println!("  mindec play  <soundcard name> <dummy arg>");
 }
 
 fn main() {
@@ -646,7 +647,8 @@ fn main() {
             generate_thumbnails(&index, &cache_dir);
         }
         "play" => {
-            mindec::playback::main();
+            let card_name = dir;
+            mindec::playback::main(&card_name);
         }
         _ => {
             print_usage();

@@ -14,29 +14,70 @@ use nix::errno::Errno;
 
 type Result<T> = result::Result<T, alsa::Error>;
 
-pub fn open_device() -> Result<alsa::PCM> {
-    let mut cards = alsa::card::Iter::new();
+pub fn print_available_cards() -> Result<()> {
+    let cards = alsa::card::Iter::new();
     let mut found_any = false;
+
     for res_card in cards {
+        if found_any {
+            println!();
+        }
+
         let card = res_card?;
-        println!("Card {}:", card.get_index());
-        println!("  Name: {}", card.get_name()?);
-        println!("  Longname: {}", card.get_longname()?);
+        println!("Name:       {}", card.get_name()?);
+        println!("Long name:  {}", card.get_longname()?);
+
+        let non_block = false;
+        let ctl = alsa::ctl::Ctl::from_card(&card, non_block)?;
+        let info = ctl.card_info()?;
+        println!("Card id:    {}", info.get_id()?);
+        println!("Driver:     {}", info.get_driver()?);
+        println!("Components: {}", info.get_components()?);
+        println!("Mixer name: {}", info.get_mixername()?);
 
         found_any = true;
     }
 
     if !found_any {
-        println!("No cards found, are you a member of the 'audio' group?");
+        println!("No cards found.");
+        println!("You may need to be a member of the 'audio' group.");
     }
 
-    // Pick the first hardware device. TODO: Make this configurable?
-    // We could also pick "default", but when the default is the virtual
-    // PulseAudio device, the mmap access mode is unsupported, and I don't want
-    // to implement the fallback at this time.
-    let device = "hw:0,0";
+    Ok(())
+}
+
+pub fn open_device(card_name: &str) -> Result<alsa::PCM> {
+    let cards = alsa::card::Iter::new();
+    let mut opt_card_index = None;
+
+    for res_card in cards {
+        let card = res_card?;
+        if card.get_name()? == card_name {
+            opt_card_index = Some(card.get_index());
+        }
+    }
+
+    let card_index = match opt_card_index {
+        Some(i) => i,
+        None => {
+            println!("Could not find a card with name '{}'.", card_name);
+            println!("Valid options:\n");
+            print_available_cards()?;
+            panic!("TODO: Add a better error handler.");
+        }
+    };
+
+    // Pick the "front" output on the chosen device. This output should give us
+    // stereo analog output and direct access to the hardware, according to
+    // https://alsa-project.org/wiki/DeviceNames. It doesn't look like we can
+    // choose between different outputs on the same card (e.g. headphones or
+    // built-in speakers), but for now this will do. It is possible to prefix
+    // the device name with "plug:" to get automatic sample rate conversion, but
+    // I don't want sample rate conversion, I want a hard failure for
+    // unsupported configurations.
+    let device = format!("front:{}", card_index);
     let non_block = false;
-    let pcm = match alsa::PCM::new(device, alsa::Direction::Playback, non_block) {
+    let pcm = match alsa::PCM::new(&device, alsa::Direction::Playback, non_block) {
         Ok(pcm) => pcm,
         Err(error) if error.errno() == Some(Errno::EBUSY) => {
             println!("Could not open audio interface for exclusive access, it is already use.");
@@ -171,7 +212,7 @@ pub fn write_samples_i16(
 
 // TODO: Continue playback following https://github.com/diwic/alsa-rs/blob/master/synth-example/src/main.rs.
 
-pub fn main() {
+pub fn main(card_name: &str) {
     let mut blocks = Vec::new();
 
     for _ in 0..2 {
@@ -186,7 +227,7 @@ pub fn main() {
         blocks.push(Block::new(block));
     }
 
-    let device = open_device().expect("TODO: Failed to open device.");
+    let device = open_device(card_name).expect("TODO: Failed to open device.");
     let mut fds = device.get().expect("TODO: Failed to get fds from device.");
 
     let mut mmap = device.direct_mmap_playback::<i16>().expect("TODO: Failed to use mmap playback.");
