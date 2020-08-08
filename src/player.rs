@@ -10,8 +10,9 @@
 use std::fs;
 
 use claxon;
+use claxon::metadata::StreamInfo;
 
-use ::TrackId;
+use ::{MetaIndex, TrackId};
 
 type FlacReader = claxon::FlacReader<fs::File>;
 
@@ -113,12 +114,191 @@ pub struct Player {
     /// blocks either. In other words, all decoded blocks are at the beginning
     /// of the queue.
     queue: Vec<QueuedTrack>,
+
+    /// The index of the track for which a decode is in progress.
+    ///
+    /// The decoder itself will be moved into the decoder thread temporarily.
+    /// When the decode is done, the decoder thread needs to add the new blocks,
+    /// and put the `FlacReader` back, but the queue could have changed in the
+    /// meantime, so we need to track the index of where to restore later.
+    current_decode: Option<usize>,
+}
+
+/// A task to be executed by the decoder thread.
+pub enum DecodeTask {
+    /// Continue decoding with the given reader.
+    Continue(FlacReader),
+
+    /// Start decoding a new track.
+    Start(TrackId),
+}
+
+/// The result of a decode task.
+///
+/// If the file has been fully decoded, the reader is `None`, if there is more
+/// to decode, it is returned here.
+pub struct DecodeResult {
+    block: Block,
+    reader: Option<FlacReader>,
+}
+
+impl DecodeTask {
+    /// Decode until the end of the file, or until we produced `max_bytes`.
+    ///
+    pub fn run<I: MetaIndex>(self, index: &I, max_bytes: usize) -> DecodeResult {
+        match self {
+            DecodeTask::Continue(reader) => DecodeTask::decode(reader, max_bytes),
+            DecodeTask::Start(track_id) => DecodeTask::start(index, track_id, max_bytes),
+        }
+    }
+
+    fn start<I: MetaIndex>(index: &I, track_id: TrackId, max_bytes: usize) -> DecodeResult {
+        let track = match index.get_track(track_id) {
+            Some(t) => t,
+            None => panic!("Track {} does not exist, how did it end up queued?"),
+        };
+        let fname = index.get_filename(track.filename);
+        // TODO: Add a proper way to do logging.
+        println!("Opening {:?} for decode.", fname);
+        let reader = match FlacReader::open(fname) {
+            Ok(r) => r,
+            // TODO: Don't crash the full daemon on decode errors.
+            Err(err) => panic!("Failed to open {:?} for reading: {:?}", fname, err),
+        };
+        DecodeTask::decode(reader, max_bytes)
+    }
+
+    fn decode(reader: FlacReader, max_bytes: usize) -> DecodeResult {
+        let streaminfo = reader.streaminfo();
+        match streaminfo.bits_per_sample {
+            16 => DecodeTask::decode_i16(reader, streaminfo, max_bytes),
+            14 => DecodeTask::decode_i24(reader, streaminfo, max_bytes),
+            n  => panic!("Unsupported bit depth: {}", n),
+        }
+    }
+
+    fn decode_i16(
+        mut reader: FlacReader,
+        streaminfo: StreamInfo,
+        max_bytes: usize,
+    ) -> DecodeResult {
+        assert_eq!(streaminfo.bits_per_sample, 16);
+        assert_eq!(streaminfo.channels, 2);
+        let mut out = Vec::with_capacity(max_bytes);
+
+        // The block size counts inter-channel samples, and we assume that all
+        // files are stereo, so multiply by two.
+        let max_samples_per_frame = streaminfo.max_block_size as usize * 2;
+        let max_bytes_per_frame = max_samples_per_frame * 2;
+        let mut is_done = false;
+
+        {
+            let mut frame_reader = reader.blocks();
+            let mut buffer = Vec::with_capacity(max_samples_per_frame);
+
+            // Decode as long as we expect to stay under the byte limit, but do
+            // decode at least one frame, otherwise we would not make progress.
+            while out.is_empty() || out.len() + max_bytes_per_frame < max_bytes  {
+                let frame = match frame_reader.read_next_or_eof(buffer) {
+                    Ok(None) => {
+                        is_done = true;
+                        break
+                    }
+                    Ok(Some(b)) => b,
+                    Err(err) => panic!("TODO: Handle decode error: {:?}", err),
+                };
+
+                for (l, r) in frame.stereo_samples() {
+                    // Encode the samples in little endian.
+                    let bytes: [u8; 4] = [
+                        ((l >> 0) & 0xff) as u8,
+                        ((l >> 8) & 0xff) as u8,
+                        ((r >> 0) & 0xff) as u8,
+                        ((r >> 8) & 0xff) as u8,
+                    ];
+                    out.extend_from_slice(&bytes[..]);
+                }
+
+                buffer = frame.into_buffer();
+            }
+        }
+
+        let format = Format {
+            sample_rate_hz: streaminfo.sample_rate,
+            bits_per_sample: 16,
+        };
+        let block = Block::new(format, out);
+        DecodeResult {
+            block: block,
+            reader: if is_done { None } else { Some(reader) }
+        }
+    }
+
+    fn decode_i24(
+        mut reader: FlacReader,
+        streaminfo: StreamInfo,
+        max_bytes: usize,
+    ) -> DecodeResult {
+        assert_eq!(streaminfo.bits_per_sample, 24);
+        assert_eq!(streaminfo.channels, 2);
+        let mut out = Vec::with_capacity(max_bytes);
+
+        // The block size counts inter-channel samples, and we assume that all
+        // files are stereo, so multiply by two.
+        let max_samples_per_frame = streaminfo.max_block_size as usize * 2;
+        let max_bytes_per_frame = max_samples_per_frame * 3;
+        let mut is_done = false;
+
+        {
+            let mut frame_reader = reader.blocks();
+            let mut buffer = Vec::with_capacity(max_samples_per_frame);
+
+            // Decode as long as we expect to stay under the byte limit, but do
+            // decode at least one frame, otherwise we would not make progress.
+            while out.is_empty() || out.len() + max_bytes_per_frame < max_bytes  {
+                let frame = match frame_reader.read_next_or_eof(buffer) {
+                    Ok(None) => {
+                        is_done = true;
+                        break
+                    }
+                    Ok(Some(b)) => b,
+                    Err(err) => panic!("TODO: Handle decode error: {:?}", err),
+                };
+
+                for (l, r) in frame.stereo_samples() {
+                    // Encode the samples in little endian.
+                    let bytes: [u8; 6] = [
+                        ((l >>  0) & 0xff) as u8,
+                        ((l >>  8) & 0xff) as u8,
+                        ((l >> 16) & 0xff) as u8,
+                        ((r >>  0) & 0xff) as u8,
+                        ((r >>  8) & 0xff) as u8,
+                        ((r >> 16) & 0xff) as u8,
+                    ];
+                    out.extend_from_slice(&bytes[..]);
+                }
+
+                buffer = frame.into_buffer();
+            }
+        }
+
+        let format = Format {
+            sample_rate_hz: streaminfo.sample_rate,
+            bits_per_sample: 24,
+        };
+        let block = Block::new(format, out);
+        DecodeResult {
+            block: block,
+            reader: if is_done { None } else { Some(reader) }
+        }
+    }
 }
 
 impl Player {
     pub fn new() -> Player {
         Player {
             queue: Vec::new(),
+            current_decode: None,
         }
     }
 
@@ -160,6 +340,11 @@ impl Player {
         };
         if track_done {
             self.queue.remove(0);
+            // If a decode is in progress, the index of the track it is decoding
+            // changed because of the `remove` above.
+            if let Some(i) = self.current_decode {
+                self.current_decode = Some(i - 1);
+            }
         }
 
         #[cfg(debug)]
@@ -174,5 +359,50 @@ impl Player {
     /// Return the size of all blocks in bytes.
     pub fn pending_size_bytes(&self) -> usize {
         self.queue.iter().map(|qt| qt.size_bytes()).sum()
+    }
+
+    /// Return a decode task, if there is something to decode.
+    pub fn take_decode_task(&mut self) -> Option<DecodeTask> {
+        assert!(
+            self.current_decode.is_none(),
+            "Can only take decode task when none is already in progress.",
+        );
+
+        for (i, queued_track) in self.queue.iter_mut().enumerate() {
+            // If there is a decode in progress, continue with that.
+            if let Some(r) = queued_track.reader.take() {
+                self.current_decode = Some(i);
+                return Some(DecodeTask::Continue(r));
+            }
+
+            // There is no reader, but there are blocks. This file has been
+            // decoded entirely then, there is nothing left to do here.
+            if queued_track.blocks.len() > 0 {
+                continue
+            }
+
+            // If there are no blocks yet, and also no decoder, then we need to
+            // create a new decoder for this track.
+            return Some(DecodeTask::Start(queued_track.track));
+        }
+
+        None
+    }
+
+    /// Store the result after completing a decode task.
+    ///
+    /// If the file has not been fully decoded yet, the reader needs to be
+    /// returned as well.
+    pub fn return_decode_task(&mut self, result: DecodeResult) {
+        let queued_track = match self.current_decode {
+            Some(i) => &mut self.queue[i],
+            None => panic!("Can only return from a decode task if one is in progress."),
+        };
+        assert!(
+            queued_track.reader.is_none(),
+            "If we decoded for this track, the reader must not be present on there.",
+        );
+        queued_track.blocks.push(result.block);
+        queued_track.reader = result.reader;
     }
 }
