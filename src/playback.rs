@@ -180,7 +180,7 @@ pub fn write_samples_i16(
         // TODO: Use a ring buffer instead of a vec.
         match blocks.pop() {
             Some(mut block) => {
-                let num_channels = 2; // TODO: Don't hard-code.
+                let num_channels = 2;
                 let samples_written = io.writei(block.slice())? * num_channels;
                 block.consume(samples_written);
 

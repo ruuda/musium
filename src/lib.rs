@@ -444,6 +444,9 @@ pub enum IssueDetail {
     /// Two different sort names were found for album artists with the same mbid.
     /// Contains the name used, and the discarded alternative.
     ArtistSortNameMismatch(ArtistId, String, String),
+
+    /// The file does not contain exactly two channels.
+    NotStereo,
 }
 
 impl IssueDetail {
@@ -469,6 +472,8 @@ impl fmt::Display for Issue {
                 write!(f, "error: field '{}' missing.", field),
             IssueDetail::FieldParseFailedError(field) =>
                 write!(f, "error: failed to parse field '{}'.", field),
+            IssueDetail::NotStereo =>
+                write!(f, "error: the file is not stereo"),
             IssueDetail::AlbumTitleMismatch(_id, ref title, ref alt) =>
                 write!(f, "warning: discarded inconsistent album title '{}' in favour of '{}'.", alt, title),
             IssueDetail::AlbumReleaseDateMismatch(_id, ref date, ref alt) =>
@@ -906,6 +911,10 @@ impl BuildMetaIndex {
         self.issue(filename, IssueDetail::FieldParseFailedError(field));
     }
 
+    fn error_not_stereo(&mut self, filename: String) {
+        self.issue(filename, IssueDetail::NotStereo);
+    }
+
     pub fn insert(
         &mut self,
         filename: &str,
@@ -927,6 +936,13 @@ impl BuildMetaIndex {
 
         let filename_id = self.filenames.len() as u32;
         let filename_string = filename.to_string();
+
+        // It simplifies many things for playback if I can assume that all files
+        // are stereo, so reject any non-stereo files. At the time of writing,
+        // all 16k tracks in my library are stereo.
+        if streaminfo.channels != 2 {
+            return self.error_not_stereo(filename_string);
+        }
 
         for (tag, value) in tags {
             match &tag.to_ascii_lowercase()[..] {
