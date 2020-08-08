@@ -15,11 +15,18 @@ type Result<T> = result::Result<T, alsa::Error>;
 
 pub fn open_device() -> Result<alsa::PCM> {
     let mut cards = alsa::card::Iter::new();
+    let mut found_any = false;
     for res_card in cards {
         let card = res_card?;
         println!("Card {}:", card.get_index());
         println!("  Name: {}", card.get_name()?);
         println!("  Longname: {}", card.get_longname()?);
+
+        found_any = true;
+    }
+
+    if !found_any {
+        println!("No cards found, are you a member of the 'audio' group?");
     }
 
     // Pick the first hardware device. TODO: Make this configurable?
