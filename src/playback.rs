@@ -67,15 +67,17 @@ pub fn open_device(card_name: &str) -> Result<alsa::PCM> {
         }
     };
 
-    // Pick the "front" output on the chosen device. This output should give us
-    // stereo analog output and direct access to the hardware, according to
-    // https://alsa-project.org/wiki/DeviceNames. It doesn't look like we can
-    // choose between different outputs on the same card (e.g. headphones or
-    // built-in speakers), but for now this will do. It is possible to prefix
-    // the device name with "plug:" to get automatic sample rate conversion, but
-    // I don't want sample rate conversion, I want a hard failure for
-    // unsupported configurations.
-    let device = format!("front:{}", card_index);
+    // Select the card by index (":{}") to get direct access to the hardware,
+    // play back stereo on the front two speakers. Adding "plug:" in front makes
+    // Alsa take care of conversions where needed. This is bad on the one hand,
+    // because I would not want e.g. silent sample rate conversion, but on the
+    // other hand, I have a UCM404HD, and it supports exactly 4 channels in "hw"
+    // mode, so then I would have to manually fill the two other channels with
+    // silence, and I don't feel like doing that right now. Even when selecting
+    // "front" without "plug", the minimum number of channels is 4, even though
+    // https://alsa-project.org/wiki/DeviceNames claims that for "front" we
+    // would get stereo.
+    let device = format!("plug:front:{}", card_index);
     let non_block = false;
     let pcm = match alsa::PCM::new(&device, alsa::Direction::Playback, non_block) {
         Ok(pcm) => pcm,
@@ -92,6 +94,10 @@ pub fn open_device(card_name: &str) -> Result<alsa::PCM> {
 
     {
         let hwp = alsa::pcm::HwParams::any(&pcm)?;
+        // TOOD: Confirm by first querying the device without plug: that it
+        // supports this sample rate and format without plugin involvement (to
+        // ensure that the plugin is only responsible for channel count
+        // conversion). Alternatively, do the channel conversion manually.
         hwp.set_channels(req_channels)?;
         hwp.set_rate(req_rate, alsa::ValueOr::Nearest)?;
         hwp.set_format(req_format)?;
