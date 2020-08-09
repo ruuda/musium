@@ -11,6 +11,7 @@ use std::mem;
 use std::result;
 use std::sync::Mutex;
 use std::thread::Thread;
+use std::thread;
 
 use alsa;
 use alsa::PollDescriptors;
@@ -254,10 +255,10 @@ fn ensure_buffers_full(
 
 /// Run a loop that keeps plays back what is in the queue.
 ///
-/// When the queue becomes empty, this thread exits, and the Alsa device is
-/// released. A new thread can be started once there is new content in the
+/// When the queue becomes empty, this function returns, and the Alsa device is
+/// released. An outer loop can call it again once there is new content in the
 /// queue.
-pub fn main(
+fn play_queue(
     card_name: &str,
     state_mutex: &Mutex<PlayerState>,
     decode_thread: &Thread,
@@ -307,5 +308,31 @@ pub fn main(
                 io = device.io();
             }
         }
+    }
+}
+
+/// Play audio from the queue, then park the thread.
+///
+/// When the thread that runs this is unparked, check if there is anything in
+/// the queue to play, and if so, open the Alsa device and start playing. When
+/// the queue is empty, the device is released, and the thread parks itself
+/// again.
+pub fn main(
+    card_name: &str,
+    state_mutex: &Mutex<PlayerState>,
+    decode_thread: &Thread,
+) {
+    // TODO: Set thread priority to high.
+    loop {
+        let has_audio = {
+            let state = state_mutex.lock().unwrap();
+            !state.is_queue_empty()
+        };
+        if has_audio {
+            println!("Starting playback ...");
+            play_queue(card_name, state_mutex, decode_thread);
+            println!("Playback done, sleeping ...");
+        }
+        thread::park();
     }
 }

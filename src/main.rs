@@ -651,8 +651,7 @@ fn main() {
             let index = make_index(&dir);
             let arc_index = std::sync::Arc::new(index);
             let mut player = mindec::player::Player::new(arc_index, card_name);
-            player.play();
-            player.wait();
+            player.join();
         }
         _ => {
             print_usage();

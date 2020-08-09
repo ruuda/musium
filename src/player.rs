@@ -595,8 +595,7 @@ pub struct Player<I: MetaIndex + Sync + Send + 'static> {
     state: Arc<Mutex<PlayerState>>,
     index: Arc<I>,
     decode_thread: JoinHandle<()>,
-    playback_thread: Option<JoinHandle<()>>,
-    card_name: String,
+    playback_thread: JoinHandle<()>,
 }
 
 impl<I: MetaIndex + Sync + Send + 'static> Player<I> {
@@ -614,52 +613,33 @@ impl<I: MetaIndex + Sync + Send + 'static> Player<I> {
                 decode_main(&*index_for_decode, &*state_mutex_for_decode);
             }).unwrap();
 
-        Player {
-            state: state,
-            index: index,
-            decode_thread: decode_join_handle,
-            playback_thread: None,
-            card_name: card_name,
-        }
-    }
-
-    fn start_playback(&mut self) {
-        assert!(self.playback_thread.is_none(), "Playback already in progress.");
-
-        let state_mutex_for_playback: Arc<Mutex<PlayerState>> = self.state.clone();
-        let decode_thread_for_playback: std::thread::Thread = self.decode_thread.thread().clone();
-        let card_name_for_playback = self.card_name.clone();
+        let state_mutex_for_playback = state.clone();
+        let decode_thread_for_playback = decode_join_handle.thread().clone();
 
         let builder = std::thread::Builder::new();
         let playback_join_handle = builder
             .name("playback".into())
             .spawn(move || {
-                // TODO: Set thread priority to high.
-                println!("Playback thread starting ...");
                 playback::main(
-                    &card_name_for_playback[..],
+                    &card_name[..],
                     &*state_mutex_for_playback,
                     &decode_thread_for_playback,
                 );
-                println!("Playback done.");
             }).unwrap();
 
-        self.playback_thread = Some(playback_join_handle);
-    }
-
-    pub fn play(&mut self) {
-        match self.playback_thread {
-            None => self.start_playback(),
-            Some(ref _handle) => {
-                // TODO: Figure out a way to check if the thread is still
-                // running, and if not, delete it and then start a new one.
-            }
+        Player {
+            state: state,
+            index: index,
+            decode_thread: decode_join_handle,
+            playback_thread: playback_join_handle,
         }
     }
 
-    pub fn wait(&mut self) {
-        if let Some(handle) = self.playback_thread.take() {
-            handle.join().unwrap();
-        }
+    /// Wait for the playback and decode thread to finish.
+    pub fn join(self) {
+        // Note: currently there is no way to to signal these threads to stop,
+        // so this will block indefinitely.
+        self.playback_thread.join().unwrap();
+        self.decode_thread.join().unwrap();
     }
 }
