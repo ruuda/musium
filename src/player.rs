@@ -170,7 +170,7 @@ impl DecodeTask {
         let streaminfo = reader.streaminfo();
         match streaminfo.bits_per_sample {
             16 => DecodeTask::decode_i16(reader, streaminfo, max_bytes),
-            14 => DecodeTask::decode_i24(reader, streaminfo, max_bytes),
+            24 => DecodeTask::decode_i24(reader, streaminfo, max_bytes),
             n  => panic!("Unsupported bit depth: {}", n),
         }
     }
