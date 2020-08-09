@@ -100,7 +100,10 @@ fn open_device(card_name: &str) -> Result<alsa::PCM> {
 fn set_format(pcm: &alsa::PCM, format: Format) -> Result<()> {
     let sample_format = match format.bits_per_sample {
         16 => alsa::pcm::Format::S16LE,
-        24 => alsa::pcm::Format::S24LE,
+        // Note the "3" in the format here: this means that every sample is 3
+        // bytes. The regular S24LE format uses 4 bytes per sample, with the
+        // most significant byte being zero.
+        24 => alsa::pcm::Format::S243LE,
         // Files with unsupported bit depths are filtered out at index time.
         // They could still occur here if the index is outdated, but that is not
         // something that deserves special error handling, just crash it.
