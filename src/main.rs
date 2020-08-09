@@ -620,7 +620,7 @@ fn print_usage() {
     println!("usage: ");
     println!("  mindec serve /path/to/music/library /path/to/cache");
     println!("  mindec cache /path/to/music/library /path/to/cache");
-    println!("  mindec play  <soundcard name> <dummy arg>");
+    println!("  mindec play  /path/to/music/library <soundcard name>");
 }
 
 fn main() {
@@ -647,8 +647,12 @@ fn main() {
             generate_thumbnails(&index, &cache_dir);
         }
         "play" => {
-            let card_name = dir;
-            mindec::playback::main(&card_name);
+            let card_name = cache_dir;
+            let index = make_index(&dir);
+            let arc_index = std::sync::Arc::new(index);
+            let mut player = mindec::player::Player::new(arc_index, card_name);
+            player.play();
+            player.wait();
         }
         _ => {
             print_usage();

@@ -8,6 +8,8 @@
 //! Logic for playing back audio using Alsa.
 
 use std::result;
+use std::sync::Mutex;
+use std::thread::Thread;
 
 use alsa;
 use alsa::PollDescriptors;
@@ -17,7 +19,7 @@ use player::{Format, PlayerState};
 
 type Result<T> = result::Result<T, alsa::Error>;
 
-pub fn print_available_cards() -> Result<()> {
+fn print_available_cards() -> Result<()> {
     let cards = alsa::card::Iter::new();
     let mut found_any = false;
 
@@ -49,7 +51,7 @@ pub fn print_available_cards() -> Result<()> {
     Ok(())
 }
 
-pub fn open_device(card_name: &str) -> Result<alsa::PCM> {
+fn open_device(card_name: &str) -> Result<alsa::PCM> {
     let cards = alsa::card::Iter::new();
     let mut opt_card_index = None;
 
@@ -137,14 +139,14 @@ fn set_format(pcm: &alsa::PCM, format: Format) -> Result<()> {
     Ok(())
 }
 
-pub enum WriteResult {
+enum WriteResult {
     ChangeFormat(Format),
-    Done,
+    QueueEmpty,
     NeedMore,
     Yield,
 }
 
-pub fn write_samples(
+fn write_samples(
     pcm: &alsa::PCM,
     current_format: Format,
     io: &mut alsa::pcm::IO<u8>,
@@ -182,24 +184,16 @@ pub fn write_samples(
         }
     }
 
-    // If the tracks to play are on a spinning disk that is currently not
-    // spinning to save power, spinning it up could take 10 to 15 seconds, so
-    // we may already need to wake up the decoder thread now if we don't want
-    // to run out of data later. Use a safe margin of 30s.
-    if player.pending_duration_ms() < 30_000 {
-        println!("TODO: Wake up the decoder thread.");
-    }
-
     match pcm.state() {
         State::Running  => return Ok(WriteResult::Yield),
         State::Draining => match next_format {
             Some(_) => return Ok(WriteResult::Yield),
-            None if queue_empty => return Ok(WriteResult::Done),
+            None if queue_empty => return Ok(WriteResult::QueueEmpty),
             None => panic!("PCM is unexpectedly in draining state."),
         }
         State::Setup => match next_format {
             Some(format) => return Ok(WriteResult::ChangeFormat(format)),
-            None if queue_empty => return Ok(WriteResult::Done),
+            None if queue_empty => return Ok(WriteResult::QueueEmpty),
             None => panic!("PCM is unexpectedly in setup state."),
         }
         State::Prepared => pcm.start()?,
@@ -210,9 +204,46 @@ pub fn write_samples(
     Ok(WriteResult::NeedMore)
 }
 
-pub fn main(card_name: &str) {
-    let mut player = PlayerState::new();
+enum FillResult {
+    QueueEmpty,
+    Yield,
+}
 
+fn ensure_buffers_full(
+    device: &alsa::PCM,
+    format: &mut Format,
+    io: &mut alsa::pcm::IO<u8>,
+    player: &mut PlayerState,
+) -> FillResult {
+    loop {
+        match write_samples(device, *format, io, player).expect("TODO: Failed to write samples.") {
+            WriteResult::ChangeFormat(new_format) => {
+                // Note that the docs of the "alsa" crate say that no IO should
+                // be in scope when setting the hardware params, which makes
+                // sense for the typed IO objects, because changing the hw
+                // params can change the sample format. But the IO here is just
+                // using raw bytes, the format is unchecked anyway, so that
+                // should be fine.
+                set_format(&device, new_format).expect("TODO: Failed to set format.");
+                *format = new_format;
+            }
+            WriteResult::NeedMore => continue,
+            WriteResult::Yield => return FillResult::Yield,
+            WriteResult::QueueEmpty => return FillResult::QueueEmpty,
+        }
+    }
+}
+
+/// Run a loop that keeps plays back what is in the queue.
+///
+/// When the queue becomes empty, this thread exits, and the Alsa device is
+/// released. A new thread can be started once there is new content in the
+/// queue.
+pub fn main(
+    card_name: &str,
+    state_mutex: &Mutex<PlayerState>,
+    decode_thread: &Thread,
+) {
     let device = open_device(card_name).expect("TODO: Failed to open device.");
     let mut fds = device.get().expect("TODO: Failed to get fds from device.");
 
@@ -228,23 +259,35 @@ pub fn main(card_name: &str) {
     let mut io = device.io();
 
     loop {
-        match write_samples(&device, format, &mut io, &mut player).expect("TODO: Failed to write samples.") {
-            WriteResult::ChangeFormat(new_format) => {
-                // Note that the docs of the "alsa" crate say that no IO should
-                // be in scope when setting the hardware params, which makes
-                // sense for the typed IO objects, because changing the hw
-                // params can change the sample format. But the IO here is just
-                // using raw bytes, the format is unchecked anyway, so that
-                // should be fine.
-                set_format(&device, new_format).expect("TODO: Failed to set format.");
-                format = new_format;
-            }
-            WriteResult::NeedMore => continue,
-            WriteResult::Yield => {
-                let max_sleep_ms = 100;
+        let (result, is_buffer_low) = {
+            let mut state = state_mutex.lock().unwrap();
+            let result = ensure_buffers_full(
+                &device,
+                &mut format,
+                &mut io,
+                &mut state
+            );
+
+            // If the tracks to play are on a spinning disk that is currently
+            // not spinning to save power, spinning it up could take 10 to 15
+            // seconds, so we may already need to wake up the decoder thread now
+            // if we don't want to run out of data later. Use a safe margin of
+            // 30s. TODO: Deduplicate this check.
+            let is_buffer_low = state.pending_duration_ms() < 30_000;
+
+            (result, is_buffer_low)
+        };
+
+        if is_buffer_low {
+            decode_thread.unpark();
+        }
+
+        match result {
+            FillResult::Yield => {
+                let max_sleep_ms = 5_000;
                 alsa::poll::poll(&mut fds, max_sleep_ms).expect("TODO: Failed to wait for events.");
             }
-            WriteResult::Done => break,
+            FillResult::QueueEmpty => return,
         }
     }
 }

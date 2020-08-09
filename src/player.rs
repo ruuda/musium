@@ -9,12 +9,13 @@
 
 use std::sync::{Arc, Mutex};
 use std::fs;
-use std::thread::Thread;
+use std::thread::JoinHandle;
 use std::thread;
 
 use claxon;
 use claxon::metadata::StreamInfo;
 
+use ::playback;
 use ::{MetaIndex, TrackId};
 
 type FlacReader = claxon::FlacReader<fs::File>;
@@ -410,7 +411,7 @@ impl PlayerState {
 }
 
 /// Decode the queue until we reach a set memory limit.
-fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Arc<Mutex<PlayerState>>) {
+fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
     // The decode thread is a trade-off between power consumption and memory
     // usage: decoding a lot in one go and then sleeping for a long time is more
     // efficient than decoding a bit all the time, because the CPU can be
@@ -452,7 +453,7 @@ fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Arc<Mutex<PlayerState>>) 
 /// Decodes until the in-memory buffer is full, then parks itself. When
 /// unparked, if the buffer is running low, it starts a new burst of decode and
 /// then parks itself again, etc.
-fn decode_main<I: MetaIndex>(index: Arc<I>, state_mutex: Arc<Mutex<PlayerState>>) {
+fn decode_main<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
     // The minimum duration of decoded samples. If the buffered content is more
     // than this, there is no need to decode yet; it is better to sleep and do
     // a burst of decode later, than to decode a little bit all the time. The 30
@@ -470,20 +471,23 @@ fn decode_main<I: MetaIndex>(index: Arc<I>, state_mutex: Arc<Mutex<PlayerState>>
         };
 
         if should_decode {
-            decode_burst(&*index, &state_mutex);
+            decode_burst(index, state_mutex);
         }
 
         thread::park();
     }
 }
 
-struct Player {
+pub struct Player<I: MetaIndex + Sync + Send + 'static> {
     state: Arc<Mutex<PlayerState>>,
-    decode_thread: Thread,
+    index: Arc<I>,
+    decode_thread: JoinHandle<()>,
+    playback_thread: Option<JoinHandle<()>>,
+    card_name: String,
 }
 
-impl Player {
-    fn new<I: MetaIndex + Sync + Send + 'static>(index: Arc<I>) -> Player {
+impl<I: MetaIndex + Sync + Send + 'static> Player<I> {
+    pub fn new(index: Arc<I>, card_name: String) -> Player<I> {
         let state = Arc::new(Mutex::new(PlayerState::new()));
 
         // Start the decode thread. It runs indefinitely, but we do need to
@@ -491,13 +495,58 @@ impl Player {
         let state_mutex_for_decode = state.clone();
         let index_for_decode = index.clone();
         let builder = std::thread::Builder::new();
-        let decode_join_handle = builder.spawn(move || {
-            decode_main(index_for_decode, state_mutex_for_decode);
-        }).unwrap();
+        let decode_join_handle = builder
+            .name("decoder".into())
+            .spawn(move || {
+                decode_main(&*index_for_decode, &*state_mutex_for_decode);
+            }).unwrap();
 
         Player {
             state: state,
-            decode_thread: decode_join_handle.thread().clone(),
+            index: index,
+            decode_thread: decode_join_handle,
+            playback_thread: None,
+            card_name: card_name,
+        }
+    }
+
+    fn start_playback(&mut self) {
+        assert!(self.playback_thread.is_none(), "Playback already in progress.");
+
+        let state_mutex_for_playback: Arc<Mutex<PlayerState>> = self.state.clone();
+        let decode_thread_for_playback: std::thread::Thread = self.decode_thread.thread().clone();
+        let card_name_for_playback = self.card_name.clone();
+
+        let builder = std::thread::Builder::new();
+        let playback_join_handle = builder
+            .name("playback".into())
+            .spawn(move || {
+                // TODO: Set thread priority to high.
+                println!("Playback thread starting ...");
+                playback::main(
+                    &card_name_for_playback[..],
+                    &*state_mutex_for_playback,
+                    &decode_thread_for_playback,
+                );
+                println!("Playback done.");
+            }).unwrap();
+
+        self.playback_thread = Some(playback_join_handle);
+    }
+
+    pub fn play(&mut self) {
+        match self.playback_thread {
+            None => self.start_playback(),
+            Some(ref _handle) => {
+                // TODO: Figure out a way to check if the thread is still
+                // running, and if not, delete it and then start a new one.
+            }
+        }
+    }
+
+    pub fn wait(&mut self) {
+        if let Some(handle) = self.playback_thread.take() {
+            handle.join().unwrap();
         }
     }
 }
