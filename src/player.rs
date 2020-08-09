@@ -316,6 +316,8 @@ impl PlayerState {
         PlayerState {
             queue: vec![
                 QueuedTrack::new(TrackId(0x1c154369c48bf100)),
+                QueuedTrack::new(TrackId(0x29b4bebda0c87101)),
+                QueuedTrack::new(TrackId(0x29b4bebda0c87107)),
             ],
             current_decode: None,
         }

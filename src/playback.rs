@@ -157,7 +157,20 @@ fn write_samples(
     let mut next_format = None;
     let mut n_consumed = 0;
 
-    if pcm.avail_update()? > 0 {
+    // Query how many frames are available for writing. If the device is in a
+    // failed state, for example because of an underrun, then this fails, and
+    // we need to recover. Recover once, if that does not help, propagate the
+    // error.
+    let n_available = match pcm.avail_update() {
+        Ok(n) => n,
+        Err(err) => {
+            let silent = true;
+            pcm.try_recover(err, silent)?;
+            pcm.avail_update()?
+        }
+    };
+
+    if n_available > 0 {
         n_consumed = match player.peek_mut() {
             Some(ref block) if current_format != block.format() => {
                 // Next block has a different sample rate or bit depth, finish
