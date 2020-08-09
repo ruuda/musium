@@ -318,6 +318,7 @@ impl PlayerState {
                 QueuedTrack::new(TrackId(0x1c154369c48bf100)),
                 QueuedTrack::new(TrackId(0x29b4bebda0c87101)),
                 QueuedTrack::new(TrackId(0x29b4bebda0c87107)),
+                QueuedTrack::new(TrackId(0x29b4bebda0c8710d)),
             ],
             current_decode: None,
         }
@@ -378,12 +379,14 @@ impl PlayerState {
             }
         };
         if track_done {
-            self.queue.remove(0);
+            let track = self.queue.remove(0);
             // If a decode is in progress, the index of the track it is decoding
             // changed because of the `remove` above.
             if let Some(i) = self.current_decode {
                 self.current_decode = Some(i - 1);
             }
+
+            println!("Track {} fully consumed. Queue size: {}", track.track, self.queue.len());
         }
 
         #[cfg(debug)]
@@ -480,6 +483,7 @@ fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
         // Get the latest memory usage, and take the next task to execute. This
         // only holds the mutex briefly, so we can do the decode without holding
         // the mutex.
+        println!("Requesting next decode task.");
         let (task, bytes_used, pending_duration_ms) = {
             let mut state = state_mutex.lock().unwrap();
 
@@ -494,6 +498,7 @@ fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
 
             (task, state.pending_size_bytes(), state.pending_duration_ms())
         };
+        println!("Got decode task.");
 
         // If the buffer is running low, then our priority shouldn't be to
         // decode efficiently in bursts, it should be to put something in the
@@ -506,9 +511,12 @@ fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
         let decode_bytes_per_ms = 44_100 * 4 * 5 / 1000;
         let decode_bytes_budget = decode_bytes_per_ms * pending_duration_ms;
         let bytes_left = decode_bytes_budget.min(max_bytes - bytes_used);
-        println!("Decoding with budget of {} bytes ...", bytes_left);
+        println!("Pending buffer stats:");
+        println!("  Duration: {:.3} seconds", pending_duration_ms as f32 / 1000.0);
+        println!("  Memory:   {:.3} / {:.3} MB", bytes_used as f32 * 1e-6, max_bytes as f32 * 1e-6);
+        println!("  Budget:   {:.3} MB", bytes_left as f32 * 1e-6);
         let result = task.run(index, bytes_left);
-        println!("Decoded {} bytes.", result.block.len());
+        println!("Decoded {:.3} MB.", result.block.len() as f32 * 1e-6);
         previous_result = Some(result);
     }
 }
@@ -539,7 +547,9 @@ fn decode_main<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
             decode_burst(index, state_mutex);
         }
 
+        println!("Decoder going to sleep.");
         thread::park();
+        println!("Decoder woken up.");
     }
 }
 

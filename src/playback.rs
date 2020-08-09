@@ -270,6 +270,7 @@ pub fn main(
     let mut io = device.io();
 
     loop {
+        println!("Begin fill buffers.");
         let (result, is_buffer_low) = {
             let mut state = state_mutex.lock().unwrap();
             let result = ensure_buffers_full(
@@ -288,6 +289,7 @@ pub fn main(
 
             (result, is_buffer_low)
         };
+        println!("End fill buffers.");
 
         if is_buffer_low {
             decode_thread.unpark();
