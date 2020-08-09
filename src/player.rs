@@ -7,7 +7,10 @@
 
 //! Ensures that the right samples are queued for playback.
 
+use std::sync::{Arc, Mutex};
 use std::fs;
+use std::thread::Thread;
+use std::thread;
 
 use claxon;
 use claxon::metadata::StreamInfo;
@@ -106,7 +109,7 @@ impl QueuedTrack {
     }
 }
 
-pub struct Player {
+pub struct PlayerState {
     /// The tracks pending playback. Element 0 is being played currently.
     ///
     /// Invariant: If the queued track at index i has no decoded blocks, then
@@ -144,7 +147,6 @@ pub struct DecodeResult {
 
 impl DecodeTask {
     /// Decode until the end of the file, or until we produced `max_bytes`.
-    ///
     pub fn run<I: MetaIndex>(self, index: &I, max_bytes: usize) -> DecodeResult {
         match self {
             DecodeTask::Continue(reader) => DecodeTask::decode(reader, max_bytes),
@@ -294,9 +296,9 @@ impl DecodeTask {
     }
 }
 
-impl Player {
-    pub fn new() -> Player {
-        Player {
+impl PlayerState {
+    pub fn new() -> PlayerState {
+        PlayerState {
             queue: Vec::new(),
             current_decode: None,
         }
@@ -404,5 +406,98 @@ impl Player {
         );
         queued_track.blocks.push(result.block);
         queued_track.reader = result.reader;
+    }
+}
+
+/// Decode the queue until we reach a set memory limit.
+fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Arc<Mutex<PlayerState>>) {
+    // The decode thread is a trade-off between power consumption and memory
+    // usage: decoding a lot in one go and then sleeping for a long time is more
+    // efficient than decoding a bit all the time, because the CPU can be
+    // downclocked in between the bursts. Also, if the time between disk
+    // accesses is long enough, it might even be possible to spin down the disks
+    // until the next batch of decodes, which keeps the system quiet too.
+    // However, we do need to be able to hold all decoded samples in memory
+    // then, and there is some risk of the decode being wasted work when the
+    // queue changes. 85 MB will hold about 8 minutes of 16-bit 44.1 kHz audio.
+    // TODO: Make this configurable.
+    let max_bytes = 85_000_000;
+    let mut previous_result = None;
+
+    loop {
+        // Get the latest memory usage, and take the next task to execute. This
+        // only holds the mutex briefly, so we can do the decode without holding
+        // the mutex.
+        let (task, bytes_used) = {
+            let mut state = state_mutex.lock().unwrap();
+
+            if let Some(result) = previous_result.take() {
+                state.return_decode_task(result);
+            }
+
+            let task = match state.take_decode_task() {
+                None => return,
+                Some(t) => t,
+            };
+            (task, state.pending_size_bytes())
+        };
+
+        let bytes_left = max_bytes - bytes_used;
+        previous_result = Some(task.run(index, bytes_left));
+    }
+}
+
+/// The main loop for the decode thread.
+///
+/// Decodes until the in-memory buffer is full, then parks itself. When
+/// unparked, if the buffer is running low, it starts a new burst of decode and
+/// then parks itself again, etc.
+fn decode_main<I: MetaIndex>(index: Arc<I>, state_mutex: Arc<Mutex<PlayerState>>) {
+    // The minimum duration of decoded samples. If the buffered content is more
+    // than this, there is no need to decode yet; it is better to sleep and do
+    // a burst of decode later, than to decode a little bit all the time. The 30
+    // seconds are chosen as a safe margin to spin up any disks from which we
+    // may need to read files. If the disks are in power saving mode, a read can
+    // take 10 to 15 seconds, so we need to start the read early enough for
+    // continuous playback.
+    // TODO: Make this configurable.
+    let min_buffer_ms = 30_000;
+
+    loop {
+        let should_decode = {
+            let state = state_mutex.lock().unwrap();
+            state.pending_duration_ms() < min_buffer_ms
+        };
+
+        if should_decode {
+            decode_burst(&*index, &state_mutex);
+        }
+
+        thread::park();
+    }
+}
+
+struct Player {
+    state: Arc<Mutex<PlayerState>>,
+    decode_thread: Thread,
+}
+
+impl Player {
+    fn new<I: MetaIndex + Sync + Send + 'static>(index: Arc<I>) -> Player {
+        let state = Arc::new(Mutex::new(PlayerState::new()));
+
+        // Start the decode thread. It runs indefinitely, but we do need to
+        // periodically unpark it when there is new stuff to decode.
+        let state_mutex_for_decode = state.clone();
+        let index_for_decode = index.clone();
+        let builder = std::thread::Builder::new();
+        let decode_join_handle = builder.spawn(move || {
+            decode_main(index_for_decode, state_mutex_for_decode);
+        }).unwrap();
+
+        Player {
+            state: state,
+            decode_thread: decode_join_handle.thread().clone(),
+        }
     }
 }

@@ -13,7 +13,7 @@ use alsa;
 use alsa::PollDescriptors;
 use nix::errno::Errno;
 
-use player::{Format, Player};
+use player::{Format, PlayerState};
 
 type Result<T> = result::Result<T, alsa::Error>;
 
@@ -148,7 +148,7 @@ pub fn write_samples(
     pcm: &alsa::PCM,
     current_format: Format,
     io: &mut alsa::pcm::IO<u8>,
-    player: &mut Player,
+    player: &mut PlayerState,
 ) -> Result<WriteResult> {
     use alsa::pcm::State;
 
@@ -211,7 +211,7 @@ pub fn write_samples(
 }
 
 pub fn main(card_name: &str) {
-    let mut player = Player::new();
+    let mut player = PlayerState::new();
 
     let device = open_device(card_name).expect("TODO: Failed to open device.");
     let mut fds = device.get().expect("TODO: Failed to get fds from device.");
