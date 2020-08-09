@@ -142,15 +142,15 @@ pub struct DecodeResult {
 }
 
 impl DecodeTask {
-    /// Decode until the end of the file, or until we produced `max_bytes`.
-    pub fn run<I: MetaIndex>(self, index: &I, max_bytes: usize) -> DecodeResult {
+    /// Decode until the end of the file, or until we produced more than `stop_after_bytes`.
+    pub fn run<I: MetaIndex>(self, index: &I, stop_after_bytes: usize) -> DecodeResult {
         match self {
-            DecodeTask::Continue(reader) => DecodeTask::decode(reader, max_bytes),
-            DecodeTask::Start(track_id) => DecodeTask::start(index, track_id, max_bytes),
+            DecodeTask::Continue(reader) => DecodeTask::decode(reader, stop_after_bytes),
+            DecodeTask::Start(track_id) => DecodeTask::start(index, track_id, stop_after_bytes),
         }
     }
 
-    fn start<I: MetaIndex>(index: &I, track_id: TrackId, max_bytes: usize) -> DecodeResult {
+    fn start<I: MetaIndex>(index: &I, track_id: TrackId, stop_after_bytes: usize) -> DecodeResult {
         let track = match index.get_track(track_id) {
             Some(t) => t,
             None => panic!("Track {} does not exist, how did it end up queued?"),
@@ -163,14 +163,14 @@ impl DecodeTask {
             // TODO: Don't crash the full daemon on decode errors.
             Err(err) => panic!("Failed to open {:?} for reading: {:?}", fname, err),
         };
-        DecodeTask::decode(reader, max_bytes)
+        DecodeTask::decode(reader, stop_after_bytes)
     }
 
-    fn decode(reader: FlacReader, max_bytes: usize) -> DecodeResult {
+    fn decode(reader: FlacReader, stop_after_bytes: usize) -> DecodeResult {
         let streaminfo = reader.streaminfo();
         match streaminfo.bits_per_sample {
-            16 => DecodeTask::decode_i16(reader, streaminfo, max_bytes),
-            24 => DecodeTask::decode_i24(reader, streaminfo, max_bytes),
+            16 => DecodeTask::decode_i16(reader, streaminfo, stop_after_bytes),
+            24 => DecodeTask::decode_i24(reader, streaminfo, stop_after_bytes),
             n  => panic!("Unsupported bit depth: {}", n),
         }
     }
@@ -178,17 +178,17 @@ impl DecodeTask {
     fn decode_i16(
         mut reader: FlacReader,
         streaminfo: StreamInfo,
-        max_bytes: usize,
+        stop_after_bytes: usize,
     ) -> DecodeResult {
         assert_eq!(streaminfo.bits_per_sample, 16);
         assert_eq!(streaminfo.channels, 2);
-        let mut out = Vec::with_capacity(max_bytes);
 
         // The block size counts inter-channel samples, and we assume that all
         // files are stereo, so multiply by two.
         let max_samples_per_frame = streaminfo.max_block_size as usize * 2;
         let max_bytes_per_frame = max_samples_per_frame * 2;
         let mut is_done = false;
+        let mut out = Vec::with_capacity(stop_after_bytes + max_bytes_per_frame);
 
         {
             let mut frame_reader = reader.blocks();
@@ -196,7 +196,7 @@ impl DecodeTask {
 
             // Decode as long as we expect to stay under the byte limit, but do
             // decode at least one frame, otherwise we would not make progress.
-            while out.is_empty() || out.len() + max_bytes_per_frame < max_bytes  {
+            while out.is_empty() || out.len() < stop_after_bytes  {
                 let frame = match frame_reader.read_next_or_eof(buffer) {
                     Ok(None) => {
                         is_done = true;
@@ -235,17 +235,17 @@ impl DecodeTask {
     fn decode_i24(
         mut reader: FlacReader,
         streaminfo: StreamInfo,
-        max_bytes: usize,
+        stop_after_bytes: usize,
     ) -> DecodeResult {
         assert_eq!(streaminfo.bits_per_sample, 24);
         assert_eq!(streaminfo.channels, 2);
-        let mut out = Vec::with_capacity(max_bytes);
 
         // The block size counts inter-channel samples, and we assume that all
         // files are stereo, so multiply by two.
         let max_samples_per_frame = streaminfo.max_block_size as usize * 2;
         let max_bytes_per_frame = max_samples_per_frame * 3;
         let mut is_done = false;
+        let mut out = Vec::with_capacity(stop_after_bytes + max_bytes_per_frame);
 
         {
             let mut frame_reader = reader.blocks();
@@ -253,7 +253,7 @@ impl DecodeTask {
 
             // Decode as long as we expect to stay under the byte limit, but do
             // decode at least one frame, otherwise we would not make progress.
-            while out.is_empty() || out.len() + max_bytes_per_frame < max_bytes  {
+            while out.is_empty() || out.len() < stop_after_bytes  {
                 let frame = match frame_reader.read_next_or_eof(buffer) {
                     Ok(None) => {
                         is_done = true;
@@ -315,19 +315,22 @@ impl PlayerState {
     pub fn new() -> PlayerState {
         PlayerState {
             queue: vec![
-                QueuedTrack::new(TrackId(0x32385e9e354a1102)),
-                QueuedTrack::new(TrackId(0xba542e474fb39101)),
-                QueuedTrack::new(TrackId(0x752f4652a82cc101)),
-                QueuedTrack::new(TrackId(0x829506fd64ad710b)),
-                QueuedTrack::new(TrackId(0x29b4bebda0c87107)),
-                QueuedTrack::new(TrackId(0xb9b7641fbd52f106)),
-                QueuedTrack::new(TrackId(0x11c86a504f455101)),
-                QueuedTrack::new(TrackId(0x29b4bebda0c87101)),
-                QueuedTrack::new(TrackId(0xb9b7641fbd52f102)),
-                QueuedTrack::new(TrackId(0x1c154369c48bf100)),
                 QueuedTrack::new(TrackId(0x29b4bebda0c8710d)),
-                QueuedTrack::new(TrackId(0x8ead13ff2b95f102)),
+                QueuedTrack::new(TrackId(0xb9b7641fbd52f102)),
+                QueuedTrack::new(TrackId(0x829506fd64ad710b)),
+                QueuedTrack::new(TrackId(0xba542e474fb39101)),
+                QueuedTrack::new(TrackId(0x29b4bebda0c87107)),
                 QueuedTrack::new(TrackId(0x639f0d068574320b)),
+                QueuedTrack::new(TrackId(0x1c154369c48bf100)),
+                QueuedTrack::new(TrackId(0xb9b7641fbd52f106)),
+                QueuedTrack::new(TrackId(0xb1a431f57167a104)),
+                QueuedTrack::new(TrackId(0x9b21f06be23fb108)),
+                QueuedTrack::new(TrackId(0x737135ec9131c101)),
+                QueuedTrack::new(TrackId(0x752f4652a82cc101)),
+                QueuedTrack::new(TrackId(0x32385e9e354a1102)),
+                QueuedTrack::new(TrackId(0x29b4bebda0c87101)),
+                QueuedTrack::new(TrackId(0x8ead13ff2b95f102)),
+                QueuedTrack::new(TrackId(0x11c86a504f455101)),
             ],
             current_decode: None,
         }
@@ -517,7 +520,7 @@ fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
     // then, and there is some risk of the decode being wasted work when the
     // queue changes. 85 MB will hold about 8 minutes of 16-bit 44.1 kHz audio.
     // TODO: Make this configurable.
-    let max_bytes = 85_000_000;
+    let stop_after_bytes = 85_000_000;
     let mut previous_result = None;
 
     loop {
@@ -532,7 +535,7 @@ fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
             }
 
             let bytes_used = state.pending_size_bytes();
-            if bytes_used >= max_bytes {
+            if bytes_used >= stop_after_bytes {
                 println!("Buffer full, stopping decode for now.");
                 return
             }
@@ -555,10 +558,10 @@ fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
         // decoder will still decode at least one frame.
         let decode_bytes_per_ms = 44_100 * 4 * 5 / 1000;
         let decode_bytes_budget = decode_bytes_per_ms * pending_duration_ms;
-        let bytes_left = decode_bytes_budget.min(max_bytes - bytes_used);
+        let bytes_left = decode_bytes_budget.min(stop_after_bytes - bytes_used);
         println!("Pending buffer stats:");
         println!("  Duration: {:.3} seconds", pending_duration_ms as f32 / 1000.0);
-        println!("  Memory:   {:.3} / {:.3} MB", bytes_used as f32 * 1e-6, max_bytes as f32 * 1e-6);
+        println!("  Memory:   {:.3} / {:.3} MB", bytes_used as f32 * 1e-6, stop_after_bytes as f32 * 1e-6);
         println!("  Budget:   {:.3} MB", bytes_left as f32 * 1e-6);
         let result = task.run(index, bytes_left);
         println!("Decoded {:.3} MB.", result.block.len() as f32 * 1e-6);
