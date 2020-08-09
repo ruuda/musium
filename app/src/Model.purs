@@ -16,6 +16,7 @@ module Model
   , SearchResults (..)
   , SearchTrack (..)
   , coverUrl
+  , enqueueTrack
   , formatDurationSeconds
   , getAlbums
   , getTracks
@@ -29,14 +30,16 @@ import Prelude
 
 import Affjax as Http
 import Affjax.ResponseFormat as Http.ResponseFormat
-import Data.Array (sortWith)
-import Data.Argonaut.Core (Json)
 import Control.Monad.Error.Class (class MonadThrow, throwError)
+import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (decodeJson, getField) as Json
 import Data.Argonaut.Decode.Class (class DecodeJson)
+import Data.Array (sortWith)
 import Data.Either (Either (..))
+import Data.Maybe (Maybe (Nothing))
 import Data.String as String
 import Effect.Aff (Aff)
+import Effect.Class.Console as Console
 import Effect.Exception (Error, error)
 import Data.Int (rem)
 
@@ -99,6 +102,13 @@ getAlbums = do
     Right response -> case Json.decodeJson response.body of
       Left err -> fatal $ "Failed to parse albums: " <> err
       Right albums -> pure $ sortWith (\(Album a) -> a.date) albums
+
+enqueueTrack :: TrackId -> Aff Unit
+enqueueTrack (TrackId trackId) = do
+  result <- Http.put Http.ResponseFormat.ignore ("/queue/" <> trackId) Nothing
+  case result of
+    Left err -> fatal $ "Enqueue failed: " <> Http.printError err
+    Right unit -> Console.log $ "Enqueued track " <> trackId
 
 newtype SearchArtist = SearchArtist
   { id :: ArtistId

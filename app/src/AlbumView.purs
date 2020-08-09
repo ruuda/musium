@@ -87,3 +87,16 @@ renderTrack album (Track track) =
     Html.div $ do
       Html.addClass "artist"
       Html.text track.artist
+
+    trackElement <- ask
+
+    Html.onClick $ do
+      Html.withElement trackElement $ Html.addClass "queueing"
+      launchAff_ $ do
+        Model.enqueueTrack $ track.id
+        -- TODO: Remove class after track is no longer in queue.
+        -- Also change playing status. Or maybe this is the wrong
+        -- place to update this.
+        liftEffect $ Html.withElement trackElement $ do
+          Html.addClass "queued"
+          Html.removeClass "queueing"
