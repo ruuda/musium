@@ -119,7 +119,7 @@ fn set_format(pcm: &alsa::PCM, format: Format) -> Result<()> {
         hwp.set_channels(2)?;
         hwp.set_rate(format.sample_rate_hz, alsa::ValueOr::Nearest)?;
         hwp.set_format(sample_format)?;
-        hwp.set_access(alsa::pcm::Access::RWInterleaved)?;
+        hwp.set_access(alsa::pcm::Access::MMapInterleaved)?;
         // TODO: Pick a good buffer size.
         hwp.set_buffer_size(2048)?;
         hwp.set_period_size(256, alsa::ValueOr::Nearest)?;
@@ -172,7 +172,7 @@ fn write_samples(
             pcm.try_recover(err, silent)?;
             pcm.avail_update()?
         }
-    };
+    } as usize;
 
     if n_available > 0 {
         n_consumed = match player.peek_mut() {
@@ -185,7 +185,14 @@ fn write_samples(
             }
             Some(block) => {
                 let num_channels = 2;
-                let samples_written = io.writei(block.slice())? * num_channels;
+                let samples_written = num_channels * io.mmap(n_available, |dst| {
+                    let src = block.slice();
+                    let n = dst.len().min(src.len());
+                    &mut dst[..n].copy_from_slice(&src[..n]);
+                    // We have to return the number of frames (count independent
+                    // of the number of channels), but we have bytes.
+                    n / (num_channels * current_format.bits_per_sample as usize / 8)
+                })?;
                 samples_written
             }
             None => 0,
@@ -270,7 +277,6 @@ pub fn main(
     let mut io = device.io();
 
     loop {
-        println!("Begin fill buffers.");
         let (result, is_buffer_low) = {
             let mut state = state_mutex.lock().unwrap();
             let result = ensure_buffers_full(
@@ -289,7 +295,6 @@ pub fn main(
 
             (result, is_buffer_low)
         };
-        println!("End fill buffers.");
 
         if is_buffer_low {
             decode_thread.unpark();

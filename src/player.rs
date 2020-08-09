@@ -319,6 +319,11 @@ impl PlayerState {
                 QueuedTrack::new(TrackId(0x29b4bebda0c87101)),
                 QueuedTrack::new(TrackId(0x29b4bebda0c87107)),
                 QueuedTrack::new(TrackId(0x29b4bebda0c8710d)),
+                QueuedTrack::new(TrackId(0x829506fd64ad710b)),
+                QueuedTrack::new(TrackId(0x32385e9e354a1102)),
+                QueuedTrack::new(TrackId(0xba542e474fb39101)),
+                QueuedTrack::new(TrackId(0x752f4652a82cc101)),
+                QueuedTrack::new(TrackId(0xb9b7641fbd52f102)),
             ],
             current_decode: None,
         }
