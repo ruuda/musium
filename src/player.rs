@@ -327,6 +327,7 @@ impl PlayerState {
                 QueuedTrack::new(TrackId(0x1c154369c48bf100)),
                 QueuedTrack::new(TrackId(0x29b4bebda0c8710d)),
                 QueuedTrack::new(TrackId(0x8ead13ff2b95f102)),
+                QueuedTrack::new(TrackId(0x639f0d068574320b)),
             ],
             current_decode: None,
         }
@@ -523,7 +524,6 @@ fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
         // Get the latest memory usage, and take the next task to execute. This
         // only holds the mutex briefly, so we can do the decode without holding
         // the mutex.
-        println!("Requesting next decode task.");
         let (task, bytes_used, pending_duration_ms) = {
             let mut state = state_mutex.lock().unwrap();
 
@@ -531,14 +531,19 @@ fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
                 state.return_decode_task(result);
             }
 
+            let bytes_used = state.pending_size_bytes();
+            if bytes_used >= max_bytes {
+                println!("Buffer full, stopping decode for now.");
+                return
+            }
+
             let task = match state.take_decode_task() {
                 None => return,
                 Some(t) => t,
             };
 
-            (task, state.pending_size_bytes(), state.pending_duration_ms())
+            (task, bytes_used, state.pending_duration_ms())
         };
-        println!("Got decode task.");
 
         // If the buffer is running low, then our priority shouldn't be to
         // decode efficiently in bursts, it should be to put something in the
