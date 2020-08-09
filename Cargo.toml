@@ -27,6 +27,9 @@ panic = "abort"
 
 [profile.release]
 panic = "abort"
+# If we use parallel codegen, Claxon does not get optimized properly, and the
+# result will be slow, so disable parallel codegen.
+codegen-units = 1
 
 [[bench]]
 name = "main"
