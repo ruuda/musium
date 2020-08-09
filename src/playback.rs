@@ -277,7 +277,7 @@ pub fn main(
     let mut io = device.io();
 
     loop {
-        let (result, is_buffer_low) = {
+        let (result, needs_decode, pending_ms) = {
             let mut state = state_mutex.lock().unwrap();
             let result = ensure_buffers_full(
                 &device,
@@ -286,29 +286,23 @@ pub fn main(
                 &mut state
             );
 
-            // If the tracks to play are on a spinning disk that is currently
-            // not spinning to save power, spinning it up could take 10 to 15
-            // seconds, so we may already need to wake up the decoder thread now
-            // if we don't want to run out of data later. Use a safe margin of
-            // 30s. TODO: Deduplicate this check.
-            let is_buffer_low = state.pending_duration_ms() < 30_000;
-
-            (result, is_buffer_low)
+            (result, state.needs_decode(), state.pending_duration_ms())
         };
 
-        if is_buffer_low {
+        if needs_decode {
             decode_thread.unpark();
         }
 
         match result {
             FillResult::QueueEmpty => return,
             FillResult::Yield => {
-                let max_sleep_ms = if is_buffer_low { 20 } else { 5_000 };
+                let max_sleep_ms = 5_000.min(pending_ms as i32 / 2);
                 alsa::poll::poll(&mut fds, max_sleep_ms).expect("TODO: Failed to wait for events.");
             }
             FillResult::ChangeFormat(new_format) => {
                 mem::drop(io);
                 set_format(&device, new_format).expect("TODO: Failed to set format.");
+                println!("Changed format to {:?}", new_format);
                 format = new_format;
                 io = device.io();
             }

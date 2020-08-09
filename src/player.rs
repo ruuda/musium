@@ -21,7 +21,7 @@ use ::{MetaIndex, TrackId};
 
 type FlacReader = claxon::FlacReader<fs::File>;
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Format {
     pub sample_rate_hz: u32,
     pub bits_per_sample: u32,
@@ -315,15 +315,18 @@ impl PlayerState {
     pub fn new() -> PlayerState {
         PlayerState {
             queue: vec![
-                QueuedTrack::new(TrackId(0x1c154369c48bf100)),
-                QueuedTrack::new(TrackId(0x29b4bebda0c87101)),
-                QueuedTrack::new(TrackId(0x29b4bebda0c87107)),
-                QueuedTrack::new(TrackId(0x29b4bebda0c8710d)),
-                QueuedTrack::new(TrackId(0x829506fd64ad710b)),
                 QueuedTrack::new(TrackId(0x32385e9e354a1102)),
                 QueuedTrack::new(TrackId(0xba542e474fb39101)),
                 QueuedTrack::new(TrackId(0x752f4652a82cc101)),
+                QueuedTrack::new(TrackId(0x829506fd64ad710b)),
+                QueuedTrack::new(TrackId(0x29b4bebda0c87107)),
+                QueuedTrack::new(TrackId(0xb9b7641fbd52f106)),
+                QueuedTrack::new(TrackId(0x11c86a504f455101)),
+                QueuedTrack::new(TrackId(0x29b4bebda0c87101)),
                 QueuedTrack::new(TrackId(0xb9b7641fbd52f102)),
+                QueuedTrack::new(TrackId(0x1c154369c48bf100)),
+                QueuedTrack::new(TrackId(0x29b4bebda0c8710d)),
+                QueuedTrack::new(TrackId(0x8ead13ff2b95f102)),
             ],
             current_decode: None,
         }
@@ -406,6 +409,38 @@ impl PlayerState {
     /// Return the size of all blocks in bytes.
     pub fn pending_size_bytes(&self) -> usize {
         self.queue.iter().map(|qt| qt.size_bytes()).sum()
+    }
+
+    /// Return whether there are queue items that have not yet been fully decoded.
+    pub fn can_decode(&self) -> bool {
+        for queued_track in self.queue.iter() {
+            match &queued_track.decode {
+                Decode::Done => continue,
+                _ => return true,
+            }
+        }
+        return false
+    }
+
+    /// Return whether we should start decoding more.
+    ///
+    /// In general, we prefer to decode a lot in a big batch, and then sleep for
+    /// a long time, over decoding little bits all the time. This saves power
+    /// because it allows the CPU to be downclocked when we are not decoding,
+    /// and if the buffer is long enough, it may even be possible to spin down
+    /// disks.
+    ///
+    /// However, when the disks are not spinning, if we need to access those
+    /// disks to resume decoding, it can take 10 to 15 seconds for them to spin
+    /// up again, therefore we should start decoding early enough, such that the
+    /// IO is complete before we run out of samples to play.
+    pub fn needs_decode(&self) -> bool {
+        // Choose a safe margin; if spinning up the disks takes 10 to 15
+        // seconds, starting 30 seconds in advance should be sufficient.
+        let min_buffer_ms = 30_000;
+
+        let is_buffer_low = self.pending_duration_ms() < min_buffer_ms;
+        is_buffer_low && self.can_decode()
     }
 
     /// Return a decode task, if there is something to decode.
@@ -532,20 +567,10 @@ fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
 /// unparked, if the buffer is running low, it starts a new burst of decode and
 /// then parks itself again, etc.
 fn decode_main<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
-    // The minimum duration of decoded samples. If the buffered content is more
-    // than this, there is no need to decode yet; it is better to sleep and do
-    // a burst of decode later, than to decode a little bit all the time. The 30
-    // seconds are chosen as a safe margin to spin up any disks from which we
-    // may need to read files. If the disks are in power saving mode, a read can
-    // take 10 to 15 seconds, so we need to start the read early enough for
-    // continuous playback.
-    // TODO: Make this configurable.
-    let min_buffer_ms = 30_000;
-
     loop {
         let should_decode = {
             let state = state_mutex.lock().unwrap();
-            state.pending_duration_ms() < min_buffer_ms
+            state.needs_decode()
         };
 
         if should_decode {
