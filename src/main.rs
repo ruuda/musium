@@ -22,26 +22,34 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use futures::future::Future;
 use hyper::header::{AccessControlAllowOrigin, ContentLength, ContentType, Expires, HttpDate};
 use hyper::mime;
 use hyper::server::{Http, Request, Response, Service};
-use hyper::{Get, StatusCode};
+use hyper::{Get, Put, StatusCode};
 use mindec::{AlbumId, MetaIndex, MemoryMetaIndex, TrackId};
+use mindec::player::Player;
 
 struct MetaServer {
-    index: MemoryMetaIndex,
+    index: Arc<MemoryMetaIndex>,
     cache_dir: PathBuf,
+    player: Player<MemoryMetaIndex>,
 }
 
 type BoxFuture = Box<Future<Item=Response, Error=hyper::Error>>;
 
 impl MetaServer {
-    fn new(index: MemoryMetaIndex, cache_dir: &str) -> MetaServer {
+    fn new(
+        index: Arc<MemoryMetaIndex>,
+        cache_dir: &str,
+        player: Player<MemoryMetaIndex>,
+    ) -> MetaServer {
         MetaServer {
             index: index,
             cache_dir: PathBuf::from(cache_dir),
+            player: player,
         }
     }
 
@@ -243,6 +251,25 @@ impl MetaServer {
         Box::new(futures::future::ok(response))
     }
 
+    fn handle_enqueue(&self, _request: &Request, id: &str) -> BoxFuture {
+        let track_id = match TrackId::parse(id) {
+            Some(tid) => tid,
+            None => return self.handle_bad_request("Invalid track id."),
+        };
+
+        // Confirm that the track exists before we enqueue it.
+        let _track = match self.index.get_track(track_id) {
+            Some(t) => t,
+            None => return self.handle_not_found(),
+        };
+
+        self.player.enqueue(track_id);
+
+        let response = Response::new()
+            .with_status(StatusCode::Accepted);
+        Box::new(futures::future::ok(response))
+    }
+
     fn handle_search(&self, request: &Request) -> BoxFuture {
         let raw_query = match request.query() {
             Some(q) => q.as_ref(),
@@ -327,6 +354,7 @@ impl Service for MetaServer {
             (&Get, Some("albums"), None)    => self.handle_albums(&request),
             (&Get, Some("artist"), Some(a)) => self.handle_artist(&request, a),
             (&Get, Some("search"), None)    => self.handle_search(&request),
+            (&Put, Some("queue"),  Some(t)) => self.handle_enqueue(&request, t),
             // Web endpoints.
             (&Get, None,              None) => self.handle_static_file("app/index.html", "text/html"),
             (&Get, Some("style.css"), None) => self.handle_static_file("app/style.css", "text/css"),
@@ -618,13 +646,12 @@ fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &str) {
 
 fn print_usage() {
     println!("usage: ");
-    println!("  mindec serve /path/to/music/library /path/to/cache");
-    println!("  mindec cache /path/to/music/library /path/to/cache");
-    println!("  mindec play  /path/to/music/library <soundcard name>");
+    println!("  mindec serve /path/to/music/library /path/to/cache <soundcard name>");
+    println!("  mindec cache /path/to/music/library /path/to/cache <dummy arg>");
 }
 
 fn main() {
-    if env::args().len() < 4 {
+    if env::args().len() < 5 {
         print_usage();
         process::exit(1);
     }
@@ -632,26 +659,24 @@ fn main() {
     let cmd = env::args().nth(1).unwrap();
     let dir = env::args().nth(2).unwrap();
     let cache_dir = env::args().nth(3).unwrap();
+    let card_name = env::args().nth(4).unwrap();
 
     match &cmd[..] {
         "serve" => {
             let index = make_index(&dir);
+            let arc_index = std::sync::Arc::new(index);
             println!("Indexing complete, starting server on port 8233.");
-            let service = Rc::new(MetaServer::new(index, &cache_dir));
+
+            let player = mindec::player::Player::new(arc_index.clone(), card_name);
+            let service = Rc::new(MetaServer::new(arc_index.clone(), &cache_dir, player));
             let addr = ([0, 0, 0, 0], 8233).into();
             let server = Http::new().bind(&addr, move || Ok(service.clone())).unwrap();
+
             server.run().unwrap();
         }
         "cache" => {
             let index = make_index(&dir);
             generate_thumbnails(&index, &cache_dir);
-        }
-        "play" => {
-            let card_name = cache_dir;
-            let index = make_index(&dir);
-            let arc_index = std::sync::Arc::new(index);
-            let mut player = mindec::player::Player::new(arc_index, card_name);
-            player.join();
         }
         _ => {
             print_usage();

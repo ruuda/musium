@@ -315,22 +315,22 @@ impl PlayerState {
     pub fn new() -> PlayerState {
         PlayerState {
             queue: vec![
-                QueuedTrack::new(TrackId(0x29b4bebda0c8710d)),
-                QueuedTrack::new(TrackId(0xb9b7641fbd52f102)),
-                QueuedTrack::new(TrackId(0x829506fd64ad710b)),
-                QueuedTrack::new(TrackId(0xba542e474fb39101)),
-                QueuedTrack::new(TrackId(0x29b4bebda0c87107)),
-                QueuedTrack::new(TrackId(0x639f0d068574320b)),
-                QueuedTrack::new(TrackId(0x1c154369c48bf100)),
-                QueuedTrack::new(TrackId(0xb9b7641fbd52f106)),
-                QueuedTrack::new(TrackId(0xb1a431f57167a104)),
-                QueuedTrack::new(TrackId(0x9b21f06be23fb108)),
-                QueuedTrack::new(TrackId(0x737135ec9131c101)),
-                QueuedTrack::new(TrackId(0x752f4652a82cc101)),
-                QueuedTrack::new(TrackId(0x32385e9e354a1102)),
-                QueuedTrack::new(TrackId(0x29b4bebda0c87101)),
-                QueuedTrack::new(TrackId(0x8ead13ff2b95f102)),
-                QueuedTrack::new(TrackId(0x11c86a504f455101)),
+                // QueuedTrack::new(TrackId(0x29b4bebda0c8710d)),
+                // QueuedTrack::new(TrackId(0xb9b7641fbd52f102)),
+                // QueuedTrack::new(TrackId(0x829506fd64ad710b)),
+                // QueuedTrack::new(TrackId(0xba542e474fb39101)),
+                // QueuedTrack::new(TrackId(0x29b4bebda0c87107)),
+                // QueuedTrack::new(TrackId(0x639f0d068574320b)),
+                // QueuedTrack::new(TrackId(0x1c154369c48bf100)),
+                // QueuedTrack::new(TrackId(0xb9b7641fbd52f106)),
+                // QueuedTrack::new(TrackId(0xb1a431f57167a104)),
+                // QueuedTrack::new(TrackId(0x9b21f06be23fb108)),
+                // QueuedTrack::new(TrackId(0x737135ec9131c101)),
+                // QueuedTrack::new(TrackId(0x752f4652a82cc101)),
+                // QueuedTrack::new(TrackId(0x32385e9e354a1102)),
+                // QueuedTrack::new(TrackId(0x29b4bebda0c87101)),
+                // QueuedTrack::new(TrackId(0x8ead13ff2b95f102)),
+                // QueuedTrack::new(TrackId(0x11c86a504f455101)),
             ],
             current_decode: None,
         }
@@ -641,5 +641,21 @@ impl<I: MetaIndex + Sync + Send + 'static> Player<I> {
         // so this will block indefinitely.
         self.playback_thread.join().unwrap();
         self.decode_thread.join().unwrap();
+    }
+
+    /// Enqueue the track for playback at the end of the queue.
+    pub fn enqueue(&self, track_id: TrackId) {
+        // If the queue is empty, then the playback thread may be parked,
+        // so we may need to wake it after enqueuing something.
+        let needs_wake = {
+            let mut state = self.state.lock().unwrap();
+            let needs_wake = state.is_queue_empty();
+            state.queue.push(QueuedTrack::new(track_id));
+            needs_wake
+        };
+
+        if needs_wake {
+            self.playback_thread.thread().unpark();
+        }
     }
 }
