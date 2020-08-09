@@ -7,8 +7,9 @@
 
 //! Ensures that the right samples are queued for playback.
 
-use std::sync::{Arc, Mutex};
 use std::fs;
+use std::mem;
+use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::thread;
 
@@ -84,9 +85,21 @@ impl Block {
     }
 }
 
+/// The decoding state of a queued track.
+pub enum Decode {
+    /// No decode started yet.
+    NotStarted,
+    /// Track partially decoded, can be resumed.
+    Partial(FlacReader),
+    /// Decode in progress, the decoder thread has the reader for now.
+    Running,
+    /// Decoding is complete.
+    Done,
+}
+
 pub struct QueuedTrack {
     track: TrackId,
-    reader: Option<FlacReader>,
+    decode: Decode,
     blocks: Vec<Block>,
 }
 
@@ -94,7 +107,7 @@ impl QueuedTrack {
     pub fn new(track: TrackId) -> QueuedTrack {
         QueuedTrack {
             track: track,
-            reader: None,
+            decode: Decode::NotStarted,
             blocks: Vec::new(),
         }
     }
@@ -108,24 +121,6 @@ impl QueuedTrack {
     pub fn size_bytes(&self) -> usize {
         self.blocks.iter().map(|b| b.size_bytes()).sum()
     }
-}
-
-pub struct PlayerState {
-    /// The tracks pending playback. Element 0 is being played currently.
-    ///
-    /// Invariant: If the queued track at index i has no decoded blocks, then
-    /// for every index j > i, the queued track at index j has no decoded
-    /// blocks either. In other words, all decoded blocks are at the beginning
-    /// of the queue.
-    queue: Vec<QueuedTrack>,
-
-    /// The index of the track for which a decode is in progress.
-    ///
-    /// The decoder itself will be moved into the decoder thread temporarily.
-    /// When the decode is done, the decoder thread needs to add the new blocks,
-    /// and put the `FlacReader` back, but the queue could have changed in the
-    /// meantime, so we need to track the index of where to restore later.
-    current_decode: Option<usize>,
 }
 
 /// A task to be executed by the decoder thread.
@@ -297,10 +292,31 @@ impl DecodeTask {
     }
 }
 
+pub struct PlayerState {
+    /// The tracks pending playback. Element 0 is being played currently.
+    ///
+    /// Invariant: If the queued track at index i has no decoded blocks, then
+    /// for every index j > i, the queued track at index j has no decoded
+    /// blocks either. In other words, all decoded blocks are at the beginning
+    /// of the queue.
+    queue: Vec<QueuedTrack>,
+
+    /// The index of the track for which a decode is in progress.
+    ///
+    /// The decoder itself will be moved into the decoder thread temporarily.
+    /// When the decode is done, the decoder thread needs to add the new blocks,
+    /// and put the `FlacReader` back, but the queue could have changed in the
+    /// meantime, so we need to track the index of where to restore later.
+    current_decode: Option<usize>,
+}
+
+
 impl PlayerState {
     pub fn new() -> PlayerState {
         PlayerState {
-            queue: Vec::new(),
+            queue: vec![
+                QueuedTrack::new(TrackId(0x1c154369c48bf100)),
+            ],
             current_decode: None,
         }
     }
@@ -317,6 +333,16 @@ impl PlayerState {
             }
             saw_empty = qt.blocks.len() == 0;
         }
+
+        let n_running = self
+            .queue
+            .iter()
+            .filter(|qt| match qt.decode {
+                Decode::Running => true,
+                _               => false,
+            })
+            .count();
+        assert!(n_running <= 1, "At most one decode should be in progress.");
     }
 
     /// Return the next block to play from, if any.
@@ -325,6 +351,11 @@ impl PlayerState {
             Some(qt) => qt.blocks.first_mut(),
             None => None,
         }
+    }
+
+    /// Return whether the queue is empty.
+    pub fn is_queue_empty(&self) -> bool {
+        self.queue.is_empty()
     }
 
     /// Consume n samples from the peeked block.
@@ -339,7 +370,10 @@ impl PlayerState {
             if block_done {
                 queued_track.blocks.remove(0);
             }
-            queued_track.blocks.len() == 0
+            match &queued_track.decode {
+                Decode::Done => queued_track.blocks.is_empty(),
+                _ => false,
+            }
         };
         if track_done {
             self.queue.remove(0);
@@ -372,21 +406,32 @@ impl PlayerState {
         );
 
         for (i, queued_track) in self.queue.iter_mut().enumerate() {
-            // If there is a decode in progress, continue with that.
-            if let Some(r) = queued_track.reader.take() {
-                self.current_decode = Some(i);
-                return Some(DecodeTask::Continue(r));
+            match &queued_track.decode {
+                &Decode::Done => continue,
+                _ => {}
             }
 
-            // There is no reader, but there are blocks. This file has been
-            // decoded entirely then, there is nothing left to do here.
-            if queued_track.blocks.len() > 0 {
-                continue
-            }
+            // If the decode is not done, then we will now start or continue,
+            // so put on "running", and then inspect the previous state.
+            let mut decode = Decode::Running;
+            mem::swap(&mut decode, &mut queued_track.decode);
 
-            // If there are no blocks yet, and also no decoder, then we need to
-            // create a new decoder for this track.
-            return Some(DecodeTask::Start(queued_track.track));
+            match decode {
+                Decode::NotStarted => {
+                    self.current_decode = Some(i);
+                    return Some(DecodeTask::Start(queued_track.track));
+                }
+                Decode::Partial(reader) => {
+                    self.current_decode = Some(i);
+                    return Some(DecodeTask::Continue(reader));
+                }
+                Decode::Running => {
+                    panic!("No decode can be running when current_decode is None.");
+                }
+                Decode::Done => {
+                    panic!("Unreachable, we skipped the iteration on Done.");
+                }
+            }
         }
 
         None
@@ -401,12 +446,16 @@ impl PlayerState {
             Some(i) => &mut self.queue[i],
             None => panic!("Can only return from a decode task if one is in progress."),
         };
-        assert!(
-            queued_track.reader.is_none(),
-            "If we decoded for this track, the reader must not be present on there.",
-        );
+        match queued_track.decode {
+            Decode::Running => {},
+            _ => panic!("If we decoded for this track, it must have been marked running."),
+        }
         queued_track.blocks.push(result.block);
-        queued_track.reader = result.reader;
+        queued_track.decode = match result.reader {
+            Some(r) => Decode::Partial(r),
+            None => Decode::Done,
+        };
+        self.current_decode = None;
     }
 }
 
@@ -429,7 +478,7 @@ fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
         // Get the latest memory usage, and take the next task to execute. This
         // only holds the mutex briefly, so we can do the decode without holding
         // the mutex.
-        let (task, bytes_used) = {
+        let (task, bytes_used, pending_duration_ms) = {
             let mut state = state_mutex.lock().unwrap();
 
             if let Some(result) = previous_result.take() {
@@ -440,11 +489,25 @@ fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
                 None => return,
                 Some(t) => t,
             };
-            (task, state.pending_size_bytes())
+
+            (task, state.pending_size_bytes(), state.pending_duration_ms())
         };
 
-        let bytes_left = max_bytes - bytes_used;
-        previous_result = Some(task.run(index, bytes_left));
+        // If the buffer is running low, then our priority shouldn't be to
+        // decode efficiently in bursts, it should be to put something in the
+        // buffer as soon as possible. In that case we set the number of bytes
+        // to decode very low, so we can make the result available quickly.
+        // As a rough estimate, say we can decode 16 bit 44.1 kHz stereo audio
+        // at 5× realtime speed, then the duration of the buffered audio
+        // determines our budget for decoding. If we set the budget at 0, the
+        // decoder will still decode at least one frame.
+        let decode_bytes_per_ms = 44_100 * 4 * 5 / 1000;
+        let decode_bytes_budget = decode_bytes_per_ms * pending_duration_ms;
+        let bytes_left = decode_bytes_budget.min(max_bytes - bytes_used);
+        println!("Decoding with budget of {} bytes ...", bytes_left);
+        let result = task.run(index, bytes_left);
+        println!("Decoded {} bytes.", result.block.len());
+        previous_result = Some(result);
     }
 }
 

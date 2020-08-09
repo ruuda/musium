@@ -154,11 +154,11 @@ fn write_samples(
 ) -> Result<WriteResult> {
     use alsa::pcm::State;
 
-    let mut queue_empty = false;
     let mut next_format = None;
+    let mut n_consumed = 0;
 
     if pcm.avail_update()? > 0 {
-        let n_consumed = match player.peek_mut() {
+        n_consumed = match player.peek_mut() {
             Some(ref block) if current_format != block.format() => {
                 // Next block has a different sample rate or bit depth, finish
                 // what is still in the buffer, so we can switch afterwards.
@@ -171,16 +171,14 @@ fn write_samples(
                 let samples_written = io.writei(block.slice())? * num_channels;
                 samples_written
             }
-            None => {
-                // Queue is empty, play what is still there, then stop.
-                pcm.drain()?;
-                queue_empty = true;
-                0
-            }
+            None => 0,
         };
 
         if n_consumed > 0 {
             player.consume(n_consumed);
+        } else if player.is_queue_empty() {
+            // The queue is empty, play what is still there, then stop.
+            pcm.drain()?;
         }
     }
 
@@ -188,15 +186,19 @@ fn write_samples(
         State::Running  => return Ok(WriteResult::Yield),
         State::Draining => match next_format {
             Some(_) => return Ok(WriteResult::Yield),
-            None if queue_empty => return Ok(WriteResult::QueueEmpty),
+            None if player.is_queue_empty() => return Ok(WriteResult::QueueEmpty),
             None => panic!("PCM is unexpectedly in draining state."),
         }
         State::Setup => match next_format {
             Some(format) => return Ok(WriteResult::ChangeFormat(format)),
-            None if queue_empty => return Ok(WriteResult::QueueEmpty),
-            None => panic!("PCM is unexpectedly in setup state."),
+            None if player.is_queue_empty() => return Ok(WriteResult::QueueEmpty),
+            // The queue is not empty, but we have no data nonetheless, which
+            // means the decoder is behind ... yield and hope that next round it
+            // caught up.
+            None => return Ok(WriteResult::Yield),
         }
-        State::Prepared => pcm.start()?,
+        State::Prepared if n_consumed > 0 => pcm.start()?,
+        State::Prepared => return Ok(WriteResult::Yield),
         State::XRun => pcm.prepare()?,
         State::Suspended => pcm.resume()?,
         unexpected => panic!("Unexpected PCM state: {:?}", unexpected),
@@ -284,7 +286,7 @@ pub fn main(
 
         match result {
             FillResult::Yield => {
-                let max_sleep_ms = 5_000;
+                let max_sleep_ms = if is_buffer_low { 20 } else { 5_000 };
                 alsa::poll::poll(&mut fds, max_sleep_ms).expect("TODO: Failed to wait for events.");
             }
             FillResult::QueueEmpty => return,
