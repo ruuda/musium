@@ -12,6 +12,7 @@ in
   pkgs.buildEnv {
     name = "mindec-devenv";
     paths = [
+      pkgs.alsaLib
       pkgs.mkdocs
       pkgs.psc-package
       pkgs.purescript
