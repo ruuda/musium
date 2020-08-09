@@ -7,6 +7,7 @@
 
 //! Logic for playing back audio using Alsa.
 
+use std::mem;
 use std::result;
 use std::sync::Mutex;
 use std::thread::Thread;
@@ -220,29 +221,21 @@ fn write_samples(
 }
 
 enum FillResult {
+    ChangeFormat(Format),
     QueueEmpty,
     Yield,
 }
 
 fn ensure_buffers_full(
     device: &alsa::PCM,
-    format: &mut Format,
+    format: Format,
     io: &mut alsa::pcm::IO<u8>,
     player: &mut PlayerState,
 ) -> FillResult {
     loop {
-        match write_samples(device, *format, io, player).expect("TODO: Failed to write samples.") {
-            WriteResult::ChangeFormat(new_format) => {
-                // Note that the docs of the "alsa" crate say that no IO should
-                // be in scope when setting the hardware params, which makes
-                // sense for the typed IO objects, because changing the hw
-                // params can change the sample format. But the IO here is just
-                // using raw bytes, the format is unchecked anyway, so that
-                // should be fine.
-                set_format(&device, new_format).expect("TODO: Failed to set format.");
-                *format = new_format;
-            }
+        match write_samples(device, format, io, player).expect("TODO: Failed to write samples.") {
             WriteResult::NeedMore => continue,
+            WriteResult::ChangeFormat(new_format) => return FillResult::ChangeFormat(new_format),
             WriteResult::Yield => return FillResult::Yield,
             WriteResult::QueueEmpty => return FillResult::QueueEmpty,
         }
@@ -278,7 +271,7 @@ pub fn main(
             let mut state = state_mutex.lock().unwrap();
             let result = ensure_buffers_full(
                 &device,
-                &mut format,
+                format,
                 &mut io,
                 &mut state
             );
@@ -298,11 +291,17 @@ pub fn main(
         }
 
         match result {
+            FillResult::QueueEmpty => return,
             FillResult::Yield => {
                 let max_sleep_ms = if is_buffer_low { 20 } else { 5_000 };
                 alsa::poll::poll(&mut fds, max_sleep_ms).expect("TODO: Failed to wait for events.");
             }
-            FillResult::QueueEmpty => return,
+            FillResult::ChangeFormat(new_format) => {
+                mem::drop(io);
+                set_format(&device, new_format).expect("TODO: Failed to set format.");
+                format = new_format;
+                io = device.io();
+            }
         }
     }
 }
