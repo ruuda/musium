@@ -10,6 +10,11 @@ cache:
     - target
     - app/.psc-package
 
+addons:
+  apt:
+    packages:
+    - libasound2-dev
+
 before_install:
   # Make the pinned build environment available on the PATH.
   - export PATH=$(nix-build --no-out-link)/bin:$PATH
