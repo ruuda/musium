@@ -1,72 +1,68 @@
 # Mindec
 
-Music metadata indexer and mediaserver.
+Music player daemon with web-based library browser.
 
 [![Build Status][ci-img]][ci]
 
-Mindec is:
+Mindec is a music player that can be controlled through a web-based library
+browser. It indexes a collection of flac files, and exposes playback controls to
+the local network. It is intended to run on a low-power always-on device, such
+as a Raspberry Pi, that has audio out connected to speakers. Playback on those
+speakers can then be controlled from any device on the local network.
 
- * A library for indexing metadata of a collection of flac files.
- * An http mediaserver that exposes music metadata.
- * A web-based library browser.
- * Designed to run fast in resource-constrained environments
-   and scale to hundreds of thousands of tracks.
+Mindec is designed to run fast in resource-constrained environments and scale to
+hundreds of thousands of tracks.
 
 ## Overview
 
-Mindec *the library* can be used to:
+Mindec consists of a few components:
 
- * Power a music player.
- * Build music analytics tools (e.g. to aid analyzing Last.fm playcounts).
+ * A library that can index a collection of flac files, to support operations
+   such as listing all tracks in an album, and to accelerate search. The index
+   is not backed by a general-purpose database, it is a domain-specific data
+   structure.
 
-Mindec *the server* can be used to:
+ * A player that can decode and play back a queue of tracks through
+   [Claxon][claxon] and [Alsa][alsa-rs].
 
- * Expose local flac files to the network for e.g. Chromecast playback.
- * Export music metadata as json, for ad-hoc querying with `jq`.
- * Report statistics about your music library and find inconsistencies in tags.
+ * An http server that exposes the index as json, and endpoints to control
+   the player. It also serves the static content for the library browser.
 
-Mindec *the webapp* can be used to:
+ * A web-based library browser.
 
- * Browse your music library.
- * Play music on Chromecast.
-
-Mindec is **not**:
+Mindec is not:
 
  * A tagger. Mindec expects properly tagged flac files. Mindec is picky and
    will complain about inconsistent or missing tags, but it will not fix them
    for you.
+
  * A database. Mindec treats the music library as read-only, and does not store
    mutable data such as playcounts itself.
 
+[claxon]:  https://github.com/ruuda/claxon
+[alsa-rs]: https://github.com/diwic/alsa-rs
+
 ## Compiling
 
-The library and server are written in [Rust][rust] and build with Cargo:
+The library browser is written in [Purescript][purescript]. There is a basic
+makefile that calls `purs` and `psc-package`:
+
+    make -C app
+    stat app/output/app.js
+
+The server will serve `app.js` and other static files alongside the API.
+
+The server is written in [Rust][rust] and builds with Cargo:
 
     cargo build --release
     mkdir /tmp/cover-thumbs
     target/release/mindec cache ~/music /tmp/cover-thumbs
-    target/release/mindec serve ~/music /tmp/cover-thumbs
+    target/release/mindec serve ~/music /tmp/cover-thumbs $ALSA_CARD_NAME
 
-The webapp is written in [Purescript][purescript]:
+## Alternatives
 
-    cd app
-    make
-    stat output/app.js
-
-The server will serve `app.js` and other static files alongside the API.
-
-## Querying
-
-List all of your albums, by original release date or by album artist:
-
-    curl localhost:8233/albums | jq 'sort_by(.date)'
-    curl localhost:8233/albums | jq 'sort_by(.sort_artist)'
-
-List all album artists, ordered by sort name:
-
-    curl localhost:8233/albums |
-      jq 'map({artist, sort_artist})' |
-      jq 'unique | sort_by(.sort_artist) | map(.artist)'
+ * [MPD with a web client](https://musicpd.org/clients/#web-clients)
+ * [Mopidy with Iris](https://mopidy.com/ext/iris/)
 
 ## License
 
