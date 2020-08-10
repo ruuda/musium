@@ -246,11 +246,6 @@ impl MetaServer {
         Box::new(futures::future::ok(response))
     }
 
-    fn handle_artist(&self, _request: &Request, _id: &str) -> BoxFuture {
-        let response = Response::new().with_body("Artist");
-        Box::new(futures::future::ok(response))
-    }
-
     fn handle_enqueue(&self, _request: &Request, id: &str) -> BoxFuture {
         let track_id = match TrackId::parse(id) {
             Some(tid) => tid,
@@ -352,7 +347,6 @@ impl Service for MetaServer {
             (&Get, Some("track"),  Some(t)) => self.handle_track(&request, t),
             (&Get, Some("album"),  Some(a)) => self.handle_album(&request, a),
             (&Get, Some("albums"), None)    => self.handle_albums(&request),
-            (&Get, Some("artist"), Some(a)) => self.handle_artist(&request, a),
             (&Get, Some("search"), None)    => self.handle_search(&request),
             (&Put, Some("queue"),  Some(t)) => self.handle_enqueue(&request, t),
             // Web endpoints.
