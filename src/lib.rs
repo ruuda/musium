@@ -1457,15 +1457,22 @@ impl MemoryMetaIndex {
         // threads are done.
         mem::drop(tx_progress);
 
+        let counter = std::sync::atomic::AtomicUsize::new(0);
+
         crossbeam::scope(|scope| {
             let (tx_files, rx_files) = crossbeam_channel::bounded(256);
 
-            let n_per_chunk = paths.len() / num_threads;
-            for paths_chunk in paths.chunks(n_per_chunk) {
+            for _ in 0..num_threads {
                 let mut tx = tx_files.clone();
+                let counter = &counter;
                 scope.spawn(move || {
-                    for fname in paths_chunk.iter() {
-                        let f = fs::File::open(&fname).unwrap();
+                    loop {
+                        let i = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        if i >= paths.len() {
+                            break;
+                        }
+                        let fname = &paths[i];
+                        let f = fs::File::open(fname).unwrap();
                         tx.send((fname.as_ref(), f)).unwrap();
                     }
                 });
