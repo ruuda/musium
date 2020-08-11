@@ -188,3 +188,15 @@ Use “frontier” read pattern, commit `64371ff0aa834add77185531bae7160cfd6134a
 | Cold       |  15931 |       147.144940804 |         4.670934000 |      10.321421000 |
 | Warm       |  15931 |         1.134759625 |         2.831797000 |       4.271261000 |
 | Warm       |  15931 |         1.204304762 |         3.183732000 |       4.562911000 |
+
+After changing the IO queue size (and also tuning internal queue a bit), this
+could be brought down to 93 seconds, which suggests the win is really more in IO
+patterns, and for the warm case, simpler is probably better.
+
+
+    $ cat /sys/block/sd{b,c,d}/queue/nr_requests
+    4
+    4
+    4
+    $ echo 2048 | sudo tee /sys/block/sd{b,c,d}/queue/nr_requests
+    2048

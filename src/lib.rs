@@ -11,7 +11,6 @@
 extern crate alsa;
 extern crate claxon;
 extern crate crossbeam;
-extern crate crossbeam_channel;
 extern crate libc;
 extern crate nix;
 extern crate serde_json;
@@ -28,13 +27,12 @@ pub mod player;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::collections::btree_map;
 use std::fmt;
-use std::fs;
 use std::io;
 use std::io::Write;
 use std::mem;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{SyncSender, sync_channel};
 use std::u32;
 use std::u64;
@@ -1410,19 +1408,20 @@ impl MemoryMetaIndex {
         }
     }
 
-    fn process(files: &crossbeam_channel::Receiver<(&Path, fs::File)>, builder: &mut BuildMetaIndex) {
+    fn process(paths: &[PathBuf], counter: &AtomicUsize, builder: &mut BuildMetaIndex) {
         let mut progress_unreported = 0;
         loop {
-            let (path, file) = match files.recv() {
-                Ok(path_file) => path_file,
-                Err(_) => break,
-            };
+            let i = counter.fetch_add(1, Ordering::SeqCst);
+            if i >= paths.len() {
+                break;
+            }
+            let path = &paths[i];
             let opts = claxon::FlacReaderOptions {
                 metadata_only: true,
                 read_picture: claxon::ReadPicture::Skip,
                 read_vorbis_comment: true,
             };
-            let reader = claxon::FlacReader::new_ext(file, opts).unwrap();
+            let reader = claxon::FlacReader::open_ext(path, opts).unwrap();
             builder.insert(path.to_str().expect("TODO"), &reader.streaminfo(), &mut reader.tags());
             progress_unreported += 1;
 
@@ -1460,30 +1459,9 @@ impl MemoryMetaIndex {
         let counter = std::sync::atomic::AtomicUsize::new(0);
 
         crossbeam::scope(|scope| {
-            let (tx_files, rx_files) = crossbeam_channel::bounded(256);
-
-            for _ in 0..num_threads {
-                let mut tx = tx_files.clone();
-                let counter = &counter;
-                scope.spawn(move || {
-                    loop {
-                        let i = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                        if i >= paths.len() {
-                            break;
-                        }
-                        let fname = &paths[i];
-                        let f = fs::File::open(fname).unwrap();
-                        tx.send((fname.as_ref(), f)).unwrap();
-                    }
-                });
-            }
-            // Drop the original sender, to ensure the channel is closed when
-            // all threads are done.
-            mem::drop(tx_files);
-
             for builder in builders.iter_mut() {
-                let rx = rx_files.clone();
-                scope.spawn(move || MemoryMetaIndex::process(&rx, builder));
+                let counter = &counter;
+                scope.spawn(move || MemoryMetaIndex::process(paths, counter, builder));
             }
 
             // Print issues live as indexing happens.
