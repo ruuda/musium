@@ -1447,7 +1447,7 @@ impl MemoryMetaIndex {
     where W: Write {
         let (tx_progress, rx_progress) = sync_channel(8);
 
-        let num_threads = 24;
+        let num_threads = 256;
         let mut builders: Vec<_> = (0..num_threads)
             .map(|_| BuildMetaIndex::new(tx_progress.clone()))
             .collect();
