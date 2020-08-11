@@ -1443,11 +1443,7 @@ impl MemoryMetaIndex {
         builder.progress = None;
     }
 
-    /// Index the given files, and store the index in the target directory.
-    ///
-    /// Although this streams most metadata to disk, a few parts of the index
-    /// have to be kept in memory for efficient sorting, so the paths iterator
-    /// should not yield *too* many elements.
+    /// Index the given files.
     ///
     /// Reports progress to `out`, which can be `std::io::stdout().lock()`.
     pub fn from_paths<I, W>(paths: I, mut out: W) -> Result<MemoryMetaIndex>
