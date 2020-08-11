@@ -1445,10 +1445,10 @@ impl MemoryMetaIndex {
     /// Reports progress to `out`, which can be `std::io::stdout().lock()`.
     pub fn from_paths<W>(paths: &[PathBuf], mut out: W) -> Result<MemoryMetaIndex>
     where W: Write {
-        let (tx_progress, rx_progress) = sync_channel(8);
+        let (tx_progress, rx_progress) = sync_channel(64);
 
-        let num_threads = 256;
-        let mut builders: Vec<_> = (0..num_threads)
+        let max_threads = 64;
+        let mut builders: Vec<_> = (0..max_threads)
             .map(|_| BuildMetaIndex::new(tx_progress.clone()))
             .collect();
 
@@ -1459,9 +1459,41 @@ impl MemoryMetaIndex {
         let counter = std::sync::atomic::AtomicUsize::new(0);
 
         crossbeam::scope(|scope| {
+            // Begin spawning new indexing threads. These can either be IO
+            // bound, when reading from a slow disk, or CPU bound, when all IO
+            // is cached. If we are IO bound, then it makes sense to have many
+            // threads, to produce many outstanding IO requests, to the disk
+            // scheduler can do a better job and minimize seeks. But if we are
+            // CPU cound, then at some point adding more threads only adds
+            // overhead. Therefore, spawn threads adaptively.
+            let min_threads = 4;
+            let mut strikes = 0;
             for builder in builders.iter_mut() {
-                let counter = &counter;
-                scope.spawn(move || MemoryMetaIndex::process(paths, counter, builder));
+
+                if strikes < min_threads {
+                    let mut before = counter.load(Ordering::SeqCst);
+
+                    let counter_ref = &counter;
+                    scope.spawn(move || MemoryMetaIndex::process(paths, counter_ref, builder));
+
+                    // Perform 10 yields, and count how many tracks the current
+                    // threads have indexes in that time. If they could index 5
+                    // tracks in 10 yields, they are pretty much running at top
+                    // speed, so there is no point in starting more threads. We
+                    // count that as a strike.
+                    for _ in 0..10 {
+                        std::thread::yield_now();
+                        let after = counter.load(Ordering::SeqCst);
+                        if after >= before + 5 || after == paths.len() {
+                            strikes += 1;
+                            before = after;
+                        }
+                    }
+                } else {
+                    // Close the progress channel, for `process` is not going to
+                    // do it, and if we don't close it, we hang at the end.
+                    builder.progress = None;
+                }
             }
 
             // Print issues live as indexing happens.
