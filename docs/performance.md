@@ -159,6 +159,9 @@ Command:
     echo 3 | sudo tee /proc/sys/vm/drop_caches
     perf stat target/release/mindec cache /pool/music /pool/volatile/covers dummy
 
+Measurements were performed with disks spinning. If the disks needed to spin up
+first, I restarted the measurement as soon as the disk was spinning.
+
 Baseline, commit `bcb01aac03b72c6250823d44d2b4dd71887e387c`:
 
 | Disk Cache | Tracks | Wall time (seconds) | User time (seconds) | Sys time (seconds |
@@ -169,3 +172,8 @@ Baseline, commit `bcb01aac03b72c6250823d44d2b4dd71887e387c`:
 | Warm       |  15931 |         0.346267741 |         0.987189000 |       0.427480000 |
 | Warm       |  15931 |         0.369951824 |         0.886352000 |       0.523628000 |
 | Warm       |  15931 |         0.372806305 |         0.929290000 |       0.480558000 |
+
+| Disk Cache | Tracks | Wall time (seconds) | User time (seconds) | Sys time (seconds |
+| ---------- | ------ | ------------------- | ------------------- | ----------------- |
+| Cold       |  15931 |       200.334320084 |         4.513103000 |      10.766578000 |
+| Warm       |  15931 |         0.835945466 |         2.131593000 |       2.420703000 |
