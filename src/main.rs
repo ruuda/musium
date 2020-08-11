@@ -403,7 +403,7 @@ fn make_index(dir: &str) -> MemoryMetaIndex {
         }
         writeln!(&mut lock, "\r{} files discovered", k).unwrap();
 
-        index = mindec::MemoryMetaIndex::from_paths(paths.iter(), &mut lock);
+        index = mindec::MemoryMetaIndex::from_paths(&paths[..], &mut lock);
     };
 
     let index = index.expect("Failed to build index.");

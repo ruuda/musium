@@ -11,6 +11,7 @@
 extern crate alsa;
 extern crate claxon;
 extern crate crossbeam;
+extern crate crossbeam_channel;
 extern crate libc;
 extern crate nix;
 extern crate serde_json;
@@ -27,10 +28,11 @@ pub mod player;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::collections::btree_map;
 use std::fmt;
+use std::fs;
 use std::io;
 use std::io::Write;
 use std::mem;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Mutex;
 use std::sync::mpsc::{SyncSender, sync_channel};
@@ -1408,24 +1410,20 @@ impl MemoryMetaIndex {
         }
     }
 
-    fn process<I>(paths: &Mutex<I>, builder: &mut BuildMetaIndex)
-    where
-        I: Iterator, <I as Iterator>::Item: AsRef<Path>
-    {
+    fn process(files: &crossbeam_channel::Receiver<(&Path, fs::File)>, builder: &mut BuildMetaIndex) {
         let mut progress_unreported = 0;
         loop {
-            let opt_path = paths.lock().unwrap().next();
-            let path = match opt_path {
-                Some(p) => p,
-                None => break,
+            let (path, file) = match files.recv() {
+                Ok(path_file) => path_file,
+                Err(_) => break,
             };
             let opts = claxon::FlacReaderOptions {
                 metadata_only: true,
                 read_picture: claxon::ReadPicture::Skip,
                 read_vorbis_comment: true,
             };
-            let reader = claxon::FlacReader::open_ext(path.as_ref(), opts).unwrap();
-            builder.insert(path.as_ref().to_str().expect("TODO"), &reader.streaminfo(), &mut reader.tags());
+            let reader = claxon::FlacReader::new_ext(file, opts).unwrap();
+            builder.insert(path.to_str().expect("TODO"), &reader.streaminfo(), &mut reader.tags());
             progress_unreported += 1;
 
             // Don't report every track individually, to avoid synchronisation
@@ -1446,12 +1444,8 @@ impl MemoryMetaIndex {
     /// Index the given files.
     ///
     /// Reports progress to `out`, which can be `std::io::stdout().lock()`.
-    pub fn from_paths<I, W>(paths: I, mut out: W) -> Result<MemoryMetaIndex>
-    where I: Iterator + Send,
-          W: Write,
-          <I as Iterator>::Item: AsRef<Path> {
-        let paths_iterator = paths.fuse();
-        let mutex = Mutex::new(paths_iterator);
+    pub fn from_paths<W>(paths: &[PathBuf], mut out: W) -> Result<MemoryMetaIndex>
+    where W: Write {
         let (tx_progress, rx_progress) = sync_channel(8);
 
         let num_threads = 24;
@@ -1464,9 +1458,25 @@ impl MemoryMetaIndex {
         mem::drop(tx_progress);
 
         crossbeam::scope(|scope| {
+            let (tx_files, rx_files) = crossbeam_channel::bounded(256);
+
+            let n_per_chunk = paths.len() / num_threads;
+            for paths_chunk in paths.chunks(n_per_chunk) {
+                let mut tx = tx_files.clone();
+                scope.spawn(move || {
+                    for fname in paths_chunk.iter() {
+                        let f = fs::File::open(&fname).unwrap();
+                        tx.send((fname.as_ref(), f)).unwrap();
+                    }
+                });
+            }
+            // Drop the original sender, to ensure the channel is closed when
+            // all threads are done.
+            mem::drop(tx_files);
+
             for builder in builders.iter_mut() {
-                let mtx = &mutex;
-                scope.spawn(move || MemoryMetaIndex::process(mtx, builder));
+                let rx = rx_files.clone();
+                scope.spawn(move || MemoryMetaIndex::process(&rx, builder));
             }
 
             // Print issues live as indexing happens.

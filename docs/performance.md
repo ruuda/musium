@@ -159,7 +159,7 @@ Command:
     echo 3 | sudo tee /proc/sys/vm/drop_caches
     perf stat target/release/mindec cache /pool/music /pool/volatile/covers dummy
 
-Before using `fadvise`:
+Baseline, commit `bcb01aac03b72c6250823d44d2b4dd71887e387c`:
 
 | Disk Cache | Tracks | Wall time (seconds) | User time (seconds) | Sys time (seconds |
 | ---------- | ------ | ------------------- | ------------------- | ----------------- |
