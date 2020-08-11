@@ -151,3 +151,21 @@ and reallocations for storing the pathbuf pointers in a vec are totally worth
 it. It might be even better then to alternate beween scanning paths and
 processing them, to reduce peak memory usage, but let’s not worry about that at
 this point.
+
+## Fadvise
+
+Command:
+
+    echo 3 | sudo tee /proc/sys/vm/drop_caches
+    perf stat target/release/mindec cache /pool/music /pool/volatile/covers dummy
+
+Before using `fadvise`:
+
+| Disk Cache | Tracks | Wall time (seconds) | User time (seconds) | Sys time (seconds |
+| ---------- | ------ | ------------------- | ------------------- | ----------------- |
+| Cold       |  15931 |       142.662233261 |         3.283129000 |       8.579975000 |
+| Cold       |  15931 |       147.348811539 |         3.236058000 |       8.641414000 |
+| Cold       |  15931 |       145.916103563 |         3.376106000 |       8.547039000 |
+| Warm       |  15931 |         0.346267741 |         0.987189000 |       0.427480000 |
+| Warm       |  15931 |         0.369951824 |         0.886352000 |       0.523628000 |
+| Warm       |  15931 |         0.372806305 |         0.929290000 |       0.480558000 |
