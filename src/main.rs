@@ -13,15 +13,15 @@ extern crate url;
 extern crate walkdir;
 
 use std::env;
-use std::time::{Duration, SystemTime};
 use std::ffi::OsStr;
 use std::fs;
-use std::io;
 use std::io::Write;
+use std::io;
 use std::path::PathBuf;
 use std::process;
-use std::rc::Rc;
 use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, SystemTime};
 
 use tiny_http::{Header, Request, Response, ResponseBox, Server};
 use tiny_http::Method::{Get, Put};
@@ -310,6 +310,43 @@ impl MetaServer {
             Ok(()) => {},
             Err(err) => println!("Error while responding to request: {:?}", err),
         }
+    }
+}
+
+fn serve(bind: &str, service: Arc<MetaServer>) {
+    let server = Server::http(bind).expect("TODO: Failed to start server.");
+    let server = Arc::new(server);
+
+    // Browsers do not make more than 8 requests in parallel, so having more
+    // handler threads is not useful; I expect only a single user to be
+    // browsing at a time.
+    let n_threads = 8;
+    let mut threads = Vec::with_capacity(n_threads);
+
+    for i in 0..n_threads {
+        let server_i = server.clone();
+        let service_i = service.clone();
+        let name = format!("http_server_{}", i);
+        let builder = thread::Builder::new().name(name);
+        let join_handle = builder.spawn(move || {
+            loop {
+                let request = match server_i.recv() {
+                    Ok(rq) => rq,
+                    Err(e) => {
+                        println!("Error: {:?}", e);
+                        break;
+                    }
+                };
+                service_i.handle_request(request);
+            }
+        }).unwrap();
+        threads.push(join_handle);
+    }
+
+    // Block until all threads have stopped, which only happens in case of an
+    // error on all of them.
+    for thread in threads.drain(..) {
+        thread.join().unwrap();
     }
 }
 
@@ -615,19 +652,8 @@ fn main() {
             println!("Indexing complete, starting server on port 8233.");
 
             let player = mindec::player::Player::new(arc_index.clone(), card_name);
-            let service = Rc::new(MetaServer::new(arc_index.clone(), &cache_dir, player));
-            let server = Server::http("0.0.0.0:8233").expect("TODO: Failed to start server.");
-            // TODO: Add multi-threaded wrapper.
-            loop {
-                let request = match server.recv() {
-                    Ok(rq) => rq,
-                    Err(e) => {
-                        println!("Error: {:?}", e);
-                        break;
-                    }
-                };
-                service.handle_request(request);
-            }
+            let service = MetaServer::new(arc_index.clone(), &cache_dir, player);
+            serve("0.0.0.0:8233", Arc::new(service));
         }
         "cache" => {
             let index = make_index(&dir);
