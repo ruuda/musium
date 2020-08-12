@@ -6,10 +6,9 @@
 // A copy of the License has been included in the root of the repository.
 
 extern crate claxon;
-extern crate futures;
-extern crate hyper;
 extern crate mindec;
 extern crate serde_json;
+extern crate tiny_http;
 extern crate url;
 extern crate walkdir;
 
@@ -18,27 +17,32 @@ use std::time::{Duration, SystemTime};
 use std::ffi::OsStr;
 use std::fs;
 use std::io;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::PathBuf;
 use std::process;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use futures::future::Future;
-use hyper::header::{AccessControlAllowOrigin, ContentLength, ContentType, Expires, HttpDate};
-use hyper::mime;
-use hyper::server::{Http, Request, Response, Service};
-use hyper::{Get, Put, StatusCode};
+use tiny_http::{Header, Request, Response, ResponseBox, Server};
+use tiny_http::Method::{Get, Put};
+
 use mindec::{AlbumId, MetaIndex, MemoryMetaIndex, TrackId};
 use mindec::player::Player;
+
+fn header_access_control_allow_origin_any() -> Header {
+    Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap()
+}
+
+fn header_content_type(content_type: &str) -> Header {
+    Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes())
+        .expect("Failed to create content-type header, value is not ascii.")
+}
 
 struct MetaServer {
     index: Arc<MemoryMetaIndex>,
     cache_dir: PathBuf,
     player: Player<MemoryMetaIndex>,
 }
-
-type BoxFuture = Box<dyn Future<Item=Response, Error=hyper::Error>>;
 
 impl MetaServer {
     fn new(
@@ -53,51 +57,35 @@ impl MetaServer {
         }
     }
 
-    fn handle_not_found(&self) -> BoxFuture {
-        let not_found = "Not Found";
-        let response = Response::new()
-            .with_status(StatusCode::NotFound)
-            .with_header(ContentLength(not_found.len() as u64))
-            .with_body(not_found);
-        Box::new(futures::future::ok(response))
+    fn handle_not_found(&self) -> ResponseBox {
+        Response::from_string("Not Found")
+            .with_status_code(404) // "404 Not Found"
+            .boxed()
     }
 
-    fn handle_bad_request(&self, reason: &'static str) -> BoxFuture {
-        let response = Response::new()
-            .with_status(StatusCode::BadRequest)
-            .with_header(ContentLength(reason.len() as u64))
-            .with_body(reason);
-        Box::new(futures::future::ok(response))
+    fn handle_bad_request(&self, reason: &'static str) -> ResponseBox {
+        Response::from_string(reason)
+            .with_status_code(400) // "400 Bad Request"
+            .boxed()
     }
 
-    fn handle_error(&self, reason: &'static str) -> BoxFuture {
-        let response = Response::new()
-            .with_status(StatusCode::InternalServerError)
-            .with_header(ContentLength(reason.len() as u64))
-            .with_body(reason);
-        Box::new(futures::future::ok(response))
+    fn handle_error(&self, reason: &'static str) -> ResponseBox {
+        Response::from_string(reason)
+            .with_status_code(500) // "500 Internal Server Error"
+            .boxed()
     }
 
-    fn handle_static_file(&self, fname: &str, mime_type: &str) -> BoxFuture {
-        let mut data = Vec::new();
-        let mut file = match fs::File::open(fname) {
+    fn handle_static_file(&self, fname: &str, mime_type: &str) -> ResponseBox {
+        let file = match fs::File::open(fname) {
             Ok(f) => f,
             Err(..) => return self.handle_error("Failed to read static file."),
         };
-        match file.read_to_end(&mut data) {
-            Ok(..) => {}
-            Err(..) => return self.handle_error("Failed to read cached thumbnail."),
-        }
-        let mime = mime_type.parse::<mime::Mime>().unwrap();
-        let response = Response::new()
-            .with_header(AccessControlAllowOrigin::Any)
-            .with_header(ContentType(mime))
-            .with_header(ContentLength(data.len() as u64))
-            .with_body(data);
-        Box::new(futures::future::ok(response))
+        Response::from_file(file)
+            .with_header(header_content_type(mime_type))
+            .boxed()
     }
 
-    fn handle_track_cover(&self, _request: &Request, id: &str) -> BoxFuture {
+    fn handle_track_cover(&self, id: &str) -> ResponseBox {
         let album_id = match AlbumId::parse(id) {
             Some(aid) => aid,
             None => return self.handle_bad_request("Invalid album id."),
@@ -118,30 +106,20 @@ impl MetaServer {
         };
 
         if let Some(cover) = reader.into_pictures().pop() {
-            let mime = match cover.mime_type.parse::<mime::Mime>() {
-                Ok(m) => m,
-                Err(..) => {
-                    // TODO: Add a proper logging mechanism.
-                    println!("Warning invalid mime type: '{}' in track {} ({}).", cover.mime_type, id, fname);
-                    return self.handle_error("Invalid mime type.")
-                }
-            };
+            let content_type = header_content_type(&cover.mime_type);
             let data = cover.into_vec();
-            let expires = SystemTime::now() + Duration::from_secs(3600 * 24 * 30);
-            let response = Response::new()
-                .with_header(AccessControlAllowOrigin::Any)
-                .with_header(Expires(HttpDate::from(expires)))
-                .with_header(ContentType(mime))
-                .with_header(ContentLength(data.len() as u64))
-                .with_body(data);
-            Box::new(futures::future::ok(response))
+            // let expires = SystemTime::now() + Duration::from_secs(3600 * 24 * 30);
+            Response::from_data(data)
+                .with_header(content_type)
+                // TODO: Add back expires header.
+                .boxed()
         } else {
             // The file has no embedded front cover.
             self.handle_not_found()
         }
     }
 
-    fn handle_thumb(&self, _request: &Request, id: &str) -> BoxFuture {
+    fn handle_thumb(&self, id: &str) -> ResponseBox {
         // TODO: DRY this track id parsing and loadong part.
         let album_id = match AlbumId::parse(id) {
             Some(aid) => aid,
@@ -150,29 +128,20 @@ impl MetaServer {
 
         let mut fname: PathBuf = PathBuf::from(&self.cache_dir);
         fname.push(format!("{}.jpg", album_id));
-        let mut file = match fs::File::open(fname) {
+        let file = match fs::File::open(fname) {
             Ok(f) => f,
             // TODO: This is not entirely accurate. Also, try to generate the
             // thumbnail if it does not exist.
             Err(..) => return self.handle_not_found(),
         };
-        let mut data = Vec::new();
-        match file.read_to_end(&mut data) {
-            Ok(..) => {}
-            Err(..) => return self.handle_error("Failed to read cached thumbnail."),
-        }
-        let expires = SystemTime::now() + Duration::from_secs(3600 * 24 * 30);
-        let mime = "image/jpeg".parse::<mime::Mime>().unwrap();
-        let response = Response::new()
-            .with_header(AccessControlAllowOrigin::Any)
-            .with_header(Expires(HttpDate::from(expires)))
-            .with_header(ContentType(mime))
-            .with_header(ContentLength(data.len() as u64))
-            .with_body(data);
-        Box::new(futures::future::ok(response))
+        let _expires = SystemTime::now() + Duration::from_secs(3600 * 24 * 30);
+        Response::from_file(file)
+            .with_header(header_content_type("image/jpeg"))
+            // TODO: Add back expires header.
+            .boxed()
     }
 
-    fn handle_track(&self, _request: &Request, path: &str) -> BoxFuture {
+    fn handle_track(&self, path: &str) -> ResponseBox {
         // Track urls are of the form `/track/f7c153f2b16dc101.flac`.
         if !path.ends_with(".flac") {
             return self.handle_bad_request("Expected a path ending in .flac.")
@@ -191,30 +160,20 @@ impl MetaServer {
 
         let fname = self.index.get_filename(track.filename);
 
-        // TODO: Rather than reading the file into memory in userspace, use
-        // sendfile. Hyper seems to be over-engineered for my use case, just
-        // writing to a TCP socket would be simpler.
-        let mut file = match fs::File::open(fname) {
+        // TODO: Rather than reading the file into memory in userspace,
+        // use sendfile.
+        // TODO: Handle requests with Range header.
+        let file = match fs::File::open(fname) {
             Ok(f) => f,
             Err(_) => return self.handle_error("Failed to open file."),
         };
-        let len_hint = file.metadata().map(|m| m.len()).unwrap_or(4096);
-        let mut body = Vec::with_capacity(len_hint as usize);
-        if let Err(_) = file.read_to_end(&mut body) {
-            return self.handle_error("Failed to read file.")
-        }
 
-        // TODO: Handle requests with Range header.
-        let audio_flac = "audio/flac".parse::<mime::Mime>().unwrap();
-        let response = Response::new()
-            .with_header(AccessControlAllowOrigin::Any)
-            .with_header(ContentType(audio_flac))
-            .with_header(ContentLength(body.len() as u64))
-            .with_body(body);
-        Box::new(futures::future::ok(response))
+        Response::from_file(file)
+            .with_header(header_content_type("audio/flac"))
+            .boxed()
     }
 
-    fn handle_album(&self, _request: &Request, id: &str) -> BoxFuture {
+    fn handle_album(&self, id: &str) -> ResponseBox {
         let album_id = match AlbumId::parse(id) {
             Some(aid) => aid,
             None => return self.handle_bad_request("Invalid album id."),
@@ -228,25 +187,23 @@ impl MetaServer {
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
         self.index.write_album_json(&mut w, album_id, album).unwrap();
-        let response = Response::new()
-            .with_header(ContentType::json())
-            .with_header(AccessControlAllowOrigin::Any)
-            .with_body(w.into_inner());
-        Box::new(futures::future::ok(response))
+
+        Response::from_data(w.into_inner())
+            .with_header(header_content_type("application/json"))
+            .boxed()
     }
 
-    fn handle_albums(&self, _request: &Request) -> BoxFuture {
+    fn handle_albums(&self) -> ResponseBox {
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
         self.index.write_albums_json(&mut w).unwrap();
-        let response = Response::new()
-            .with_header(ContentType::json())
-            .with_header(AccessControlAllowOrigin::Any)
-            .with_body(w.into_inner());
-        Box::new(futures::future::ok(response))
+
+        Response::from_data(w.into_inner())
+            .with_header(header_content_type("application/json"))
+            .boxed()
     }
 
-    fn handle_enqueue(&self, _request: &Request, id: &str) -> BoxFuture {
+    fn handle_enqueue(&self, id: &str) -> ResponseBox {
         let track_id = match TrackId::parse(id) {
             Some(tid) => tid,
             None => return self.handle_bad_request("Invalid track id."),
@@ -260,14 +217,13 @@ impl MetaServer {
 
         self.player.enqueue(track_id);
 
-        let response = Response::new()
-            .with_status(StatusCode::Accepted);
-        Box::new(futures::future::ok(response))
+        Response::empty(201) // "201 Created"
+            .boxed()
     }
 
-    fn handle_search(&self, request: &Request) -> BoxFuture {
-        let raw_query = match request.query() {
-            Some(q) => q.as_ref(),
+    fn handle_search(&self, request: &Request) -> ResponseBox {
+        let raw_query = match request.url().strip_prefix("/search?") {
+            Some(q) => q,
             None => "",
         };
         let mut opt_query = None;
@@ -313,26 +269,17 @@ impl MetaServer {
             &tracks[..n_tracks],
         ).unwrap();
 
-        let response = Response::new()
-            .with_header(AccessControlAllowOrigin::Any)
-            .with_header(ContentType::json())
-            .with_body(w.into_inner());
-        Box::new(futures::future::ok(response))
+        Response::from_data(w.into_inner())
+            .with_status_code(200)
+            .with_header(header_content_type("application/json"))
+            .boxed()
     }
-}
 
-impl Service for MetaServer {
-    type Request = Request;
-    type Response = Response;
-    type Error = hyper::Error;
-    type Future = BoxFuture;
-
-    fn call(&self, request: Request) -> Self::Future {
+    fn handle_request(&self, request: Request) {
         println!("Request: {:?}", request);
 
         let mut parts = request
-            .uri()
-            .path()
+            .url()
             .splitn(3, '/')
             .filter(|x| x.len() > 0);
 
@@ -340,15 +287,15 @@ impl Service for MetaServer {
         let p1 = parts.next();
 
         // A very basic router. See also docs/api.md for an overview.
-        match (request.method(), p0, p1) {
+        let mut response = match (request.method(), p0, p1) {
             // API endpoints.
-            (&Get, Some("cover"),  Some(t)) => self.handle_track_cover(&request, t),
-            (&Get, Some("thumb"),  Some(t)) => self.handle_thumb(&request, t),
-            (&Get, Some("track"),  Some(t)) => self.handle_track(&request, t),
-            (&Get, Some("album"),  Some(a)) => self.handle_album(&request, a),
-            (&Get, Some("albums"), None)    => self.handle_albums(&request),
+            (&Get, Some("cover"),  Some(t)) => self.handle_track_cover(t),
+            (&Get, Some("thumb"),  Some(t)) => self.handle_thumb(t),
+            (&Get, Some("track"),  Some(t)) => self.handle_track(t),
+            (&Get, Some("album"),  Some(a)) => self.handle_album(a),
+            (&Get, Some("albums"), None)    => self.handle_albums(),
             (&Get, Some("search"), None)    => self.handle_search(&request),
-            (&Put, Some("queue"),  Some(t)) => self.handle_enqueue(&request, t),
+            (&Put, Some("queue"),  Some(t)) => self.handle_enqueue(t),
             // Web endpoints.
             (&Get, None,              None) => self.handle_static_file("app/index.html", "text/html"),
             (&Get, Some("style.css"), None) => self.handle_static_file("app/style.css", "text/css"),
@@ -356,6 +303,12 @@ impl Service for MetaServer {
             // Fallback.
             (&Get, _, _) => self.handle_not_found(),
             _ => self.handle_bad_request("Expected a GET request."),
+        };
+
+        response.add_header(header_access_control_allow_origin_any());
+        match request.respond(response) {
+            Ok(()) => {},
+            Err(err) => println!("Error while responding to request: {:?}", err),
         }
     }
 }
@@ -663,10 +616,18 @@ fn main() {
 
             let player = mindec::player::Player::new(arc_index.clone(), card_name);
             let service = Rc::new(MetaServer::new(arc_index.clone(), &cache_dir, player));
-            let addr = ([0, 0, 0, 0], 8233).into();
-            let server = Http::new().bind(&addr, move || Ok(service.clone())).unwrap();
-
-            server.run().unwrap();
+            let server = Server::http("0.0.0.0:8233").expect("TODO: Failed to start server.");
+            // TODO: Add multi-threaded wrapper.
+            loop {
+                let request = match server.recv() {
+                    Ok(rq) => rq,
+                    Err(e) => {
+                        println!("Error: {:?}", e);
+                        break;
+                    }
+                };
+                service.handle_request(request);
+            }
         }
         "cache" => {
             let index = make_index(&dir);
