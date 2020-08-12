@@ -2,6 +2,7 @@
 name = "mindec"
 version = "0.0.0"
 authors = ["Ruud van Asseldonk <dev@veniogames.com>"]
+edition = "2018"
 
 [dependencies]
 alsa                  = "0.4.2"
