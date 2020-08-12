@@ -39,7 +39,7 @@ use std::u64;
 
 use unicode_normalization::UnicodeNormalization;
 
-use word_index::{MemoryWordIndex, WordMeta};
+use crate::word_index::{MemoryWordIndex, WordMeta};
 
 // Stats of my personal music library at this point:
 //
@@ -220,7 +220,7 @@ pub trait MetaIndex {
     fn get_artists(&self) -> &[(ArtistId, Artist)];
 
     /// Look up an artist by id.
-    fn get_artist(&self, ArtistId) -> Option<&Artist>;
+    fn get_artist(&self, _: ArtistId) -> Option<&Artist>;
 
     /// Return all albums by the given artist.
     ///
@@ -228,7 +228,7 @@ pub trait MetaIndex {
     ///
     /// Includes the artist too, because the associations are stored as a flat
     /// array of (artist id, album id) pairs.
-    fn get_albums_by_artist(&self, ArtistId) -> &[(ArtistId, AlbumId)];
+    fn get_albums_by_artist(&self, _: ArtistId) -> &[(ArtistId, AlbumId)];
 
     /// Search for artists where the word occurs in the name.
     ///

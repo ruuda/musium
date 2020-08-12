@@ -38,7 +38,7 @@ struct MetaServer {
     player: Player<MemoryMetaIndex>,
 }
 
-type BoxFuture = Box<Future<Item=Response, Error=hyper::Error>>;
+type BoxFuture = Box<dyn Future<Item=Response, Error=hyper::Error>>;
 
 impl MetaServer {
     fn new(
@@ -436,7 +436,7 @@ impl GenThumb {
 
     /// Start an extract-and-resize operation.
     pub fn new(cache_dir: &str, album_id: AlbumId, filename: &str) -> claxon::Result<Option<GenThumb>> {
-        use process::{Command, Stdio};
+        use crate::process::{Command, Stdio};
 
         let mut out_fname_jpg: PathBuf = PathBuf::from(cache_dir);
         out_fname_jpg.push(format!("{}.jpg", album_id));
@@ -524,7 +524,7 @@ impl GenThumb {
 
     /// Wait for one step of the process, start and return the next one if any.
     pub fn poll(self) -> Option<GenThumb> {
-        use process::Command;
+        use crate::process::Command;
         match self {
             GenThumb::Resizing { out_fname_png, out_fname_jpg, mut child } => {
                 // TODO: Use a custom error type, remove all `expect()`s.

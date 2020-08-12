@@ -9,7 +9,7 @@ use std::cmp;
 use std::collections::BinaryHeap;
 use std::iter;
 
-use word_index::{Values, WordIndex, WordMeta};
+use crate::word_index::{Values, WordIndex, WordMeta};
 
 /// Iterator over a value range of a word index.
 struct IndexIter<'a, I: 'a + WordIndex> {

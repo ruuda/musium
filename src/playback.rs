@@ -17,7 +17,7 @@ use alsa;
 use alsa::PollDescriptors;
 use nix::errno::Errno;
 
-use player::{Format, PlayerState};
+use crate::player::{Format, PlayerState};
 
 type Result<T> = result::Result<T, alsa::Error>;
 

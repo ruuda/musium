@@ -16,8 +16,8 @@ use std::thread;
 use claxon;
 use claxon::metadata::StreamInfo;
 
-use ::playback;
-use ::{MetaIndex, TrackId};
+use crate::playback;
+use crate::{MetaIndex, TrackId};
 
 type FlacReader = claxon::FlacReader<fs::File>;
 
@@ -376,9 +376,9 @@ impl PlayerState {
     /// Consume n samples from the peeked block.
     pub fn consume(&mut self, n: usize) {
         let track_done = {
-            let mut queued_track = &mut self.queue[0];
+            let queued_track = &mut self.queue[0];
             let block_done = {
-                let mut block = &mut queued_track.blocks[0];
+                let block = &mut queued_track.blocks[0];
                 block.consume(n);
                 block.len() == 0
             };
