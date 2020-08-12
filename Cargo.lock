@@ -120,8 +120,8 @@ dependencies = [
 
 [[package]]
 name = "claxon"
-version = "0.4.0"
-source = "git+https://github.com/ruuda/claxon?rev=f3cd5ddaf7ffd56edfa4a218a924a776d4792bdd#f3cd5ddaf7ffd56edfa4a218a924a776d4792bdd"
+version = "0.4.3"
+source = "git+https://github.com/ruuda/claxon?rev=1f868774a250f5937ae70c868d77d1b1479f1831#1f868774a250f5937ae70c868d77d1b1479f1831"
 
 [[package]]
 name = "cloudabi"

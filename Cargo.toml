@@ -17,7 +17,7 @@ walkdir               = "2.3"
 
 [dependencies.claxon]
 git = "https://github.com/ruuda/claxon"
-rev = "f3cd5ddaf7ffd56edfa4a218a924a776d4792bdd"
+rev = "1f868774a250f5937ae70c868d77d1b1479f1831"
 
 [dev-dependencies]
 criterion = "0.2"
