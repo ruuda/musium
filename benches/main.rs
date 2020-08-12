@@ -34,7 +34,7 @@ fn build_index() -> MemoryMetaIndex {
         .collect();
 
     let sink = std::io::sink();
-    MemoryMetaIndex::from_paths(paths.iter(), sink).expect("Failed to build index.")
+    MemoryMetaIndex::from_paths(&paths[..], sink).expect("Failed to build index.")
 }
 
 fn bench_get_artist(b: &mut Bencher) {
