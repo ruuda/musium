@@ -35,6 +35,7 @@ import Event (Event)
 import Event as Event
 import History as History
 import Html as Html
+import LocalStorage as LocalStorage
 import Model (Album (..))
 import Model as Model
 import Navigation (Navigation)
@@ -131,6 +132,7 @@ updateAlbumList state = do
           }
         , index: i
         }
+  LocalStorage.set "albumListIndex" index
   scrollState <- AlbumListView.updateAlbumList
     state.albums
     state.postEvent
