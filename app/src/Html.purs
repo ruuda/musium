@@ -29,6 +29,7 @@ module Html
   , setId
   , setTitle
   , setTransform
+  , setTransition
   , span
   , text
   , ul
@@ -69,6 +70,9 @@ setId id = ReaderT $ \container -> Dom.setId id container
 
 setTransform :: String -> Html Unit
 setTransform transform = ReaderT $ \container -> Dom.setTransform transform container
+
+setTransition :: String -> Html Unit
+setTransition transition = ReaderT $ \container -> Dom.setTransition transition container
 
 setTitle :: String -> Html Unit
 setTitle title = ReaderT $ \self -> Dom.setAttribute "title" title self

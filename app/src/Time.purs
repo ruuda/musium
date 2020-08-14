@@ -12,6 +12,7 @@ module Time
   ( Duration
   , Instant
   , add
+  , addSeconds
   , fromSeconds
   , getCurrentInstant
   , mean

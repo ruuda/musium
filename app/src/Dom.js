@@ -132,6 +132,12 @@ exports.setTransformImpl = function(transform, element) {
   }
 }
 
+exports.setTransitionImpl = function(transition, element) {
+  return function() {
+    element.style.transition = transition;
+  }
+}
+
 exports.setHeightImpl = function(height, element) {
   return function() {
     element.style.height = height;

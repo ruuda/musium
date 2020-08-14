@@ -30,6 +30,7 @@ module Dom
   , setId
   , setImage
   , setTransform
+  , setTransition
   ) where
 
 import Data.Function.Uncurried (Fn2, runFn2, Fn3, runFn3)
@@ -63,6 +64,7 @@ foreign import setImageImpl :: Fn3 String String Element (Effect Unit)
 foreign import setHeightImpl :: Fn2 String Element (Effect Unit)
 foreign import setIdImpl :: Fn2 String Element (Effect Unit)
 foreign import setTransformImpl :: Fn2 String Element (Effect Unit)
+foreign import setTransitionImpl :: Fn2 String Element (Effect Unit)
 
 appendChild :: Element -> Element -> Effect Unit
 appendChild child container = runFn2 appendChildImpl child container
@@ -90,6 +92,9 @@ setId id element = runFn2 setIdImpl id element
 
 setTransform :: String -> Element -> Effect Unit
 setTransform transform element = runFn2 setTransformImpl transform element
+
+setTransition :: String -> Element -> Effect Unit
+setTransition transition element = runFn2 setTransitionImpl transition element
 
 setAttribute :: String -> String -> Element -> Effect Unit
 setAttribute attribute value element = runFn3 setAttributeImpl attribute value element

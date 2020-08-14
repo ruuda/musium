@@ -40,6 +40,7 @@ import Model (Album (..), QueuedTrack (..), TrackId)
 import Model as Model
 import Navigation (Navigation)
 import Navigation as Navigation
+import StatusBar (StatusBarElements)
 import StatusBar as StatusBar
 import Time (Instant)
 import Time as Time
@@ -50,13 +51,14 @@ type Elements =
   { albumListView :: Element
   , albumListRunway :: Element
   , albumView :: Element
-  , statusBar :: Element
+  , statusBar :: StatusBarElements
   }
 
 type AppState =
   { albums :: Array Album
   , queue :: Array QueuedTrack
   , nextQueueFetch :: Fiber Unit
+  , nextProgressUpdate :: Fiber Unit
   , albumListState :: AlbumListState
     -- The index of the album at the top of the viewport.
   , albumListIndex :: Int
@@ -79,9 +81,7 @@ setupElements postEvent = Html.withElement Dom.body $ do
     Html.addClass "inactive"
     ask
 
-  statusBar <- Html.div $ do
-    Html.setId "statusbar"
-    ask
+  statusBar <- StatusBar.new
 
   Html.onScroll $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
   liftEffect $ Dom.onResizeWindow $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
@@ -92,11 +92,12 @@ new :: BusW Event -> Effect AppState
 new bus = do
   let postEvent event = Bus.write event bus
   elements <- setupElements postEvent
-  nextQueueFetch <- Aff.launchSuspendedAff Aff.never
+  never <- Aff.launchSuspendedAff Aff.never
   pure
     { albums: []
     , queue: []
-    , nextQueueFetch: nextQueueFetch
+    , nextQueueFetch: never
+    , nextProgressUpdate: never
     , albumListState: { elements: [], begin: 0, end: 0 }
     , albumListIndex: 0
     , navigation: { location: Navigation.Library }
@@ -155,11 +156,35 @@ updateStatusBar currentTrack state = do
     Nothing | Array.null state.queue -> pure unit
 
     -- When it did change, clear the current status bar, and place the new one.
-    Nothing -> Html.withElement state.elements.statusBar $ do
-      Html.clear
-    Just t  -> Html.withElement state.elements.statusBar $ do
-      Html.clear
-      StatusBar.renderStatusBar t
+    Nothing ->
+      Html.withElement state.elements.statusBar.currentTrack $ Html.addClass "empty"
+
+    Just t -> do
+      Html.withElement state.elements.statusBar.currentTrack $ do
+        Html.removeClass "empty"
+        Html.clear
+        StatusBar.renderCurrentTrack t
+
+-- Update the progress bar, and schedule the next update event, if applicable.
+updateProgressBar :: AppState -> Aff AppState
+updateProgressBar state = do
+  Aff.killFiber (Exception.error "Update cancelled in favor of new one.") state.nextProgressUpdate
+  case Array.head state.queue of
+    Nothing -> do
+      liftEffect $ Html.withElement state.elements.statusBar.progressBar $ Html.addClass "empty"
+      pure state
+
+    Just t -> do
+      delay <- liftEffect $ Html.withElement state.elements.statusBar.progressBar $ do
+        Html.removeClass "empty"
+        StatusBar.updateProgressBar t
+
+      -- Schedule the next update.
+      fiber <- Aff.forkAff $ do
+        Aff.delay $ Time.toNonNegativeMilliseconds delay
+        state.postEvent $ Event.UpdateProgress
+
+      pure $ state { nextProgressUpdate = fiber }
 
 handleEvent :: Event -> AppState -> Aff AppState
 handleEvent event state = case event of
@@ -196,7 +221,9 @@ handleEvent event state = case event of
         Nothing -> t30
         Just (QueuedTrack t) -> min t30 t.refreshAt
 
-    scheduleFetchQueue nextUpdate $ state { queue = queue }
+    updateProgressBar <=< scheduleFetchQueue nextUpdate $ state { queue = queue }
+
+  Event.UpdateProgress -> updateProgressBar state
 
   Event.OpenAlbum (Album album) -> liftEffect $ do
     Html.withElement state.elements.albumView $ do
