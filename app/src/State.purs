@@ -183,18 +183,18 @@ handleEvent event state = case event of
     liftEffect $ updateStatusBar (Array.head queue) state
     -- TODO: Possibly update the queue, if it is in view.
 
-    -- Update the queue again either 30 seconds from now, or just slightly after
-    -- we expect the current buffer to run out, which is usually when the
-    -- current track will end, so at that point it will get dropped from the
-    -- queue. The 30-second interval is not really needed when we are the only
-    -- client, but when multiple clients manipulate the queue, it could change
-    -- without us knowing, so poll every 30 seconds to get back in sync.
+    -- Update the queue again either 30 seconds from now, or at the time when
+    -- we expect the current track will run out, so the point where we expect
+    -- the queue to change. The 30-second interval is not really needed when we
+    -- are the only client, but when multiple clients manipulate the queue, it
+    -- could change without us knowing, so poll every 30 seconds to get back in
+    -- sync.
     now <- liftEffect $ Time.getCurrentInstant
     let
       t30 = Time.add (Time.fromSeconds 30.0) now
       nextUpdate = case Array.head queue of
         Nothing -> t30
-        Just (QueuedTrack t) -> min t30 $ Time.add (Time.fromSeconds 0.1) t.refreshAt
+        Just (QueuedTrack t) -> min t30 t.refreshAt
 
     scheduleFetchQueue nextUpdate $ state { queue = queue }
 
@@ -203,7 +203,7 @@ handleEvent event state = case event of
       Html.removeClass "inactive"
       Html.addClass "active"
       Html.clear
-      AlbumView.renderAlbum (Album album)
+      AlbumView.renderAlbum state.postEvent (Album album)
       Html.scrollIntoView
     Html.withElement state.elements.albumListView $ do
       Html.removeClass "active"
@@ -238,6 +238,14 @@ handleEvent event state = case event of
     -- actually visible.
     Navigation.Library -> liftEffect $ updateAlbumList state
     _ -> pure state
+
+  Event.EnqueueTrack queuedTrack ->
+    -- This is an internal update, after we enqueue a track. It allows updating
+    -- the queue without having to fully fetch it, although it might trigger a
+    -- new fetch.
+    handleEvent
+      (Event.UpdateQueue $ Array.snoc state.queue queuedTrack)
+      state
 
 -- Schedule a new queue update at the given instant. Typically we would schedule
 -- it just after we expect the current track to end.

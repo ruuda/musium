@@ -9,7 +9,7 @@ module Event
   ( Event (..)
   ) where
 
-import Model (Album, QueuedTrack)
+import Model (Album, AlbumId, QueuedTrack, Track)
 
 data Event
   = Initialize (Array Album)
@@ -17,3 +17,7 @@ data Event
   | OpenLibrary
   | OpenAlbum Album
   | ChangeViewport
+    -- This event is generated internally after enqueueing a track, to
+    -- immediately bring the queue in sync without having to refresh it fully.
+    -- It can kick off a full refresh in the usual way.
+  | EnqueueTrack QueuedTrack

@@ -249,7 +249,12 @@ getQueue = do
       , albumId: track.albumId
       , durationSeconds: track.durationSeconds
       , startedAt: Time.add (Time.fromSeconds $ -track.positionSeconds) now
-      , refreshAt: Time.add (Time.fromSeconds track.bufferedSeconds) now
+        -- Add a little delay after we expect the buffer to run out (which
+        -- likely means the track will stop), before we really refresh the
+        -- queue. If there is some small offset in the time, we'd rather fetch
+        -- a bit after the track stops, than being a bit too early and having to
+        -- check a second time right away.
+      , refreshAt: Time.add (Time.fromSeconds $ 0.1 + track.bufferedSeconds) now
       }
 
   case result of

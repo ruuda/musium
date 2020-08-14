@@ -11,17 +11,20 @@ module AlbumView
 
 import Control.Monad.Reader.Class (ask)
 import Data.Foldable (traverse_)
-import Effect.Aff (joinFiber, launchAff, launchAff_)
+import Effect.Aff (Aff, joinFiber, launchAff, launchAff_)
 import Effect.Class (liftEffect)
 import Prelude
 
 import Html (Html)
 import Html as Html
-import Model (Album (..), Track (..))
+import Model (Album (..), QueuedTrack (..), Track (..))
 import Model as Model
+import Event (Event)
+import Event as Event
+import Time as Time
 
-renderAlbum :: Album -> Html Unit
-renderAlbum (Album album) = do
+renderAlbum :: (Event -> Aff Unit) -> Album -> Html Unit
+renderAlbum postEvent (Album album) = do
   -- Begin loading the tracks before we add the images. The current server is
   -- single-threaded, and the album list can be served from memory, but the
   -- cover art needs disk access. When the disks need to spin up, it can easily
@@ -68,10 +71,10 @@ renderAlbum (Album album) = do
     tracks <- joinFiber tracksAsync
     liftEffect
       $ Html.withElement trackList
-      $ traverse_ (renderTrack $ Album album) tracks
+      $ traverse_ (renderTrack postEvent $ Album album) tracks
 
-renderTrack :: Album -> Track -> Html Unit
-renderTrack album (Track track) =
+renderTrack :: (Event -> Aff Unit) -> Album -> Track -> Html Unit
+renderTrack postEvent (Album album) (Track track) =
   Html.li $ do
     Html.addClass "track"
 
@@ -95,8 +98,21 @@ renderTrack album (Track track) =
       launchAff_ $ do
         Model.enqueueTrack $ track.id
         -- TODO: Remove class after track is no longer in queue.
-        -- Also change playing status. Or maybe this is the wrong
-        -- place to update this.
+        now <- liftEffect $ Time.getCurrentInstant
+        postEvent $ Event.EnqueueTrack $ QueuedTrack
+          { id: track.id
+          , title: track.title
+          , artist: track.artist
+          , album: album.title
+          , albumId: album.id
+          , durationSeconds: track.durationSeconds
+          , startedAt: now
+            -- Add a small delay before we refresh. If the queue was empty and
+            -- the enqueue triggered the track, the server should focus on
+            -- playing and establishing a safe buffer first, before we bother it
+            -- with queue status requests.
+          , refreshAt: Time.add (Time.fromSeconds 0.2) now
+          }
         liftEffect $ Html.withElement trackElement $ do
           Html.addClass "queued"
           Html.removeClass "queueing"
