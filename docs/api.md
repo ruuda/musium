@@ -8,4 +8,5 @@ Endpoints:
  * `GET /cover/:album_id`:      Return cover art in original resolution.
  * `GET /thumb/:album_id`:      Return downsampled cover art.
  * `GET /search?q=`:            Return json search results.
+ * `GET /queue`:                Return the current play queue.
  * `PUT /queue/:track_id`:      Enqueue the track with the given id.
