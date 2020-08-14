@@ -15,11 +15,13 @@ module Model
   , SearchAlbum (..)
   , SearchResults (..)
   , SearchTrack (..)
+  , QueuedTrack (..)
   , coverUrl
   , enqueueTrack
   , formatDurationSeconds
   , getAlbums
   , getTracks
+  , getQueue
   , originalReleaseYear
   , search
   , thumbUrl
@@ -179,6 +181,35 @@ search query = do
     Left err -> fatal $ "Search failed: " <> Http.printError err
     Right response -> case Json.decodeJson response.body of
       Left err -> fatal $ "Failed to parse search results: " <> err
+      Right results -> pure results
+
+newtype QueuedTrack = QueuedTrack
+  { id :: TrackId
+  , title :: String
+  , artist :: String
+  , album :: String
+  , albumId :: AlbumId
+  , durationSeconds :: Int
+  }
+
+instance decodeJsonQueuedTrack :: DecodeJson QueuedTrack where
+  decodeJson json = do
+    obj        <- Json.decodeJson json
+    id         <- map TrackId $ Json.getField obj "id"
+    title      <- Json.getField obj "title"
+    artist     <- Json.getField obj "artist"
+    album      <- Json.getField obj "album"
+    albumId    <- map AlbumId $ Json.getField obj "album_id"
+    durationSeconds <- Json.getField obj "duration_seconds"
+    pure $ QueuedTrack { id, title, artist, album, albumId, durationSeconds }
+
+getQueue :: Aff (Array QueuedTrack)
+getQueue = do
+  result <- Http.get Http.ResponseFormat.json "/queue"
+  case result of
+    Left err -> fatal $ "Failed to retrieve queue: " <> Http.printError err
+    Right response -> case Json.decodeJson response.body of
+      Left err -> fatal $ "Failed to parse queue: " <> err
       Right results -> pure results
 
 newtype Track = Track
