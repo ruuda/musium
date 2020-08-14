@@ -37,11 +37,6 @@ main = launchAff_ $ do
     Console.log "Loaded albums"
     initialState.postEvent $ Event.Initialize albums
 
-  _fiberQueue <- forkAff $ do
-    queue <- Model.getQueue
-    Console.log "Loaded queue"
-    initialState.postEvent $ Event.UpdateQueue  queue
-
   liftEffect $ History.pushState Navigation.Library "Mindec" "/"
   liftEffect $ History.onPopState $ launchAff_ <<< case _ of
     -- TODO: Avoid double pushes here.

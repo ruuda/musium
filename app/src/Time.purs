@@ -16,12 +16,14 @@ module Time
   , getCurrentInstant
   , mean
   , subtract
+  , toNonNegativeMilliseconds
   , toSeconds
   ) where
 
 import Prelude
 
 import Data.Function.Uncurried (Fn2, Fn5, runFn2, runFn5)
+import Data.Time.Duration (Milliseconds (..))
 import Effect (Effect)
 
 foreign import data Instant :: Type
@@ -64,6 +66,9 @@ fromSeconds = Duration
 
 toSeconds :: Duration -> Number
 toSeconds (Duration secs) = secs
+
+toNonNegativeMilliseconds :: Duration -> Milliseconds
+toNonNegativeMilliseconds (Duration secs) = Milliseconds $ max 0.0 $ secs * 1000.0
 
 -- Return the instant half-way between t0 and t1.
 mean :: Instant -> Instant -> Instant

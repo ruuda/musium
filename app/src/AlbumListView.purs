@@ -19,7 +19,6 @@ import Data.String.CodeUnits as CodeUnits
 import Data.Traversable (for_, sequence, sequence_)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff)
-import Effect.Class.Console as Console
 import Prelude
 import Test.Assert (assert', assertEqual')
 

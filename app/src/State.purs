@@ -8,8 +8,8 @@
 module State
   ( AppState (..)
   , Elements (..)
-  , new
   , handleEvent
+  , new
   ) where
 
 import Control.Monad.Reader.Class (ask)
@@ -17,10 +17,13 @@ import Data.Array as Array
 import Data.Int as Int
 import Data.Maybe (Maybe (Just, Nothing))
 import Effect (Effect)
-import Effect.Aff (Aff, launchAff_)
+import Effect.Aff as Aff
+import Effect.Aff (Aff, Fiber)
 import Effect.Aff.Bus (BusW)
 import Effect.Aff.Bus as Bus
 import Effect.Class (liftEffect)
+import Effect.Class.Console as Console
+import Effect.Exception as Exception
 import Prelude
 
 import AlbumListView (AlbumListState)
@@ -34,9 +37,12 @@ import History as History
 import Html as Html
 import LocalStorage as LocalStorage
 import Model (Album (..), QueuedTrack (..), TrackId)
+import Model as Model
 import Navigation (Navigation)
 import Navigation as Navigation
 import StatusBar as StatusBar
+import Time (Instant)
+import Time as Time
 
 type EventBus = BusW Event
 
@@ -50,6 +56,7 @@ type Elements =
 type AppState =
   { albums :: Array Album
   , queue :: Array QueuedTrack
+  , nextQueueFetch :: Fiber Unit
   , albumListState :: AlbumListState
     -- The index of the album at the top of the viewport.
   , albumListIndex :: Int
@@ -76,8 +83,8 @@ setupElements postEvent = Html.withElement Dom.body $ do
     Html.setId "statusbar"
     ask
 
-  Html.onScroll $ launchAff_ $ postEvent $ Event.ChangeViewport
-  liftEffect $ Dom.onResizeWindow $ launchAff_ $ postEvent $ Event.ChangeViewport
+  Html.onScroll $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
+  liftEffect $ Dom.onResizeWindow $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
 
   pure { albumListView, albumListRunway, albumView, statusBar }
 
@@ -85,9 +92,11 @@ new :: BusW Event -> Effect AppState
 new bus = do
   let postEvent event = Bus.write event bus
   elements <- setupElements postEvent
+  nextQueueFetch <- Aff.launchSuspendedAff Aff.never
   pure
     { albums: []
     , queue: []
+    , nextQueueFetch: nextQueueFetch
     , albumListState: { elements: [], begin: 0, end: 0 }
     , albumListIndex: 0
     , navigation: { location: Navigation.Library }
@@ -110,7 +119,7 @@ updateAlbumList state = do
   -- this update.
   { target, index } <- case Array.head state.albumListState.elements of
     Nothing -> do
-      launchAff_ $ state.postEvent $ Event.ChangeViewport
+      Aff.launchAff_ $ state.postEvent $ Event.ChangeViewport
       pure $ { target: { begin: 0, end: min 1 (Array.length state.albums) }, index: 0 }
     Just elem -> do
       entryHeight <- Dom.getOffsetHeight elem
@@ -154,19 +163,40 @@ updateStatusBar currentTrack state = do
 
 handleEvent :: Event -> AppState -> Aff AppState
 handleEvent event state = case event of
-  Event.Initialize albums -> liftEffect $ do
-    runway <- Html.withElement state.elements.albumListView $ do
-      Html.clear
-      AlbumListView.renderAlbumListRunway $ Array.length albums
-    updateAlbumList $ state
-      { albums = albums
-      , elements = state.elements { albumListRunway = runway }
-      }
+  Event.Initialize albums -> do
+    -- Now that we have the album list, immediately start fetching the current
+    -- queue, so that can happen in the background while we render the album
+    -- list.
+    state' <- fetchQueue state
 
-  Event.UpdateQueue queue -> liftEffect $ do
-    updateStatusBar (Array.head queue) state
+    liftEffect $ do
+      runway <- Html.withElement state'.elements.albumListView $ do
+        Html.clear
+        AlbumListView.renderAlbumListRunway $ Array.length albums
+
+      updateAlbumList $ state'
+        { albums = albums
+        , elements = state'.elements { albumListRunway = runway }
+        }
+
+  Event.UpdateQueue queue -> do
+    liftEffect $ updateStatusBar (Array.head queue) state
     -- TODO: Possibly update the queue, if it is in view.
-    pure $ state { queue = queue }
+
+    -- Update the queue again either 30 seconds from now, or just slightly after
+    -- we expect the current buffer to run out, which is usually when the
+    -- current track will end, so at that point it will get dropped from the
+    -- queue. The 30-second interval is not really needed when we are the only
+    -- client, but when multiple clients manipulate the queue, it could change
+    -- without us knowing, so poll every 30 seconds to get back in sync.
+    now <- liftEffect $ Time.getCurrentInstant
+    let
+      t30 = Time.add (Time.fromSeconds 30.0) now
+      nextUpdate = case Array.head queue of
+        Nothing -> t30
+        Just (QueuedTrack t) -> min t30 $ Time.add (Time.fromSeconds 0.1) t.refreshAt
+
+    scheduleFetchQueue nextUpdate $ state { queue = queue }
 
   Event.OpenAlbum (Album album) -> liftEffect $ do
     Html.withElement state.elements.albumView $ do
@@ -208,3 +238,39 @@ handleEvent event state = case event of
     -- actually visible.
     Navigation.Library -> liftEffect $ updateAlbumList state
     _ -> pure state
+
+-- Schedule a new queue update at the given instant. Typically we would schedule
+-- it just after we expect the current track to end.
+scheduleFetchQueue :: Instant -> AppState -> Aff AppState
+scheduleFetchQueue fetchAt state = do
+  -- Cancel the previous fetch. If it was no longer running, this should be a
+  -- no-op. If it was waiting, then now we replace it with a newer waiting
+  -- fetch.
+  Aff.killFiber (Exception.error "Fetch cancelled in favor of new fetch.") state.nextQueueFetch
+
+  fiber <- Aff.forkAff $ do
+    -- Wait until the desired fetch instant.
+    now <- liftEffect $ Time.getCurrentInstant
+    Aff.delay $ Time.toNonNegativeMilliseconds $ Time.subtract fetchAt now
+
+    -- Then fetch, and send an event with the new queue.
+    queue <- Model.getQueue
+    Console.log "Loaded queue"
+    state.postEvent $ Event.UpdateQueue queue
+
+  pure $ state { nextQueueFetch = fiber }
+
+-- Schedule a fetch queue right now.
+fetchQueue :: AppState -> Aff AppState
+fetchQueue state = do
+  -- Cancel the previous fetch. If it was no longer running, this should be a
+  -- no-op. If it was waiting, then now we replace it with a newer waiting
+  -- fetch.
+  Aff.killFiber (Exception.error "Fetch cancelled in favor of new fetch.") state.nextQueueFetch
+
+  fiber <- Aff.forkAff $ do
+    queue <- Model.getQueue
+    Console.log "Loaded queue"
+    state.postEvent $ Event.UpdateQueue queue
+
+  pure $ state { nextQueueFetch = fiber }
