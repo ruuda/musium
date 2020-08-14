@@ -42,9 +42,10 @@ import Data.Int (rem)
 import Data.Maybe (Maybe (Nothing))
 import Data.String as String
 import Effect.Aff (Aff)
+import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (Error, error)
-import Time
+import Time as Time
 import Time (Instant)
 
 fatal :: forall m a. MonadThrow Error m => String -> m a
@@ -185,7 +186,7 @@ search query = do
       Left err -> fatal $ "Failed to parse search results: " <> err
       Right results -> pure results
 
-newtype QueuedTrack = QueuedTrack
+newtype QueuedTrackRaw = QueuedTrackRaw
   { id :: TrackId
   , title :: String
   , artist :: String
@@ -196,9 +197,18 @@ newtype QueuedTrack = QueuedTrack
   , bufferedSeconds :: Number
   }
 
-derive instance queuedTrackEq :: Eq QueuedTrack
+newtype QueuedTrack = QueuedTrack
+  { id :: TrackId
+  , title :: String
+  , artist :: String
+  , album :: String
+  , albumId :: AlbumId
+  , durationSeconds :: Int
+  , startedAt :: Instant
+  , refreshAt :: Instant
+  }
 
-instance decodeJsonQueuedTrack :: DecodeJson QueuedTrack where
+instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
   decodeJson json = do
     obj        <- Json.decodeJson json
     id         <- map TrackId $ Json.getField obj "id"
@@ -209,7 +219,7 @@ instance decodeJsonQueuedTrack :: DecodeJson QueuedTrack where
     durationSeconds <- Json.getField obj "duration_seconds"
     positionSeconds <- Json.getField obj "position_seconds"
     bufferedSeconds <- Json.getField obj "buffered_seconds"
-    pure $ QueuedTrack
+    pure $ QueuedTrackRaw
       { id
       , title
       , artist
@@ -222,12 +232,31 @@ instance decodeJsonQueuedTrack :: DecodeJson QueuedTrack where
 
 getQueue :: Aff (Array QueuedTrack)
 getQueue = do
+  t0 <- liftEffect $ Time.getCurrentInstant
   result <- Http.get Http.ResponseFormat.json "/queue"
+  t1 <- liftEffect $ Time.getCurrentInstant
+
+  let
+    -- We assume that the request time is symmetric, so the time at which the
+    -- server generated the response was the middle of t0 and t1. Treat all
+    -- other offsets relative to that point in time.
+    now = Time.mean t0 t1
+    makeTimeAbsolute (QueuedTrackRaw track) = QueuedTrack
+      { id: track.id
+      , title: track.title
+      , artist: track.artist
+      , album: track.album
+      , albumId: track.albumId
+      , durationSeconds: track.durationSeconds
+      , startedAt: Time.add (Time.fromSeconds $ -track.positionSeconds) now
+      , refreshAt: Time.add (Time.fromSeconds track.bufferedSeconds) now
+      }
+
   case result of
     Left err -> fatal $ "Failed to retrieve queue: " <> Http.printError err
     Right response -> case Json.decodeJson response.body of
       Left err -> fatal $ "Failed to parse queue: " <> err
-      Right results -> pure results
+      Right results -> pure $ map makeTimeAbsolute results
 
 newtype Track = Track
   { id :: TrackId

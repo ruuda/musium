@@ -17,14 +17,11 @@ import Data.Array as Array
 import Data.Int as Int
 import Data.Maybe (Maybe (Just, Nothing))
 import Effect (Effect)
-import Effect.Aff as Aff
 import Effect.Aff (Aff, launchAff_)
 import Effect.Aff.Bus (BusW)
 import Effect.Aff.Bus as Bus
 import Effect.Class (liftEffect)
-import Effect.Class.Console as Console
 import Prelude
-import Data.Time.Duration (Milliseconds (..))
 
 import AlbumListView (AlbumListState)
 import AlbumListView as AlbumListView
@@ -36,8 +33,7 @@ import Event as Event
 import History as History
 import Html as Html
 import LocalStorage as LocalStorage
-import Model (Album (..), QueuedTrack (..))
-import Model as Model
+import Model (Album (..), QueuedTrack (..), TrackId)
 import Navigation (Navigation)
 import Navigation as Navigation
 import StatusBar as StatusBar
@@ -99,6 +95,11 @@ new bus = do
     , postEvent: postEvent
     }
 
+currentTrackId :: AppState -> Maybe TrackId
+currentTrackId state = case Array.head state.queue of
+  Just (QueuedTrack t) -> Just t.id
+  Nothing              -> Nothing
+
 -- Bring the album list in sync with the viewport (the album list index and
 -- the number of entries per viewport).
 updateAlbumList :: AppState -> Effect AppState
@@ -141,7 +142,10 @@ updateStatusBar :: Maybe QueuedTrack -> AppState -> Effect Unit
 updateStatusBar currentTrack state = do
   case currentTrack of
     -- When the current track did not change, do not re-render the status bar.
-    t | t == Array.head state.queue -> pure unit
+    Just (QueuedTrack t) | Just t.id == currentTrackId state -> pure unit
+    Nothing | Array.null state.queue -> pure unit
+
+    -- When it did change, clear the current status bar, and place the new one.
     Nothing -> Html.withElement state.elements.statusBar $ do
       Html.clear
     Just t  -> Html.withElement state.elements.statusBar $ do

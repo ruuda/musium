@@ -14,6 +14,7 @@ module Time
   , add
   , fromSeconds
   , getCurrentInstant
+  , mean
   , subtract
   , toSeconds
   ) where
@@ -63,3 +64,7 @@ fromSeconds = Duration
 
 toSeconds :: Duration -> Number
 toSeconds (Duration secs) = secs
+
+-- Return the instant half-way between t0 and t1.
+mean :: Instant -> Instant -> Instant
+mean t0 t1 = addSeconds (0.5 * diffSeconds t0 t1) t0
