@@ -658,4 +658,14 @@ impl<I: MetaIndex + Sync + Send + 'static> Player<I> {
             self.playback_thread.thread().unpark();
         }
     }
+
+    /// Return a snapshot of the queue.
+    pub fn get_queue(&self) -> Vec<TrackId> {
+        let state = self.state.lock().unwrap();
+        let mut result = Vec::with_capacity(state.queue.len());
+        for queued_track in state.queue.iter() {
+            result.push(queued_track.track);
+        }
+        result
+    }
 }

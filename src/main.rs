@@ -203,6 +203,16 @@ impl MetaServer {
             .boxed()
     }
 
+    fn handle_queue(&self) -> ResponseBox {
+        let buffer = Vec::new();
+        let mut w = io::Cursor::new(buffer);
+        let queue = self.player.get_queue();
+        self.index.write_queue_json(&mut w, &queue[..]).unwrap();
+        Response::from_data(w.into_inner())
+            .with_header(header_content_type("application/json"))
+            .boxed()
+    }
+
     fn handle_enqueue(&self, id: &str) -> ResponseBox {
         let track_id = match TrackId::parse(id) {
             Some(tid) => tid,
@@ -295,6 +305,7 @@ impl MetaServer {
             (&Get, Some("album"),  Some(a)) => self.handle_album(a),
             (&Get, Some("albums"), None)    => self.handle_albums(),
             (&Get, Some("search"), None)    => self.handle_search(&request),
+            (&Get, Some("queue"),  None)    => self.handle_queue(),
             (&Put, Some("queue"),  Some(t)) => self.handle_enqueue(t),
             // Web endpoints.
             (&Get, None,              None) => self.handle_static_file("app/index.html", "text/html"),

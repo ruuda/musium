@@ -376,6 +376,28 @@ pub trait MetaIndex {
         serde_json::to_writer(&mut w, self.get_string(track.artist))?;
         write!(w, r#"}}"#)
     }
+
+    fn write_queue_json<W: Write>(&self, mut w: W, tracks: &[TrackId]) -> io::Result<()> {
+        write!(w, "[")?;
+        let mut first = true;
+        for &track_id in tracks.iter() {
+            if !first { write!(w, ",")?; }
+            first = false;
+
+            // Same as the search result track format, but additionally includes
+            // the duration.
+            let track = self.get_track(track_id).unwrap();
+            let album = self.get_album(track.album_id).unwrap();
+            write!(w, r#"{{"id":"{}","title":"#, track_id)?;
+            serde_json::to_writer(&mut w, self.get_string(track.title))?;
+            write!(w, r#","album_id":"{}","album":"#, track.album_id)?;
+            serde_json::to_writer(&mut w, self.get_string(album.title))?;
+            write!(w, r#","artist":"#)?;
+            serde_json::to_writer(&mut w, self.get_string(track.artist))?;
+            write!(w, r#","duration_seconds":{}}}"#, track.duration_seconds)?;
+        }
+        write!(w, "]")
+    }
 }
 
 #[derive(Debug)]
