@@ -377,15 +377,23 @@ pub trait MetaIndex {
         write!(w, r#"}}"#)
     }
 
-    fn write_queue_json<W: Write>(&self, mut w: W, tracks: &[TrackId]) -> io::Result<()> {
+    // TODO: This mixes concerns, it would be better to extract all of the json
+    // writing out of here, into the server. Making the index aware of playback
+    // status feels dirty.
+    fn write_queue_json<W: Write>(
+        &self,
+        mut w: W,
+        tracks: &[TrackId],
+        position_seconds: f32,
+        buffered_seconds: f32,
+    ) -> io::Result<()> {
         write!(w, "[")?;
         let mut first = true;
         for &track_id in tracks.iter() {
             if !first { write!(w, ",")?; }
-            first = false;
 
             // Same as the search result track format, but additionally includes
-            // the duration.
+            // the duration, and playback information.
             let track = self.get_track(track_id).unwrap();
             let album = self.get_album(track.album_id).unwrap();
             write!(w, r#"{{"id":"{}","title":"#, track_id)?;
@@ -394,7 +402,22 @@ pub trait MetaIndex {
             serde_json::to_writer(&mut w, self.get_string(album.title))?;
             write!(w, r#","artist":"#)?;
             serde_json::to_writer(&mut w, self.get_string(track.artist))?;
-            write!(w, r#","duration_seconds":{}}}"#, track.duration_seconds)?;
+            write!(w, r#","duration_seconds":{}"#, track.duration_seconds)?;
+
+            if first {
+                write!(w, r#","position_seconds":{:.03}"#, position_seconds)?;
+                write!(w, r#","buffered_seconds":{:.03}}}"#, buffered_seconds)?;
+            } else {
+                // Note that the buffered seconds here is a bit of a lie, there
+                // can be more. When moving this out of the indexer and into the
+                // server module, we could return the correct buffered seconds.
+                // For now, the app only needs those for the current track, so
+                // this is fine.
+                write!(w, r#","position_seconds":0.0"#)?;
+                write!(w, r#","buffered_seconds":0.0}}"#)?;
+            }
+
+            first = false;
         }
         write!(w, "]")
     }

@@ -207,7 +207,14 @@ impl MetaServer {
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
         let queue = self.player.get_queue();
-        self.index.write_queue_json(&mut w, &queue[..]).unwrap();
+        let position_seconds = queue.position_ms as f32 * 1e-3;
+        let buffered_seconds = queue.buffered_ms as f32 * 1e-3;
+        self.index.write_queue_json(
+            &mut w,
+            &queue.tracks[..],
+            position_seconds,
+            buffered_seconds,
+        ).unwrap();
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
             .boxed()

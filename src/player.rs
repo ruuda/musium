@@ -98,23 +98,46 @@ pub enum Decode {
 }
 
 pub struct QueuedTrack {
+    /// Id of this track.
     track: TrackId,
-    decode: Decode,
+
+    /// Decoded blocks of audio data.
     blocks: Vec<Block>,
+
+    /// Number of samples already sent to the audio card.
+    ///
+    /// Divide by the sample rate and number of channels to get the playback
+    /// position in seconds.
+    samples_played: usize,
+
+    /// Decoder for this track.
+    decode: Decode,
 }
 
 impl QueuedTrack {
     pub fn new(track: TrackId) -> QueuedTrack {
         QueuedTrack {
             track: track,
-            decode: Decode::NotStarted,
             blocks: Vec::new(),
+            samples_played: 0,
+            decode: Decode::NotStarted,
         }
     }
 
     /// Return the duration of the unconsumed samples in milliseconds.
     pub fn duration_ms(&self) -> usize {
         self.blocks.iter().map(|b| b.duration_ms()).sum()
+    }
+
+    /// Return the duration of the consumed samples in milliseconds.
+    pub fn position_ms(&self) -> usize {
+        if self.blocks.len() > 0 {
+            // Multiply by 1000 to get the rate in seconds, divide by 2 because
+            // we have stereo audio.
+            self.samples_played * 500 / self.blocks[0].format.sample_rate_hz as usize
+        } else {
+            0
+        }
     }
 
     /// Return the size of the blocks (including consumed samples) in bytes.
@@ -314,24 +337,7 @@ pub struct PlayerState {
 impl PlayerState {
     pub fn new() -> PlayerState {
         PlayerState {
-            queue: vec![
-                // QueuedTrack::new(TrackId(0x29b4bebda0c8710d)),
-                // QueuedTrack::new(TrackId(0xb9b7641fbd52f102)),
-                // QueuedTrack::new(TrackId(0x829506fd64ad710b)),
-                // QueuedTrack::new(TrackId(0xba542e474fb39101)),
-                // QueuedTrack::new(TrackId(0x29b4bebda0c87107)),
-                // QueuedTrack::new(TrackId(0x639f0d068574320b)),
-                // QueuedTrack::new(TrackId(0x1c154369c48bf100)),
-                // QueuedTrack::new(TrackId(0xb9b7641fbd52f106)),
-                // QueuedTrack::new(TrackId(0xb1a431f57167a104)),
-                // QueuedTrack::new(TrackId(0x9b21f06be23fb108)),
-                // QueuedTrack::new(TrackId(0x737135ec9131c101)),
-                // QueuedTrack::new(TrackId(0x752f4652a82cc101)),
-                // QueuedTrack::new(TrackId(0x32385e9e354a1102)),
-                // QueuedTrack::new(TrackId(0x29b4bebda0c87101)),
-                // QueuedTrack::new(TrackId(0x8ead13ff2b95f102)),
-                // QueuedTrack::new(TrackId(0x11c86a504f455101)),
-            ],
+            queue: Vec::new(),
             current_decode: None,
         }
     }
@@ -377,6 +383,7 @@ impl PlayerState {
     pub fn consume(&mut self, n: usize) {
         let track_done = {
             let queued_track = &mut self.queue[0];
+            queued_track.samples_played += n;
             let block_done = {
                 let block = &mut queued_track.blocks[0];
                 block.consume(n);
@@ -598,6 +605,17 @@ pub struct Player<I: MetaIndex + Sync + Send + 'static> {
     playback_thread: JoinHandle<()>,
 }
 
+pub struct QueueSnapshot {
+    /// The queued tracks, index 0 is the currently playing track.
+    pub tracks: Vec<TrackId>,
+
+    /// The current playback position in the track, in milliseconds.
+    pub position_ms: usize,
+
+    /// The duration of the decoded but unplayed audio data, in milliseconds.
+    pub buffered_ms: usize,
+}
+
 impl<I: MetaIndex + Sync + Send + 'static> Player<I> {
     pub fn new(index: Arc<I>, card_name: String) -> Player<I> {
         let state = Arc::new(Mutex::new(PlayerState::new()));
@@ -660,12 +678,25 @@ impl<I: MetaIndex + Sync + Send + 'static> Player<I> {
     }
 
     /// Return a snapshot of the queue.
-    pub fn get_queue(&self) -> Vec<TrackId> {
+    pub fn get_queue(&self) -> QueueSnapshot {
         let state = self.state.lock().unwrap();
-        let mut result = Vec::with_capacity(state.queue.len());
+
+        let mut tracks = Vec::with_capacity(state.queue.len());
         for queued_track in state.queue.iter() {
-            result.push(queued_track.track);
+            tracks.push(queued_track.track);
         }
+
+        let mut result = QueueSnapshot {
+            tracks: tracks,
+            position_ms: 0,
+            buffered_ms: 0,
+        };
+
+        if let Some(t) = state.queue.first() {
+            result.position_ms = t.position_ms();
+            result.buffered_ms = t.duration_ms();
+        }
+
         result
     }
 }

@@ -190,6 +190,8 @@ newtype QueuedTrack = QueuedTrack
   , album :: String
   , albumId :: AlbumId
   , durationSeconds :: Int
+  , positionSeconds :: Number
+  , bufferedSeconds :: Number
   }
 
 derive instance queuedTrackEq :: Eq QueuedTrack
@@ -203,7 +205,18 @@ instance decodeJsonQueuedTrack :: DecodeJson QueuedTrack where
     album      <- Json.getField obj "album"
     albumId    <- map AlbumId $ Json.getField obj "album_id"
     durationSeconds <- Json.getField obj "duration_seconds"
-    pure $ QueuedTrack { id, title, artist, album, albumId, durationSeconds }
+    positionSeconds <- Json.getField obj "position_seconds"
+    bufferedSeconds <- Json.getField obj "buffered_seconds"
+    pure $ QueuedTrack
+      { id
+      , title
+      , artist
+      , album
+      , albumId
+      , durationSeconds
+      , positionSeconds
+      , bufferedSeconds
+      }
 
 getQueue :: Aff (Array QueuedTrack)
 getQueue = do
