@@ -9,10 +9,11 @@ module Event
   ( Event (..)
   ) where
 
-import Model (Album)
+import Model (Album, QueuedTrack)
 
 data Event
   = Initialize (Array Album)
+  | UpdateQueue (Array QueuedTrack)
   | OpenLibrary
   | OpenAlbum Album
   | ChangeViewport

@@ -36,10 +36,11 @@ import Event as Event
 import History as History
 import Html as Html
 import LocalStorage as LocalStorage
-import Model (Album (..))
+import Model (Album (..), QueuedTrack (..))
 import Model as Model
 import Navigation (Navigation)
 import Navigation as Navigation
+import StatusBar as StatusBar
 
 type EventBus = BusW Event
 
@@ -47,10 +48,12 @@ type Elements =
   { albumListView :: Element
   , albumListRunway :: Element
   , albumView :: Element
+  , statusBar :: Element
   }
 
 type AppState =
   { albums :: Array Album
+  , queue :: Array QueuedTrack
   , albumListState :: AlbumListState
     -- The index of the album at the top of the viewport.
   , albumListIndex :: Int
@@ -73,24 +76,14 @@ setupElements postEvent = Html.withElement Dom.body $ do
     Html.addClass "inactive"
     ask
 
-  _statusBar <- Html.div $ do
+  statusBar <- Html.div $ do
     Html.setId "statusbar"
-    Html.img
-      (Model.thumbUrl $ Model.AlbumId "2482431964dafd1b")
-      "The Dark Side of the Moon by Pink Floyd"
-      (Html.addClass "thumb")
-    Html.span $ do
-      Html.addClass "title"
-      Html.text "The Great Gig in the Sky"
-    Html.span $ do
-      Html.addClass "artist"
-      Html.text $ "Pink Floyd"
     ask
 
   Html.onScroll $ launchAff_ $ postEvent $ Event.ChangeViewport
   liftEffect $ Dom.onResizeWindow $ launchAff_ $ postEvent $ Event.ChangeViewport
 
-  pure { albumListView, albumListRunway, albumView }
+  pure { albumListView, albumListRunway, albumView, statusBar }
 
 new :: BusW Event -> Effect AppState
 new bus = do
@@ -98,6 +91,7 @@ new bus = do
   elements <- setupElements postEvent
   pure
     { albums: []
+    , queue: []
     , albumListState: { elements: [], begin: 0, end: 0 }
     , albumListIndex: 0
     , navigation: { location: Navigation.Library }
@@ -141,6 +135,19 @@ updateAlbumList state = do
     state.albumListState
   pure $ state { albumListState = scrollState, albumListIndex = index }
 
+-- Update the status bar elements, if the current track has changed. This only
+-- updates the view, it does not change the queue in the state.
+updateStatusBar :: Maybe QueuedTrack -> AppState -> Effect Unit
+updateStatusBar currentTrack state = do
+  case currentTrack of
+    -- When the current track did not change, do not re-render the status bar.
+    t | t == Array.head state.queue -> pure unit
+    Nothing -> Html.withElement state.elements.statusBar $ do
+      Html.clear
+    Just t  -> Html.withElement state.elements.statusBar $ do
+      Html.clear
+      StatusBar.renderStatusBar t
+
 handleEvent :: Event -> AppState -> Aff AppState
 handleEvent event state = case event of
   Event.Initialize albums -> liftEffect $ do
@@ -151,6 +158,11 @@ handleEvent event state = case event of
       { albums = albums
       , elements = state.elements { albumListRunway = runway }
       }
+
+  Event.UpdateQueue queue -> liftEffect $ do
+    updateStatusBar (Array.head queue) state
+    -- TODO: Possibly update the queue, if it is in view.
+    pure $ state { queue = queue }
 
   Event.OpenAlbum (Album album) -> liftEffect $ do
     Html.withElement state.elements.albumView $ do

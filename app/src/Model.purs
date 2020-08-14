@@ -192,6 +192,8 @@ newtype QueuedTrack = QueuedTrack
   , durationSeconds :: Int
   }
 
+derive instance queuedTrackEq :: Eq QueuedTrack
+
 instance decodeJsonQueuedTrack :: DecodeJson QueuedTrack where
   decodeJson json = do
     obj        <- Json.decodeJson json
