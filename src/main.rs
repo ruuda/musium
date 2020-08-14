@@ -29,10 +29,6 @@ use tiny_http::Method::{Get, Put};
 use mindec::{AlbumId, MetaIndex, MemoryMetaIndex, TrackId};
 use mindec::player::Player;
 
-fn header_access_control_allow_origin_any() -> Header {
-    Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap()
-}
-
 fn header_content_type(content_type: &str) -> Header {
     Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes())
         .expect("Failed to create content-type header, value is not ascii.")
@@ -323,7 +319,6 @@ impl MetaServer {
             _ => self.handle_bad_request("Expected a GET request."),
         };
 
-        response.add_header(header_access_control_allow_origin_any());
         match request.respond(response) {
             Ok(()) => {},
             Err(err) => println!("Error while responding to request: {:?}", err),
