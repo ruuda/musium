@@ -38,12 +38,14 @@ import Data.Argonaut.Decode (decodeJson, getField) as Json
 import Data.Argonaut.Decode.Class (class DecodeJson)
 import Data.Array (sortWith)
 import Data.Either (Either (..))
+import Data.Int (rem)
 import Data.Maybe (Maybe (Nothing))
 import Data.String as String
 import Effect.Aff (Aff)
 import Effect.Class.Console as Console
 import Effect.Exception (Error, error)
-import Data.Int (rem)
+import Time
+import Time (Instant)
 
 fatal :: forall m a. MonadThrow Error m => String -> m a
 fatal = error >>> throwError
