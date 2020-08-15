@@ -10,7 +10,7 @@ let
   pkgs = import (import ./nixpkgs-pinned.nix) {};
 in
   pkgs.buildEnv {
-    name = "mindec-devenv";
+    name = "musium-devenv";
     paths = [
       pkgs.mkdocs
       pkgs.psc-package

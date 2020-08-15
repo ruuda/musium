@@ -1,4 +1,4 @@
-// Mindec -- Music metadata indexer
+// Musium -- Music playback daemon with web-based library browser
 // Copyright 2018 Ruud van Asseldonk
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -6,7 +6,7 @@
 // A copy of the License has been included in the root of the repository.
 
 extern crate claxon;
-extern crate mindec;
+extern crate musium;
 extern crate serde_json;
 extern crate tiny_http;
 extern crate url;
@@ -25,8 +25,8 @@ use std::thread;
 use tiny_http::{Header, Request, Response, ResponseBox, Server};
 use tiny_http::Method::{Get, Put};
 
-use mindec::{AlbumId, MetaIndex, MemoryMetaIndex, TrackId};
-use mindec::player::Player;
+use musium::{AlbumId, MetaIndex, MemoryMetaIndex, TrackId};
+use musium::player::Player;
 
 fn header_content_type(content_type: &str) -> Header {
     Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes())
@@ -257,7 +257,7 @@ impl MetaServer {
         };
 
         let mut words = Vec::new();
-        mindec::normalize_words(query.as_ref(), &mut words);
+        musium::normalize_words(query.as_ref(), &mut words);
 
         let mut artists = Vec::new();
         let mut albums = Vec::new();
@@ -412,7 +412,7 @@ fn make_index(dir: &str) -> MemoryMetaIndex {
         }
         writeln!(&mut lock, "\r{} files discovered", k).unwrap();
 
-        index = mindec::MemoryMetaIndex::from_paths(&paths[..], &mut lock);
+        index = musium::MemoryMetaIndex::from_paths(&paths[..], &mut lock);
     };
 
     let index = index.expect("Failed to build index.");
@@ -649,8 +649,8 @@ fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &str) {
 
 fn print_usage() {
     println!("usage: ");
-    println!("  mindec serve /path/to/music/library /path/to/cache <soundcard name>");
-    println!("  mindec cache /path/to/music/library /path/to/cache <dummy arg>");
+    println!("  musium serve /path/to/music/library /path/to/cache <soundcard name>");
+    println!("  musium cache /path/to/music/library /path/to/cache <dummy arg>");
 }
 
 fn main() {
@@ -670,7 +670,7 @@ fn main() {
             let arc_index = std::sync::Arc::new(index);
             println!("Indexing complete, starting server on port 8233.");
 
-            let player = mindec::player::Player::new(arc_index.clone(), card_name);
+            let player = musium::player::Player::new(arc_index.clone(), card_name);
             let service = MetaServer::new(arc_index.clone(), &cache_dir, player);
             serve("0.0.0.0:8233", Arc::new(service));
         }

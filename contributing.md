@@ -1,6 +1,6 @@
 # Contributing
 
-Contributions in the form of bug reports are welcome. At this point Mindec does
+Contributions in the form of bug reports are welcome. At this point Musium does
 not accept any other external contributions.
 
 # Code of conduct

@@ -1,4 +1,4 @@
-// Mindec -- Music metadata indexer
+// Musium -- Music playback daemon with web-based library browser
 // Copyright 2018 Ruud van Asseldonk
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -7,14 +7,14 @@
 
 #[macro_use] extern crate criterion;
 
-extern crate mindec;
+extern crate musium;
 extern crate walkdir;
 
 use std::ffi::OsStr;
 use std::path::PathBuf;
 
 use criterion::{Bencher, Criterion, black_box};
-use mindec::{AlbumId, MetaIndex, MemoryMetaIndex};
+use musium::{AlbumId, MetaIndex, MemoryMetaIndex};
 
 fn build_index() -> MemoryMetaIndex {
     // TODO: Do not hard-code path.

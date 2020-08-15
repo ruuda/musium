@@ -1,4 +1,4 @@
-// Mindec -- Music metadata indexer
+// Musium -- Music playback daemon with web-based library browser
 // Copyright 2017 Ruud van Asseldonk
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -609,7 +609,7 @@ impl StringDeduper {
     ///
     /// Although some tags use typographer’s quotes, most do not, also on
     /// Musicbrainz. But the typographer’s quotes look nicer, especially in Work
-    /// Sans, which is used for Mindec’s library browser. So apply a heuristic
+    /// Sans, which is used for Musium’s library browser. So apply a heuristic
     /// to replace most straigh quotes with curly ones.
     ///
     /// This is a heuristic, it is not perfect. In particular, this function

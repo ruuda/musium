@@ -1,10 +1,10 @@
 # Tagging
 
-Mindec reads metadata from flac tags (also called Vorbis comments) and maps
-those to its internal schema. Mindec expects files to be tagged properly, and it
+Musium reads metadata from flac tags (also called Vorbis comments) and maps
+those to its internal schema. Musium expects files to be tagged properly, and it
 expects the tags to be consistent across files.
 
-Because Mindec uses internal ids based on MusicBrainz ids of albums and artists,
+Because Musium uses internal ids based on MusicBrainz ids of albums and artists,
 MusicBrainz ids are required.
 
 Files tagged with [MusicBrainz Picard][picard] should be fine.
@@ -13,12 +13,12 @@ Files tagged with [MusicBrainz Picard][picard] should be fine.
 
 ## Schema
 
-Mindec follows a tree-like data model. The library is a collection of artists.
+Musium follows a tree-like data model. The library is a collection of artists.
 Every artist has one or more albums, and every album has one or more
 tracks. The track artist can differ from the album artist (for example, to
 accomodate feat. artists), but an album belongs to exactly one artist.
 
-For artists, albums, and tracks, Mindec stores the following attributes:
+For artists, albums, and tracks, Musium stores the following attributes:
 
 ### Artist
 
@@ -40,7 +40,7 @@ For artists, albums, and tracks, Mindec stores the following attributes:
 
 ## Tags
 
-Mindec reads metadata from the following tags. Unless specified otherwise,
+Musium reads metadata from the following tags. Unless specified otherwise,
 all tags are mandatory.
 
  * `discnumber`: Disc number, a non-negative integer less than 256.
@@ -66,7 +66,7 @@ header instead.
 Tags contain redundant information, which must be consistent. For example, all
 tracks on the same album should have the same album artist and album title.
 
-Mindec uses the MusicBrainz album id, to determine what album a track belongs to,
+Musium uses the MusicBrainz album id, to determine what album a track belongs to,
 and the MusicBrainz album artist id to determine which artist an album belongs
-to. If there is an inconsistency, Mindec reports it, and it will then make an
+to. If there is an inconsistency, Musium reports it, and it will then make an
 arbitrary choice about what version to keep.

@@ -1,4 +1,4 @@
--- Mindec -- Music metadata indexer
+-- Musium -- Music playback daemon with web-based library browser
 -- Copyright 2019 Ruud van Asseldonk
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,7 +37,7 @@ main = launchAff_ $ do
     Console.log "Loaded albums"
     initialState.postEvent $ Event.Initialize albums
 
-  liftEffect $ History.pushState Navigation.Library "Mindec" "/"
+  liftEffect $ History.pushState Navigation.Library "Musium" "/"
   liftEffect $ History.onPopState $ launchAff_ <<< case _ of
     -- TODO: Avoid double pushes here.
     Nothing -> initialState.postEvent Event.OpenLibrary

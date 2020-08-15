@@ -1,21 +1,21 @@
-# Mindec
+# Musium
 
-Music player daemon with web-based library browser.
+Musium is a music playback daemon with a web-based library browser.
 
 [![Build Status][ci-img]][ci]
 
-Mindec is a music player that can be controlled through a web-based library
+Musium is a music player that can be controlled through a web-based library
 browser. It indexes a collection of flac files, and exposes playback controls to
 the local network. It is intended to run on a low-power always-on device, such
 as a Raspberry Pi, that has audio out connected to speakers. Playback on those
 speakers can then be controlled from any device on the local network.
 
-Mindec is designed to run fast in resource-constrained environments and scale to
+Musium is designed to run fast in resource-constrained environments and scale to
 hundreds of thousands of tracks.
 
 ## Overview
 
-Mindec consists of a few components:
+Musium consists of a few components:
 
  * A library that can index a collection of flac files, to support operations
    such as listing all tracks in an album, and to accelerate search. The index
@@ -30,13 +30,13 @@ Mindec consists of a few components:
 
  * A web-based library browser.
 
-Mindec is not:
+Musium is not:
 
- * A tagger. Mindec expects properly tagged flac files. Mindec is picky and
+ * A tagger. Musium expects properly tagged flac files. Musium is picky and
    will complain about inconsistent or missing tags, but it will not fix them
    for you.
 
- * A database. Mindec treats the music library as read-only, and does not store
+ * A database. Musium treats the music library as read-only, and does not store
    mutable data such as playcounts itself.
 
 [claxon]:  https://github.com/ruuda/claxon
@@ -56,8 +56,8 @@ The server is written in [Rust][rust] and builds with Cargo:
 
     cargo build --release
     mkdir /tmp/cover-thumbs
-    target/release/mindec cache ~/music /tmp/cover-thumbs
-    target/release/mindec serve ~/music /tmp/cover-thumbs $ALSA_CARD_NAME
+    target/release/musium cache ~/music /tmp/cover-thumbs
+    target/release/musium serve ~/music /tmp/cover-thumbs $ALSA_CARD_NAME
 
 ## Alternatives
 
@@ -66,15 +66,15 @@ The server is written in [Rust][rust] and builds with Cargo:
 
 ## License
 
-Mindec is licensed under the [Apache 2.0][apache2] license. It may be used in
+Musium is licensed under the [Apache 2.0][apache2] license. It may be used in
 free software as well as closed-source applications, both for commercial and
 non-commercial use under the conditions given in the license. If you want to
-use Mindec in your GPLv2-licensed software, you can add an [exception][except]
+use Musium in your GPLv2-licensed software, you can add an [exception][except]
 to your copyright notice. Please do not open an issue if you disagree with the
 choice of license.
 
-[ci-img]:     https://travis-ci.org/ruuda/mindec.svg?branch=master
-[ci]:         https://travis-ci.org/ruuda/mindec
+[ci-img]:     https://travis-ci.org/ruuda/musium.svg?branch=master
+[ci]:         https://travis-ci.org/ruuda/musium
 [rust]:       https://rust-lang.org
 [purescript]: http://www.purescript.org/
 [apache2]:    https://www.apache.org/licenses/LICENSE-2.0

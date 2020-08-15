@@ -1,5 +1,5 @@
-site_name: Mindec
-repo_url: https://github.com/ruuda/mindec
+site_name: Musium
+repo_url: https://github.com/ruuda/musium
 strict: true
 theme:
   name: null

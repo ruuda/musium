@@ -1,14 +1,14 @@
 # Search
 
-Each of the three Mindec data types (artists, albums, and tracks) can be
+Each of the three Musium data types (artists, albums, and tracks) can be
 searched from a single search box, that searches all three simultaneously.
-To facilitate search, Mindec maintains indexes from words to artists, albums,
+To facilitate search, Musium maintains indexes from words to artists, albums,
 and tracks. Indexes are sorted on normalized word, so we can locate the words
 with a given prefix in logarithmic time.
 
 ## Single search
 
-Mindec has a one search box. It should be able to find what you need from a
+Musium has a one search box. It should be able to find what you need from a
 single query, without the need to select what you are searching for, and without
 the need for separate browsers for artists, albums, and tracks, with independent
 search functions.

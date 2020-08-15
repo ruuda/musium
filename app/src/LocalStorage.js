@@ -1,4 +1,4 @@
-// Mindec -- Music metadata indexer
+// Musium -- Music playback daemon with web-based library browser
 // Copyright 2020 Ruud van Asseldonk
 //
 // Licensed under the Apache License, Version 2.0 (the "License");

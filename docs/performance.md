@@ -88,7 +88,7 @@ over the paths in the vec. Is this the right thing to do, or should we put the
 paths iterator in a mutex directly? Measurement setup:
 
     echo 3 | sudo tee /proc/sys/vm/drop_caches
-    perf stat target/release/mindec ~/music
+    perf stat target/release/musium ~/music
 
 Note that the server was disabled to terminate the program after indexing. Also,
 these results are not comparable to the previous numbers, as the library has
@@ -157,7 +157,7 @@ this point.
 Command:
 
     echo 3 | sudo tee /proc/sys/vm/drop_caches
-    perf stat target/release/mindec cache /pool/music /pool/volatile/covers dummy
+    perf stat target/release/musium cache /pool/music /pool/volatile/covers dummy
 
 Measurements were performed with disks spinning. If the disks needed to spin up
 first, I restarted the measurement as soon as the disk was spinning.
