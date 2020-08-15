@@ -411,10 +411,16 @@ button.play-next::before {
 }
 
 #statusbar #progress {
-  border-top: 1.6pt solid rgba(0, 0, 0, 0.15);
   position: absolute;
-  top: -0.8pt;
+  top: -1.2pt;
+  height: 1.6pt;
   width: 100%;
+  background: linear-gradient(
+    90deg,
+    #eee 0% 33%,
+    #ccc 93%,
+    #bbb 100%
+  );
 
   opacity: 1.0;
   transition: opacity 0.5s ease-in-out, transform 2s linear;
