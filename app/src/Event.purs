@@ -9,7 +9,7 @@ module Event
   ( Event (..)
   ) where
 
-import Model (Album, AlbumId, QueuedTrack, Track)
+import Model (Album, QueuedTrack)
 
 data Event
   = Initialize (Array Album)
