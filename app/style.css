@@ -439,6 +439,11 @@ button.play-next::before {
   opacity: 0;
 }
 
+#statusbar .artist {
+  font-size: 0.75rem;
+  color: #777;
+}
+
 @media (min-width: 30rem) and (max-width: 50rem) {
   #album-view {
     display: grid;
