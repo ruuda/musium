@@ -73,10 +73,14 @@ impl Block {
     }
 
     /// Return the duration of the unconsumed samples in milliseconds.
-    pub fn duration_ms(&self) -> usize {
+    pub fn duration_ms(&self) -> u64 {
         // Multiply by 1000 to go from seconds to milliseconds, divide by 2
-        // because there are 2 channels.
-        self.len() * 500 / self.format.sample_rate_hz as usize
+        // because there are 2 channels. We need to work with u64 here, because
+        // around 100s of stereo 44.1 kHz audio, the sample count times 500
+        // overflows a u32 (and usize can be 32 bits). We can't move the 500
+        // into the denominator, because the common sample rate of 44.1 kHz is
+        // not a multiple of 500.
+        self.len() as u64 * 500 / self.format.sample_rate_hz as u64
     }
 
     /// Return the size of the block (including consumed samples) in bytes.
@@ -108,7 +112,7 @@ pub struct QueuedTrack {
     ///
     /// Divide by the sample rate and number of channels to get the playback
     /// position in seconds.
-    samples_played: usize,
+    samples_played: u64,
 
     /// Decoder for this track.
     decode: Decode,
@@ -125,16 +129,20 @@ impl QueuedTrack {
     }
 
     /// Return the duration of the unconsumed samples in milliseconds.
-    pub fn duration_ms(&self) -> usize {
+    pub fn duration_ms(&self) -> u64 {
         self.blocks.iter().map(|b| b.duration_ms()).sum()
     }
 
     /// Return the duration of the consumed samples in milliseconds.
-    pub fn position_ms(&self) -> usize {
+    pub fn position_ms(&self) -> u64 {
         if self.blocks.len() > 0 {
-            // Multiply by 1000 to get the rate in seconds, divide by 2 because
-            // we have stereo audio.
-            self.samples_played * 500 / self.blocks[0].format.sample_rate_hz as usize
+            // Multiply by 1000 to go from seconds to milliseconds, divide by 2
+            // because there are 2 channels. We need to work with u64 here, because
+            // around 100s of stereo 44.1 kHz audio, the sample count times 500
+            // overflows a u32 (and usize can be 32 bits). We can't move the 500
+            // into the denominator, because the common sample rate of 44.1 kHz
+            // is not a multiple of 500.
+            self.samples_played * 500 / (self.blocks[0].format.sample_rate_hz as u64)
         } else {
             0
         }
@@ -383,7 +391,7 @@ impl PlayerState {
     pub fn consume(&mut self, n: usize) {
         let track_done = {
             let queued_track = &mut self.queue[0];
-            queued_track.samples_played += n;
+            queued_track.samples_played += n as u64;
             let block_done = {
                 let block = &mut queued_track.blocks[0];
                 block.consume(n);
@@ -413,7 +421,7 @@ impl PlayerState {
     }
 
     /// Return the duration of all unconsumed samples in milliseconds.
-    pub fn pending_duration_ms(&self) -> usize {
+    pub fn pending_duration_ms(&self) -> u64 {
         self.queue.iter().map(|qt| qt.duration_ms()).sum()
     }
 
@@ -564,7 +572,7 @@ fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
         // determines our budget for decoding. If we set the budget at 0, the
         // decoder will still decode at least one frame.
         let decode_bytes_per_ms = 44_100 * 4 * 5 / 1000;
-        let decode_bytes_budget = decode_bytes_per_ms * pending_duration_ms;
+        let decode_bytes_budget = decode_bytes_per_ms * pending_duration_ms as usize;
         let bytes_left = decode_bytes_budget.min(stop_after_bytes - bytes_used);
         println!("Pending buffer stats:");
         println!("  Duration: {:.3} seconds", pending_duration_ms as f32 / 1000.0);
@@ -610,10 +618,10 @@ pub struct QueueSnapshot {
     pub tracks: Vec<TrackId>,
 
     /// The current playback position in the track, in milliseconds.
-    pub position_ms: usize,
+    pub position_ms: u64,
 
     /// The duration of the decoded but unplayed audio data, in milliseconds.
-    pub buffered_ms: usize,
+    pub buffered_ms: u64,
 }
 
 impl<I: MetaIndex + Sync + Send + 'static> Player<I> {
