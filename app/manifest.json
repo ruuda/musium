@@ -1,0 +1,8 @@
+{
+  "name": "Musium",
+  "short_name": "Musium",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "description": "Music playback daemon and web-based library browser"
+}

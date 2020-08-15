@@ -317,9 +317,10 @@ impl MetaServer {
             (&Get, Some("queue"),  None)    => self.handle_queue(),
             (&Put, Some("queue"),  Some(t)) => self.handle_enqueue(t),
             // Web endpoints.
-            (&Get, None,              None) => self.handle_static_file("app/index.html", "text/html"),
-            (&Get, Some("style.css"), None) => self.handle_static_file("app/style.css", "text/css"),
-            (&Get, Some("app.js"),    None) => self.handle_static_file("app/output/app.js", "text/javascript"),
+            (&Get, None,                  None) => self.handle_static_file("app/index.html", "text/html"),
+            (&Get, Some("style.css"),     None) => self.handle_static_file("app/style.css", "text/css"),
+            (&Get, Some("manifest.json"), None) => self.handle_static_file("app/manifest.json", "text/javascript"),
+            (&Get, Some("app.js"),        None) => self.handle_static_file("app/output/app.js", "text/javascript"),
             // Fallback.
             (&Get, _, _) => self.handle_not_found(),
             _ => self.handle_bad_request("Expected a GET request."),
