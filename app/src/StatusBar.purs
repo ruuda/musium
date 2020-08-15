@@ -148,14 +148,24 @@ updateProgressBar (QueuedTrack currentTrack) state = do
     completion = max 0.0 $ min 1.0 $ (Time.toSeconds position) / durationSeconds
     transform = "translateX(" <> show (-100.0 * (1.0 - completion)) <> "%)"
     animationDuration = Time.subtract target now
-    animationDurationSeconds = Time.toSeconds animationDuration
-    transition = "opacity 0.5s ease-in-out, transform " <> show animationDurationSeconds <> "s linear"
+    -- Add a minimum duration; if we are close to the end, we may not reach 100%
+    -- before the end then, but I prefer having a smooth animation over having
+    -- pixel-perfect progress.
+    animationDurationSeconds = max 0.2 $ Time.toSeconds animationDuration
+    transition = "transform " <> show animationDurationSeconds <> "s linear"
 
   case state.current of
     Nothing -> pure unit
-    Just t -> Html.withElement t.progressBar $ do
-      Html.setTransition transition
-      Html.setTransform transform
+    Just t -> launchAff_ $ do
+      -- If we apply the transition and transform at the same time (even if we
+      -- set the transition first), then the new transition will not be used to
+      -- transition to the new transform, the old transition will be used. This
+      -- means that the timing will be all wrong. In particular, for the initial
+      -- update it will be very bad, because there is no transition yet. We can
+      -- work around this by introducing a delay.
+      liftEffect $ Html.withElement t.progressBar $ Html.setTransition transition
+      Aff.delay $ Milliseconds 17.0
+      liftEffect $ Html.withElement t.progressBar $ Html.setTransform transform
 
   -- Schedule the next update slightly before the animation completes, so we
   -- will not be too late to start the next one, which could cause a stutter.

@@ -18,8 +18,8 @@ import Data.Array as Array
 import Data.Int as Int
 import Data.Maybe (Maybe (Just, Nothing))
 import Effect (Effect)
-import Effect.Aff as Aff
 import Effect.Aff (Aff, Fiber)
+import Effect.Aff as Aff
 import Effect.Aff.Bus (BusW)
 import Effect.Aff.Bus as Bus
 import Effect.Class (liftEffect)

@@ -97,7 +97,6 @@ renderTrack postEvent (Album album) (Track track) =
       Html.withElement trackElement $ Html.addClass "queueing"
       launchAff_ $ do
         Model.enqueueTrack $ track.id
-        -- TODO: Remove class after track is no longer in queue.
         now <- liftEffect $ Time.getCurrentInstant
         postEvent $ Event.EnqueueTrack $ QueuedTrack
           { id: track.id
@@ -113,6 +112,7 @@ renderTrack postEvent (Album album) (Track track) =
             -- with queue status requests.
           , refreshAt: Time.add (Time.fromSeconds 0.2) now
           }
+        -- TODO: Remove class after track is no longer in queue.
         liftEffect $ Html.withElement trackElement $ do
           Html.addClass "queued"
           Html.removeClass "queueing"
