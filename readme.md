@@ -42,7 +42,7 @@ Musium is not:
 [claxon]:  https://github.com/ruuda/claxon
 [alsa-rs]: https://github.com/diwic/alsa-rs
 
-## Compiling
+## Getting started
 
 The library browser is written in [Purescript][purescript]. There is a basic
 makefile that calls `purs` and `psc-package`:
@@ -50,14 +50,28 @@ makefile that calls `purs` and `psc-package`:
     make -C app
     stat app/output/app.js
 
-The server will serve `app.js` and other static files alongside the API.
-
-The server is written in [Rust][rust] and builds with Cargo:
+The server will serve `app.js` and other static files alongside the API. The
+server itself is written in [Rust][rust] and builds with Cargo:
 
     cargo build --release
-    mkdir /tmp/cover-thumbs
-    target/release/musium cache ~/music /tmp/cover-thumbs
-    target/release/musium serve ~/music /tmp/cover-thumbs $ALSA_CARD_NAME
+
+Write a configuration file to `musium.conf`:
+
+    listen = 0.0.0.0:8233
+    library_path = /home/user/music
+    covers_path = /home/user/.cache/musium/covers
+    audio_device = HDA Intel PCH
+
+Generate cover art thumbnails (requires Imagemagick and Guetzli):
+
+    mkdir -p /home/user/.cache/musium/covers
+    target/release/musium cache musium.conf
+
+Start the server:
+
+    target/release/musium serve musium.conf
+
+You can now open the library browser at http://localhost:8233.
 
 ## Alternatives
 

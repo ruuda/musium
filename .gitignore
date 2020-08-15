@@ -7,3 +7,6 @@
 
 # Nix output
 /result
+
+# Default config file.
+/musium.conf

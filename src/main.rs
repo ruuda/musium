@@ -15,9 +15,9 @@ extern crate walkdir;
 use std::env;
 use std::ffi::OsStr;
 use std::fs;
-use std::io::Write;
+use std::io::{BufRead, Write};
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::Arc;
 use std::thread;
@@ -25,8 +25,10 @@ use std::thread;
 use tiny_http::{Header, Request, Response, ResponseBox, Server};
 use tiny_http::Method::{Get, Put};
 
-use musium::{AlbumId, MetaIndex, MemoryMetaIndex, TrackId};
+use musium::config::Config;
+use musium::error;
 use musium::player::Player;
+use musium::{AlbumId, MetaIndex, MemoryMetaIndex, TrackId};
 
 fn header_content_type(content_type: &str) -> Header {
     Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes())
@@ -51,12 +53,12 @@ struct MetaServer {
 impl MetaServer {
     fn new(
         index: Arc<MemoryMetaIndex>,
-        cache_dir: &str,
+        cache_dir: PathBuf,
         player: Player<MemoryMetaIndex>,
     ) -> MetaServer {
         MetaServer {
             index: index,
-            cache_dir: PathBuf::from(cache_dir),
+            cache_dir: cache_dir,
             player: player,
         }
     }
@@ -370,8 +372,8 @@ fn serve(bind: &str, service: Arc<MetaServer>) {
     }
 }
 
-fn make_index(dir: &str) -> MemoryMetaIndex {
-    let wd = walkdir::WalkDir::new(&dir)
+fn make_index(dir: &Path) -> MemoryMetaIndex {
+    let wd = walkdir::WalkDir::new(dir)
         .follow_links(true)
         .max_open(128);
 
@@ -445,7 +447,7 @@ enum GenThumb {
 impl GenThumb {
 
     /// Start an extract-and-resize operation.
-    pub fn new(cache_dir: &str, album_id: AlbumId, filename: &str) -> claxon::Result<Option<GenThumb>> {
+    pub fn new(cache_dir: &Path, album_id: AlbumId, filename: &str) -> claxon::Result<Option<GenThumb>> {
         use crate::process::{Command, Stdio};
 
         let mut out_fname_jpg: PathBuf = PathBuf::from(cache_dir);
@@ -576,13 +578,13 @@ impl GenThumb {
 }
 
 struct GenThumbs<'a> {
-    cache_dir: &'a str,
+    cache_dir: &'a Path,
     pending: Vec<GenThumb>,
     max_len: usize,
 }
 
 impl<'a> GenThumbs<'a> {
-    pub fn new(cache_dir: &'a str, max_parallelism: usize) -> GenThumbs<'a> {
+    pub fn new(cache_dir: &'a Path, max_parallelism: usize) -> GenThumbs<'a> {
         GenThumbs {
             cache_dir: cache_dir,
             pending: Vec::new(),
@@ -634,7 +636,7 @@ impl<'a> GenThumbs<'a> {
 }
 
 
-fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &str) {
+fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &Path) {
     let max_parallelism = 32;
     let mut gen_thumbs = GenThumbs::new(cache_dir, max_parallelism);
     let mut prev_album_id = AlbumId(0);
@@ -650,34 +652,41 @@ fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &str) {
 
 fn print_usage() {
     println!("usage: ");
-    println!("  musium serve /path/to/music/library /path/to/cache <soundcard name>");
-    println!("  musium cache /path/to/music/library /path/to/cache <dummy arg>");
+    println!("  musium serve musium.conf");
+    println!("  musium cache musium.conf");
+}
+
+fn load_config(config_fname: &str) -> error::Result<Config> {
+    let f = fs::File::open(config_fname)?;
+    let buf_reader = io::BufReader::new(f);
+    let lines: io::Result<Vec<String>> = buf_reader.lines().collect();
+    Config::parse(lines?.iter())
 }
 
 fn main() {
-    if env::args().len() < 5 {
+    if env::args().len() != 3 {
         print_usage();
         process::exit(1);
     }
 
     let cmd = env::args().nth(1).unwrap();
-    let dir = env::args().nth(2).unwrap();
-    let cache_dir = env::args().nth(3).unwrap();
-    let card_name = env::args().nth(4).unwrap();
+    let config_path = env::args().nth(2).unwrap();
+    let config = load_config(&config_path).unwrap();
+    println!("Configuration:\n{}\n", config);
 
     match &cmd[..] {
         "serve" => {
-            let index = make_index(&dir);
+            let index = make_index(&config.library_path);
             let arc_index = std::sync::Arc::new(index);
-            println!("Indexing complete, starting server on port 8233.");
+            println!("Indexing complete, starting server on {}.", config.listen);
 
-            let player = musium::player::Player::new(arc_index.clone(), card_name);
-            let service = MetaServer::new(arc_index.clone(), &cache_dir, player);
-            serve("0.0.0.0:8233", Arc::new(service));
+            let player = musium::player::Player::new(arc_index.clone(), config.audio_device);
+            let service = MetaServer::new(arc_index.clone(), config.covers_path, player);
+            serve(&config.listen, Arc::new(service));
         }
         "cache" => {
-            let index = make_index(&dir);
-            generate_thumbnails(&index, &cache_dir);
+            let index = make_index(&config.library_path);
+            generate_thumbnails(&index, &config.covers_path);
         }
         _ => {
             print_usage();

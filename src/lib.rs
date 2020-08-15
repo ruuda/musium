@@ -20,6 +20,8 @@ mod flat_tree; // TODO: Rename.
 mod search;
 mod word_index;
 
+pub mod config;
+pub mod error;
 pub mod net;
 pub mod playback;
 pub mod player;
