@@ -8,6 +8,7 @@ nav:
   - Overview: index.md
   - User Guide:
     - Building: building.md
+    - Configuration: configuration.md
     - Tagging: tagging.md
   - API Reference: api.md
   - Internals:
