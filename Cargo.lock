@@ -346,6 +346,7 @@ name = "mindec"
 version = "0.0.0"
 dependencies = [
  "alsa",
+ "chrono",
  "claxon",
  "criterion",
  "crossbeam",

@@ -21,7 +21,6 @@ use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
 use std::thread;
-use std::time::{Duration, SystemTime};
 
 use tiny_http::{Header, Request, Response, ResponseBox, Server};
 use tiny_http::Method::{Get, Put};
@@ -31,6 +30,15 @@ use mindec::player::Player;
 
 fn header_content_type(content_type: &str) -> Header {
     Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes())
+        .expect("Failed to create content-type header, value is not ascii.")
+}
+
+fn header_expires_seconds(age_seconds: i64) -> Header {
+    let now = chrono::Utc::now();
+    let at = now.checked_add_signed(chrono::Duration::seconds(age_seconds)).unwrap();
+    // The format from https://tools.ietf.org/html/rfc7234#section-5.3.
+    let value = at.format("%a, %e %b %Y %H:%M:%S GMT").to_string();
+    Header::from_bytes(&b"Expires"[..], value)
         .expect("Failed to create content-type header, value is not ascii.")
 }
 
@@ -81,7 +89,7 @@ impl MetaServer {
             .boxed()
     }
 
-    fn handle_track_cover(&self, id: &str) -> ResponseBox {
+    fn handle_album_cover(&self, id: &str) -> ResponseBox {
         let album_id = match AlbumId::parse(id) {
             Some(aid) => aid,
             None => return self.handle_bad_request("Invalid album id."),
@@ -104,10 +112,9 @@ impl MetaServer {
         if let Some(cover) = reader.into_pictures().pop() {
             let content_type = header_content_type(&cover.mime_type);
             let data = cover.into_vec();
-            // let expires = SystemTime::now() + Duration::from_secs(3600 * 24 * 30);
             Response::from_data(data)
                 .with_header(content_type)
-                // TODO: Add back expires header.
+                .with_header(header_expires_seconds(3600 * 24 * 30))
                 .boxed()
         } else {
             // The file has no embedded front cover.
@@ -130,10 +137,9 @@ impl MetaServer {
             // thumbnail if it does not exist.
             Err(..) => return self.handle_not_found(),
         };
-        let _expires = SystemTime::now() + Duration::from_secs(3600 * 24 * 30);
         Response::from_file(file)
             .with_header(header_content_type("image/jpeg"))
-            // TODO: Add back expires header.
+            .with_header(header_expires_seconds(3600 * 24 * 30))
             .boxed()
     }
 
@@ -300,9 +306,9 @@ impl MetaServer {
         let p1 = parts.next();
 
         // A very basic router. See also docs/api.md for an overview.
-        let mut response = match (request.method(), p0, p1) {
+        let response = match (request.method(), p0, p1) {
             // API endpoints.
-            (&Get, Some("cover"),  Some(t)) => self.handle_track_cover(t),
+            (&Get, Some("cover"),  Some(t)) => self.handle_album_cover(t),
             (&Get, Some("thumb"),  Some(t)) => self.handle_thumb(t),
             (&Get, Some("track"),  Some(t)) => self.handle_track(t),
             (&Get, Some("album"),  Some(a)) => self.handle_album(a),
