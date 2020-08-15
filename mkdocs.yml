@@ -9,6 +9,7 @@ nav:
   - User Guide:
     - Building: building.md
     - Configuration: configuration.md
+    - Running: running.md
     - Tagging: tagging.md
   - API Reference: api.md
   - Internals:
