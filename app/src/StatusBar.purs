@@ -50,7 +50,11 @@ newCurrentTrack (QueuedTrack currentTrack) = Html.div $ do
 
   progressBar <- Html.div $ do
     Html.addClass "progress"
-    Html.setTransform "translateX(-100%)"
+    now <- liftEffect $ Time.getCurrentInstant
+    let
+      position = Time.subtract now currentTrack.startedAt
+      completion = Time.toSeconds position / Int.toNumber currentTrack.durationSeconds
+    Html.setTransform $ "translateX(" <> show (-100.0 * (1.0 - completion)) <> "%)"
     ask
 
   Html.div $ do
