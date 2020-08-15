@@ -26,6 +26,8 @@ The address and port to bind to, for example `0.0.0.0:80`. Use `0.0.0.0` as the
 address to listen for external connections, to make the player available to the
 entire local network, or use `localhost` to listen only on loopback.
 
+The listen address is optional and defaults to `0.0.0.0:8233`.
+
 ### `library_path`
 
 The directory to recursively scan for flac files.
