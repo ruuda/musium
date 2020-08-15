@@ -59,7 +59,6 @@ exports.assumeElementById = function(id) {
 }
 
 exports.body = document.body;
-exports.window = window;
 
 exports.getValue = function(element) {
   return function() {
