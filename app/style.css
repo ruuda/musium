@@ -410,7 +410,22 @@ button.play-next::before {
   backdrop-filter: blur(3pt) brightness(110%);
 }
 
-#statusbar #progress {
+#statusbar .current-track {
+  position: absolute;
+  top: 0;
+  opacity: 1.0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+#statusbar .current-track.fade-in {
+  opacity: 0.0;
+}
+
+#statusbar .current-track.fade-out {
+  opacity: 0.0;
+}
+
+#statusbar .progress {
   position: absolute;
   top: -1.2pt;
   height: 1.6pt;
@@ -421,15 +436,9 @@ button.play-next::before {
     #ccc 93%,
     #bbb 100%
   );
-
-  opacity: 1.0;
-  transition: opacity 0.5s ease-in-out, transform 2s linear;
 }
 
-#statusbar #current-track {
-  opacity: 1.0;
-  transition: opacity 0.1s ease-in-out;
-
+#statusbar .track-info {
   padding: 1rem;
   display: grid;
   grid-column-gap: 0.75em;
@@ -439,10 +448,6 @@ button.play-next::before {
     "thumb title"
     "thumb artist"
   ;
-}
-
-#statusbar #current-track.empty, #statusbar #progress.empty {
-  opacity: 0;
 }
 
 #statusbar .artist {

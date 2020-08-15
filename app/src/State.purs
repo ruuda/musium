@@ -12,6 +12,7 @@ module State
   , new
   ) where
 
+import Control.Monad.Error.Class (class MonadThrow, throwError)
 import Control.Monad.Reader.Class (ask)
 import Data.Array as Array
 import Data.Int as Int
@@ -23,6 +24,7 @@ import Effect.Aff.Bus (BusW)
 import Effect.Aff.Bus as Bus
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
+import Effect.Exception (Error)
 import Effect.Exception as Exception
 import Prelude
 
@@ -40,10 +42,13 @@ import Model (Album (..), QueuedTrack (..), TrackId)
 import Model as Model
 import Navigation (Navigation)
 import Navigation as Navigation
-import StatusBar (StatusBarElements)
+import StatusBar (StatusBarState)
 import StatusBar as StatusBar
 import Time (Instant)
 import Time as Time
+
+fatal :: forall m a. MonadThrow Error m => String -> m a
+fatal = Exception.error >>> throwError
 
 type EventBus = BusW Event
 
@@ -51,7 +56,6 @@ type Elements =
   { albumListView :: Element
   , albumListRunway :: Element
   , albumView :: Element
-  , statusBar :: StatusBarElements
   }
 
 type AppState =
@@ -59,6 +63,7 @@ type AppState =
   , queue :: Array QueuedTrack
   , nextQueueFetch :: Fiber Unit
   , nextProgressUpdate :: Fiber Unit
+  , statusBar :: StatusBarState
   , albumListState :: AlbumListState
     -- The index of the album at the top of the viewport.
   , albumListIndex :: Int
@@ -81,23 +86,23 @@ setupElements postEvent = Html.withElement Dom.body $ do
     Html.addClass "inactive"
     ask
 
-  statusBar <- StatusBar.new
-
   Html.onScroll $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
   liftEffect $ Dom.onResizeWindow $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
 
-  pure { albumListView, albumListRunway, albumView, statusBar }
+  pure { albumListView, albumListRunway, albumView }
 
 new :: BusW Event -> Effect AppState
 new bus = do
   let postEvent event = Bus.write event bus
   elements <- setupElements postEvent
+  statusBar <- Html.withElement Dom.body StatusBar.new
   never <- Aff.launchSuspendedAff Aff.never
   pure
     { albums: []
     , queue: []
     , nextQueueFetch: never
     , nextProgressUpdate: never
+    , statusBar: statusBar
     , albumListState: { elements: [], begin: 0, end: 0 }
     , albumListIndex: 0
     , navigation: { location: Navigation.Library }
@@ -146,45 +151,28 @@ updateAlbumList state = do
     state.albumListState
   pure $ state { albumListState = scrollState, albumListIndex = index }
 
--- Update the status bar elements, if the current track has changed. This only
--- updates the view, it does not change the queue in the state.
-updateStatusBar :: Maybe QueuedTrack -> AppState -> Effect Unit
-updateStatusBar currentTrack state = do
-  case currentTrack of
-    -- When the current track did not change, do not re-render the status bar.
-    Just (QueuedTrack t) | Just t.id == currentTrackId state -> pure unit
-    Nothing | Array.null state.queue -> pure unit
-
-    -- When it did change, clear the current status bar, and place the new one.
-    Nothing ->
-      Html.withElement state.elements.statusBar.currentTrack $ Html.addClass "empty"
-
-    Just t -> do
-      Html.withElement state.elements.statusBar.currentTrack $ do
-        Html.removeClass "empty"
-        Html.clear
-        StatusBar.renderCurrentTrack t
-
 -- Update the progress bar, and schedule the next update event, if applicable.
 updateProgressBar :: AppState -> Aff AppState
 updateProgressBar state = do
   Aff.killFiber (Exception.error "Update cancelled in favor of new one.") state.nextProgressUpdate
   case Array.head state.queue of
-    Nothing -> do
-      liftEffect $ Html.withElement state.elements.statusBar.progressBar $ Html.addClass "empty"
-      pure state
+    -- If these is no current track, there is no progress to update.
+    Nothing -> pure state
 
-    Just t -> do
-      delay <- liftEffect $ Html.withElement state.elements.statusBar.progressBar $ do
-        Html.removeClass "empty"
-        StatusBar.updateProgressBar t
+    Just (QueuedTrack t) -> case state.statusBar.current of
+      -- If there is a current track, and if it matches the one in the status
+      -- bar, then we can update progress in the status bar.
+      Just current | current.track == t.id -> do
+          delay <- liftEffect $ StatusBar.updateProgressBar (QueuedTrack t) state.statusBar
 
-      -- Schedule the next update.
-      fiber <- Aff.forkAff $ do
-        Aff.delay $ Time.toNonNegativeMilliseconds delay
-        state.postEvent $ Event.UpdateProgress
+          -- Schedule the next update.
+          fiber <- Aff.forkAff $ do
+            Aff.delay $ Time.toNonNegativeMilliseconds delay
+            state.postEvent $ Event.UpdateProgress
 
-      pure $ state { nextProgressUpdate = fiber }
+          pure $ state { nextProgressUpdate = fiber }
+
+      _ -> fatal "Mismatch between status bar current track, and queue."
 
 handleEvent :: Event -> AppState -> Aff AppState
 handleEvent event state = case event of
@@ -205,7 +193,7 @@ handleEvent event state = case event of
         }
 
   Event.UpdateQueue queue -> do
-    liftEffect $ updateStatusBar (Array.head queue) state
+    statusBar' <- liftEffect $ StatusBar.updateStatusBar (Array.head queue) state.statusBar
     -- TODO: Possibly update the queue, if it is in view.
 
     -- Update the queue again either 30 seconds from now, or at the time when
@@ -221,7 +209,10 @@ handleEvent event state = case event of
         Nothing -> t30
         Just (QueuedTrack t) -> min t30 t.refreshAt
 
-    updateProgressBar <=< scheduleFetchQueue nextUpdate $ state { queue = queue }
+    updateProgressBar <=< scheduleFetchQueue nextUpdate $ state
+      { queue = queue
+      , statusBar = statusBar'
+      }
 
   Event.UpdateProgress -> updateProgressBar state
 

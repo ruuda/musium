@@ -6,60 +6,108 @@
 -- A copy of the License has been included in the root of the repository.
 
 module StatusBar
-  ( StatusBarElements
+  ( CurrentTrack
+  , StatusBarState
   , new
-  , renderCurrentTrack
   , updateProgressBar
+  , updateStatusBar
   ) where
 
 import Control.Monad.Reader.Class (ask)
 import Data.Int as Int
-import Effect.Class (liftEffect)
+import Data.Maybe (Maybe (Nothing, Just))
+import Effect (Effect)
 import Prelude
 
 import Dom (Element)
 import Html (Html)
 import Html as Html
-import Model (QueuedTrack (..))
+import Model (QueuedTrack (..), TrackId)
 import Model as Model
 import Time (Duration)
 import Time as Time
 
-type StatusBarElements =
-  { progressBar :: Element
-  , currentTrack :: Element
+type CurrentTrack =
+  { track :: TrackId
+  , container :: Element
+  , progressBar :: Element
   }
 
-new :: Html StatusBarElements
+type StatusBarState =
+  { current :: Maybe CurrentTrack
+  , statusBar :: Element
+  }
+
+newCurrentTrack :: QueuedTrack -> Html CurrentTrack
+newCurrentTrack (QueuedTrack currentTrack) = Html.div $ do
+  Html.addClass "current-track"
+
+  progressBar <- Html.div $ do
+    Html.addClass "progress"
+    Html.setTransform "translateX(-100%)"
+    ask
+
+  Html.div $ do
+    Html.addClass "track-info"
+    Html.img
+      (Model.thumbUrl $ currentTrack.albumId)
+      (currentTrack.title <> " by " <> currentTrack.artist)
+      (Html.addClass "thumb")
+    Html.span $ do
+      Html.addClass "title"
+      Html.text $ currentTrack.title
+    Html.span $ do
+      Html.addClass "artist"
+      Html.text $ currentTrack.artist
+
+  container <- ask
+  pure { track: currentTrack.id, container, progressBar }
+
+new :: Html StatusBarState
 new = Html.div $ do
   Html.setId "statusbar"
-  progressBar <- Html.div $ do
-    Html.setId "progress"
-    Html.addClass "empty"
-    ask
-  currentTrack <- Html.div $ do
-    Html.setId "current-track"
-    Html.addClass "empty"
-    ask
-  pure { progressBar, currentTrack }
+  Html.addClass "empty"
+  statusBar <- ask
+  pure { current: Nothing, statusBar }
 
-renderCurrentTrack :: QueuedTrack -> Html Unit
-renderCurrentTrack (QueuedTrack currentTrack) = do
-  Html.img
-    (Model.thumbUrl $ currentTrack.albumId)
-    (currentTrack.title <> " by " <> currentTrack.artist)
-    (Html.addClass "thumb")
-  Html.span $ do
-    Html.addClass "title"
-    Html.text $ currentTrack.title
-  Html.span $ do
-    Html.addClass "artist"
-    Html.text $ currentTrack.artist
+-- Starts the animation to remove the current "current track", and remove it
+-- once the animation is done.
+removeCurrentTrack :: StatusBarState -> Effect StatusBarState
+removeCurrentTrack state = case state.current of
+  Nothing -> pure state
+  Just current -> do
+    Html.withElement state.statusBar $ Html.addClass "empty"
+    -- TODO: Start animation, remove.
+    pure $ state { current = Nothing }
 
--- Update the progress bar. Return delay until the next update is needed.
-updateProgressBar :: QueuedTrack -> Html Duration
-updateProgressBar (QueuedTrack currentTrack) = do
-  now <- liftEffect $ Time.getCurrentInstant
+-- Add a new current track. This loses the reference to a previous one if there
+-- was any, but it does not remove it from the DOM.
+addCurrentTrack :: QueuedTrack -> StatusBarState -> Effect StatusBarState
+addCurrentTrack track state = do
+  currentTrack <- Html.withElement state.statusBar $ do
+    Html.removeClass "empty"
+    newCurrentTrack track
+  pure $ state { current = Just currentTrack }
+
+updateStatusBar :: Maybe QueuedTrack -> StatusBarState -> Effect StatusBarState
+updateStatusBar currentTrack state =
+  case currentTrack of
+    Just (QueuedTrack newTrack) -> case state.current of
+      -- The track did not change, nothing to do.
+      Just old | old.track == newTrack.id -> pure state
+      Just old -> addCurrentTrack (QueuedTrack newTrack) =<< removeCurrentTrack state
+      Nothing  -> addCurrentTrack (QueuedTrack newTrack) state
+
+    Nothing -> case state.current of
+      Just old -> removeCurrentTrack state
+      Nothing  -> pure state
+
+-- Update the progress of the current track, return delay until the next update
+-- is needed. This does not confirm that the current track in the view matches
+-- the track passed to this function.
+updateProgressBar :: QueuedTrack -> StatusBarState -> Effect Duration
+updateProgressBar (QueuedTrack currentTrack) state = do
+  now <- Time.getCurrentInstant
   let
     -- Compute the completion 5 seconds from now, or at the end of the track,
     -- whichever comes first, and set that as the target. Then set a css
@@ -76,8 +124,11 @@ updateProgressBar (QueuedTrack currentTrack) = do
     animationDurationSeconds = Time.toSeconds animationDuration
     transition = "opacity 0.5s ease-in-out, transform " <> show animationDurationSeconds <> "s linear"
 
-  Html.setTransition transition
-  Html.setTransform transform
+  case state.current of
+    Nothing -> pure unit
+    Just t -> Html.withElement t.progressBar $ do
+      Html.setTransition transition
+      Html.setTransform transform
 
   -- Schedule the next update slightly before the animation completes, so we
   -- will not be too late to start the next one, which could cause a stutter.
