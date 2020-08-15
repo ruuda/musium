@@ -16,10 +16,15 @@ module StatusBar
 import Control.Monad.Reader.Class (ask)
 import Data.Int as Int
 import Data.Maybe (Maybe (Nothing, Just))
+import Data.Time.Duration (Milliseconds (..))
 import Effect (Effect)
+import Effect.Class (liftEffect)
+import Effect.Aff (launchAff_)
+import Effect.Aff as Aff
 import Prelude
 
 import Dom (Element)
+import Dom as Dom
 import Html (Html)
 import Html as Html
 import Model (QueuedTrack (..), TrackId)
@@ -41,6 +46,7 @@ type StatusBarState =
 newCurrentTrack :: QueuedTrack -> Html CurrentTrack
 newCurrentTrack (QueuedTrack currentTrack) = Html.div $ do
   Html.addClass "current-track"
+  Html.addClass "fade-in"
 
   progressBar <- Html.div $ do
     Html.addClass "progress"
@@ -77,7 +83,16 @@ removeCurrentTrack state = case state.current of
   Nothing -> pure state
   Just current -> do
     Html.withElement state.statusBar $ Html.addClass "empty"
-    -- TODO: Start animation, remove.
+
+    -- Apply the "fade-out" class to trigger the css transition that hides the
+    -- node. After the animation is done, we remove the node in the Aff below.
+    Html.withElement current.container $ Html.addClass "fade-out"
+    launchAff_ $ do
+      -- The css transition is 0.15s, so choose 0.2s to be sure the transition
+      -- has ended.
+      Aff.delay $ Milliseconds 200.0
+      liftEffect $ Dom.removeChild current.container state.statusBar
+
     pure $ state { current = Nothing }
 
 -- Add a new current track. This loses the reference to a previous one if there
@@ -87,6 +102,15 @@ addCurrentTrack track state = do
   currentTrack <- Html.withElement state.statusBar $ do
     Html.removeClass "empty"
     newCurrentTrack track
+
+  -- The new node gets created with "fade-in" class applied. We remove it
+  -- immediately to trigger the css transition to the normal state. We do need
+  -- a delay for this, if we remove the class synchronously, the transition does
+  -- not trigger.
+  launchAff_ $ do
+    Aff.delay $ Milliseconds 17.0
+    liftEffect $ Html.withElement currentTrack.container $ Html.removeClass "fade-in"
+
   pure $ state { current = Just currentTrack }
 
 updateStatusBar :: Maybe QueuedTrack -> StatusBarState -> Effect StatusBarState
@@ -94,6 +118,9 @@ updateStatusBar currentTrack state =
   case currentTrack of
     Just (QueuedTrack newTrack) -> case state.current of
       -- The track did not change, nothing to do.
+      -- TODO: Checking this on track id is not correct, because you can queue
+      -- the same track twice in a row. Instead, the client should assign a
+      -- unique identifier with every enqueue operation.
       Just old | old.track == newTrack.id -> pure state
       Just old -> addCurrentTrack (QueuedTrack newTrack) =<< removeCurrentTrack state
       Nothing  -> addCurrentTrack (QueuedTrack newTrack) state

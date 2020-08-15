@@ -413,8 +413,9 @@ button.play-next::before {
 #statusbar .current-track {
   position: absolute;
   top: 0;
+  width: 100%;
   opacity: 1.0;
-  transition: opacity 0.2s ease-in-out;
+  transition: opacity 0.15s ease-in-out;
 }
 
 #statusbar .current-track.fade-in {
@@ -448,6 +449,16 @@ button.play-next::before {
     "thumb title"
     "thumb artist"
   ;
+  transition: transform 0.15s ease-in-out;
+  transform: translateX(0);
+}
+
+#statusbar .current-track.fade-in .track-info {
+  transform: translateX(1em);
+}
+
+#statusbar .current-track.fade-out .track-info {
+  transform: translateX(-1em);
 }
 
 #statusbar .artist {
