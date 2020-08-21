@@ -21,6 +21,7 @@ pub struct Config {
     pub listen: String,
     pub library_path: PathBuf,
     pub covers_path: PathBuf,
+    pub play_log_path: Option<PathBuf>,
     // TODO: Make this optional; pick the first one by default.
     pub audio_device: String,
 }
@@ -30,6 +31,10 @@ impl fmt::Display for Config {
         write!(f, "  listen = {}\n", self.listen)?;
         write!(f, "  library_path = {}\n", self.library_path.to_string_lossy())?;
         write!(f, "  covers_path = {}\n", self.library_path.to_string_lossy())?;
+        match &self.play_log_path {
+            Some(p) => write!(f, "  play_log_path = {}\n", p.to_string_lossy())?,
+            None => write!(f, "  play_log_path is not set\n")?,
+        }
         write!(f, "  audio_device = {}", self.audio_device)?;
         Ok(())
     }
@@ -44,6 +49,7 @@ impl Config {
         let mut listen = None;
         let mut library_path = None;
         let mut covers_path = None;
+        let mut play_log_path = None;
         let mut audio_device = None;
 
         for (lineno, line_raw) in lines.into_iter().enumerate() {
@@ -66,6 +72,7 @@ impl Config {
                     "listen" => listen = Some(String::from(value)),
                     "library_path" => library_path = Some(PathBuf::from(value)),
                     "covers_path" => covers_path = Some(PathBuf::from(value)),
+                    "play_log_path" => play_log_path = Some(PathBuf::from(value)),
                     "audio_device" => audio_device = Some(String::from(value)),
                     _ => {
                         let msg = "Unknown key. Expected one of \
@@ -98,6 +105,7 @@ impl Config {
                     "Covers path not set. Expected 'covers_path ='-line."
                 )),
             },
+            play_log_path: play_log_path,
             audio_device: match audio_device {
                 Some(d) => d,
                 None => return Err(Error::IncompleteConfig(
