@@ -7,6 +7,7 @@
 
 //! Ensures that the right samples are queued for playback.
 
+use std::fmt;
 use std::fs;
 use std::mem;
 use std::sync::{Arc, Mutex};
@@ -20,6 +21,20 @@ use crate::playback;
 use crate::{MetaIndex, TrackId};
 
 type FlacReader = claxon::FlacReader<fs::File>;
+
+/// A unique identifier for a queued track.
+///
+/// This identifier is used to track the queued track through its lifetimes
+/// (queued, playing, history). Having a unique id per queued track allows e.g.
+/// distinguishing the same track queued twice in succession.
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct QueueId(u64);
+
+impl fmt::Display for QueueId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:016x}", self.0)
+    }
+}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Format {
@@ -102,6 +117,9 @@ pub enum Decode {
 }
 
 pub struct QueuedTrack {
+    /// A unique identifier for this particular queuement of the track.
+    id: QueueId,
+
     /// Id of this track.
     track: TrackId,
 
@@ -119,8 +137,9 @@ pub struct QueuedTrack {
 }
 
 impl QueuedTrack {
-    pub fn new(track: TrackId) -> QueuedTrack {
+    pub fn new(id: QueueId, track: TrackId) -> QueuedTrack {
         QueuedTrack {
+            id: id,
             track: track,
             blocks: Vec::new(),
             samples_played: 0,
@@ -324,6 +343,9 @@ impl DecodeTask {
 }
 
 pub struct PlayerState {
+    /// Counter that assigns queue ids.
+    next_unused_id: QueueId,
+
     /// The tracks pending playback. Element 0 is being played currently.
     ///
     /// Invariant: If the queued track at index i has no decoded blocks, then
@@ -345,6 +367,7 @@ pub struct PlayerState {
 impl PlayerState {
     pub fn new() -> PlayerState {
         PlayerState {
+            next_unused_id: QueueId(0),
             queue: Vec::new(),
             current_decode: None,
         }
@@ -615,7 +638,7 @@ pub struct Player<I: MetaIndex + Sync + Send + 'static> {
 
 pub struct QueueSnapshot {
     /// The queued tracks, index 0 is the currently playing track.
-    pub tracks: Vec<TrackId>,
+    pub tracks: Vec<(QueueId, TrackId)>,
 
     /// The current playback position in the track, in milliseconds.
     pub position_ms: u64,
@@ -670,19 +693,23 @@ impl<I: MetaIndex + Sync + Send + 'static> Player<I> {
     }
 
     /// Enqueue the track for playback at the end of the queue.
-    pub fn enqueue(&self, track_id: TrackId) {
+    pub fn enqueue(&self, track_id: TrackId) -> QueueId {
         // If the queue is empty, then the playback thread may be parked,
         // so we may need to wake it after enqueuing something.
-        let needs_wake = {
+        let (queue_id, needs_wake) = {
             let mut state = self.state.lock().unwrap();
             let needs_wake = state.is_queue_empty();
-            state.queue.push(QueuedTrack::new(track_id));
-            needs_wake
+            let id = state.next_unused_id;
+            state.next_unused_id = QueueId(id.0 + 1);
+            state.queue.push(QueuedTrack::new(id, track_id));
+            (id, needs_wake)
         };
 
         if needs_wake {
             self.playback_thread.thread().unpark();
         }
+
+        queue_id
     }
 
     /// Return a snapshot of the queue.
@@ -691,7 +718,7 @@ impl<I: MetaIndex + Sync + Send + 'static> Player<I> {
 
         let mut tracks = Vec::with_capacity(state.queue.len());
         for queued_track in state.queue.iter() {
-            tracks.push(queued_track.track);
+            tracks.push((queued_track.id, queued_track.track));
         }
 
         let mut result = QueueSnapshot {

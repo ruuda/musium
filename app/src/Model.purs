@@ -15,6 +15,7 @@ module Model
   , SearchAlbum (..)
   , SearchResults (..)
   , SearchTrack (..)
+  , QueueId (..)
   , QueuedTrack (..)
   , coverUrl
   , enqueueTrack
@@ -72,6 +73,14 @@ derive instance trackIdOrd :: Ord TrackId
 instance showTrackId :: Show TrackId where
   show (TrackId id) = id
 
+newtype QueueId = QueueId String
+
+derive instance queueIdEq :: Eq QueueId
+derive instance queueIdOrd :: Ord QueueId
+
+instance showQueueId :: Show QueueId where
+  show (QueueId id) = id
+
 thumbUrl :: AlbumId -> String
 thumbUrl (AlbumId id) = "/thumb/" <> id
 
@@ -108,12 +117,16 @@ getAlbums = do
       Left err -> fatal $ "Failed to parse albums: " <> err
       Right albums -> pure $ sortWith (\(Album a) -> a.date) albums
 
-enqueueTrack :: TrackId -> Aff Unit
+enqueueTrack :: TrackId -> Aff QueueId
 enqueueTrack (TrackId trackId) = do
-  result <- Http.put Http.ResponseFormat.ignore ("/queue/" <> trackId) Nothing
+  result <- Http.put Http.ResponseFormat.json ("/queue/" <> trackId) Nothing
   case result of
     Left err -> fatal $ "Enqueue failed: " <> Http.printError err
-    Right unit -> Console.log $ "Enqueued track " <> trackId
+    Right response -> case Json.decodeJson response.body of
+      Left err -> fatal $ "Failed to enqueue track: " <> err
+      Right queueId -> do
+        Console.log $ "Enqueued track " <> trackId <> ", got queue id " <> queueId
+        pure $ QueueId queueId
 
 newtype SearchArtist = SearchArtist
   { id :: ArtistId
@@ -187,7 +200,8 @@ search query = do
       Right results -> pure results
 
 newtype QueuedTrackRaw = QueuedTrackRaw
-  { id :: TrackId
+  { queueId :: QueueId
+  , trackId :: TrackId
   , title :: String
   , artist :: String
   , album :: String
@@ -198,7 +212,8 @@ newtype QueuedTrackRaw = QueuedTrackRaw
   }
 
 newtype QueuedTrack = QueuedTrack
-  { id :: TrackId
+  { queueId :: QueueId
+  , trackId :: TrackId
   , title :: String
   , artist :: String
   , album :: String
@@ -211,7 +226,8 @@ newtype QueuedTrack = QueuedTrack
 instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
   decodeJson json = do
     obj        <- Json.decodeJson json
-    id         <- map TrackId $ Json.getField obj "id"
+    queueId    <- map QueueId $ Json.getField obj "queue_id"
+    trackId    <- map TrackId $ Json.getField obj "track_id"
     title      <- Json.getField obj "title"
     artist     <- Json.getField obj "artist"
     album      <- Json.getField obj "album"
@@ -220,7 +236,8 @@ instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
     positionSeconds <- Json.getField obj "position_seconds"
     bufferedSeconds <- Json.getField obj "buffered_seconds"
     pure $ QueuedTrackRaw
-      { id
+      { queueId
+      , trackId
       , title
       , artist
       , album
@@ -242,7 +259,8 @@ getQueue = do
     -- other offsets relative to that point in time.
     now = Time.mean t0 t1
     makeTimeAbsolute (QueuedTrackRaw track) = QueuedTrack
-      { id: track.id
+      { queueId: track.queueId
+      , trackId: track.trackId
       , title: track.title
       , artist: track.artist
       , album: track.album

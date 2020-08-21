@@ -236,9 +236,12 @@ impl MetaServer {
             None => return self.handle_not_found(),
         };
 
-        self.player.enqueue(track_id);
+        let queue_id = self.player.enqueue(track_id);
+        let queue_id_json = format!(r#""{}""#, queue_id);
 
-        Response::empty(201) // "201 Created"
+        Response::from_string(queue_id_json)
+            .with_status_code(201) // "201 Created"
+            .with_header(header_content_type("application/json"))
             .boxed()
     }
 

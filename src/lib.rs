@@ -42,6 +42,7 @@ use std::u64;
 use unicode_normalization::UnicodeNormalization;
 
 use crate::word_index::{MemoryWordIndex, WordMeta};
+use crate::player::QueueId;
 
 // Stats of my personal music library at this point:
 //
@@ -385,20 +386,20 @@ pub trait MetaIndex {
     fn write_queue_json<W: Write>(
         &self,
         mut w: W,
-        tracks: &[TrackId],
+        tracks: &[(QueueId, TrackId)],
         position_seconds: f32,
         buffered_seconds: f32,
     ) -> io::Result<()> {
         write!(w, "[")?;
         let mut first = true;
-        for &track_id in tracks.iter() {
+        for &(queue_id, track_id) in tracks.iter() {
             if !first { write!(w, ",")?; }
 
             // Same as the search result track format, but additionally includes
             // the duration, and playback information.
             let track = self.get_track(track_id).unwrap();
             let album = self.get_album(track.album_id).unwrap();
-            write!(w, r#"{{"id":"{}","title":"#, track_id)?;
+            write!(w, r#"{{"queue_id":"{}","track_id":"{}","title":"#, queue_id, track_id)?;
             serde_json::to_writer(&mut w, self.get_string(track.title))?;
             write!(w, r#","album_id":"{}","album":"#, track.album_id)?;
             serde_json::to_writer(&mut w, self.get_string(album.title))?;

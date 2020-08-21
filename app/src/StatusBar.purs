@@ -71,7 +71,7 @@ newCurrentTrack (QueuedTrack currentTrack) = Html.div $ do
       Html.text $ currentTrack.artist
 
   container <- ask
-  pure { track: currentTrack.id, container, progressBar }
+  pure { track: currentTrack.trackId, container, progressBar }
 
 new :: Html StatusBarState
 new = Html.div $ do
@@ -125,7 +125,7 @@ updateStatusBar currentTrack state =
       -- TODO: Checking this on track id is not correct, because you can queue
       -- the same track twice in a row. Instead, the client should assign a
       -- unique identifier with every enqueue operation.
-      Just old | old.track == newTrack.id -> pure state
+      Just old | old.track == newTrack.trackId -> pure state
       Just old -> addCurrentTrack (QueuedTrack newTrack) =<< removeCurrentTrack state
       Nothing  -> addCurrentTrack (QueuedTrack newTrack) state
 

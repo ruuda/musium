@@ -112,7 +112,7 @@ new bus = do
 
 currentTrackId :: AppState -> Maybe TrackId
 currentTrackId state = case Array.head state.queue of
-  Just (QueuedTrack t) -> Just t.id
+  Just (QueuedTrack t) -> Just t.trackId
   Nothing              -> Nothing
 
 -- Bring the album list in sync with the viewport (the album list index and
@@ -162,7 +162,7 @@ updateProgressBar state = do
     Just (QueuedTrack t) -> case state.statusBar.current of
       -- If there is a current track, and if it matches the one in the status
       -- bar, then we can update progress in the status bar.
-      Just current | current.track == t.id -> do
+      Just current | current.track == t.trackId -> do
           delay <- liftEffect $ StatusBar.updateProgressBar (QueuedTrack t) state.statusBar
 
           -- Schedule the next update.

@@ -96,10 +96,11 @@ renderTrack postEvent (Album album) (Track track) =
     Html.onClick $ do
       Html.withElement trackElement $ Html.addClass "queueing"
       launchAff_ $ do
-        Model.enqueueTrack $ track.id
+        queueId <- Model.enqueueTrack $ track.id
         now <- liftEffect $ Time.getCurrentInstant
         postEvent $ Event.EnqueueTrack $ QueuedTrack
-          { id: track.id
+          { queueId: queueId
+          , trackId: track.id
           , title: track.title
           , artist: track.artist
           , album: album.title
