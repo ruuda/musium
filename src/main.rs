@@ -686,7 +686,11 @@ fn main() {
             let arc_index = std::sync::Arc::new(index);
             println!("Indexing complete, starting server on {}.", config.listen);
 
-            let player = musium::player::Player::new(arc_index.clone(), config.audio_device);
+            let player = musium::player::Player::new(
+                arc_index.clone(),
+                config.audio_device,
+                config.play_log_path,
+            );
             let service = MetaServer::new(arc_index.clone(), config.covers_path, player);
             serve(&config.listen, Arc::new(service));
         }

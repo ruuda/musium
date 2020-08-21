@@ -10,8 +10,9 @@
 use std::fmt;
 use std::fs;
 use std::mem;
-use std::sync::mpsc;
+use std::path::PathBuf;
 use std::sync::mpsc::SyncSender;
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::thread;
@@ -672,7 +673,11 @@ pub struct QueueSnapshot {
 }
 
 impl Player {
-    pub fn new(index: Arc<dyn MetaIndex + Send + Sync>, card_name: String) -> Player {
+    pub fn new(
+        index: Arc<dyn MetaIndex + Send + Sync>,
+        card_name: String,
+        play_log_path: Option<PathBuf>,
+    ) -> Player {
         // Build the channel to send playback events to the history thread. That
         // thread is expected to process them immediately and be idle most of
         // the time, so pick a small channel size.
@@ -709,7 +714,13 @@ impl Player {
         let index_for_history = index.clone();
         let history_join_handle = builder
             .name("history".into())
-            .spawn(move || history::main(&*index_for_history, receiver)).unwrap();
+            .spawn(move || {
+                history::main(
+                    play_log_path,
+                    &*index_for_history,
+                    receiver,
+                );
+            }).unwrap();
 
         Player {
             state: state,

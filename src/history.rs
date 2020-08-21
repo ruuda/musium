@@ -7,6 +7,10 @@
 
 //! Logging of historical playback events.
 
+use std::fs;
+use std::io;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::Receiver;
 
 use crate::{MetaIndex, TrackId};
@@ -19,21 +23,44 @@ pub enum PlaybackEvent {
     Completed(QueueId, TrackId),
 }
 
+fn append_event(
+    play_log_path: &Path,
+    index: &dyn MetaIndex,
+    event: PlaybackEvent,
+) -> io::Result<()> {
+    let now = chrono::Utc::now();
+    let file = fs::OpenOptions::new().append(true).create(true).open(play_log_path)?;
+    let mut writer = io::BufWriter::new(file);
+
+    match event {
+        PlaybackEvent::Started(queue_id, track_id) => {
+            serialization::write_playback_event(
+                index, &mut writer, now, "started", queue_id, track_id,
+            )?;
+        }
+        PlaybackEvent::Completed(queue_id, track_id) => {
+            serialization::write_playback_event(
+                index, &mut writer, now, "completed", queue_id, track_id,
+            )?;
+        }
+    }
+
+    write!(writer, "\n")
+}
+
 /// Main for the thread that logs historical playback events.
-pub fn main(index: &dyn MetaIndex, events: Receiver<PlaybackEvent>) {
+pub fn main(
+    play_log_path: Option<PathBuf>,
+    index: &dyn MetaIndex,
+    events: Receiver<PlaybackEvent>,
+) {
     for event in events {
-        let now = chrono::Utc::now();
-        let stdout = std::io::stdout();
-        match event {
-            PlaybackEvent::Started(queue_id, track_id) => {
-                serialization::write_playback_event(
-                    index, stdout.lock(), now, "started", queue_id, track_id,
-                ).unwrap();
-            }
-            PlaybackEvent::Completed(queue_id, track_id) => {
-                serialization::write_playback_event(
-                    index, stdout.lock(), now, "completed", queue_id, track_id,
-                ).unwrap();
+        // Only log if a file is provided. We do still run the thread and the
+        // loop if logging is disabled, to make sure we drain the receiver.
+        if let Some(ref p) = play_log_path {
+            match append_event(&p, index, event) {
+                Ok(()) => {},
+                Err(err) => eprintln!("Failed to write to play log: {}", err),
             }
         }
     }
