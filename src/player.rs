@@ -193,14 +193,14 @@ pub struct DecodeResult {
 
 impl DecodeTask {
     /// Decode until the end of the file, or until we produced more than `stop_after_bytes`.
-    pub fn run<I: MetaIndex>(self, index: &I, stop_after_bytes: usize) -> DecodeResult {
+    pub fn run(self, index: &dyn MetaIndex, stop_after_bytes: usize) -> DecodeResult {
         match self {
             DecodeTask::Continue(reader) => DecodeTask::decode(reader, stop_after_bytes),
             DecodeTask::Start(track_id) => DecodeTask::start(index, track_id, stop_after_bytes),
         }
     }
 
-    fn start<I: MetaIndex>(index: &I, track_id: TrackId, stop_after_bytes: usize) -> DecodeResult {
+    fn start(index: &dyn MetaIndex, track_id: TrackId, stop_after_bytes: usize) -> DecodeResult {
         let track = match index.get_track(track_id) {
             Some(t) => t,
             None => panic!("Track {} does not exist, how did it end up queued?"),
@@ -547,7 +547,7 @@ impl PlayerState {
 }
 
 /// Decode the queue until we reach a set memory limit.
-fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
+fn decode_burst(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>) {
     // The decode thread is a trade-off between power consumption and memory
     // usage: decoding a lot in one go and then sleeping for a long time is more
     // efficient than decoding a bit all the time, because the CPU can be
@@ -612,7 +612,7 @@ fn decode_burst<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
 /// Decodes until the in-memory buffer is full, then parks itself. When
 /// unparked, if the buffer is running low, it starts a new burst of decode and
 /// then parks itself again, etc.
-fn decode_main<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
+fn decode_main(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>) {
     loop {
         let should_decode = {
             let state = state_mutex.lock().unwrap();
@@ -629,9 +629,9 @@ fn decode_main<I: MetaIndex>(index: &I, state_mutex: &Mutex<PlayerState>) {
     }
 }
 
-pub struct Player<I: MetaIndex + Sync + Send + 'static> {
+pub struct Player {
     state: Arc<Mutex<PlayerState>>,
-    index: Arc<I>,
+    index: Arc<dyn MetaIndex + Send + Sync>,
     decode_thread: JoinHandle<()>,
     playback_thread: JoinHandle<()>,
 }
@@ -647,8 +647,8 @@ pub struct QueueSnapshot {
     pub buffered_ms: u64,
 }
 
-impl<I: MetaIndex + Sync + Send + 'static> Player<I> {
-    pub fn new(index: Arc<I>, card_name: String) -> Player<I> {
+impl Player {
+    pub fn new(index: Arc<dyn MetaIndex + Send + Sync>, card_name: String) -> Player {
         let state = Arc::new(Mutex::new(PlayerState::new()));
 
         // Start the decode thread. It runs indefinitely, but we do need to

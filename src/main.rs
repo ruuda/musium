@@ -48,14 +48,14 @@ fn header_expires_seconds(age_seconds: i64) -> Header {
 struct MetaServer {
     index: Arc<MemoryMetaIndex>,
     cache_dir: PathBuf,
-    player: Player<MemoryMetaIndex>,
+    player: Player,
 }
 
 impl MetaServer {
     fn new(
         index: Arc<MemoryMetaIndex>,
         cache_dir: PathBuf,
-        player: Player<MemoryMetaIndex>,
+        player: Player,
     ) -> MetaServer {
         MetaServer {
             index: index,
