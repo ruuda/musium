@@ -122,10 +122,10 @@ pub enum Decode {
 
 pub struct QueuedTrack {
     /// A unique identifier for this particular queuement of the track.
-    id: QueueId,
+    queue_id: QueueId,
 
-    /// Id of this track.
-    track: TrackId,
+    /// Track id of the track to be played.
+    track_id: TrackId,
 
     /// Decoded blocks of audio data.
     blocks: Vec<Block>,
@@ -141,10 +141,10 @@ pub struct QueuedTrack {
 }
 
 impl QueuedTrack {
-    pub fn new(id: QueueId, track: TrackId) -> QueuedTrack {
+    pub fn new(queue_id: QueueId, track_id: TrackId) -> QueuedTrack {
         QueuedTrack {
-            id: id,
-            track: track,
+            queue_id: queue_id,
+            track_id: track_id,
             blocks: Vec::new(),
             samples_played: 0,
             decode: Decode::NotStarted,
@@ -446,7 +446,7 @@ impl PlayerState {
                 self.current_decode = Some(i - 1);
             }
 
-            self.events.send(PlaybackEvent::Completed(track.id, track.track))
+            self.events.send(PlaybackEvent::Completed(track.queue_id, track.track_id))
                 .expect("Failed to send completion event to history thread.");
         }
 
@@ -517,7 +517,7 @@ impl PlayerState {
             match decode {
                 Decode::NotStarted => {
                     self.current_decode = Some(i);
-                    return Some(DecodeTask::Start(queued_track.track));
+                    return Some(DecodeTask::Start(queued_track.track_id));
                 }
                 Decode::Partial(reader) => {
                     self.current_decode = Some(i);
@@ -742,7 +742,7 @@ impl Player {
 
         let mut tracks = Vec::with_capacity(state.queue.len());
         for queued_track in state.queue.iter() {
-            tracks.push((queued_track.id, queued_track.track));
+            tracks.push((queued_track.queue_id, queued_track.track_id));
         }
 
         let mut result = QueueSnapshot {
