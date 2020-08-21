@@ -422,9 +422,21 @@ impl PlayerState {
 
     /// Consume n samples from the peeked block.
     pub fn consume(&mut self, n: usize) {
+        assert!(n > 0, "Must consume at least one sample.");
+
         let track_done = {
             let queued_track = &mut self.queue[0];
+
+            // If this is the first time that we consume samples from this
+            // track, then that means it was just started.
+            if queued_track.samples_played == 0 {
+                self.events.send(
+                    PlaybackEvent::Started(queued_track.queue_id, queued_track.track_id)
+                ).expect("Failed to send completion event to history thread.");
+            }
+
             queued_track.samples_played += n as u64;
+
             let block_done = {
                 let block = &mut queued_track.blocks[0];
                 block.consume(n);
