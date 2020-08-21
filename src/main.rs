@@ -29,6 +29,7 @@ use musium::config::Config;
 use musium::error;
 use musium::player::Player;
 use musium::{AlbumId, MetaIndex, MemoryMetaIndex, TrackId};
+use musium::serialization;
 
 fn header_content_type(content_type: &str) -> Header {
     Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes())
@@ -190,7 +191,7 @@ impl MetaServer {
 
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        self.index.write_album_json(&mut w, album_id, album).unwrap();
+        serialization::write_album_json(&*self.index, &mut w, album_id, album).unwrap();
 
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
@@ -200,7 +201,7 @@ impl MetaServer {
     fn handle_albums(&self) -> ResponseBox {
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        self.index.write_albums_json(&mut w).unwrap();
+        serialization::write_albums_json(&*self.index, &mut w).unwrap();
 
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
@@ -213,7 +214,8 @@ impl MetaServer {
         let queue = self.player.get_queue();
         let position_seconds = queue.position_ms as f32 * 1e-3;
         let buffered_seconds = queue.buffered_ms as f32 * 1e-3;
-        self.index.write_queue_json(
+        serialization::write_queue_json(
+            &*self.index,
             &mut w,
             &queue.tracks[..],
             position_seconds,
@@ -286,7 +288,8 @@ impl MetaServer {
 
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        self.index.write_search_results_json(
+        serialization::write_search_results_json(
+            &*self.index,
             &mut w,
             &artists[..n_artists],
             &albums[..n_albums],
