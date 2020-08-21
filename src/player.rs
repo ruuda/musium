@@ -10,6 +10,8 @@
 use std::fmt;
 use std::fs;
 use std::mem;
+use std::sync::mpsc;
+use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::thread;
@@ -17,6 +19,8 @@ use std::thread;
 use claxon;
 use claxon::metadata::StreamInfo;
 
+use crate::history::PlaybackEvent;
+use crate::history;
 use crate::playback;
 use crate::{MetaIndex, TrackId};
 
@@ -361,15 +365,21 @@ pub struct PlayerState {
     /// and put the `FlacReader` back, but the queue could have changed in the
     /// meantime, so we need to track the index of where to restore later.
     current_decode: Option<usize>,
+
+    /// Sender for playback events.
+    ///
+    /// These events get consumed by the history thread, who logs them.
+    events: SyncSender<PlaybackEvent>,
 }
 
 
 impl PlayerState {
-    pub fn new() -> PlayerState {
+    pub fn new(events: SyncSender<PlaybackEvent>) -> PlayerState {
         PlayerState {
             next_unused_id: QueueId(0),
             queue: Vec::new(),
             current_decode: None,
+            events: events,
         }
     }
 
@@ -436,7 +446,8 @@ impl PlayerState {
                 self.current_decode = Some(i - 1);
             }
 
-            println!("Track {} fully consumed. Queue size: {}", track.track, self.queue.len());
+            self.events.send(PlaybackEvent::Completed(track.id, track.track))
+                .expect("Failed to send completion event to history thread.");
         }
 
         #[cfg(debug)]
@@ -634,6 +645,7 @@ pub struct Player {
     index: Arc<dyn MetaIndex + Send + Sync>,
     decode_thread: JoinHandle<()>,
     playback_thread: JoinHandle<()>,
+    history_thread: JoinHandle<()>,
 }
 
 pub struct QueueSnapshot {
@@ -649,7 +661,12 @@ pub struct QueueSnapshot {
 
 impl Player {
     pub fn new(index: Arc<dyn MetaIndex + Send + Sync>, card_name: String) -> Player {
-        let state = Arc::new(Mutex::new(PlayerState::new()));
+        // Build the channel to send playback events to the history thread. That
+        // thread is expected to process them immediately and be idle most of
+        // the time, so pick a small channel size.
+        let (sender, receiver) = mpsc::sync_channel(5);
+
+        let state = Arc::new(Mutex::new(PlayerState::new(sender)));
 
         // Start the decode thread. It runs indefinitely, but we do need to
         // periodically unpark it when there is new stuff to decode.
@@ -676,11 +693,18 @@ impl Player {
                 );
             }).unwrap();
 
+        let builder = std::thread::Builder::new();
+        let index_for_history = index.clone();
+        let history_join_handle = builder
+            .name("history".into())
+            .spawn(move || history::main(&*index_for_history, receiver)).unwrap();
+
         Player {
             state: state,
             index: index,
             decode_thread: decode_join_handle,
             playback_thread: playback_join_handle,
+            history_thread: history_join_handle,
         }
     }
 

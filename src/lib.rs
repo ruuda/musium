@@ -22,6 +22,7 @@ mod word_index;
 
 pub mod config;
 pub mod error;
+pub mod history;
 pub mod net;
 pub mod playback;
 pub mod player;
