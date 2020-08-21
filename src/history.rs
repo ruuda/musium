@@ -11,6 +11,7 @@ use std::sync::mpsc::Receiver;
 
 use crate::{MetaIndex, TrackId};
 use crate::player::QueueId;
+use crate::serialization;
 
 /// Changes in the playback state to be recorded.
 pub enum PlaybackEvent {
@@ -22,12 +23,17 @@ pub enum PlaybackEvent {
 pub fn main(index: &dyn MetaIndex, events: Receiver<PlaybackEvent>) {
     for event in events {
         let now = chrono::Utc::now();
+        let stdout = std::io::stdout();
         match event {
             PlaybackEvent::Started(queue_id, track_id) => {
-                println!("Started {} {} at {}", queue_id, track_id, now);
+                serialization::write_playback_event(
+                    index, stdout.lock(), now, "started", queue_id, track_id,
+                ).unwrap();
             }
             PlaybackEvent::Completed(queue_id, track_id) => {
-                println!("Completed {} {} at {}", queue_id, track_id, now);
+                serialization::write_playback_event(
+                    index, stdout.lock(), now, "completed", queue_id, track_id,
+                ).unwrap();
             }
         }
     }
