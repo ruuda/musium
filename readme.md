@@ -1,4 +1,4 @@
-# Musium
+<h1 align="center"><img src="app/logo.svg" alt="Musium" width="400"></h1>
 
 Musium is a music playback daemon with a web-based library browser.
 
