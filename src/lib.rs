@@ -122,6 +122,43 @@ impl ArtistId {
     }
 }
 
+/// Loudness Units relative to Full Scale.
+///
+/// The representation is millibel relative to full scale. In other words, this
+/// is a decimal fixed-point number with two decimal digits after the point.
+///
+/// Example: -7.32 LUFS would be stored as `Lufs(-732)`.
+///
+/// A value of `i16::MAX` indicates that the loudness is unknown.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct Lufs(pub i16);
+
+impl Lufs {
+    pub fn none() -> Lufs {
+        use std::i16;
+        Lufs(i16::MAX)
+    }
+}
+
+impl FromStr for Lufs {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> std::result::Result<Lufs, &'static str> {
+        match s.strip_suffix(" LUFS") {
+            None => Err("Expected loudness value of the form '-9.999 LUFS', but the LUFS suffix is missing."),
+            Some(num) => match f32::from_str(num) {
+                Err(_) => Err("Expected loudness value of the form '-9.999 LUFS', but the number is invalid."),
+                // Put some reasonable bounds on the loudness value, that on the
+                // one hand prevents nonsensical values, and on the other hand
+                // ensures that we can convert to i16 without overflow.
+                Ok(x) if x < -70.0 => Err("Loudness is too low, should be at least -70.0 LUFS."),
+                Ok(x) if x >  70.0 => Err("Loudness is too high, should be at most 70.0 LUFS."),
+                Ok(x) => Ok(Lufs((x * 100.0) as i16)),
+            }
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Track {
@@ -139,6 +176,11 @@ pub struct Track {
     pub duration_seconds: u16,
     pub disc_number: u8,
     pub track_number: u8,
+
+    // TODO: Because of this field, the `Track` type becomes too big. But we can
+    // save this, because `album_id` could be removed if we make the album id a
+    // prefix of the track id.
+    pub loudness: Lufs
 }
 
 #[repr(C)]
@@ -171,6 +213,7 @@ pub struct Album {
     pub artist_id: ArtistId,
     pub title: StringRef,
     pub original_release_date: Date,
+    pub loudness: Lufs,
 }
 
 #[repr(C)]
@@ -822,6 +865,8 @@ impl BuildMetaIndex {
         let mut album_artist_for_sort = None;
         let mut date = None;
         let mut original_date = None;
+        let mut track_loudness = Lufs::none();
+        let mut album_loudness = Lufs::none();
 
         let mut mbid_album = 0;
         let mut mbid_artist = 0;
@@ -863,6 +908,17 @@ impl BuildMetaIndex {
                 "date"                      => date = parse_date(value),
                 "title"                     => title = Some(self.strings.insert(value)),
                 "tracknumber"               => track_number = Some(u8::from_str(value).unwrap()),
+                "bs17704_track_loudness"    => track_loudness = match Lufs::from_str(value) {
+                    Ok(v) => v,
+                    // Unfortunately we have no way to include more details
+                    // about the parse failure with the error message at this
+                    // point.
+                    Err(_) => return self.error_parse_failed(filename_string, "bs17704_track_loudness"),
+                },
+                "bs17704_album_loudness"    => album_loudness = match Lufs::from_str(value) {
+                    Ok(v) => v,
+                    Err(_) => return self.error_parse_failed(filename_string, "bs17704_album_loudness"),
+                },
                 _ => {}
             }
         }
@@ -986,11 +1042,13 @@ impl BuildMetaIndex {
             artist: StringRef(f_track_artist),
             duration_seconds: seconds as u16,
             filename: FilenameRef(filename_id),
+            loudness: track_loudness,
         };
         let album = Album {
             artist_id: artist_id,
             title: StringRef(f_album),
             original_release_date: f_date,
+            loudness: album_loudness,
         };
         let artist = Artist {
             name: StringRef(f_album_artist),
