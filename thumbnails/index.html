@@ -1,0 +1,659 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    Kilsbergen MkDocs theme copyright 2019 Ruud van Asseldonk.
+    Licensed under the Apache 2.0 license.
+    See https://github.com/ruuda/kilsbergen.
+  -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Thumbnails — Musium</title>
+  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
+  <style>
+  /* The Inter font family, see https://rsms.me/inter.
+     https://rsms.me/inter/#faq-cdn suggests that linking these files directly is fine.
+  */
+  @font-face {
+    font-family: Inter;
+    font-style:  normal;
+    font-weight: 400;
+    src: url("https://rsms.me/inter/font-files/Inter-Regular.woff2?v=3.11") format("woff2"),
+         url("https://rsms.me/inter/font-files/Inter-Regular.woff?v=3.11") format("woff");
+  }
+  @font-face {
+    font-family: Inter;
+    font-style:  italic;
+    font-weight: 400;
+    src: url("https://rsms.me/inter/font-files/Inter-Italic.woff2?v=3.11") format("woff2"),
+         url("https://rsms.me/inter/font-files/Inter-Italic.woff?v=3.11") format("woff");
+  }
+  @font-face {
+    font-family: Inter;
+    font-style:  normal;
+    font-weight: 500;
+    src: url("https://rsms.me/inter/font-files/Inter-Medium.woff2?v=3.11") format("woff2"),
+         url("https://rsms.me/inter/font-files/Inter-Medium.woff?v=3.11") format("woff");
+  }
+  @font-face {
+    font-family: Inter;
+    font-style:  normal;
+    font-weight: 600;
+    src: url("https://rsms.me/inter/font-files/Inter-SemiBold.woff2?v=3.11") format("woff2"),
+         url("https://rsms.me/inter/font-files/Inter-SemiBold.woff?v=3.11") format("woff");
+  }
+  @font-face {
+    font-family: Inter;
+    font-style:  normal;
+    font-weight: 700;
+    src: url("https://rsms.me/inter/font-files/Inter-Bold.woff2?v=3.11") format("woff2"),
+         url("https://rsms.me/inter/font-files/Inter-Bold.woff?v=3.11") format("woff");
+  }
+  /* Modular scale with exponent 1.7^(1/3). The 1.7 was chosen as the line hight
+     that goes well with Inter. Previously I used 1.59, but it was just too tight.
+     0.59em
+     0.70em
+     1.00em
+     1.19em
+     1.42em
+     1.70em
+     2.02em
+     2.42em
+  */
+  * { margin: 0; padding: 0; border-spacing: 0; }
+  html {
+    font-family: Inter, Roboto, sans-serif;
+    /*
+    Turn on character variant 8 for Inter, which puts serifs on the uppercase I.
+    Also turn on variant 1, which has a curved 1.
+    Disable contextual alternates for now. There is a bug, either in Inter or
+    in Chrome (https://crbug.com/1046095) that causes colons after a <strong> to
+    be raised above the baseline.
+    */
+    font-feature-settings: 'cv01' 1, 'cv08' 1, 'calt' 0;
+
+    font-size: 16px;
+    line-height: 1.7em;
+    background-color: #fff;
+    height: 100%;
+  }
+  body {
+    height: 100%;
+  }
+  #content {
+    display: grid;
+    grid-template-columns: auto 16rem 50rem auto;
+    color: #333;
+    min-height: 100%;
+  }
+  #main {
+    grid-area: 1 / 3 / 2 / 4;
+    padding: 2.2rem;
+    padding-left: 4rem;
+    padding-right: 4rem;
+    overflow: hidden;
+  }
+  #breadcrumbs {
+    margin-bottom: 3rem;
+    word-spacing: 0.3em;
+    color: #78a;
+  }
+  #breadcrumbs a {
+    word-spacing: 0;
+    color: #78a;
+  }
+  article {
+    margin-top: 1.3rem;
+  }
+  h1, h2, h3 {
+    font-weight: 600;
+    font-size: 1rem;
+    color: #444;
+  }
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 2.1rem;
+  }
+  h2 {
+    font-size: 1.42rem;
+    margin-top: 3.5rem;
+    margin-bottom: 1.6rem;
+  }
+  code {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.84rem;
+    line-height: 1.5rem;
+  }
+  h3 > code {
+    /* Roboto Mono 500 is about as heavy as Inter semibold (600). */
+    font-weight: 500;
+  }
+  abbr {
+    text-transform: uppercase;
+    /* Downsize so caps are x-height, and compensate weight loss. */
+    font-size: 0.78rem;
+    font-weight: 500;
+    letter-spacing: 0.05rem;
+    /* Prevent abbrs from changing the line height of lines in which they occur. */
+    line-height: 0;
+  }
+  sub, sup {
+    /* Don't disturb the line height of normal text. */
+    line-height: 0rem;
+    font-size: 0.78rem;
+    font-weight: 500;
+  }
+  p > code,
+  a > code,
+  h3 > code,
+  li > code,
+  td > code,
+  dt > code {
+    background-color: #f0f0f0;
+    padding: 0.13rem;
+    padding-left: 0.3rem;
+    padding-right: 0.3rem;
+    border-radius: 0.2rem;
+    line-height: 1rem;
+  }
+  h3 {
+    padding-top: 0.9rem;
+    padding-bottom: 0.8rem;
+  }
+  h3 > code {
+    margin-left: -0.1rem;
+  }
+  a {
+    color: #36d;
+    text-decoration: none;
+  }
+  p, ul, ol, dl, pre, table {
+    /* Same space as line height, leave exactly one line blank. */
+    margin-bottom: 1.7rem;
+  }
+  pre {
+    padding-top: 0.8rem;
+    padding-bottom: 0.9rem;
+    padding-left: 1.19rem;
+    padding-right: 0;
+    background-color: #f8f8f8;
+    border-radius: 0 0.2rem 0.2rem 0;
+    border-left: 0.3rem solid #d5d8e0;
+    overflow-x: auto;
+  }
+  pre > code {
+    margin-right: 1.41rem;
+    color: #555;
+  }
+  ul, ol {
+    list-style-type: none;
+    counter-reset: item;
+  }
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+  th, td {
+    padding-right: 2rem;
+  }
+  th {
+    text-align: left;
+  }
+  td > img {
+    display: block;
+    padding-top: 1em;
+    padding-bottom: 1em;
+  }
+  dl {
+    display: grid;
+    grid-template-columns: 1fr 4fr;
+    grid-column-gap: 2em;
+  }
+  dl dt {
+    text-align: right;
+  }
+  #main ul li:before {
+    color: #555;
+    content: '\2022';
+    display: inline-block;
+    font-weight: 700;
+    margin-left: -0.9rem;
+    width: 0.9rem;
+  }
+  #main ul li {
+    margin-left: 0.87rem;
+  }
+  #main ol li:before {
+    content: counter(item);
+    display: inline-block;
+    font-weight: 700;
+    width: 0.8rem;
+    margin-left: -1.6rem;
+    padding-right: 0.8rem;
+  }
+  #main ol li {
+    margin-left: 1.6rem;
+    counter-increment: item;
+  }
+  #nav-prev-next {
+    margin-top: 3.4rem;
+    padding-bottom: 3.3rem;
+  }
+  #nav-prev, #nav-next, #repo-link {
+    display: inline-block;
+  }
+  #nav-prev {
+    float: left;
+  }
+  #nav-next, #repo-link {
+    float: right;
+    text-align: right;
+  }
+  #nav-prev::before {
+    content: '\219e';
+    padding-right: 0.5em;
+  }
+  #nav-next::after {
+    content: '\21a0';
+    padding-left: 0.5em;
+  }
+  aside {
+    grid-area: 1 / 1 / 2 / 3;
+    border-right: 1px solid #eee;
+    background-color: #fafafa;
+    color: #78a;
+  }
+  aside nav {
+    margin-top: 9rem;
+    padding-bottom: 3.4rem;
+    width: 14rem;
+    float: right;
+    /* Put the active chapter border over the sidebar border. */
+    margin-right: -1px;
+  }
+  aside a {
+    color: inherit;
+  }
+  aside .toc-section {
+    font-weight: 700;
+  }
+  aside ul {
+    margin-bottom: 0;
+  }
+  aside li ul {
+    padding-top: 0.6rem;
+    padding-bottom: 1.1rem;
+  }
+  aside li.toc-section {
+    margin-top: 1.7rem;
+  }
+  aside li.toc-section {
+    color: #36d;
+  }
+  aside li.current, aside li ul {
+    border-right: 0.3em solid #d5d8e0;
+    padding-left: 1em;
+    margin-left: -1em;
+  }
+  aside li.toc-chapter.current {
+    font-weight: 600;
+  }
+  aside li.toc-heading {
+    padding-left: 1em;
+  }
+
+  @media(max-width: 63rem)
+  {
+    #content {
+      /* Manual implementation of max-width: on narrower viewports,
+         auto-size the body. */
+      grid-template-columns: 0 16rem auto 0;
+    }
+  }
+
+  @media(max-width: 1150px)
+  {
+    html { font-size: 15px; }
+  }
+
+  /* Move the sidebar TOC below content at small widths. */
+  @media(max-width: 800px)
+  {
+    #content {
+      display: block;
+    }
+    aside {
+      border-top: 1px solid #eee;
+      border-right: 0px none;
+    }
+    aside nav {
+      margin-left: 4em;
+      margin-top: 1.7em;
+      margin-right: 0;
+      float: none;
+      width: auto;
+    }
+    #main {
+      padding-bottom: 1.7em;
+    }
+    /* Now that the TOC is full-width, adding the border on the right to
+       highlight the active page is not as clear anymore, it can be far away.
+       The current chapter is still in boldface, but that does not work for
+       section indexes. So point a guillemet at it as well. */
+    aside li.current, aside li ul {
+      border-right: 0px none;
+      position: relative;
+    }
+    aside li.current:before {
+      content: '\203a';
+      position: absolute;
+      left: 0;
+    }
+  }
+
+  /* Use less generous margins for very narrow viewports. */
+  @media(max-width: 650px)
+  {
+    #main {
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+    aside nav {
+      margin-left: 2rem;
+      padding-bottom: 2rem;
+    }
+  }
+
+  @media(max-width: 450px)
+  {
+    #main {
+      padding-left: 1.7em;
+      padding-right: 1.7em;
+    }
+    aside nav {
+      margin-left: 1.7em;
+    }
+  }
+  </style>
+</head>
+<body>
+  <div id="content">
+    <div id="main">
+      <nav id="breadcrumbs">
+        <a href="..">Musium</a>
+         › <a href="../search/">Internals</a> 
+         › <a href="./">Thumbnails</a> 
+        <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
+      </nav>
+      <article>
+        <h1 id="thumbnails">Thumbnails</h1>
+<p>Musium generates a cached thumbnail per album, extracted from the embedded
+cover art. The smaller thumbnails speed up the web-based library browser
+substantially.</p>
+<p>Initially, Musium used Imagemagick both for downsizing cover art, and for
+encoding the thumnails as jpeg. However, better compressors exist, and for some
+types of album art, in particular graphics with solid red areas, the thumbnails
+generated by Imagemagick showed pretty bad artefacts. This document compares
+compressors.</p>
+<h2 id="encoders-considered">Encoders considered</h2>
+<p>The following encoders were compared:</p>
+<ul>
+<li>Imagemagick 7.0.9-10 Q16</li>
+<li>Mozjpeg 3.3.1</li>
+<li>Guetzli 1.0.1</li>
+</ul>
+<p>These were used to encode 1216 downsized cover art images. They were downsized
+from their native size to 140 × 140 pixels with Imagemagick through</p>
+<pre><code>convert infile
+    -colorspace LAB
+    -filter Cosine
+    -distort Resize 140x140!
+    -colorspace sRGB
+    -strip
+    outfile.png
+</code></pre>
+<h2 id="size">Size</h2>
+<p>The cumulative size of all 1216 compressed thumbnails for various encoders:</p>
+<table>
+<thead>
+<tr>
+<th align="right">Size (bytes)</th>
+<th>Encoder</th>
+<th>Quality</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="right">10,771,743</td>
+<td>Guetzli</td>
+<td>95</td>
+</tr>
+<tr>
+<td align="right">11,926,551</td>
+<td>Guetzli</td>
+<td>96</td>
+</tr>
+<tr>
+<td align="right">12,016,780</td>
+<td>Mozjpeg</td>
+<td>92</td>
+</tr>
+<tr>
+<td align="right">12,889,658</td>
+<td>Imagemagick</td>
+<td>95</td>
+</tr>
+<tr>
+<td align="right">13,049,795</td>
+<td>Mozjpeg</td>
+<td>93</td>
+</tr>
+<tr>
+<td align="right">13,605,461</td>
+<td>Guetzli</td>
+<td>97</td>
+</tr>
+<tr>
+<td align="right">14,157,834</td>
+<td>Mozjpeg</td>
+<td>94</td>
+</tr>
+<tr>
+<td align="right">14,254,799</td>
+<td>Imagemagick</td>
+<td>96</td>
+</tr>
+<tr>
+<td align="right">14,988,104</td>
+<td>Mozjpeg</td>
+<td>95</td>
+</tr>
+<tr>
+<td align="right">19,531,105</td>
+<td>Mozjpeg</td>
+<td>97</td>
+</tr>
+<tr>
+<td align="right">20,254,930</td>
+<td>Guetzli</td>
+<td>99</td>
+</tr>
+</tbody>
+</table>
+<p>The quality is the quality level passed to the encoder.</p>
+<p>The goal of this investigation was to find the most appropriate replacement for
+Imagemagick at quality 95 (which was used initially), but it is not obvious how
+to make a fair comparison when the sizes differ so greatly.</p>
+<p>Because the default of Imagemagick at quality 95 was a bit arbitrary, we can
+instead compare the 3 options that are closest together in terms of size, for a
+fairer comparison.</p>
+<ul>
+<li>Guetzli 96, Mozjpeg 92, Imagemagick 95, with a gap of 963,107 bytes.</li>
+<li>Imagemagick 95, Mozjpeg 93, Guetzli 97, with a gap of 715,803 bytes.</li>
+<li>Guetzli 97, Mozjpeg 94, Imagemagick 96, with a gap of 649,338 bytes.</li>
+</ul>
+<p>This means we will involve Imagemagick at quality 96 instead of 95, so the
+artefacts are not as bad, but they are still fairly apparent.</p>
+<h2 id="comparison">Comparison</h2>
+<p>Below is a comparison of the thumbnails where artefacts were most apparent in
+the images encoded by Imagemagick. This is not a general comparison of the
+encoders; the focus is specifically on images where Imagemagick performed badly.
+One thing that most of these images have in common, is that they contain solid
+areas of bright red with sharp edges.</p>
+<table>
+<thead>
+<tr>
+<th>Guetzli 97</th>
+<th>Mozjpeg 95</th>
+<th>Imagemagick 96</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><img alt="guetzli-q97" src="42b34b571ec0446c-guetzli-q97.jpg" /></td>
+<td><img alt="mozjpeg-q95" src="42b34b571ec0446c-mozjpeg-q95.jpg" /></td>
+<td><img alt="imagemagick-q96" src="42b34b571ec0446c-imagemagick-q96.jpg" /></td>
+</tr>
+<tr>
+<td><img alt="guetzli-q97" src="7844675595370e04-guetzli-q97.jpg" /></td>
+<td><img alt="mozjpeg-q95" src="7844675595370e04-mozjpeg-q95.jpg" /></td>
+<td><img alt="imagemagick-q96" src="7844675595370e04-imagemagick-q96.jpg" /></td>
+</tr>
+<tr>
+<td><img alt="guetzli-q97" src="1a0d31b44fe33359-guetzli-q97.jpg" /></td>
+<td><img alt="mozjpeg-q95" src="1a0d31b44fe33359-mozjpeg-q95.jpg" /></td>
+<td><img alt="imagemagick-q96" src="1a0d31b44fe33359-imagemagick-q96.jpg" /></td>
+</tr>
+<tr>
+<td><img alt="guetzli-q97" src="292eec08f76c8998-guetzli-q97.jpg" /></td>
+<td><img alt="mozjpeg-q95" src="292eec08f76c8998-mozjpeg-q95.jpg" /></td>
+<td><img alt="imagemagick-q96" src="292eec08f76c8998-imagemagick-q96.jpg" /></td>
+</tr>
+<tr>
+<td><img alt="guetzli-q97" src="233427df1d053306-guetzli-q97.jpg" /></td>
+<td><img alt="mozjpeg-q95" src="233427df1d053306-mozjpeg-q95.jpg" /></td>
+<td><img alt="imagemagick-q96" src="233427df1d053306-imagemagick-q96.jpg" /></td>
+</tr>
+<tr>
+<td><img alt="guetzli-q97" src="37a2d1aae9b6ddac-guetzli-q97.jpg" /></td>
+<td><img alt="mozjpeg-q95" src="37a2d1aae9b6ddac-mozjpeg-q95.jpg" /></td>
+<td><img alt="imagemagick-q96" src="37a2d1aae9b6ddac-imagemagick-q96.jpg" /></td>
+</tr>
+<tr>
+<td><img alt="guetzli-q97" src="e82593ba643ff972-guetzli-q97.jpg" /></td>
+<td><img alt="mozjpeg-q95" src="e82593ba643ff972-mozjpeg-q95.jpg" /></td>
+<td><img alt="imagemagick-q96" src="e82593ba643ff972-imagemagick-q96.jpg" /></td>
+</tr>
+<tr>
+<td><img alt="guetzli-q97" src="025d4f1a77340cf4-guetzli-q97.jpg" /></td>
+<td><img alt="mozjpeg-q95" src="025d4f1a77340cf4-mozjpeg-q95.jpg" /></td>
+<td><img alt="imagemagick-q96" src="025d4f1a77340cf4-imagemagick-q96.jpg" /></td>
+</tr>
+<tr>
+<td><img alt="guetzli-q97" src="bb796ceaa0c6ffa1-guetzli-q97.jpg" /></td>
+<td><img alt="mozjpeg-q95" src="bb796ceaa0c6ffa1-mozjpeg-q95.jpg" /></td>
+<td><img alt="imagemagick-q96" src="bb796ceaa0c6ffa1-imagemagick-q96.jpg" /></td>
+</tr>
+<tr>
+<td><img alt="guetzli-q97" src="4baf4134335d43fb-guetzli-q97.jpg" /></td>
+<td><img alt="mozjpeg-q95" src="4baf4134335d43fb-mozjpeg-q95.jpg" /></td>
+<td><img alt="imagemagick-q96" src="4baf4134335d43fb-imagemagick-q96.jpg" /></td>
+</tr>
+<tr>
+<td><img alt="guetzli-q97" src="1d8b48dcd0766fe2-guetzli-q97.jpg" /></td>
+<td><img alt="mozjpeg-q95" src="1d8b48dcd0766fe2-mozjpeg-q95.jpg" /></td>
+<td><img alt="imagemagick-q96" src="1d8b48dcd0766fe2-imagemagick-q96.jpg" /></td>
+</tr>
+<tr>
+<td><img alt="guetzli-q97" src="bf691b17d5c99348-guetzli-q97.jpg" /></td>
+<td><img alt="mozjpeg-q95" src="bf691b17d5c99348-mozjpeg-q95.jpg" /></td>
+<td><img alt="imagemagick-q96" src="bf691b17d5c99348-imagemagick-q96.jpg" /></td>
+</tr>
+<tr>
+<td><img alt="guetzli-q97" src="663089923e708352-guetzli-q97.jpg" /></td>
+<td><img alt="mozjpeg-q95" src="663089923e708352-mozjpeg-q95.jpg" /></td>
+<td><img alt="imagemagick-q96" src="663089923e708352-imagemagick-q96.jpg" /></td>
+</tr>
+<tr>
+<td><img alt="guetzli-q97" src="f772122e1146e8cf-guetzli-q97.jpg" /></td>
+<td><img alt="mozjpeg-q95" src="f772122e1146e8cf-mozjpeg-q95.jpg" /></td>
+<td><img alt="imagemagick-q96" src="f772122e1146e8cf-imagemagick-q96.jpg" /></td>
+</tr>
+<tr>
+<td><img alt="guetzli-q97" src="f7c153f2b16dcdc7-guetzli-q97.jpg" /></td>
+<td><img alt="mozjpeg-q95" src="f7c153f2b16dcdc7-mozjpeg-q95.jpg" /></td>
+<td><img alt="imagemagick-q96" src="f7c153f2b16dcdc7-imagemagick-q96.jpg" /></td>
+</tr>
+<tr>
+<td><img alt="guetzli-q97" src="d85da9ae7d2eb123-guetzli-q97.jpg" /></td>
+<td><img alt="mozjpeg-q95" src="d85da9ae7d2eb123-mozjpeg-q95.jpg" /></td>
+<td><img alt="imagemagick-q96" src="d85da9ae7d2eb123-imagemagick-q96.jpg" /></td>
+</tr>
+</tbody>
+</table>
+<p>A few things stand out visually:</p>
+<ul>
+<li>Both Guetzli and Mozjpeg perform much better than Imagemagick.</li>
+<li>Where Imagemagick creates blurry edges, Mozjpeg creates sharp edges, but at
+   the cost of ringing artefacts. Guetzli produces sharp edges without much
+   ringing.</li>
+</ul>
+<h2 id="throughput">Throughput</h2>
+<p>This comparison does not include timing information, but while running the
+various compressors, it was clear that Guetzli is much slower than either
+Imagemagick or Mozjpeg. For Musium this is not a big problem, because generating
+thumbnails tends to be <abbr>IO</abbr>-bound when the files are one a a spinning
+disk. As long as Guetzli is faster than the disk, it is fast enough.</p>
+<h2 id="conclusion">Conclusion</h2>
+<p>We should compress thumbnails with Guetzli to minimize visible artefacts.</p>
+      </article>
+      <nav id="nav-prev-next">
+        <a id="nav-prev" href="../performance/" title="Performance">Previous</a>
+        </nav>
+      </div>
+    <aside>
+      <nav>
+        <ul>
+        <li class="toc-section"><a href="..">Overview</a></li>
+          <li class="toc-section
+            "><a href="../building/">User Guide</a></li>
+          
+            <li class="toc-chapter
+              "><a href="../building/">Building</a></li>
+            
+            <li class="toc-chapter
+              "><a href="../configuration/">Configuration</a></li>
+            
+            <li class="toc-chapter
+              "><a href="../running/">Running</a></li>
+            
+            <li class="toc-chapter
+              "><a href="../tagging/">Tagging</a></li>
+            
+            <li class="toc-chapter
+              "><a href="../loudness/">Loudness normalization</a></li>
+            <li class="toc-section"><a href="../api/">API Reference</a></li>
+          <li class="toc-section
+            "><a href="../search/">Internals</a></li>
+          
+            <li class="toc-chapter
+              "><a href="../search/">Search</a></li>
+            
+            <li class="toc-chapter
+              "><a href="../performance/">Performance</a></li>
+            
+            <li class="toc-chapter
+               current"><a href="./">Thumbnails</a></li>
+            <li><ul>
+                <li class="toc-heading"><a href="#encoders-considered">Encoders considered</a></li>
+                <li class="toc-heading"><a href="#size">Size</a></li>
+                <li class="toc-heading"><a href="#comparison">Comparison</a></li>
+                <li class="toc-heading"><a href="#throughput">Throughput</a></li>
+                <li class="toc-heading"><a href="#conclusion">Conclusion</a></li>
+                </ul></li>
+               </ul>
+      </nav>
+    </aside>
+  </div>
+</body>
+</html>

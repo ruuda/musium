@@ -1,0 +1,1114 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    Kilsbergen MkDocs theme copyright 2019 Ruud van Asseldonk.
+    Licensed under the Apache 2.0 license.
+    See https://github.com/ruuda/kilsbergen.
+  -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Performance — Musium</title>
+  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
+  <style>
+  /* The Inter font family, see https://rsms.me/inter.
+     https://rsms.me/inter/#faq-cdn suggests that linking these files directly is fine.
+  */
+  @font-face {
+    font-family: Inter;
+    font-style:  normal;
+    font-weight: 400;
+    src: url("https://rsms.me/inter/font-files/Inter-Regular.woff2?v=3.11") format("woff2"),
+         url("https://rsms.me/inter/font-files/Inter-Regular.woff?v=3.11") format("woff");
+  }
+  @font-face {
+    font-family: Inter;
+    font-style:  italic;
+    font-weight: 400;
+    src: url("https://rsms.me/inter/font-files/Inter-Italic.woff2?v=3.11") format("woff2"),
+         url("https://rsms.me/inter/font-files/Inter-Italic.woff?v=3.11") format("woff");
+  }
+  @font-face {
+    font-family: Inter;
+    font-style:  normal;
+    font-weight: 500;
+    src: url("https://rsms.me/inter/font-files/Inter-Medium.woff2?v=3.11") format("woff2"),
+         url("https://rsms.me/inter/font-files/Inter-Medium.woff?v=3.11") format("woff");
+  }
+  @font-face {
+    font-family: Inter;
+    font-style:  normal;
+    font-weight: 600;
+    src: url("https://rsms.me/inter/font-files/Inter-SemiBold.woff2?v=3.11") format("woff2"),
+         url("https://rsms.me/inter/font-files/Inter-SemiBold.woff?v=3.11") format("woff");
+  }
+  @font-face {
+    font-family: Inter;
+    font-style:  normal;
+    font-weight: 700;
+    src: url("https://rsms.me/inter/font-files/Inter-Bold.woff2?v=3.11") format("woff2"),
+         url("https://rsms.me/inter/font-files/Inter-Bold.woff?v=3.11") format("woff");
+  }
+  /* Modular scale with exponent 1.7^(1/3). The 1.7 was chosen as the line hight
+     that goes well with Inter. Previously I used 1.59, but it was just too tight.
+     0.59em
+     0.70em
+     1.00em
+     1.19em
+     1.42em
+     1.70em
+     2.02em
+     2.42em
+  */
+  * { margin: 0; padding: 0; border-spacing: 0; }
+  html {
+    font-family: Inter, Roboto, sans-serif;
+    /*
+    Turn on character variant 8 for Inter, which puts serifs on the uppercase I.
+    Also turn on variant 1, which has a curved 1.
+    Disable contextual alternates for now. There is a bug, either in Inter or
+    in Chrome (https://crbug.com/1046095) that causes colons after a <strong> to
+    be raised above the baseline.
+    */
+    font-feature-settings: 'cv01' 1, 'cv08' 1, 'calt' 0;
+
+    font-size: 16px;
+    line-height: 1.7em;
+    background-color: #fff;
+    height: 100%;
+  }
+  body {
+    height: 100%;
+  }
+  #content {
+    display: grid;
+    grid-template-columns: auto 16rem 50rem auto;
+    color: #333;
+    min-height: 100%;
+  }
+  #main {
+    grid-area: 1 / 3 / 2 / 4;
+    padding: 2.2rem;
+    padding-left: 4rem;
+    padding-right: 4rem;
+    overflow: hidden;
+  }
+  #breadcrumbs {
+    margin-bottom: 3rem;
+    word-spacing: 0.3em;
+    color: #78a;
+  }
+  #breadcrumbs a {
+    word-spacing: 0;
+    color: #78a;
+  }
+  article {
+    margin-top: 1.3rem;
+  }
+  h1, h2, h3 {
+    font-weight: 600;
+    font-size: 1rem;
+    color: #444;
+  }
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 2.1rem;
+  }
+  h2 {
+    font-size: 1.42rem;
+    margin-top: 3.5rem;
+    margin-bottom: 1.6rem;
+  }
+  code {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.84rem;
+    line-height: 1.5rem;
+  }
+  h3 > code {
+    /* Roboto Mono 500 is about as heavy as Inter semibold (600). */
+    font-weight: 500;
+  }
+  abbr {
+    text-transform: uppercase;
+    /* Downsize so caps are x-height, and compensate weight loss. */
+    font-size: 0.78rem;
+    font-weight: 500;
+    letter-spacing: 0.05rem;
+    /* Prevent abbrs from changing the line height of lines in which they occur. */
+    line-height: 0;
+  }
+  sub, sup {
+    /* Don't disturb the line height of normal text. */
+    line-height: 0rem;
+    font-size: 0.78rem;
+    font-weight: 500;
+  }
+  p > code,
+  a > code,
+  h3 > code,
+  li > code,
+  td > code,
+  dt > code {
+    background-color: #f0f0f0;
+    padding: 0.13rem;
+    padding-left: 0.3rem;
+    padding-right: 0.3rem;
+    border-radius: 0.2rem;
+    line-height: 1rem;
+  }
+  h3 {
+    padding-top: 0.9rem;
+    padding-bottom: 0.8rem;
+  }
+  h3 > code {
+    margin-left: -0.1rem;
+  }
+  a {
+    color: #36d;
+    text-decoration: none;
+  }
+  p, ul, ol, dl, pre, table {
+    /* Same space as line height, leave exactly one line blank. */
+    margin-bottom: 1.7rem;
+  }
+  pre {
+    padding-top: 0.8rem;
+    padding-bottom: 0.9rem;
+    padding-left: 1.19rem;
+    padding-right: 0;
+    background-color: #f8f8f8;
+    border-radius: 0 0.2rem 0.2rem 0;
+    border-left: 0.3rem solid #d5d8e0;
+    overflow-x: auto;
+  }
+  pre > code {
+    margin-right: 1.41rem;
+    color: #555;
+  }
+  ul, ol {
+    list-style-type: none;
+    counter-reset: item;
+  }
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+  th, td {
+    padding-right: 2rem;
+  }
+  th {
+    text-align: left;
+  }
+  td > img {
+    display: block;
+    padding-top: 1em;
+    padding-bottom: 1em;
+  }
+  dl {
+    display: grid;
+    grid-template-columns: 1fr 4fr;
+    grid-column-gap: 2em;
+  }
+  dl dt {
+    text-align: right;
+  }
+  #main ul li:before {
+    color: #555;
+    content: '\2022';
+    display: inline-block;
+    font-weight: 700;
+    margin-left: -0.9rem;
+    width: 0.9rem;
+  }
+  #main ul li {
+    margin-left: 0.87rem;
+  }
+  #main ol li:before {
+    content: counter(item);
+    display: inline-block;
+    font-weight: 700;
+    width: 0.8rem;
+    margin-left: -1.6rem;
+    padding-right: 0.8rem;
+  }
+  #main ol li {
+    margin-left: 1.6rem;
+    counter-increment: item;
+  }
+  #nav-prev-next {
+    margin-top: 3.4rem;
+    padding-bottom: 3.3rem;
+  }
+  #nav-prev, #nav-next, #repo-link {
+    display: inline-block;
+  }
+  #nav-prev {
+    float: left;
+  }
+  #nav-next, #repo-link {
+    float: right;
+    text-align: right;
+  }
+  #nav-prev::before {
+    content: '\219e';
+    padding-right: 0.5em;
+  }
+  #nav-next::after {
+    content: '\21a0';
+    padding-left: 0.5em;
+  }
+  aside {
+    grid-area: 1 / 1 / 2 / 3;
+    border-right: 1px solid #eee;
+    background-color: #fafafa;
+    color: #78a;
+  }
+  aside nav {
+    margin-top: 9rem;
+    padding-bottom: 3.4rem;
+    width: 14rem;
+    float: right;
+    /* Put the active chapter border over the sidebar border. */
+    margin-right: -1px;
+  }
+  aside a {
+    color: inherit;
+  }
+  aside .toc-section {
+    font-weight: 700;
+  }
+  aside ul {
+    margin-bottom: 0;
+  }
+  aside li ul {
+    padding-top: 0.6rem;
+    padding-bottom: 1.1rem;
+  }
+  aside li.toc-section {
+    margin-top: 1.7rem;
+  }
+  aside li.toc-section {
+    color: #36d;
+  }
+  aside li.current, aside li ul {
+    border-right: 0.3em solid #d5d8e0;
+    padding-left: 1em;
+    margin-left: -1em;
+  }
+  aside li.toc-chapter.current {
+    font-weight: 600;
+  }
+  aside li.toc-heading {
+    padding-left: 1em;
+  }
+
+  @media(max-width: 63rem)
+  {
+    #content {
+      /* Manual implementation of max-width: on narrower viewports,
+         auto-size the body. */
+      grid-template-columns: 0 16rem auto 0;
+    }
+  }
+
+  @media(max-width: 1150px)
+  {
+    html { font-size: 15px; }
+  }
+
+  /* Move the sidebar TOC below content at small widths. */
+  @media(max-width: 800px)
+  {
+    #content {
+      display: block;
+    }
+    aside {
+      border-top: 1px solid #eee;
+      border-right: 0px none;
+    }
+    aside nav {
+      margin-left: 4em;
+      margin-top: 1.7em;
+      margin-right: 0;
+      float: none;
+      width: auto;
+    }
+    #main {
+      padding-bottom: 1.7em;
+    }
+    /* Now that the TOC is full-width, adding the border on the right to
+       highlight the active page is not as clear anymore, it can be far away.
+       The current chapter is still in boldface, but that does not work for
+       section indexes. So point a guillemet at it as well. */
+    aside li.current, aside li ul {
+      border-right: 0px none;
+      position: relative;
+    }
+    aside li.current:before {
+      content: '\203a';
+      position: absolute;
+      left: 0;
+    }
+  }
+
+  /* Use less generous margins for very narrow viewports. */
+  @media(max-width: 650px)
+  {
+    #main {
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+    aside nav {
+      margin-left: 2rem;
+      padding-bottom: 2rem;
+    }
+  }
+
+  @media(max-width: 450px)
+  {
+    #main {
+      padding-left: 1.7em;
+      padding-right: 1.7em;
+    }
+    aside nav {
+      margin-left: 1.7em;
+    }
+  }
+  </style>
+</head>
+<body>
+  <div id="content">
+    <div id="main">
+      <nav id="breadcrumbs">
+        <a href="..">Musium</a>
+         › <a href="../search/">Internals</a> 
+         › <a href="./">Performance</a> 
+        <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
+      </nav>
+      <article>
+        <h1 id="performance">Performance</h1>
+<h2 id="disk-io">Disk IO</h2>
+<p>Should files be read from multiple threads, even when the disk is the
+bottleneck? By having multiple concurrent reads, the operating system might be
+able to optimize the disk access pattern, and schedule reads more efficiently
+for higher throughput. Let’s measure.</p>
+<table>
+<thead>
+<tr>
+<th>Disk Cache</th>
+<th>Threads</th>
+<th>Time (seconds)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cold</td>
+<td>64</td>
+<td>106.632476927</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>64</td>
+<td>106.155341479</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>64</td>
+<td>104.968957864</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>64</td>
+<td>0.065452067</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>64</td>
+<td>0.065966143</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>64</td>
+<td>0.067338459</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>6</td>
+<td>109.032390370</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>6</td>
+<td>108.156613210</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>6</td>
+<td>110.175107966</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>6</td>
+<td>0.056552910</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>6</td>
+<td>0.051793717</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>6</td>
+<td>0.057326269</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>6</td>
+<td>0.056153033</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>1</td>
+<td>131.265989187</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>1</td>
+<td>130.512200200</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>1</td>
+<td>130.496186066</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>1</td>
+<td>0.145899503</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>1</td>
+<td>0.140550669</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>1</td>
+<td>0.140376767</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>1</td>
+<td>0.146533344</td>
+</tr>
+</tbody>
+</table>
+<p>This is for roughly 11500 files. Program output was redirected to /dev/null.
+Single-threaded taken from commit <code>4a5982ceb94b6a3dc575abce3c47e148dd28aa9f</code>.
+Multi-threaded taken from commit <code>cc06a48af7c8ea8b8b647443db1a26f77374f9e4</code>.</p>
+<p>Conclusion: multithreaded ingestion is advantageous, both when indexing from the
+disk, as well as when indexing from memory. There must be a CPU-bound part as
+well then. (On my system, for my workload, that is.) The next question then, is
+how much threads to use. 64 threads probably already takes all of the parallel
+gains, and the returns diminish quickly. It could be worth optimizing the number
+of threads for running time with a warm disk cache, and that would likely also
+perform almost optimally for a cold cache.</p>
+<p>Some more results after reducing the thread queue size and doing non-blocking
+pushes, to keep the queue sizes more even:</p>
+<table>
+<thead>
+<tr>
+<th>Disk Cache</th>
+<th>Threads</th>
+<th>Queue Size</th>
+<th>Time (seconds)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cold</td>
+<td>128</td>
+<td>16</td>
+<td>105.591609927</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>512</td>
+<td>0</td>
+<td>97.509055644</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>512</td>
+<td>0</td>
+<td>96.345510293</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>128</td>
+<td>1</td>
+<td>94.403741744</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>128</td>
+<td>0</td>
+<td>85.897972147</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>64</td>
+<td>0</td>
+<td>82.595254011</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>64</td>
+<td>0</td>
+<td>83.793832797</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>48</td>
+<td>0</td>
+<td>80.877349368</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>32</td>
+<td>0</td>
+<td>80.913407455</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>24</td>
+<td>0</td>
+<td>82.893433723</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>16</td>
+<td>0</td>
+<td>83.807142608</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>16</td>
+<td>0</td>
+<td>83.967152892</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>128</td>
+<td>16</td>
+<td>0.075636796</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>128</td>
+<td>1</td>
+<td>0.072041480</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>128</td>
+<td>0</td>
+<td>0.075571860</td>
+</tr>
+</tbody>
+</table>
+<p>And without queues or channels, protecting the directory iterator with a mutex
+instead:</p>
+<table>
+<thead>
+<tr>
+<th>Disk Cache</th>
+<th>Threads</th>
+<th>Time (seconds)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cold</td>
+<td>48</td>
+<td>83.731602753</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>48</td>
+<td>83.806947689</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>24</td>
+<td>81.919455988</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>24</td>
+<td>80.765494864</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>12</td>
+<td>82.537088779</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>12</td>
+<td>83.135829488</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>48</td>
+<td>0.056744610</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>24</td>
+<td>0.059594100</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>24</td>
+<td>0.054264233</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>12</td>
+<td>0.056491306</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>12</td>
+<td>0.056685518</td>
+</tr>
+</tbody>
+</table>
+<h2 id="precollect">Precollect</h2>
+<p>At commit <code>c6c611be9179d939dc5646dc43ab8bdf5ddc2962</code>, with 24 threads. First
+collecting discovered paths into a vec, and constructing the index by iterating
+over the paths in the vec. Is this the right thing to do, or should we put the
+paths iterator in a mutex directly? Measurement setup:</p>
+<pre><code>echo 3 | sudo tee /proc/sys/vm/drop_caches
+perf stat target/release/musium ~/music
+</code></pre>
+<p>Note that the server was disabled to terminate the program after indexing. Also,
+these results are not comparable to the previous numbers, as the library has
+grown, and more data is processed. Furthermore, I did not redirect stdout to
+<code>/dev/null</code> in this case, but for a cold disk cache that does not make so much
+of a difference anyway.</p>
+<table>
+<thead>
+<tr>
+<th>Precollect</th>
+<th>Time (seconds)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Vec precollect 1</td>
+<td>91.870704962</td>
+</tr>
+<tr>
+<td>Vec precollect 1</td>
+<td>90.106878818</td>
+</tr>
+<tr>
+<td>Vec precollect 1</td>
+<td>90.031705480</td>
+</tr>
+<tr>
+<td>Vec precollect 2</td>
+<td>86.926306901</td>
+</tr>
+<tr>
+<td>Vec precollect 2</td>
+<td>86.876997701</td>
+</tr>
+<tr>
+<td>Vec precollect 2</td>
+<td>89.131675265</td>
+</tr>
+<tr>
+<td>Iter, double alloc</td>
+<td>93.370680604</td>
+</tr>
+<tr>
+<td>Iter, double alloc</td>
+<td>93.180283609</td>
+</tr>
+<tr>
+<td>Iter, double alloc</td>
+<td>93.259494622</td>
+</tr>
+<tr>
+<td>Iter, single alloc</td>
+<td>94.026253229</td>
+</tr>
+<tr>
+<td>Iter, single alloc</td>
+<td>94.147137607</td>
+</tr>
+<tr>
+<td>Iter, single alloc</td>
+<td>94.352803977</td>
+</tr>
+</tbody>
+</table>
+<p>Note that I did upgrade Walkdir when switching from vector precollect to the
+iterator-based version, so the comparison may be unfair. The data collected
+before the switch is labelled “Vec precollect 1”, the version after upgrading to
+Walkdir 2.1.4 is labelled “Vec precollect 2”. Furtherore, Walkdir 2.1.4 requires
+copying the path (labelled “double alloc”). I made a small change to the crate
+to be able to avoid the copy and extra allocation (labelled “single alloc”).</p>
+<p>Counterintuitively, copying the path returned by the iterator is faster than not
+copying it. It might have something to do with ordering; spending more time in
+the iterator lock is actually a good thing? Or maybe I should collect more data,
+and this is just a statistical fluctuation. Just storing the paths is definitely
+faster if the copy is avoided:</p>
+<pre><code>copy    &lt;- c(0.023223363, 0.022365082, 0.022318216, 0.022584837,
+             0.020660742, 0.023839308, 0.022084252, 0.021812114,
+             0.022180668, 0.019982074, 0.020979151, 0.023186709,
+             0.024758619, 0.022889618, 0.024148854, 0.024708654)
+noncopy &lt;- c(0.022403112, 0.021863389, 0.019650964, 0.020984869,
+             0.021901483, 0.021376926, 0.021668108, 0.021504715,
+             0.023730031, 0.021861766, 0.021060567, 0.021986531,
+             0.022680138, 0.019719019, 0.020053399, 0.021137137)
+t.test(copy, noncopy)
+
+#     Welch Two Sample t-test
+#
+# data:  copy and noncopy
+# t = 2.6055, df = 28.297, p-value = 0.01447
+# alternative hypothesis: true difference in means is not equal to 0
+# 95 percent confidence interval:
+#  0.000242829 0.002024684
+# sample estimates:
+#  mean of x  mean of y
+# 0.02260764 0.02147388
+</code></pre>
+<p>So it is preferable to read many paths at once before processing them, perhaps
+due to better branch prediction. The gains are so big that the extra allocations
+and reallocations for storing the pathbuf pointers in a vec are totally worth
+it. It might be even better then to alternate beween scanning paths and
+processing them, to reduce peak memory usage, but let’s not worry about that at
+this point.</p>
+<h2 id="fadvise">Fadvise</h2>
+<p>Command:</p>
+<pre><code>echo 3 | sudo tee /proc/sys/vm/drop_caches
+perf stat target/release/musium cache /pool/music /pool/volatile/covers dummy
+</code></pre>
+<p>Measurements were performed with disks spinning. If the disks needed to spin up
+first, I restarted the measurement as soon as the disk was spinning.</p>
+<p>Baseline, commit <code>bcb01aac03b72c6250823d44d2b4dd71887e387c</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Disk Cache</th>
+<th>Tracks</th>
+<th>Wall time (seconds)</th>
+<th>User time (seconds)</th>
+<th>Sys time (seconds)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cold</td>
+<td>15931</td>
+<td>142.662233261</td>
+<td>3.283129000</td>
+<td>8.579975000</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>15931</td>
+<td>147.348811539</td>
+<td>3.236058000</td>
+<td>8.641414000</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>15931</td>
+<td>145.916103563</td>
+<td>3.376106000</td>
+<td>8.547039000</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>15931</td>
+<td>0.346267741</td>
+<td>0.987189000</td>
+<td>0.427480000</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>15931</td>
+<td>0.369951824</td>
+<td>0.886352000</td>
+<td>0.523628000</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>15931</td>
+<td>0.372806305</td>
+<td>0.929290000</td>
+<td>0.480558000</td>
+</tr>
+</tbody>
+</table>
+<p>Open files first, read later, commit <code>0f2d00be7ef2009fe19af79ae02ac29d11c766cf</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Disk Cache</th>
+<th>Tracks</th>
+<th>Wall time (seconds)</th>
+<th>User time (seconds)</th>
+<th>Sys time (seconds)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cold</td>
+<td>15931</td>
+<td>200.334320084</td>
+<td>4.513103000</td>
+<td>10.766578000</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>15931</td>
+<td>0.835945466</td>
+<td>2.131593000</td>
+<td>2.420703000</td>
+</tr>
+</tbody>
+</table>
+<p>Use “frontier” read pattern, commit <code>64371ff0aa834add77185531bae7160cfd6134ad</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Disk Cache</th>
+<th>Tracks</th>
+<th>Wall time (seconds)</th>
+<th>User time (seconds)</th>
+<th>Sys time (seconds)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cold</td>
+<td>15931</td>
+<td>148.444013742</td>
+<td>4.524398000</td>
+<td>10.423234000</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>15931</td>
+<td>147.144940804</td>
+<td>4.670934000</td>
+<td>10.321421000</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>15931</td>
+<td>1.134759625</td>
+<td>2.831797000</td>
+<td>4.271261000</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>15931</td>
+<td>1.204304762</td>
+<td>3.183732000</td>
+<td>4.562911000</td>
+</tr>
+</tbody>
+</table>
+<p>After changing the IO queue size (and also tuning internal queue a bit), this
+could be brought down to 93 seconds, which suggests the win is really more in IO
+patterns, and for the warm case, simpler is probably better.</p>
+<pre><code>$ cat /sys/block/sd{b,c,d}/queue/nr_requests
+4
+4
+4
+$ echo 2048 | sudo tee /sys/block/sd{b,c,d}/queue/nr_requests
+2048
+</code></pre>
+<p>Just regular blocking IO again, but tuning the disk queue size, commit
+<code>a1ac4d2100f6d0bd61f0be99fc31b7da260be6af</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Disk Cache</th>
+<th>Tracks</th>
+<th>nr_requests</th>
+<th>Threads</th>
+<th>Wall time (seconds)</th>
+<th>User time (seconds)</th>
+<th>Sys time (seconds)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cold</td>
+<td>15931</td>
+<td>2048</td>
+<td>24</td>
+<td>91.411324389</td>
+<td>3.086841000</td>
+<td>6.717432000</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>15931</td>
+<td>2048</td>
+<td>24</td>
+<td>93.145262004</td>
+<td>3.103839000</td>
+<td>7.002719000</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>15931</td>
+<td>2048</td>
+<td>128</td>
+<td>72.864833181</td>
+<td>2.616870000</td>
+<td>5.983099000</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>15931</td>
+<td>2048</td>
+<td>128</td>
+<td>73.701789903</td>
+<td>2.642680000</td>
+<td>5.953727000</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>15931</td>
+<td>2048</td>
+<td>256</td>
+<td>72.805136103</td>
+<td>2.503932000</td>
+<td>5.793247000</td>
+</tr>
+<tr>
+<td>Cold</td>
+<td>15931</td>
+<td>2048</td>
+<td>256</td>
+<td>72.108359036</td>
+<td>2.625222000</td>
+<td>5.811989000</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>15931</td>
+<td>2048</td>
+<td>24</td>
+<td>0.320772413</td>
+<td>0.952222000</td>
+<td>0.421805000</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>15931</td>
+<td>2048</td>
+<td>24</td>
+<td>0.359001663</td>
+<td>0.986530000</td>
+<td>0.390287000</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>15931</td>
+<td>2048</td>
+<td>128</td>
+<td>0.370368452</td>
+<td>0.927427000</td>
+<td>0.480482000</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>15931</td>
+<td>2048</td>
+<td>128</td>
+<td>0.454763022</td>
+<td>0.930003000</td>
+<td>0.776343000</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>15931</td>
+<td>2048</td>
+<td>256</td>
+<td>0.410941427</td>
+<td>0.922298000</td>
+<td>0.711005000</td>
+</tr>
+<tr>
+<td>Warm</td>
+<td>15931</td>
+<td>2048</td>
+<td>256</td>
+<td>0.365117437</td>
+<td>0.928634000</td>
+<td>0.472226000</td>
+</tr>
+</tbody>
+</table>
+      </article>
+      <nav id="nav-prev-next">
+        <a id="nav-prev" href="../search/" title="Search">Previous</a>
+        <a id="nav-next" href="../thumbnails/" title="Thumbnails">Next</a>
+        </nav>
+      </div>
+    <aside>
+      <nav>
+        <ul>
+        <li class="toc-section"><a href="..">Overview</a></li>
+          <li class="toc-section
+            "><a href="../building/">User Guide</a></li>
+          
+            <li class="toc-chapter
+              "><a href="../building/">Building</a></li>
+            
+            <li class="toc-chapter
+              "><a href="../configuration/">Configuration</a></li>
+            
+            <li class="toc-chapter
+              "><a href="../running/">Running</a></li>
+            
+            <li class="toc-chapter
+              "><a href="../tagging/">Tagging</a></li>
+            
+            <li class="toc-chapter
+              "><a href="../loudness/">Loudness normalization</a></li>
+            <li class="toc-section"><a href="../api/">API Reference</a></li>
+          <li class="toc-section
+            "><a href="../search/">Internals</a></li>
+          
+            <li class="toc-chapter
+              "><a href="../search/">Search</a></li>
+            
+            <li class="toc-chapter
+               current"><a href="./">Performance</a></li>
+            <li><ul>
+                <li class="toc-heading"><a href="#disk-io">Disk IO</a></li>
+                <li class="toc-heading"><a href="#precollect">Precollect</a></li>
+                <li class="toc-heading"><a href="#fadvise">Fadvise</a></li>
+                </ul></li>
+               
+            <li class="toc-chapter
+              "><a href="../thumbnails/">Thumbnails</a></li>
+            </ul>
+      </nav>
+    </aside>
+  </div>
+</body>
+</html>
