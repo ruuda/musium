@@ -138,6 +138,11 @@ impl Lufs {
         use std::i16;
         Lufs(i16::MAX)
     }
+
+    pub fn is_some(&self) -> bool {
+        use std::i16;
+        self.0 != i16::MAX
+    }
 }
 
 impl fmt::Display for Lufs {

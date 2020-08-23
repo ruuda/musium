@@ -433,6 +433,59 @@ fn make_index(dir: &Path) -> MemoryMetaIndex {
         index.get_albums().len(),
         index.len()
     );
+
+    let mut track_louds = Vec::new();
+    for &(track_id, ref track) in index.get_tracks() {
+        if track.loudness.is_some() { track_louds.push((track.loudness, track_id)); }
+    }
+    track_louds.sort();
+    let track_loud_min = track_louds[0];
+    let track_loud_max = track_louds[track_louds.len() - 1];
+    println!(
+        "\nSoftest track: {} by {} at {}.",
+        index.get_string(index.get_track(track_loud_min.1).unwrap().title),
+        index.get_string(index.get_track(track_loud_min.1).unwrap().artist),
+        track_loud_min.0,
+    );
+    println!(
+        "Loudest track: {} by {} at {}.",
+        index.get_string(index.get_track(track_loud_max.1).unwrap().title),
+        index.get_string(index.get_track(track_loud_max.1).unwrap().artist),
+        track_loud_max.0,
+    );
+    println!(
+        "Track loudness p5, p50, p95: {}, {}, {}",
+        track_louds[ 5 * track_louds.len() / 100].0,
+        track_louds[50 * track_louds.len() / 100].0,
+        track_louds[95 * track_louds.len() / 100].0,
+    );
+
+    let mut album_louds = Vec::new();
+    for &(album_id, ref album) in index.get_albums() {
+        if album.loudness.is_some() { album_louds.push((album.loudness, album_id)); }
+    }
+    album_louds.sort();
+    let album_loud_min = album_louds[0];
+    let album_loud_max = album_louds[album_louds.len() - 1];
+    println!(
+        "\nSoftest album: {} by {} at {}.",
+        index.get_string(index.get_album(album_loud_min.1).unwrap().title),
+        index.get_string(index.get_artist(index.get_album(album_loud_min.1).unwrap().artist_id).unwrap().name),
+        album_loud_min.0,
+    );
+    println!(
+        "Loudest album: {} by {} at {}.",
+        index.get_string(index.get_album(album_loud_max.1).unwrap().title),
+        index.get_string(index.get_artist(index.get_album(album_loud_max.1).unwrap().artist_id).unwrap().name),
+        album_loud_max.0,
+    );
+    println!(
+        "Album loudness p5, p50, p95: {}, {}, {}\n",
+        album_louds[ 5 * album_louds.len() / 100].0,
+        album_louds[50 * album_louds.len() / 100].0,
+        album_louds[95 * album_louds.len() / 100].0,
+    );
+
     println!("Artist word index: {}", index.words_artist.size());
     println!("Album word index:  {}", index.words_album.size());
     println!("Track word index:  {}", index.words_track.size());
