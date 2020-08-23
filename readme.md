@@ -1,4 +1,6 @@
-<h1 align="center"><img src="app/logo.svg" alt="Musium" width="400"></h1>
+<h1 align="center"><a href="https://ruuda.github.io/musium/">
+  <img src="app/logo.svg" alt="Musium" width="400">
+</a></h1>
 
 Music playback daemon with web-based library browser.
 
