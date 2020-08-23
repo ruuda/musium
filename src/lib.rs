@@ -130,13 +130,19 @@ impl ArtistId {
 /// Example: -7.32 LUFS would be stored as `Lufs(-732)`.
 ///
 /// A value of `i16::MAX` indicates that the loudness is unknown.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Lufs(pub i16);
 
 impl Lufs {
     pub fn none() -> Lufs {
         use std::i16;
         Lufs(i16::MAX)
+    }
+}
+
+impl fmt::Display for Lufs {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:.2} LUFS", (self.0 as f32) * 0.01)
     }
 }
 
@@ -363,6 +369,10 @@ pub enum IssueDetail {
     /// Contains the artist used, and the discarded alternative.
     AlbumArtistMismatch(AlbumId, String, String),
 
+    /// Two different album loudnesses were found for albums with the same mbid.
+    /// Contains the loudness used, and the discarded alternative.
+    AlbumLoudnessMismatch(AlbumId, Lufs, Lufs),
+
     /// Two different names were found for album artists with the same mbid.
     /// Contains the name used, and the discarded alternative.
     ArtistNameMismatch(ArtistId, String, String),
@@ -415,6 +425,8 @@ impl fmt::Display for Issue {
                 write!(f, "warning: discarded inconsistent artist name '{}' in favour of '{}'.", alt, name),
             IssueDetail::ArtistSortNameMismatch(_id, ref sort_name, ref alt) =>
                 write!(f, "warning: discarded inconsistent sort name '{}' in favour of '{}'.", alt, sort_name),
+            IssueDetail::AlbumLoudnessMismatch(_id, ref loudness, ref alt) =>
+                write!(f, "warning: discarded inconsistent loudness '{}' in favour of '{}'.", alt, loudness),
         }
     }
 }
@@ -571,6 +583,14 @@ fn albums_different(
             id,
             a.original_release_date,
             b.original_release_date,
+        ));
+    }
+
+    if a.loudness != b.loudness {
+        return Some(IssueDetail::AlbumLoudnessMismatch(
+            id,
+            a.loudness,
+            b.loudness,
         ));
     }
 
