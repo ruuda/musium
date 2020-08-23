@@ -57,6 +57,10 @@ all tags are mandatory.
  * `date`: If `originaldate` is not provided, this field is used instead.
  * `musicbrainz_albumartistid`: MusicBrainz id to group albums under.
  * `musicbrainz_albumid`: MusicBrainz id to group tracks under.
+ * `bs17704_track_loudness`: Optional track loudness, see
+   [loudness normalization](loudness.md).
+ * `bs17704_album_loudness`: Optional album loudness, see
+   [loudness normalization](loudness.md).
 
 Note that duration is not read from the metadata. It is determined from the flac
 header instead.
