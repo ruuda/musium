@@ -8,16 +8,15 @@ Musium is an album-centered music player designed to run on an always-on device
 connected to speakers. Playback can be controlled from anywhere on the local
 network through the webinterface.
 
-## Select documentation links
-
  * [Overview and getting started guide](https://ruuda.github.io/musium/)
  * [Building](https://ruuda.github.io/musium/building/)
  * [Running](https://ruuda.github.io/musium/running/)
 
-## Development status
+## Status
 
 Musium is in a usable state, but many features are still missing. For example,
-there is no way to pause playback yet.
+there is no way to pause playback yet. I used it on a daily basis, and I focus
+on building the most valuable features first.
 
 ## Alternatives
 
