@@ -1,14 +1,17 @@
 # Musium
 
-Music metadata indexer and mediaserver.
+Music playback daemon with a web-based library browser.
 
-Musium is an <abbr>HTTP</abbr> server that exposes a collection of flac files
-and their metadata to the local network, with an <abbr>API</abbr> to query the
-library. Musium is designed to scale to hundreds of thousands of tracks, and it
-can run in resource-constrained environments such as a Raspberry Pi.
+Musium is an album-centered music player designed to run on an always-on device
+connected to speakers. Playback can then be controlled from anywhere on the
+local network.
 
-Built upon the server is a web-based library browser that can play back tracks
-on a Chromecast.
+## Features
+
+ * Respects album artist and original release date metadata.
+ * Designed to scale to hundreds of thousands of tracks.
+ * Optimized to run in resource-constrained environments, such as a Raspberry Pi.
+ * Responsive design, supports both for mobile and desktop.
 
 ## Getting started
 
