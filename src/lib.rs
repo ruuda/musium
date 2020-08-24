@@ -147,7 +147,11 @@ impl Lufs {
 
 impl fmt::Display for Lufs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:.2} LUFS", (self.0 as f32) * 0.01)
+        if self.is_some() {
+            write!(f, "{:.2} LUFS", (self.0 as f32) * 0.01)
+        } else {
+            write!(f, "loudness information absent")
+        }
     }
 }
 
