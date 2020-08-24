@@ -436,7 +436,9 @@ fn make_index(dir: &Path) -> MemoryMetaIndex {
 
     let mut track_louds = Vec::new();
     for &(track_id, ref track) in index.get_tracks() {
-        if track.loudness.is_some() { track_louds.push((track.loudness, track_id)); }
+        if let Some(lufs) = track.loudness {
+            track_louds.push((lufs, track_id));
+        }
     }
     track_louds.sort();
     let track_loud_min = track_louds[0];
@@ -462,7 +464,9 @@ fn make_index(dir: &Path) -> MemoryMetaIndex {
 
     let mut album_louds = Vec::new();
     for &(album_id, ref album) in index.get_albums() {
-        if album.loudness.is_some() { album_louds.push((album.loudness, album_id)); }
+        if let Some(lufs) = album.loudness {
+            album_louds.push((lufs, album_id));
+        }
     }
     album_louds.sort();
     let album_loud_min = album_louds[0];

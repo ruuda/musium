@@ -129,29 +129,26 @@ impl ArtistId {
 ///
 /// Example: -7.32 LUFS would be stored as `Lufs(-732)`.
 ///
-/// A value of `i16::MAX` indicates that the loudness is unknown.
+/// The default value is -9.0 LUFS: across a collection of 16k tracks and 1.3k
+/// albums, the median track loudness was found to be -9.10 LUFS, and the median
+/// album loudness was found to be -8.98 LUFS, so a value of -9.0 seems a
+/// reasonable best guess in the absence of a true measurement.
+///
+/// A value of 0.0 LUFS is not allowed to support the nonzero optimization, such
+/// that an `Option<Lufs>` is 16 bits. This should not be a restriction for
+/// empirically mesured loudness, which is typically negative in LUFS.
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct Lufs(pub i16);
+pub struct Lufs(pub std::num::NonZeroI16);
 
 impl Lufs {
-    pub fn none() -> Lufs {
-        use std::i16;
-        Lufs(i16::MAX)
-    }
-
-    pub fn is_some(&self) -> bool {
-        use std::i16;
-        self.0 != i16::MAX
+    pub fn default() -> Lufs {
+        Lufs(std::num::NonZeroI16::new(-900).unwrap())
     }
 }
 
 impl fmt::Display for Lufs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.is_some() {
-            write!(f, "{:.2} LUFS", (self.0 as f32) * 0.01)
-        } else {
-            write!(f, "loudness information absent")
-        }
+        write!(f, "{:.2} LUFS", (self.0.get() as f32) * 0.01)
     }
 }
 
@@ -168,7 +165,8 @@ impl FromStr for Lufs {
                 // ensures that we can convert to i16 without overflow.
                 Ok(x) if x < -70.0 => Err("Loudness is too low, should be at least -70.0 LUFS."),
                 Ok(x) if x >  70.0 => Err("Loudness is too high, should be at most 70.0 LUFS."),
-                Ok(x) => Ok(Lufs((x * 100.0) as i16)),
+                Ok(x) if x == 0.0  => Err("Loudness of exactly 0.0 LUFS is disallowed, use -0.01 LUFS instead."),
+                Ok(x) => Ok(Lufs(std::num::NonZeroI16::new((x * 100.0) as i16).unwrap())),
             }
         }
     }
@@ -195,7 +193,7 @@ pub struct Track {
     // TODO: Because of this field, the `Track` type becomes too big. But we can
     // save this, because `album_id` could be removed if we make the album id a
     // prefix of the track id.
-    pub loudness: Lufs
+    pub loudness: Option<Lufs>,
 }
 
 #[repr(C)]
@@ -228,7 +226,7 @@ pub struct Album {
     pub artist_id: ArtistId,
     pub title: StringRef,
     pub original_release_date: Date,
-    pub loudness: Lufs,
+    pub loudness: Option<Lufs>,
 }
 
 #[repr(C)]
@@ -365,6 +363,9 @@ pub enum IssueDetail {
     /// A required metadata field is missing. Contains the field name.
     FieldMissingError(&'static str),
 
+    /// A recommended metadata field is missing. Contains the field name.
+    FieldMissingWarning(&'static str),
+
     /// A metadata field could be parsed. Contains the field name.
     FieldParseFailedError(&'static str),
 
@@ -382,7 +383,7 @@ pub enum IssueDetail {
 
     /// Two different album loudnesses were found for albums with the same mbid.
     /// Contains the loudness used, and the discarded alternative.
-    AlbumLoudnessMismatch(AlbumId, Lufs, Lufs),
+    AlbumLoudnessMismatch(AlbumId, Option<Lufs>, Option<Lufs>),
 
     /// Two different names were found for album artists with the same mbid.
     /// Contains the name used, and the discarded alternative.
@@ -420,6 +421,8 @@ impl fmt::Display for Issue {
         match self.detail {
             IssueDetail::FieldMissingError(field) =>
                 write!(f, "error: field '{}' missing.", field),
+            IssueDetail::FieldMissingWarning(field) =>
+                write!(f, "warning: field '{}' missing.", field),
             IssueDetail::FieldParseFailedError(field) =>
                 write!(f, "error: failed to parse field '{}'.", field),
             IssueDetail::NotStereo =>
@@ -436,8 +439,14 @@ impl fmt::Display for Issue {
                 write!(f, "warning: discarded inconsistent artist name '{}' in favour of '{}'.", alt, name),
             IssueDetail::ArtistSortNameMismatch(_id, ref sort_name, ref alt) =>
                 write!(f, "warning: discarded inconsistent sort name '{}' in favour of '{}'.", alt, sort_name),
-            IssueDetail::AlbumLoudnessMismatch(_id, ref loudness, ref alt) =>
+            IssueDetail::AlbumLoudnessMismatch(_id, Some(loudness), Some(alt)) =>
                 write!(f, "warning: discarded inconsistent loudness '{}' in favour of '{}'.", alt, loudness),
+            IssueDetail::AlbumLoudnessMismatch(_id, Some(loudness), None) =>
+                write!(f, "warning: replaced inconsistently missing loudness with '{}'.", loudness),
+            IssueDetail::AlbumLoudnessMismatch(_id, None, Some(alt)) =>
+                write!(f, "warning: ignored loudness '{}' because it is not unanimous.", alt),
+            IssueDetail::AlbumLoudnessMismatch(_id, None, None) =>
+                panic!("Not actually a loudness mismatch."),
         }
     }
 }
@@ -869,6 +878,10 @@ impl BuildMetaIndex {
         self.issue(filename, IssueDetail::FieldMissingError(field));
     }
 
+    fn warning_missing_field(&mut self, filename: String, field: &'static str) {
+        self.issue(filename, IssueDetail::FieldMissingWarning(field));
+    }
+
     fn error_parse_failed(&mut self, filename: String, field: &'static str) {
         self.issue(filename, IssueDetail::FieldParseFailedError(field));
     }
@@ -896,8 +909,8 @@ impl BuildMetaIndex {
         let mut album_artist_for_sort = None;
         let mut date = None;
         let mut original_date = None;
-        let mut track_loudness = Lufs::none();
-        let mut album_loudness = Lufs::none();
+        let mut track_loudness = None;
+        let mut album_loudness = None;
 
         let mut mbid_album = 0;
         let mut mbid_artist = 0;
@@ -940,14 +953,14 @@ impl BuildMetaIndex {
                 "title"                     => title = Some(self.strings.insert(value)),
                 "tracknumber"               => track_number = Some(u8::from_str(value).unwrap()),
                 "bs17704_track_loudness"    => track_loudness = match Lufs::from_str(value) {
-                    Ok(v) => v,
+                    Ok(v) => Some(v),
                     // Unfortunately we have no way to include more details
                     // about the parse failure with the error message at this
                     // point.
                     Err(_) => return self.error_parse_failed(filename_string, "bs17704_track_loudness"),
                 },
                 "bs17704_album_loudness"    => album_loudness = match Lufs::from_str(value) {
-                    Ok(v) => v,
+                    Ok(v) => Some(v),
                     Err(_) => return self.error_parse_failed(filename_string, "bs17704_album_loudness"),
                 },
                 _ => {}
@@ -989,6 +1002,14 @@ impl BuildMetaIndex {
             Some(d) => d,
             None => return self.error_missing_field(filename_string, "originaldate"),
         };
+
+        // Emit a warning when loudness is not present.
+        if track_loudness.is_none() {
+            self.warning_missing_field(filename_string.clone(), "bs17704_track_loudness");
+        }
+        if album_loudness.is_none() {
+            self.warning_missing_field(filename_string.clone(), "bs17704_album_loudness");
+        }
 
         let artist_id = ArtistId(mbid_artist);
         let album_id = AlbumId(mbid_album);
