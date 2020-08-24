@@ -1003,11 +1003,13 @@ impl BuildMetaIndex {
             None => return self.error_missing_field(filename_string, "originaldate"),
         };
 
-        // Emit a warning when loudness is not present.
+        // Emit a warning when loudness is not present. Emit only one of the two
+        // warnings, because it is likely that both are absent, and then you get
+        // two warnings per file, which is extremely noisy.
         if track_loudness.is_none() {
             self.warning_missing_field(filename_string.clone(), "bs17704_track_loudness");
         }
-        if album_loudness.is_none() {
+        else if album_loudness.is_none() {
             self.warning_missing_field(filename_string.clone(), "bs17704_album_loudness");
         }
 
