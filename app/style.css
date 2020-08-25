@@ -123,6 +123,11 @@ ul
   ;
 }
 
+/* Leave some whitespace between tracks on different disks. */
+.disc + .disc {
+  margin-top: 2.5rem;
+}
+
 img.thumb
 {
   width: 3em;

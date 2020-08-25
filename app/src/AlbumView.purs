@@ -10,6 +10,8 @@ module AlbumView
   ) where
 
 import Control.Monad.Reader.Class (ask)
+import Data.Array as Array
+import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Foldable (traverse_)
 import Effect.Aff (Aff, joinFiber, launchAff, launchAff_)
 import Effect.Class (liftEffect)
@@ -69,9 +71,17 @@ renderAlbum postEvent (Album album) = do
 
   liftEffect $ launchAff_ $ do
     tracks <- joinFiber tracksAsync
-    liftEffect
-      $ Html.withElement trackList
-      $ traverse_ (renderTrack postEvent $ Album album) tracks
+    liftEffect $ Html.withElement trackList $ traverse_
+      (renderDisc postEvent $ Album album)
+      (Array.groupBy isSameDisc tracks)
+
+isSameDisc :: Track -> Track -> Boolean
+isSameDisc (Track t1) (Track t2) = t1.discNumber == t2.discNumber
+
+renderDisc :: (Event -> Aff Unit) -> Album -> NonEmptyArray Track -> Html Unit
+renderDisc postEvent album tracks = Html.div $ do
+  Html.addClass "disc"
+  traverse_ (renderTrack postEvent album) tracks
 
 renderTrack :: (Event -> Aff Unit) -> Album -> Track -> Html Unit
 renderTrack postEvent (Album album) (Track track) =
