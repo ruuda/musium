@@ -98,6 +98,54 @@ fn open_device(card_name: &str) -> Result<alsa::PCM> {
     Ok(pcm)
 }
 
+struct VolumeControls {
+    master_playback_volume: alsa::hctl::Elem,
+    pcm_playback_volume: alsa::hctl::Elem,
+    speaker_playback_volume: alsa::htctl::Elem,
+}
+
+fn get_volume_controls(pcm: &alsa::PCM) -> Result<VolumeControls> {
+    let card_index = pcm.info()?.get_card();
+
+    let device = format!("hw:{}", card_index);
+    let non_block = false;
+    let hctl = alsa::hctl::HCtl::new(&device, non_block)?;
+    hctl.load()?;
+
+    let mut master_playback_volume = None;
+    let mut pcm_playback_volume = None;
+    let mut speaker_playback_volume = None;
+
+    for elem in hctl.elem_iter() {
+        let id = elem.get_id();
+        match id.get_name()? {
+            "Master Playback Volume" => master_playback_volume = Some(elem);
+            "PCM Playback Volume" => pcm_playback_volume = Some(elem);
+            "Speaker Playback Volume" => speaker_playback_volume = Some(elem);
+            _ => continue,
+        }
+        let info = elem.info()?;
+        assert_eq!(info.get_type(), Integer);
+        assert!(info.get_count() > 0);
+    }
+
+    let result = VolumeControls {
+        master_playback_volume: match master_playback_volume {
+            Some(elem) => elem,
+            None => return Err(alsa::Error::unsupported("Must have at least Master Playback Volume.")),
+        },
+        pcm_playback_volume: match pcm_playback_volume {
+            Some(elem) => elem,
+            None => return Err(alsa::Error::unsupported("Must have at least PCM Playback Volume.")),
+        },
+        let speaker_playback_volume: match speaker_playback_volume {
+            Some(elem) => elem,
+            None => return Err(alsa::Error::unsupported("Must have at least Speaker Playback Volume.")),
+        },
+    };
+    Ok(result)
+}
+
 fn set_format(pcm: &alsa::PCM, format: Format) -> Result<()> {
     let sample_format = match format.bits_per_sample {
         16 => alsa::pcm::Format::S16LE,
