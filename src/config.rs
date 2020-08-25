@@ -24,6 +24,7 @@ pub struct Config {
     pub play_log_path: Option<PathBuf>,
     // TODO: Make this optional; pick the first one by default.
     pub audio_device: String,
+    pub audio_volume_control: String,
 }
 
 impl fmt::Display for Config {
@@ -36,6 +37,7 @@ impl fmt::Display for Config {
             None => write!(f, "  play_log_path is not set\n")?,
         }
         write!(f, "  audio_device = {}", self.audio_device)?;
+        write!(f, "  audio_volume_control = {}", self.audio_volume_control)?;
         Ok(())
     }
 }
@@ -51,6 +53,7 @@ impl Config {
         let mut covers_path = None;
         let mut play_log_path = None;
         let mut audio_device = None;
+        let mut audio_volume_control = None;
 
         for (lineno, line_raw) in lines.into_iter().enumerate() {
             let line = line_raw.as_ref();
@@ -74,6 +77,7 @@ impl Config {
                     "covers_path" => covers_path = Some(PathBuf::from(value)),
                     "play_log_path" => play_log_path = Some(PathBuf::from(value)),
                     "audio_device" => audio_device = Some(String::from(value)),
+                    "audio_volume_control" => audio_volume_control = Some(String::from(value)),
                     _ => {
                         let msg = "Unknown key. Expected one of \
                             'listen', 'library_path', 'covers_path', \
@@ -112,6 +116,12 @@ impl Config {
                     "Audio device not set. Expected 'audio_device ='-line."
                 )),
             },
+            audio_volume_control: match audio_volume_control {
+                Some(d) => d,
+                None => return Err(Error::IncompleteConfig(
+                    "Audio volume control not set. Expected 'audio_volume_control ='-line."
+                )),
+            },
         };
 
         Ok(config)
@@ -132,11 +142,13 @@ mod test {
             "covers_path = /home/user/.cache/musium/covers",
             "",
             "audio_device = UCM404HD 192k",
+            "audio_volume_control = UMC404HD 192k Output",
         ];
         let config = Config::parse(&config_lines).unwrap();
         assert_eq!(&config.listen[..], "localhost:8000");
         assert_eq!(config.library_path.as_path(), Path::new("/home/user/music"));
         assert_eq!(config.covers_path.as_path(), Path::new("/home/user/.cache/musium/covers"));
         assert_eq!(&config.audio_device[..], "UCM404HD 192k");
+        assert_eq!(&config.audio_volume_control[..], "UMC404HD 192k Output");
     }
 }

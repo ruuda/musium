@@ -676,6 +676,7 @@ impl Player {
     pub fn new(
         index: Arc<dyn MetaIndex + Send + Sync>,
         card_name: String,
+        volume_name: String,
         play_log_path: Option<PathBuf>,
     ) -> Player {
         // Build the channel to send playback events to the history thread. That
@@ -704,7 +705,8 @@ impl Player {
             .name("playback".into())
             .spawn(move || {
                 playback::main(
-                    &card_name[..],
+                    &card_name,
+                    &volume_name,
                     &*state_mutex_for_playback,
                     &decode_thread_for_playback,
                 );

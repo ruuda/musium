@@ -14,6 +14,7 @@ pairs with `=` separator, and support `#` for comments.
     covers_path = /var/cache/musium/covers
 
     audio_device = UMC404HD 192k
+    audio_volume_control = UMC404HD 192k Output
 
 ## Options
 
@@ -50,3 +51,16 @@ The <abbr>Alsa</abbr> card used for playback. When the configured card cannot
 be found, Musium will list all of the cards that are available. Musium uses the
 <abbr>Alsa</abbr> hardware device directly, there is no need nor support for
 PulseAudio.
+
+### audio_volume_control
+
+The <abbr>Alsa</abbr> simple mixer control that controls playback volume. Often
+there are controls named `Master`, `PCM`, and `Speakers`, but this differs from
+card to card. Use `amixer scontrols` to list available controls. Be sure to run
+this with the right privileges (possibly as superuser, or as a user in the
+`audio` group) to reveal all available controls.
+
+Musium assumes exclusive control over this mixer control, so you should not
+manipulate it manually with tools like Alsamixer after starting Musium. In
+particular, Musium adjusts the volume to perform loudness normalization, so even
+for a constant target playback volume, Musium will manipulate the mixer control.

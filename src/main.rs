@@ -748,6 +748,7 @@ fn main() {
             let player = musium::player::Player::new(
                 arc_index.clone(),
                 config.audio_device,
+                config.audio_volume_control,
                 config.play_log_path,
             );
             let service = MetaServer::new(arc_index.clone(), config.covers_path, player);

@@ -12,6 +12,7 @@ use std::result;
 use std::sync::Mutex;
 use std::thread::Thread;
 use std::thread;
+use std::ffi::CString;
 
 use alsa;
 use alsa::PollDescriptors;
@@ -53,7 +54,7 @@ fn print_available_cards() -> Result<()> {
     Ok(())
 }
 
-fn open_device(card_name: &str) -> Result<alsa::PCM> {
+fn open_device(card_name: &str) -> Result<(alsa::PCM, alsa::Mixer)> {
     let cards = alsa::card::Iter::new();
     let mut opt_card_index = None;
 
@@ -92,58 +93,22 @@ fn open_device(card_name: &str) -> Result<alsa::PCM> {
             println!("Could not open audio interface for exclusive access, it is already use.");
             return Err(error);
         }
-        err => return err,
+        Err(error) => return Err(error),
     };
-
-    Ok(pcm)
-}
-
-struct VolumeControls {
-    master_playback_volume: alsa::hctl::Elem,
-    pcm_playback_volume: alsa::hctl::Elem,
-    speaker_playback_volume: alsa::htctl::Elem,
-}
-
-fn get_volume_controls(pcm: &alsa::PCM) -> Result<VolumeControls> {
-    let card_index = pcm.info()?.get_card();
 
     let device = format!("hw:{}", card_index);
     let non_block = false;
-    let hctl = alsa::hctl::HCtl::new(&device, non_block)?;
-    hctl.load()?;
+    let mixer = alsa::Mixer::new(&device, non_block)?;
 
-    let mut master_playback_volume = None;
-    let mut pcm_playback_volume = None;
-    let mut speaker_playback_volume = None;
+    Ok((pcm, mixer))
+}
 
-    for elem in hctl.elem_iter() {
-        let id = elem.get_id();
-        match id.get_name()? {
-            "Master Playback Volume" => master_playback_volume = Some(elem);
-            "PCM Playback Volume" => pcm_playback_volume = Some(elem);
-            "Speaker Playback Volume" => speaker_playback_volume = Some(elem);
-            _ => continue,
-        }
-        let info = elem.info()?;
-        assert_eq!(info.get_type(), Integer);
-        assert!(info.get_count() > 0);
-    }
-
-    let result = VolumeControls {
-        master_playback_volume: match master_playback_volume {
-            Some(elem) => elem,
-            None => return Err(alsa::Error::unsupported("Must have at least Master Playback Volume.")),
-        },
-        pcm_playback_volume: match pcm_playback_volume {
-            Some(elem) => elem,
-            None => return Err(alsa::Error::unsupported("Must have at least PCM Playback Volume.")),
-        },
-        let speaker_playback_volume: match speaker_playback_volume {
-            Some(elem) => elem,
-            None => return Err(alsa::Error::unsupported("Must have at least Speaker Playback Volume.")),
-        },
-    };
-    Ok(result)
+fn get_volume_control<'a>(mixer: &'a alsa::Mixer, name: &str) -> Option<alsa::mixer::Selem<'a>> {
+    let mut selem_id = alsa::mixer::SelemId::empty();
+    selem_id.set_name(&CString::new(name).expect("Invalid volume control name."));
+    let selem = mixer.find_selem(&selem_id)?;
+    assert!(selem.has_playback_volume());
+    Some(selem)
 }
 
 fn set_format(pcm: &alsa::PCM, format: Format) -> Result<()> {
@@ -308,10 +273,12 @@ fn ensure_buffers_full(
 /// queue.
 fn play_queue(
     card_name: &str,
+    volume_name: &str,
     state_mutex: &Mutex<PlayerState>,
     decode_thread: &Thread,
 ) {
-    let device = open_device(card_name).expect("TODO: Failed to open device.");
+    let (device, mixer) = open_device(card_name).expect("TODO: Failed to open device.");
+    let vc = get_volume_control(&mixer, volume_name).expect("TODO: Failed to get volume control.");
     let mut fds = device.get().expect("TODO: Failed to get fds from device.");
 
     let mut format = Format {
@@ -367,6 +334,7 @@ fn play_queue(
 /// again.
 pub fn main(
     card_name: &str,
+    volume_name: &str,
     state_mutex: &Mutex<PlayerState>,
     decode_thread: &Thread,
 ) {
@@ -378,7 +346,7 @@ pub fn main(
         };
         if has_audio {
             println!("Starting playback ...");
-            play_queue(card_name, state_mutex, decode_thread);
+            play_queue(card_name, volume_name, state_mutex, decode_thread);
             println!("Playback done, sleeping ...");
         }
         thread::park();
