@@ -136,11 +136,18 @@ impl ArtistId {
 ///
 /// A value of 0.0 LUFS is not allowed to support the nonzero optimization, such
 /// that an `Option<Lufs>` is 16 bits. This should not be a restriction for
-/// empirically mesured loudness, which is typically negative in LUFS.
+/// empirically measured loudness, which is typically negative in LUFS.
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Lufs(pub std::num::NonZeroI16);
 
 impl Lufs {
+    pub fn new(centi_loudness_units: i16) -> Lufs {
+        Lufs(
+            std::num::NonZeroI16::new(centi_loudness_units)
+            .expect("A value of 0.0 LUFS is not allowed, use -0.01 LUFS instead.")
+        )
+    }
+
     pub fn default() -> Lufs {
         Lufs(std::num::NonZeroI16::new(-900).unwrap())
     }

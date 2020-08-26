@@ -23,7 +23,7 @@ use claxon::metadata::StreamInfo;
 use crate::history::PlaybackEvent;
 use crate::history;
 use crate::playback;
-use crate::{MetaIndex, TrackId};
+use crate::{Lufs, MetaIndex, TrackId};
 
 type FlacReader = claxon::FlacReader<fs::File>;
 
@@ -38,6 +38,21 @@ pub struct QueueId(u64);
 impl fmt::Display for QueueId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:016x}", self.0)
+    }
+}
+
+/// A dimensionless number expressed on a logarithmic scale.
+///
+/// The representation is millibel, or in other words, this is a decibel as
+/// a decimal fixed-point number with two decimal digits after the point.
+///
+/// Example: -7.32 dB would be stored as `Millibel(-732)`.
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct Millibel(pub i16);
+
+impl fmt::Display for Millibel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:.2} dB", (self.0 as f32) * 0.01)
     }
 }
 
@@ -128,6 +143,12 @@ pub struct QueuedTrack {
     /// Track id of the track to be played.
     track_id: TrackId,
 
+    /// Perceived track loudness in Loudness Units Full Scale.
+    track_loudness: Lufs,
+
+    /// Perceived album loudness in Loudness Units Full Scale.
+    album_loudness: Lufs,
+
     /// Decoded blocks of audio data.
     blocks: Vec<Block>,
 
@@ -142,10 +163,17 @@ pub struct QueuedTrack {
 }
 
 impl QueuedTrack {
-    pub fn new(queue_id: QueueId, track_id: TrackId) -> QueuedTrack {
+    pub fn new(
+        queue_id: QueueId,
+        track_id: TrackId,
+        track_loudness: Lufs,
+        album_loudness: Lufs,
+    ) -> QueuedTrack {
         QueuedTrack {
             queue_id: queue_id,
             track_id: track_id,
+            track_loudness: track_loudness,
+            album_loudness: album_loudness,
             blocks: Vec::new(),
             samples_played: 0,
             decode: Decode::NotStarted,
@@ -351,6 +379,32 @@ pub struct PlayerState {
     /// Counter that assigns queue ids.
     next_unused_id: QueueId,
 
+    /// The target volume, controlled by the user.
+    ///
+    /// A volume of 0 indicates that the material plays at the target loudness,
+    /// negative values make it softer, positive values make it louder. The full
+    /// volume range available depends on the perceived loudness of the current
+    /// track or album.
+    volume: Millibel,
+
+    /// The loudness of the softest material we want to play back.
+    ///
+    /// The goal of loudness normalization is to make everything sound as loud
+    /// as the material with minimal loudness, by turning down the volume for
+    /// everything that is louder than that.
+    ///
+    /// To know how much to turn down the volume, we need to know the loudness
+    /// of the softest material we want to play back. It is possible to set the
+    /// target to the actual minimal loudness encountered in the library, but
+    /// that means that once you add an even softer album or track, the meaning
+    /// of the volume control will change, as the volume control is relative to
+    /// this target. So instead, it is also possible to set this to a fixed but
+    /// reasonably low loudness, such as -23.0 LUFS.
+    ///
+    /// The target loudness is static and should not change during the lifetime
+    /// of the player.
+    target_loudness: Lufs,
+
     /// The tracks pending playback. Element 0 is being played currently.
     ///
     /// Invariant: If the queued track at index i has no decoded blocks, then
@@ -378,6 +432,8 @@ impl PlayerState {
     pub fn new(events: SyncSender<PlaybackEvent>) -> PlayerState {
         PlayerState {
             next_unused_id: QueueId(0),
+            volume: Millibel(-150),
+            target_loudness: Lufs::new(-230),
             queue: Vec::new(),
             current_decode: None,
             events: events,
@@ -419,6 +475,20 @@ impl PlayerState {
     /// Return whether the queue is empty.
     pub fn is_queue_empty(&self) -> bool {
         self.queue.is_empty()
+    }
+
+    /// Return the desired playback volume relative to full scale.
+    ///
+    /// This applies loudness normalization on top of the player target volume,
+    /// to get the absolute playback volume.
+    pub fn target_volume_full_scale(&self) -> Option<Millibel> {
+        if self.queue.is_empty() { return None; }
+        let queued_track = &self.queue[0];
+
+        // TODO: Take either album or track loudness depending on how the queue looks.
+        let loudness_adjustment_mb = self.target_loudness.0.get() - queued_track.album_loudness.0.get();
+
+        Some(Millibel(self.volume.0 + loudness_adjustment_mb))
     }
 
     /// Consume n samples from the peeked block.
@@ -743,6 +813,11 @@ impl Player {
 
     /// Enqueue the track for playback at the end of the queue.
     pub fn enqueue(&self, track_id: TrackId) -> QueueId {
+        let track = self.index.get_track(track_id).expect("Can only enqueue existing tracks.");
+        let album = self.index.get_album(track.album_id).expect("Track must belong to album.");
+        let track_loudness = track.loudness.unwrap_or(Lufs::default());
+        let album_loudness = album.loudness.unwrap_or(Lufs::default());
+
         // If the queue is empty, then the playback thread may be parked,
         // so we may need to wake it after enqueuing something.
         let (queue_id, needs_wake) = {
@@ -750,7 +825,8 @@ impl Player {
             let needs_wake = state.is_queue_empty();
             let id = state.next_unused_id;
             state.next_unused_id = QueueId(id.0 + 1);
-            state.queue.push(QueuedTrack::new(id, track_id));
+            let qt = QueuedTrack::new(id, track_id, track_loudness, album_loudness);
+            state.queue.push(qt);
             (id, needs_wake)
         };
 
