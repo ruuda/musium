@@ -18,7 +18,7 @@ use alsa;
 use alsa::PollDescriptors;
 use nix::errno::Errno;
 
-use crate::player::{Format, PlayerState};
+use crate::player::{Format, Millibel, PlayerState};
 
 type Result<T> = result::Result<T, alsa::Error>;
 
@@ -281,6 +281,7 @@ fn play_queue(
     let vc = get_volume_control(&mixer, volume_name).expect("TODO: Failed to get volume control.");
     let mut fds = device.get().expect("TODO: Failed to get fds from device.");
 
+    let mut volume = None;
     let mut format = Format {
         sample_rate_hz: 44_100,
         bits_per_sample: 16,
@@ -293,7 +294,7 @@ fn play_queue(
     let mut io = device.io();
 
     loop {
-        let (result, needs_decode, pending_ms) = {
+        let (result, target_volume, needs_decode, pending_ms) = {
             let mut state = state_mutex.lock().unwrap();
             let result = ensure_buffers_full(
                 &device,
@@ -302,11 +303,25 @@ fn play_queue(
                 &mut state
             );
 
-            (result, state.needs_decode(), state.pending_duration_ms())
+            (
+                result,
+                state.target_volume_full_scale(),
+                state.needs_decode(),
+                state.pending_duration_ms(),
+            )
         };
 
         if needs_decode {
             decode_thread.unpark();
+        }
+
+        if volume != target_volume {
+            if let Some(Millibel(v)) = target_volume {
+                println!("Changing volume to {:.1} dB", v as f32 * 0.01);
+                vc.set_playback_db_all(alsa::mixer::MilliBel(v as i64), alsa::Round::Floor)
+                    .expect("Failed to set volume. TODO: Make fn return Alsa error?");
+                volume = target_volume;
+            }
         }
 
         match result {

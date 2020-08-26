@@ -432,8 +432,8 @@ impl PlayerState {
     pub fn new(events: SyncSender<PlaybackEvent>) -> PlayerState {
         PlayerState {
             next_unused_id: QueueId(0),
-            volume: Millibel(-150),
-            target_loudness: Lufs::new(-230),
+            volume: Millibel(-1500),
+            target_loudness: Lufs::new(-2300),
             queue: Vec::new(),
             current_decode: None,
             events: events,

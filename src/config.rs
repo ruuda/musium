@@ -36,7 +36,7 @@ impl fmt::Display for Config {
             Some(p) => write!(f, "  play_log_path = {}\n", p.to_string_lossy())?,
             None => write!(f, "  play_log_path is not set\n")?,
         }
-        write!(f, "  audio_device = {}", self.audio_device)?;
+        write!(f, "  audio_device = {}\n", self.audio_device)?;
         write!(f, "  audio_volume_control = {}", self.audio_volume_control)?;
         Ok(())
     }
