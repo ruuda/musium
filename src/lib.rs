@@ -369,6 +369,10 @@ pub enum IssueDetail {
     /// A metadata field could be parsed. Contains the field name.
     FieldParseFailedError(&'static str),
 
+    /// A track title contains the phrase "(feat. ",
+    /// which likely belongs in the artist instead.
+    TrackTitleContainsFeat,
+
     /// Two different titles were found for albums with the same mbid.
     /// Contains the title used, and the discarded alternative.
     AlbumTitleMismatch(AlbumId, String, String),
@@ -425,6 +429,8 @@ impl fmt::Display for Issue {
                 write!(f, "warning: field '{}' missing.", field),
             IssueDetail::FieldParseFailedError(field) =>
                 write!(f, "error: failed to parse field '{}'.", field),
+            IssueDetail::TrackTitleContainsFeat =>
+                write!(f, "warning: track title contains '(feat. '."),
             IssueDetail::NotStereo =>
                 write!(f, "error: the file is not stereo"),
             IssueDetail::UnsupportedBitDepth(bits) =>
@@ -882,6 +888,10 @@ impl BuildMetaIndex {
         self.issue(filename, IssueDetail::FieldMissingWarning(field));
     }
 
+    fn warning_track_title_contains_feat(&mut self, filename: String) {
+        self.issue(filename, IssueDetail::TrackTitleContainsFeat);
+    }
+
     fn error_parse_failed(&mut self, filename: String, field: &'static str) {
         self.issue(filename, IssueDetail::FieldParseFailedError(field));
     }
@@ -1011,6 +1021,15 @@ impl BuildMetaIndex {
         }
         else if album_loudness.is_none() {
             self.warning_missing_field(filename_string.clone(), "bs17704_album_loudness");
+        }
+
+        // Warn about track titles containing "(feat. ", these should probably
+        // be in the artist metadata instead.
+        {
+            let track_title = &self.strings.get(f_title);
+            if track_title.contains("(feat. ") {
+                self.warning_track_title_contains_feat(filename_string.clone());
+            }
         }
 
         let artist_id = ArtistId(mbid_artist);
