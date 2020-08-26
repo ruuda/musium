@@ -206,6 +206,8 @@ fn write_samples(
                     // We have to return the number of frames (count independent
                     // of the number of channels), but we have bytes.
                     n / (num_channels * current_format.bits_per_sample as usize / 8)
+                // TODO: This can apparently cause Error("snd_pcm_mmap_commit", Sys(EPIPE).
+                // How to handle it?
                 })?;
                 samples_written
             }
