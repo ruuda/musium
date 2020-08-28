@@ -9,20 +9,24 @@ body {
 }
 
 .track .artist {
-  color: #999;
+  color: #666;
 }
 
 .track-number {
-  color: #777;
+  color: #666;
 }
 
 .duration {
-  color: #666;
+  color: #484848;
 }
 
 /* TODO Make separate span for details. */
 #album-view .album-info h2 {
-  color: #888;
+  color: #777;
+}
+
+#album-view .album-info h1 {
+  color: #ddd;
 }
 
 #album-view .album-info h2 .artist {
@@ -31,6 +35,16 @@ body {
 
 button::before {
   color: #666;
+}
+
+#album-view .cover {
+    box-shadow: 0.0 0.3rem 1.2rem rgba(0, 0, 0, 0.2);
+}
+
+#album-view .cover img.backdrop {
+  filter: blur(1.2rem);
+  opacity: 0.4;
+  mix-blend-mode: color;
 }
 
 #statusbar {
