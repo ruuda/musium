@@ -128,6 +128,46 @@ enqueueTrack (TrackId trackId) = do
         Console.log $ "Enqueued track " <> trackId <> ", got queue id " <> queueId
         pure $ QueueId queueId
 
+newtype Decibel = Decibel Number
+
+derive instance decibelEq :: Eq Decibel
+derive instance decibelOrd :: Ord Decibel
+
+data VolumeChange = VolumeUp | VolumeDown
+
+newtype Volume = Volume
+  { volume :: Decibel
+  }
+
+instance decodeJsonVolume :: DecodeJson Volume where
+  decodeJson json = do
+    obj        <- Json.decodeJson json
+    volDb      <- Json.getField obj "volume_db"
+    pure $ Volume { volume: Decibel volDb }
+
+getVolume :: Aff Volume
+getVolume = do
+  result <- Http.get Http.ResponseFormat.json "/volume"
+  case result of
+    Left err -> fatal $ "Failed to get volume: " <> Http.printError err
+    Right response -> case Json.decodeJson response.body of
+      Left err -> fatal $ "Failed to get volume: " <> err
+      Right volume -> pure volume
+
+changeVolume :: VolumeChange -> Aff Volume
+changeVolume change =
+  let
+    dir = case change of
+      VolumeUp -> "up"
+      VolumeDown -> "down"
+  in do
+    result <- Http.post Http.ResponseFormat.json ("/volume/" <> dir) Nothing
+    case result of
+      Left err -> fatal $ "Failed to change volume: " <> Http.printError err
+      Right response -> case Json.decodeJson response.body of
+        Left err -> fatal $ "Failed to change volume: " <> err
+        Right newVolume -> pure newVolume
+
 newtype SearchArtist = SearchArtist
   { id :: ArtistId
   , name :: String
