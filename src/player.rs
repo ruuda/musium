@@ -487,8 +487,9 @@ impl PlayerState {
 
         // TODO: Take either album or track loudness depending on how the queue looks.
         let loudness_adjustment_mb = self.target_loudness.0.get() - queued_track.album_loudness.0.get();
+        let volume_mbfs = self.volume.0 + loudness_adjustment_mb;
 
-        Some(Millibel(self.volume.0 + loudness_adjustment_mb))
+        Some(Millibel(volume_mbfs))
     }
 
     /// Consume n samples from the peeked block.
@@ -858,5 +859,28 @@ impl Player {
         }
 
         result
+    }
+
+    /// Return the current playback volume.
+    pub fn get_volume(&self) -> Millibel {
+        let state = self.state.lock().unwrap();
+        state.volume
+    }
+
+    /// Add a (possibly negative) amount to the current volume, return the new volume.
+    pub fn change_volume(&self, add: Millibel) -> Millibel {
+        let mut state = self.state.lock().unwrap();
+        state.volume.0 += add.0;
+
+        // It makes no sense to crank up the volume further than the target
+        // loudness: an extremely loud track at 0 LUFS played at a volume of
+        // 0 dB would be toned bown by target_loudness to reach the target
+        // loudness, so we can turn up the volume by that amount to make things
+        // louder without exceeding full scale.
+        state.volume = state.volume.min(Millibel(-state.target_loudness.0.get()));
+        // -60 dB is low enough to be pretty much silent.
+        state.volume = state.volume.max(Millibel(-6000));
+
+        state.volume
     }
 }

@@ -23,11 +23,11 @@ use std::sync::Arc;
 use std::thread;
 
 use tiny_http::{Header, Request, Response, ResponseBox, Server};
-use tiny_http::Method::{Get, Put};
+use tiny_http::Method::{Get, Post, Put};
 
 use musium::config::Config;
 use musium::error;
-use musium::player::Player;
+use musium::player::{Millibel, Player};
 use musium::{AlbumId, MetaIndex, MemoryMetaIndex, TrackId};
 use musium::serialization;
 
@@ -247,6 +247,26 @@ impl MetaServer {
             .boxed()
     }
 
+    fn handle_get_volume(&self) -> ResponseBox {
+        let buffer = Vec::new();
+        let mut w = io::Cursor::new(buffer);
+        let volume = self.player.get_volume();
+        serialization::write_volume_json(&mut w, volume).unwrap();
+        Response::from_data(w.into_inner())
+            .with_header(header_content_type("application/json"))
+            .boxed()
+    }
+
+    fn handle_change_volume(&self, add: Millibel) -> ResponseBox {
+        let buffer = Vec::new();
+        let mut w = io::Cursor::new(buffer);
+        let volume = self.player.change_volume(add);
+        serialization::write_volume_json(&mut w, volume).unwrap();
+        Response::from_data(w.into_inner())
+            .with_header(header_content_type("application/json"))
+            .boxed()
+    }
+
     fn handle_search(&self, request: &Request) -> ResponseBox {
         let raw_query = match request.url().strip_prefix("/search?") {
             Some(q) => q,
@@ -324,6 +344,12 @@ impl MetaServer {
             (&Get, Some("search"), None)    => self.handle_search(&request),
             (&Get, Some("queue"),  None)    => self.handle_queue(),
             (&Put, Some("queue"),  Some(t)) => self.handle_enqueue(t),
+
+            // Volume control, volume up/down change the volume by 1 dB.
+            (&Get,  Some("volume"), None)         => self.handle_get_volume(),
+            (&Post, Some("volume"), Some("up"))   => self.handle_change_volume(Millibel(100)),
+            (&Post, Some("volume"), Some("down")) => self.handle_change_volume(Millibel(-100)),
+
             // Web endpoints.
             (&Get, None,                    None) => self.handle_static_file("app/index.html", "text/html"),
             (&Get, Some("style.css"),       None) => self.handle_static_file("app/style.css", "text/css"),

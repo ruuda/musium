@@ -13,7 +13,7 @@ use std::io;
 use std::io::Write;
 
 use crate::{Album, AlbumId, ArtistId, MetaIndex, TrackId};
-use crate::player::QueueId;
+use crate::player::{Millibel, QueueId};
 
 /// Write a json representation of the album list to the writer.
 pub fn write_albums_json<W: Write>(index: &dyn MetaIndex, mut w: W) -> io::Result<()> {
@@ -212,4 +212,8 @@ pub fn write_playback_event<W: Write>(
     // As this piece of metadata is not stored in the index, we will have to
     // read it from the metadata when we decode the track, and then pass it here.
     Ok(())
+}
+
+pub fn write_volume_json<W: Write>(mut w: W, current_volume: Millibel) -> io::Result<()> {
+    write!(w, r#"{{"volume_db":{:.02}}}"#, current_volume.0 as f32 * 0.01)
 }
