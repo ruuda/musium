@@ -19,12 +19,14 @@ import Data.Maybe (Maybe (Nothing, Just))
 import Data.Time.Duration (Milliseconds (..))
 import Effect (Effect)
 import Effect.Class (liftEffect)
-import Effect.Aff (launchAff_)
+import Effect.Aff (Aff, launchAff_)
 import Effect.Aff as Aff
 import Prelude
 
 import Dom (Element)
 import Dom as Dom
+import Event (Event)
+import Event as Event
 import Html (Html)
 import Html as Html
 import Model (QueuedTrack (..), TrackId)
@@ -73,10 +75,11 @@ newCurrentTrack (QueuedTrack currentTrack) = Html.div $ do
   container <- ask
   pure { track: currentTrack.trackId, container, progressBar }
 
-new :: Html StatusBarState
-new = Html.div $ do
+new :: (Event -> Aff Unit) -> Html StatusBarState
+new postEvent = Html.div $ do
   Html.setId "statusbar"
   Html.addClass "empty"
+  Html.onClick $ launchAff_ $ postEvent Event.OpenOverview
   statusBar <- ask
   pure { current: Nothing, statusBar }
 

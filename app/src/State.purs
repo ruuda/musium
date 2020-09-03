@@ -17,6 +17,7 @@ import Control.Monad.Reader.Class (ask)
 import Data.Array as Array
 import Data.Int as Int
 import Data.Maybe (Maybe (Just, Nothing))
+import Data.Time.Duration (Milliseconds (..))
 import Effect (Effect)
 import Effect.Aff (Aff, Fiber)
 import Effect.Aff as Aff
@@ -95,7 +96,7 @@ new :: BusW Event -> Effect AppState
 new bus = do
   let postEvent event = Bus.write event bus
   elements <- setupElements postEvent
-  statusBar <- Html.withElement Dom.body StatusBar.new
+  statusBar <- Html.withElement Dom.body $ StatusBar.new postEvent
   never <- Aff.launchSuspendedAff Aff.never
   pure
     { albums: []
@@ -226,6 +227,8 @@ handleEvent event state = case event of
     Html.withElement state.elements.albumListView $ do
       Html.removeClass "active"
       Html.addClass "inactive"
+    Html.withElement state.statusBar.statusBar $
+      Html.removeClass "up"
     let navigation = state.navigation { location = Navigation.Album (Album album) }
     History.pushState
       navigation.location
@@ -240,6 +243,8 @@ handleEvent event state = case event of
     Html.withElement state.elements.albumListView $ do
       Html.removeClass "inactive"
       Html.addClass "active"
+    Html.withElement state.statusBar.statusBar $
+      Html.removeClass "up"
 
     -- Restore the scroll position.
     case Array.index
@@ -250,6 +255,20 @@ handleEvent event state = case event of
         Nothing -> pure unit
 
     pure $ state { navigation = state.navigation { location = Navigation.Library } }
+
+  Event.OpenOverview -> do
+    -- Trigger the up animation, which is 200ms.
+    liftEffect $ Html.withElement state.statusBar.statusBar $ Html.addClass "up"
+    Aff.delay $ Milliseconds 200.0
+    -- After that, remove the other views, which are now behind this overview.
+    liftEffect $ do
+      Html.withElement state.elements.albumView $ do
+        Html.removeClass "active"
+        Html.addClass "inactive"
+      Html.withElement state.elements.albumListView $ do
+        Html.removeClass "active"
+        Html.addClass "inactive"
+    pure state
 
   Event.ChangeViewport -> case state.navigation.location of
     -- When scrolling or resizing, only update the album list when it is

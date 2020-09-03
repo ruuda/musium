@@ -413,6 +413,12 @@ button.play-next::before {
   width: 100vw;
   background-color: rgba(252, 251, 251, 0.92);
   backdrop-filter: blur(3pt) brightness(110%);
+  transition: height 0.2s ease-in-out, background-color 0.2s;
+}
+
+#statusbar.up {
+  height: 100vh;
+  background-color: #fff;
 }
 
 #statusbar .current-track {
