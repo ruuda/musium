@@ -79,7 +79,7 @@ new :: (Event -> Aff Unit) -> Html StatusBarState
 new postEvent = Html.div $ do
   Html.setId "statusbar"
   Html.addClass "empty"
-  Html.onClick $ launchAff_ $ postEvent Event.OpenOverview
+  Html.onClick $ launchAff_ $ postEvent Event.OpenNowPlaying
   statusBar <- ask
   pure { current: Nothing, statusBar }
 

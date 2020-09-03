@@ -42,8 +42,9 @@ main = launchAff_ $ do
     -- TODO: Avoid double pushes here.
     Nothing -> initialState.postEvent Event.OpenLibrary
     Just location -> case location of
-      Navigation.Library     -> initialState.postEvent Event.OpenLibrary
       Navigation.Album album -> initialState.postEvent $ Event.OpenAlbum album
+      Navigation.Library     -> initialState.postEvent Event.OpenLibrary
+      Navigation.NowPlaying  -> initialState.postEvent Event.OpenNowPlaying
 
   -- The main loop handles events in a loop.
   let

@@ -16,7 +16,7 @@ data Event
   | UpdateQueue (Array QueuedTrack)
   | OpenLibrary
   | OpenAlbum Album
-  | OpenOverview
+  | OpenNowPlaying
   | ChangeViewport
     -- This event is generated internally after enqueueing a track, to
     -- immediately bring the queue in sync without having to refresh it fully.

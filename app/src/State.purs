@@ -256,7 +256,7 @@ handleEvent event state = case event of
 
     pure $ state { navigation = state.navigation { location = Navigation.Library } }
 
-  Event.OpenOverview -> do
+  Event.OpenNowPlaying -> do
     -- Trigger the up animation, which is 200ms.
     liftEffect $ Html.withElement state.statusBar.statusBar $ Html.addClass "up"
     Aff.delay $ Milliseconds 200.0
@@ -268,7 +268,10 @@ handleEvent event state = case event of
       Html.withElement state.elements.albumListView $ do
         Html.removeClass "active"
         Html.addClass "inactive"
-    pure state
+
+      History.pushState Navigation.NowPlaying "Now playing" "/now"
+
+    pure $ state { navigation = state.navigation { location = Navigation.NowPlaying } }
 
   Event.ChangeViewport -> case state.navigation.location of
     -- When scrolling or resizing, only update the album list when it is

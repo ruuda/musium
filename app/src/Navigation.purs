@@ -14,6 +14,7 @@ import Model (Album)
 
 data Location
   = Library
+  | NowPlaying
   | Album Album
 
 type Navigation =
