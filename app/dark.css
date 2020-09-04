@@ -1,11 +1,23 @@
 body {
-  background-color: #282828;
-  color: #ccc;
+  background-color: #1c1c1c;
+  color: #bbb;
+}
+
+#album-list-view {
+  background-color: #161616;
+}
+
+#album-list {
+  background-color: #1c1c1c;
+}
+
+#album-list {
+  border-left-color: #2a2a2a;
 }
 
 #album-view .track-list {
-  background-color: #222;
-  border-left-color: #444;
+  background-color: #161616;
+  border-left-color: #2a2a2a;
 }
 
 .track .artist {
@@ -49,7 +61,11 @@ button::before {
 
 #statusbar {
   background-color: rgba(22, 22, 22, 0.92);
-  border-top-color: rgba(255, 255, 255, 0.15);
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+#statusbar.up {
+  background-color: #161616;
 }
 
 #statusbar .artist {

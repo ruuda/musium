@@ -99,6 +99,11 @@ ul
 {
   padding-bottom: 1em;
   position: relative;
+
+  /* Still fill the viewport, even if there are not enough albums to fill the
+   * viewport. We have the 5em + 0.8pt outer padding for the status bar, and
+   * then 1em padding here. */
+  min-height: calc(100vh - 6em - 0.8pt);
 }
 
 #album-list li
@@ -507,7 +512,7 @@ button.play-next::before {
     background-color: #fdfdfd;
   }
 
-  #album-list-view #album-list {
+  #album-list {
     grid-column: 2;
     background-color: white;
     border-left: 0.8pt solid #eee;
