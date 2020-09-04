@@ -18,6 +18,7 @@ body {
 #album-view .track-list {
   background-color: #161616;
   border-left-color: #2a2a2a;
+  border-top-color: #2a2a2a;
 }
 
 .track .artist {
