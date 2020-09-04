@@ -353,6 +353,7 @@ impl MetaServer {
             // Web endpoints.
             (&Get, None,                    None) => self.handle_static_file("app/index.html", "text/html"),
             (&Get, Some("style.css"),       None) => self.handle_static_file("app/style.css", "text/css"),
+            (&Get, Some("dark.css"),        None) => self.handle_static_file("app/dark.css", "text/css"),
             (&Get, Some("icon.svg"),        None) => self.handle_static_file("app/icon.svg", "image/svg+xml"),
             (&Get, Some("icon-lowres.svg"), None) => self.handle_static_file("app/icon-lowres.svg", "image/svg+xml"),
             (&Get, Some("manifest.json"),   None) => self.handle_static_file("app/manifest.json", "text/javascript"),
