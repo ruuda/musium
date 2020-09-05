@@ -22,8 +22,7 @@ html
   line-height: 1.5em;
 }
 
-body
-{
+body {
   color: black;
   display: grid;
   width: 100vw;
@@ -38,25 +37,39 @@ body
 }
 
 ::-webkit-scrollbar {
-  width: 2pt;
+  width: 0.5em;
 }
 
 ::-webkit-scrollbar-track {
-  background-color: #fafafa;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.00)  0%,
+    rgba(0, 0, 0, 0.02) 90%
+  );
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: #ddd;
+  background-color: rgba(0, 0, 0, 0.1);
 }
 
 #album-list-view {
   grid-area: album-list;
   overflow-y: scroll;
   background-color: #fefefe;
+  border-right: solid 1pt #eee;
 }
 
 #album-view {
   grid-area: album-view;
+  overflow-y: scroll;
+
+  display: grid;
+  grid-template-columns: auto;
+  grid-template-rows: auto auto;
+  grid-template-areas:
+    "album-info"
+    "track-list"
+  ;
 }
 
 #statusbar {
@@ -68,6 +81,8 @@ a
   color: inherit;
   text-decoration: none;
 }
+
+/* Initial loading animation. */
 
 #loader
 {
@@ -181,6 +196,8 @@ img.thumb
 
 .track-list
 {
+  grid-area: track-list;
+
   margin-top: 1em;
   padding-top: 1.5em;
   padding-bottom: 1.5rem;
@@ -313,7 +330,8 @@ img.thumb
 .searching #search-results { display: block }
 .searching #search { height: 100vh }
 
-#album-view .album-info {
+.album-info {
+  grid-area: album-info;
   padding: 1em;
 }
 
@@ -321,17 +339,21 @@ img.thumb
   width: calc(100% - 7.5em);
   margin: 3.75em;
   position: relative;
+  max-width: 20rem;
+  margin-right: auto;
+  /* TODO: This no longer applies when we have a max-width.
+   * But do we really *need* covers to be square? */
   /* Hack: the cover should be square, but there is no direct way in css to say
    * "the height should be equal to the width". We can abuse the fact that a
    * padding percentage is part of the width instead. */
-  padding-bottom: calc(100% - 7.5em);
-  height: 0;
+  /* padding-bottom: calc(100% - 7.5em); */
+  /* height: 0; */
 }
 
 #album-view .cover img {
   position: absolute;
   width: 100%;
-  height: 100%;
+  height: auto;
   top: 0;
   left: 0;
   border-radius: 0.15rem;
@@ -362,7 +384,7 @@ img.thumb
   margin-right: 3rem;
 }
 
-#album-view .album-info h1 {
+.album-info h1 {
   font-weight: 600;
   font-size: 1.7em;
   line-height: 1.1em;
@@ -372,7 +394,7 @@ img.thumb
   text-overflow: ellipsis;
 }
 
-#album-view .album-info h2 {
+.album-info h2 {
   font-weight: 400;
   font-size: 1em;
   margin-top: 0.5rem;
@@ -381,7 +403,7 @@ img.thumb
   word-spacing: 0.2em;
 }
 
-#album-view .album-info h2 .artist {
+.album-info h2 .artist {
   color: black;
   word-spacing: 0;
 }
@@ -390,7 +412,7 @@ img.thumb
   padding-top: 1rem;
 }
 
-#album-view .album-info button {
+.album-info button {
   font-family: inherit;
   font-size: inherit;
   color: #888;
@@ -478,4 +500,25 @@ button.play-next::before {
 #statusbar .artist {
   font-size: 0.75rem;
   color: #777;
+}
+
+/* At 60rem width, we put the track list to the right of the album info, instead
+ * of below the album info. */
+@media (min-width: 60rem) {
+  #album-view {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto;
+    grid-template-areas:
+      "album-info track-list"
+    ;
+  }
+
+  .track-list {
+    margin-top: 0;
+    padding-top: 4rem;
+    padding-left: 1rem;
+    padding-bottom: 2.5rem;
+    border-top: none;
+    border-left: 0.8pt solid #eee;
+  }
 }
