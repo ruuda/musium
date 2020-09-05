@@ -22,20 +22,6 @@ html
   line-height: 1.5em;
 }
 
-body {
-  color: black;
-  display: grid;
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
-  grid-template-columns: 30vw 70vw;
-  grid-template-rows: auto 5em;
-  grid-template-areas:
-    "album-list album-view"
-    "statusbar  statusbar"
-  ;
-}
-
 ::-webkit-scrollbar {
   width: 0.5em;
 }
@@ -50,6 +36,33 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background-color: rgba(0, 0, 0, 0.1);
+}
+
+body {
+  color: black;
+  display: grid;
+  height: 100vh;
+  overflow: hidden;
+  /* At the narrowest viewports, we show one pane, but the body itself is wider
+   * than that. We use translation to determine which pane is visible. */
+  width: 200vw;
+  grid-template-columns: 100vw 100vw;
+  grid-template-rows: auto 5em;
+  grid-template-areas:
+    "album-list album-view"
+    "statusbar  statusbar"
+  ;
+
+  transition: transform 0.15s ease-in-out;
+}
+
+body.nav-album-list-view {
+  transform: translateX(0);
+}
+
+body.nav-album-view {
+  /* Slide 1 viewport to the left, so the album view is at x=0. */
+  transform: translateX(-100vw);
 }
 
 #album-list-view {
@@ -500,6 +513,20 @@ button.play-next::before {
 #statusbar .artist {
   font-size: 0.75rem;
   color: #777;
+}
+
+/* At 40rem width, we can show the album list side-by-side with a different
+ * view. */
+@media (min-width: 40rem) {
+  body {
+    width: 100vw;
+    grid-template-columns: 30vw 70vw;
+  }
+
+  /* When both columns are visible at once, no translation is needed. */
+  body.nav-album-view {
+    transform: translateX(0);
+  }
 }
 
 /* At 60rem width, we put the track list to the right of the album info, instead

@@ -75,16 +75,16 @@ type AppState =
 
 setupElements :: (Event -> Aff Unit) -> Effect Elements
 setupElements postEvent = Html.withElement Dom.body $ do
+  Html.addClass "nav-album-list-view"
+
   { self: albumListView, runway: albumListRunway } <- Html.div $ do
     Html.setId "album-list-view"
-    Html.addClass "active"
     runway <- Html.div $ ask
     self <- ask
     pure { self, runway }
 
   albumView <- Html.div $ do
     Html.setId "album-view"
-    Html.addClass "inactive"
     ask
 
   Html.onScroll $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
@@ -218,17 +218,14 @@ handleEvent event state = case event of
   Event.UpdateProgress -> updateProgressBar state
 
   Event.OpenAlbum (Album album) -> liftEffect $ do
+    -- TODO: Make a function to switch the class.
+    Html.withElement Dom.body $ do
+      Html.removeClass "nav-album-list-view"
+      Html.addClass "nav-album-view"
+
     Html.withElement state.elements.albumView $ do
-      Html.removeClass "inactive"
-      Html.addClass "active"
       Html.clear
       AlbumView.renderAlbum state.postEvent (Album album)
-      Html.scrollIntoView
-    Html.withElement state.elements.albumListView $ do
-      Html.removeClass "active"
-      Html.addClass "inactive"
-    Html.withElement state.statusBar.statusBar $
-      Html.removeClass "up"
     let navigation = state.navigation { location = Navigation.Album (Album album) }
     History.pushState
       navigation.location
@@ -237,14 +234,10 @@ handleEvent event state = case event of
     pure $ state { navigation = navigation }
 
   Event.OpenLibrary -> liftEffect $ do
-    Html.withElement state.elements.albumView $ do
-      Html.removeClass "active"
-      Html.addClass "inactive"
-    Html.withElement state.elements.albumListView $ do
-      Html.removeClass "inactive"
-      Html.addClass "active"
-    Html.withElement state.statusBar.statusBar $
-      Html.removeClass "up"
+    -- TODO: Make a function to switch the class.
+    Html.withElement Dom.body $ do
+      Html.addClass "nav-album-list-view"
+      Html.removeClass "nav-album-view"
 
     -- Restore the scroll position.
     case Array.index
@@ -257,20 +250,11 @@ handleEvent event state = case event of
     pure $ state { navigation = state.navigation { location = Navigation.Library } }
 
   Event.OpenNowPlaying -> do
-    -- Trigger the up animation, which is 200ms.
-    liftEffect $ Html.withElement state.statusBar.statusBar $ Html.addClass "up"
-    Aff.delay $ Milliseconds 200.0
-    -- After that, remove the other views, which are now behind this overview.
-    liftEffect $ do
-      Html.withElement state.elements.albumView $ do
-        Html.removeClass "active"
-        Html.addClass "inactive"
-      Html.withElement state.elements.albumListView $ do
-        Html.removeClass "active"
-        Html.addClass "inactive"
-
-      History.pushState Navigation.NowPlaying "Now playing" "/now"
-
+    -- TODO: Make a function to switch the class.
+    liftEffect $ Html.withElement Dom.body $ do
+      Html.removeClass "nav-album-list-view"
+      Html.removeClass "nav-album-view"
+    liftEffect $ History.pushState Navigation.NowPlaying "Now playing" "/now"
     pure $ state { navigation = state.navigation { location = Navigation.NowPlaying } }
 
   Event.ChangeViewport -> case state.navigation.location of
