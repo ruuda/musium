@@ -25,13 +25,42 @@ html
 body
 {
   color: black;
-  /* Always show the scroll bar. If we don't, then when you switch from the
-   * album list to the album view, for a brief moment the track list is still
-   * loading, so the height of the page is suddenly a lot less, and the scroll
-   * bar disappears, only to re-appear when the track list loads. That causes a
-   * pop where all the content moves left. The track list popping in is not
-   * visually disturbing, but the horizontal displacement is. */
+  display: grid;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  grid-template-columns: 30vw 70vw;
+  grid-template-rows: auto 5em;
+  grid-template-areas:
+    "album-list album-view"
+    "statusbar  statusbar"
+  ;
+}
+
+::-webkit-scrollbar {
+  width: 2pt;
+}
+
+::-webkit-scrollbar-track {
+  background-color: #fafafa;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #ddd;
+}
+
+#album-list-view {
+  grid-area: album-list;
   overflow-y: scroll;
+  background-color: #fefefe;
+}
+
+#album-view {
+  grid-area: album-view;
+}
+
+#statusbar {
+  grid-area: statusbar;
 }
 
 a
@@ -86,24 +115,10 @@ ul
   list-style-type: none;
 }
 
-.inactive {
-  display: none !important;
-}
-
-#album-list-view {
-  /* Reserve room for the status bar. */
-  padding-bottom: calc(5em + 0.8pt);
-}
-
 #album-list
 {
   padding-bottom: 1em;
   position: relative;
-
-  /* Still fill the viewport, even if there are not enough albums to fill the
-   * viewport. We have the 5em + 0.8pt outer padding for the status bar, and
-   * then 1em padding here. */
-  min-height: calc(100vh - 6em - 0.8pt);
 }
 
 #album-list li
@@ -298,13 +313,6 @@ img.thumb
 .searching #search-results { display: block }
 .searching #search { height: 100vh }
 
-#album-view {
-  min-height: calc(100% - 5em - 0.8pt);
-
-  /* Reserve room for the status bar. */
-  padding-bottom: calc(5em + 0.8pt);
-}
-
 #album-view .album-info {
   padding: 1em;
 }
@@ -411,19 +419,9 @@ button.play-next::before {
 }
 
 #statusbar {
-  height: 5rem;
   border-top: 0.8pt solid rgba(0, 0, 0, 0.065);
-  position: fixed;
-  bottom: 0;
-  width: 100vw;
   background-color: rgba(252, 251, 251, 0.92);
   backdrop-filter: blur(3pt) brightness(110%);
-  transition: height 0.2s ease-in-out, background-color 0.2s;
-}
-
-#statusbar.up {
-  height: 100vh;
-  background-color: #fff;
 }
 
 #statusbar .current-track {
@@ -480,101 +478,4 @@ button.play-next::before {
 #statusbar .artist {
   font-size: 0.75rem;
   color: #777;
-}
-
-@media (min-width: 30rem) and (max-width: 50rem) {
-  #album-view {
-    display: grid;
-    grid-template-columns: 1fr 30rem 1fr;
-  }
-
-  #album-view .album-info {
-    grid-column: 2;
-  }
-
-  #album-view .track-list
-  {
-    grid-column: 1 / 4;
-    display: grid;
-    grid-template-columns: inherit;
-  }
-
-  #album-view .track-list .track
-  {
-    grid-column: 2 / 4;
-  }
-}
-
-@media (min-width: 40rem) {
-  #album-list-view {
-    display: grid;
-    grid-template-columns: 1fr 4fr;
-    background-color: #fdfdfd;
-  }
-
-  #album-list {
-    grid-column: 2;
-    background-color: white;
-    border-left: 0.8pt solid #eee;
-  }
-}
-
-@media (min-width: 50rem) {
-  #album-view {
-    display: grid;
-    grid-template-columns: 1fr 24rem 26rem 3fr;
-  }
-
-  #album-view .album-info {
-    grid-column: 2;
-  }
-
-  #album-view .track-list
-  {
-    grid-column: 3 / 5;
-    margin-top: 0;
-    padding-top: 4rem;
-    padding-left: 1rem;
-    padding-bottom: 2.5rem;
-    border-top: none;
-    border-left: 0.8pt solid #eee;
-  }
-
-  #album-list-view {
-    grid-template-columns: 1fr 2fr;
-  }
-}
-
-@media (min-width: 54rem) {
-  #album-view {
-    grid-template-columns: 1fr 27.5rem 28.5rem 2fr;
-  }
-}
-
-@media (min-width: 62rem) {
-  #album-view {
-    grid-template-columns: 1fr 30rem 30rem 1.5fr;
-  }
-}
-
-@media (min-width: 66rem) {
-  #album-view {
-    grid-template-columns: 1fr 32rem 32rem 1fr;
-  }
-}
-
-@media (min-width: 70rem) {
-  #album-view {
-    grid-template-columns: 1fr 34rem 34rem 1fr;
-  }
-
-  #album-list-view {
-    grid-template-columns: 2fr 3fr;
-  }
-}
-
-@media (min-width: 74rem) {
-  #album-view {
-    grid-template-columns: 1fr 36rem 36rem 1fr;
-  }
 }
