@@ -361,6 +361,7 @@ img.thumb
   margin: 3.75em;
   position: relative;
   max-width: 20rem;
+  margin-left: auto;
   margin-right: auto;
   /* TODO: This no longer applies when we have a max-width.
    * But do we really *need* covers to be square? */
@@ -409,7 +410,7 @@ img.thumb
   font-weight: 600;
   font-size: 1.7em;
   line-height: 1.1em;
-  margin-top: -0.75rem;
+  margin-top:  6rem;
   margin-left: 0.75rem;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -540,12 +541,29 @@ button.play-next::before {
 /* At 60rem width, we put the track list to the right of the album info, instead
  * of below the album info. */
 @media (min-width: 60rem) {
+  body {
+    /* Keep the album list at a fixed width, it does not need to be very wide,
+     * we rather add whitespace elsewhere. */
+    grid-template-columns: 20rem auto;
+  }
+
   #album-view {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: auto;
     grid-template-areas:
       "album-info track-list"
     ;
+  }
+
+  #album-view .cover {
+    max-width: none;
+  }
+
+  .album-info h1 {
+    /* When the cover could be centered above the title, we need plenty of
+     * whitespace to not make it look weird, but when it is aligned to the
+     * borders, we can do with less. */
+    margin-top: 0;
   }
 
   .track-list {
@@ -557,3 +575,10 @@ button.play-next::before {
     border-left: 0.8pt solid #eee;
   }
 }
+
+/* At this width, we can devote a bit more space to th album list, and we set a
+ * limit on the width of the album info column. */
+@media (min-width: 70rem) {
+  body {
+    grid-template-columns: 25rem auto;
+  }
