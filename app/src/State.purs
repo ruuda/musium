@@ -7,6 +7,7 @@
 
 module State
   ( AppState (..)
+  , BrowserElements (..)
   , Elements (..)
   , handleEvent
   , new
@@ -38,6 +39,7 @@ import Event (Event)
 import Event as Event
 import History as History
 import Html as Html
+import Html (Html)
 import LocalStorage as LocalStorage
 import Model (Album (..), QueuedTrack (..), TrackId)
 import Model as Model
@@ -53,10 +55,18 @@ fatal = Exception.error >>> throwError
 
 type EventBus = BusW Event
 
-type Elements =
+type BrowserElements =
   { albumListView :: Element
   , albumListRunway :: Element
   , albumView :: Element
+  }
+
+type Elements =
+  { browser :: BrowserElements
+  , paneNowPlaying :: Element
+  , paneBrowser :: Element
+  , paneQueue :: Element
+  , paneSearch :: Element
   }
 
 type AppState =
@@ -73,8 +83,8 @@ type AppState =
   , postEvent :: Event -> Aff Unit
   }
 
-setupElements :: (Event -> Aff Unit) -> Effect Elements
-setupElements postEvent = Html.withElement Dom.body $ do
+addBrowser :: Html BrowserElements
+addBrowser = do
   Html.addClass "nav-album-list-view"
 
   { self: albumListView, runway: albumListRunway } <- Html.div $ do
@@ -87,10 +97,36 @@ setupElements postEvent = Html.withElement Dom.body $ do
     Html.setId "album-view"
     ask
 
+  pure $ { albumListView, albumListRunway, albumView }
+
+setupElements :: (Event -> Aff Unit) -> Effect Elements
+setupElements postEvent = Html.withElement Dom.body $ do
+  paneNowPlaying <- Html.div $ do
+    Html.setId "now-playing"
+    Html.addClass "pane"
+    ask
+
+  { paneBrowser, browser} <- Html.div $ do
+    Html.setId "browser"
+    Html.addClass "pane"
+    paneBrowser <- ask
+    browser <- addBrowser
+    pure $ { paneBrowser, browser }
+
+  paneQueue <- Html.div $ do
+    Html.setId "queue"
+    Html.addClass "pane"
+    ask
+
+  paneSearch <- Html.div $ do
+    Html.setId "search"
+    Html.addClass "pane"
+    ask
+
   Html.onScroll $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
   liftEffect $ Dom.onResizeWindow $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
 
-  pure { albumListView, albumListRunway, albumView }
+  pure { browser, paneNowPlaying, paneBrowser, paneQueue, paneSearch }
 
 new :: BusW Event -> Effect AppState
 new bus = do
@@ -147,7 +183,7 @@ updateAlbumList state = do
   scrollState <- AlbumListView.updateAlbumList
     state.albums
     state.postEvent
-    state.elements.albumListRunway
+    state.elements.browser.albumListRunway
     target
     state.albumListState
   pure $ state { albumListState = scrollState, albumListIndex = index }
@@ -184,13 +220,15 @@ handleEvent event state = case event of
     state' <- fetchQueue state
 
     liftEffect $ do
-      runway <- Html.withElement state'.elements.albumListView $ do
+      runway <- Html.withElement state'.elements.browser.albumListView $ do
         Html.clear
         AlbumListView.renderAlbumListRunway $ Array.length albums
 
       updateAlbumList $ state'
         { albums = albums
-        , elements = state'.elements { albumListRunway = runway }
+        , elements = state'.elements
+          { browser = state'.elements.browser { albumListRunway = runway }
+          }
         }
 
   Event.UpdateQueue queue -> do
@@ -219,11 +257,11 @@ handleEvent event state = case event of
 
   Event.OpenAlbum (Album album) -> liftEffect $ do
     -- TODO: Make a function to switch the class.
-    Html.withElement Dom.body $ do
+    Html.withElement state.elements.paneBrowser $ do
       Html.removeClass "nav-album-list-view"
       Html.addClass "nav-album-view"
 
-    Html.withElement state.elements.albumView $ do
+    Html.withElement state.elements.browser.albumView $ do
       Html.clear
       AlbumView.renderAlbum state.postEvent (Album album)
     let navigation = state.navigation { location = Navigation.Album (Album album) }
@@ -235,7 +273,7 @@ handleEvent event state = case event of
 
   Event.OpenLibrary -> liftEffect $ do
     -- TODO: Make a function to switch the class.
-    Html.withElement Dom.body $ do
+    Html.withElement state.elements.paneBrowser $ do
       Html.addClass "nav-album-list-view"
       Html.removeClass "nav-album-view"
 
@@ -250,10 +288,7 @@ handleEvent event state = case event of
     pure $ state { navigation = state.navigation { location = Navigation.Library } }
 
   Event.OpenNowPlaying -> do
-    -- TODO: Make a function to switch the class.
-    liftEffect $ Html.withElement Dom.body $ do
-      Html.removeClass "nav-album-list-view"
-      Html.removeClass "nav-album-view"
+    -- TODO: Add pane switcher.
     liftEffect $ History.pushState Navigation.NowPlaying "Now playing" "/now"
     pure $ state { navigation = state.navigation { location = Navigation.NowPlaying } }
 

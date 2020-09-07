@@ -49,7 +49,29 @@ body {
    * always refers to the current viewport height. */
   position: fixed;
   height: 100vh;
+}
 
+.pane {
+  position: fixed;
+  width: 100vw;
+  height: 100vh;
+  opacity: 1.0;
+  transform-origin: center;
+  /* background-color: #fff; */
+  transition: transform 0.2s ease-in-out, opacity 0.2s ease-in-out;
+}
+
+.pane.in {
+  transform: scale(0.83);
+  opacity: 0.0;
+}
+
+.pane.out {
+  transform: scale(1.2);
+  opacity: 0.0;
+}
+
+.browser {
   overflow: hidden;
   /* At the narrowest viewports, we show one pane, but the body itself is wider
    * than that. We use translation to determine which pane is visible. */
@@ -64,11 +86,11 @@ body {
   transition: transform 0.15s ease-in-out;
 }
 
-body.nav-album-list-view {
+.browser.nav-album-list-view {
   transform: translateX(0);
 }
 
-body.nav-album-view {
+.browser.nav-album-view {
   /* Slide 1 viewport to the left, so the album view is at x=0. */
   transform: translateX(-100vw);
 }
@@ -527,13 +549,13 @@ button.play-next::before {
 /* At 40rem width, we can show the album list side-by-side with a different
  * view. */
 @media (min-width: 40rem) {
-  body {
+  .browser {
     width: 100vw;
     grid-template-columns: 30vw 70vw;
   }
 
   /* When both columns are visible at once, no translation is needed. */
-  body.nav-album-view {
+  .browser.nav-album-view {
     transform: translateX(0);
   }
 }
@@ -541,7 +563,7 @@ button.play-next::before {
 /* At 60rem width, we put the track list to the right of the album info, instead
  * of below the album info. */
 @media (min-width: 60rem) {
-  body {
+  .browser {
     /* Keep the album list at a fixed width, it does not need to be very wide,
      * we rather add whitespace elsewhere. */
     grid-template-columns: 20rem auto;
@@ -579,6 +601,6 @@ button.play-next::before {
 /* At this width, we can devote a bit more space to th album list, and we set a
  * limit on the width of the album info column. */
 @media (min-width: 70rem) {
-  body {
+  .browser {
     grid-template-columns: 25rem auto;
   }
