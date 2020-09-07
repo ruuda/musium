@@ -41,7 +41,15 @@ html
 body {
   color: black;
   display: grid;
+
+  /* NOTE: The 100vh unit has a peculiar behavior on Chrome: it refers to the
+   * minimal viewport height; the size of the viewport when the address bar is
+   * visible. But when the address bar is hidden, we get this extra area below
+   * the viewport. Setting 'position' to 'fixed' changes this behavior so 100vh
+   * always refers to the current viewport height. */
+  position: fixed;
   height: 100vh;
+
   overflow: hidden;
   /* At the narrowest viewports, we show one pane, but the body itself is wider
    * than that. We use translation to determine which pane is visible. */
