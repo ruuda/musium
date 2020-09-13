@@ -744,10 +744,34 @@ fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &Path) {
     gen_thumbs.drain();
 }
 
+fn fmcount(
+    index: &MemoryMetaIndex,
+    tsv_path: String,
+    property: String,
+    half_life: String,
+) {
+    let f = fs::File::open(tsv_path).expect("Failed to open listens tsv file.");
+    let mut r = io::BufReader::new(f);
+    let mut lines = r.lines();
+    // Skip the header row.
+    lines.next();
+    for opt_line in lines {
+        let line = opt_line.expect("Failed to read from listens tsv file.");
+        let mut parts = line.split('\t');
+        let time_str = parts.next().expect("Expected seconds_since_epoch");
+        let track = parts.next().expect("Expected track");
+        let artist = parts.next().expect("Expected artist");
+        let album = parts.next().expect("Expected album");
+
+        println!("At {} listened {} by {} from {}", time_str, track, artist, album);
+    }
+}
+
 fn print_usage() {
     println!("usage: ");
     println!("  musium serve musium.conf");
     println!("  musium cache musium.conf");
+    println!("  musium count musium.conf listenbrainz.tsv property half-life");
 }
 
 fn load_config(config_fname: &str) -> error::Result<Config> {
@@ -758,7 +782,7 @@ fn load_config(config_fname: &str) -> error::Result<Config> {
 }
 
 fn main() {
-    if env::args().len() != 3 {
+    if env::args().len() < 3 {
         print_usage();
         process::exit(1);
     }
@@ -788,6 +812,13 @@ fn main() {
         "cache" => {
             let index = make_index(&config.library_path);
             generate_thumbnails(&index, &config.covers_path);
+        }
+        "count" => {
+            let tsv_path = env::args().nth(3).unwrap();
+            let property = env::args().nth(4).unwrap();
+            let half_life = env::args().nth(5).unwrap();
+            let index = make_index(&config.library_path);
+            fmcount(&index, tsv_path, property, half_life);
         }
         _ => {
             print_usage();
