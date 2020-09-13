@@ -762,19 +762,27 @@ fn intersect<T: Ord + Clone>(xs: &[T], ys: &[T], out: &mut Vec<T>) {
     }
 }
 
-fn fmcount(
+fn match_listens(
     index: &MemoryMetaIndex,
-    tsv_path: String,
-    property: String,
-    half_life: String,
-) {
-    let f = fs::File::open(tsv_path).expect("Failed to open listens tsv file.");
-    let r = io::BufReader::new(f);
+    in_path: String,
+    out_path: String,
+) -> io::Result<()> {
+    let fi = fs::File::open(in_path)?;
+    let r = io::BufReader::new(fi);
     let mut lines = r.lines();
-    // Skip the header row.
+
+    let fo = fs::File::create(out_path)?;
+    let mut w = io::BufWriter::new(fo);
+
+    // Skip the header row for reading, print the header row for writing.
     lines.next();
+    write!(w, "seconds_since_epoch\ttrack_id\n")?;
+
+    let mut total = 0_u32;
+    let mut matched = 0_u32;
+
     for opt_line in lines {
-        let line = opt_line.expect("Failed to read from listens tsv file.");
+        let line = opt_line?;
         let mut parts = line.split('\t');
         let time_str = parts.next().expect("Expected seconds_since_epoch");
         let track_name = parts.next().expect("Expected track");
@@ -811,25 +819,41 @@ fn fmcount(
             let album_ok = index.get_string(album.title) == album_name;
             if artist_ok && album_ok {
                 if !found {
-                    println!("FOUND {}: at {} listened {} by {} from {}", track_id, time_str, track_name, artist_name, album_name);
+                    write!(w, "{}\t{}\n", time_str, track_id)?;
                     found = true;
+                    matched += 1;
                 } else {
-                    println!("DUPLICATE {}: at {} listened {} by {} from {}", track_id, time_str, track_name, artist_name, album_name);
+                    println!(
+                        "AMBIGUOUS {}: at {} listened {} by {} from {}",
+                        track_id, time_str, track_name, artist_name, album_name,
+                    );
                 }
             }
         }
 
         if !found {
-            println!("MISSING: at {} listened {} by {} from {}", time_str, track_name, artist_name, album_name);
+            println!(
+                "MISSING: at {} listened {} by {} from {}",
+                time_str, track_name, artist_name, album_name,
+            );
         }
+
+        total += 1;
     }
+
+    println!(
+        "Matched {} out of {} listens. ({:.1}%)",
+        matched, total, (matched as f32 * 100.0) / (total as f32),
+    );
+
+    Ok(())
 }
 
 fn print_usage() {
     println!("usage: ");
     println!("  musium serve musium.conf");
     println!("  musium cache musium.conf");
-    println!("  musium count musium.conf listenbrainz.tsv property half-life");
+    println!("  musium match musium.conf listenbrainz.tsv matched.tsv");
 }
 
 fn load_config(config_fname: &str) -> error::Result<Config> {
@@ -871,12 +895,11 @@ fn main() {
             let index = make_index(&config.library_path);
             generate_thumbnails(&index, &config.covers_path);
         }
-        "count" => {
-            let tsv_path = env::args().nth(3).unwrap();
-            let property = env::args().nth(4).unwrap();
-            let half_life = env::args().nth(5).unwrap();
+        "match" => {
+            let in_path = env::args().nth(3).unwrap();
+            let out_path = env::args().nth(4).unwrap();
             let index = make_index(&config.library_path);
-            fmcount(&index, tsv_path, property, half_life);
+            match_listens(&index, in_path, out_path).unwrap();
         }
         _ => {
             print_usage();
