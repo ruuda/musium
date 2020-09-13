@@ -29,7 +29,24 @@ if len(sys.argv) != 2:
 print('seconds_since_epoch\ttrack\tartist\talbum')
 
 for listen in json.load(open(sys.argv[1], 'r', encoding='utf-8')):
-    print(listen['listened_at'], end='\t')
-    print(listen['track_metadata']['track_name'], end='\t')
-    print(listen['track_metadata']['artist_name'], end='\t')
-    print(listen['track_metadata']['release_name'])
+    meta = listen['track_metadata']
+    if (
+        meta['track_name'] is None or
+        meta['artist_name'] is None or
+        meta['release_name'] is None
+    ):
+        continue
+
+    line = (
+        str(listen['listened_at']) + '\t' +
+        meta['track_name'] + '\t' +
+        meta['artist_name'] + '\t' +
+        meta['release_name']
+    )
+
+    # Skip misencodings. Better would be to try and fix them, but for now we
+    # just skip them.
+    if 'Ã©' in line:
+        continue
+
+    print(line)
