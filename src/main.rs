@@ -767,7 +767,7 @@ fn fmcount(
     half_life: String,
 ) {
     let f = fs::File::open(tsv_path).expect("Failed to open listens tsv file.");
-    let mut r = io::BufReader::new(f);
+    let r = io::BufReader::new(f);
     let mut lines = r.lines();
     // Skip the header row.
     lines.next();
