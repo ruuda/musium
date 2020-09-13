@@ -790,7 +790,7 @@ pub fn normalize_words(title: &str, dest: &mut Vec<String>) {
     // is unlikely to contain a lot of information about the title. (Deadmau5
     // can go and use some normal titles next time.) We remove accents to make
     // searching easier without having to type the exact accent.
-    let drop = "“”‘’'\"()[]«»,❦\u{300}\u{301}\u{302}\u{303}\u{304}\u{306}\u{307}\u{308}\u{327}";
+    let drop = "“”‘’'\"`()[]«»,❦|\u{300}\u{301}\u{302}\u{303}\u{304}\u{306}\u{307}\u{308}\u{327}";
     let keep = "$€#&=*%∆";
 
     // Cut words at the following punctuation characters, but still include them
@@ -798,7 +798,7 @@ pub fn normalize_words(title: &str, dest: &mut Vec<String>) {
     // but it still allows searching for this punctuation. This is important,
     // because some artists are under the illusion that it is cool to use
     // punctuation as part of a name.
-    let cut = "/\\@_+-:!?<>";
+    let cut = "/\\@_+-:;!?<>";
 
     // Loop over the characters, normalized and lowercased.
     for ch in title.nfkd().flat_map(|nch| nch.to_lowercase()) {
@@ -822,6 +822,17 @@ pub fn normalize_words(title: &str, dest: &mut Vec<String>) {
                     word = String::new();
                 }
                 continue
+            }
+            // Treat the upside-down question mark as a separator like the
+            // regular one, but then do include the upright one as the word,
+            // so you can search for ¿ by typing ?. Same for exclamation mark.
+            '¿' => {
+                push_word(dest, &mut word);
+                dest.push("?".to_string());
+            }
+            '¡' => {
+                push_word(dest, &mut word);
+                dest.push("!".to_string());
             }
             // Normalize a few characters to more common ones.
             // Sometimes used in "n°", map to "no".
