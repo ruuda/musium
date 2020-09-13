@@ -850,10 +850,14 @@ fn match_listens(
 }
 
 fn print_usage() {
-    println!("usage: ");
+    println!("Usage:\n");
     println!("  musium serve musium.conf");
     println!("  musium cache musium.conf");
     println!("  musium match musium.conf listenbrainz.tsv matched.tsv");
+    println!("
+serve -- Start the server.
+cache -- Generate album art thumbnails.
+match -- Match listens (see process_listens.py) to tracks.");
 }
 
 fn load_config(config_fname: &str) -> error::Result<Config> {
