@@ -299,14 +299,12 @@ pub trait MetaIndex {
 
     /// Search for artists where the word occurs in the name.
     ///
-    /// The results are guaranteed to be sorted on ascending artist id.
     /// TODO: Would be nice to have one or more slices of ids (one for each
     /// prefix).
     fn search_artist(&self, word: &str, into: &mut Vec<ArtistId>);
 
     /// Search for albums where the word occurs in the title.
     ///
-    /// The results are guaranteed to be sorted on ascending album id.
     /// TODO: Would be nice to have one or more slices of ids (one for each
     /// prefix).
     fn search_album(&self, word: &str, into: &mut Vec<AlbumId>);
@@ -318,7 +316,6 @@ pub trait MetaIndex {
     /// tracks by an artist, only those for which `search_album` would not
     /// already find the entire album.
     ///
-    /// The results are guaranteed to be sorted on ascending album id.
     /// TODO: Would be nice to have one or more slices of ids (one for each
     /// prefix).
     fn search_track(&self, word: &str, into: &mut Vec<TrackId>);
