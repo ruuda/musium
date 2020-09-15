@@ -59,6 +59,7 @@ type BrowserElements =
   { albumListView :: Element
   , albumListRunway :: Element
   , albumView :: Element
+  , browserElement :: Element
   }
 
 type Elements =
@@ -84,8 +85,8 @@ type AppState =
   }
 
 addBrowser :: Html BrowserElements
-addBrowser = do
-  Html.addClass "nav-album-list-view"
+addBrowser = Html.div $ do
+  Html.setId "browser"
 
   { self: albumListView, runway: albumListRunway } <- Html.div $ do
     Html.setId "album-list-view"
@@ -97,29 +98,30 @@ addBrowser = do
     Html.setId "album-view"
     ask
 
-  pure $ { albumListView, albumListRunway, albumView }
+  browserElement <- ask
+  pure $ { albumListView, albumListRunway, albumView, browserElement }
 
 setupElements :: (Event -> Aff Unit) -> Effect Elements
 setupElements postEvent = Html.withElement Dom.body $ do
   paneNowPlaying <- Html.div $ do
-    Html.setId "now-playing"
+    Html.setId "now-playing-pane"
     Html.addClass "pane"
     ask
 
   { paneBrowser, browser} <- Html.div $ do
-    Html.setId "browser"
+    Html.setId "browser-pane"
     Html.addClass "pane"
     paneBrowser <- ask
     browser <- addBrowser
     pure $ { paneBrowser, browser }
 
   paneQueue <- Html.div $ do
-    Html.setId "queue"
+    Html.setId "queue-pane"
     Html.addClass "pane"
     ask
 
   paneSearch <- Html.div $ do
-    Html.setId "search"
+    Html.setId "search-pane"
     Html.addClass "pane"
     ask
 
@@ -257,7 +259,7 @@ handleEvent event state = case event of
 
   Event.OpenAlbum (Album album) -> liftEffect $ do
     -- TODO: Make a function to switch the class.
-    Html.withElement state.elements.paneBrowser $ do
+    Html.withElement state.elements.browser.browserElement $ do
       Html.removeClass "nav-album-list-view"
       Html.addClass "nav-album-view"
 
@@ -273,7 +275,7 @@ handleEvent event state = case event of
 
   Event.OpenLibrary -> liftEffect $ do
     -- TODO: Make a function to switch the class.
-    Html.withElement state.elements.paneBrowser $ do
+    Html.withElement state.elements.browser.browserElement $ do
       Html.addClass "nav-album-list-view"
       Html.removeClass "nav-album-view"
 
