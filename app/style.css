@@ -48,13 +48,21 @@ body {
    * the viewport. Setting 'position' to 'fixed' changes this behavior so 100vh
    * always refers to the current viewport height. */
   position: fixed;
+  width: 100vw;
   height: 100vh;
+
+  grid-template-columns: auto;
+  grid-template-rows: auto 5em;
+  grid-template-areas:
+    "content"
+    "statusbar"
+  ;
 }
 
 .pane {
-  position: fixed;
-  width: 100vw;
-  height: 100vh;
+  grid-area: content;
+  width: 100%;
+  height: 100%;
   opacity: 1.0;
   transform-origin: center;
   /* background-color: #fff; */
@@ -77,10 +85,9 @@ body {
    * than that. We use translation to determine which pane is visible. */
   width: 200vw;
   grid-template-columns: 100vw 100vw;
-  grid-template-rows: auto 5em;
+  grid-template-rows: auto;
   grid-template-areas:
     "album-list album-view"
-    "statusbar  statusbar"
   ;
 
   transition: transform 0.15s ease-in-out;
