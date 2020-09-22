@@ -67,16 +67,16 @@ body {
   opacity: 1.0;
   transform-origin: center;
   /* background-color: #fff; */
-  transition: transform 0.2s ease-in-out, opacity 0.2s ease-in-out;
+  transition: transform 0.1s ease-in-out, opacity 0.1s ease-in-out;
 }
 
 .pane.in {
-  transform: scale(0.83);
+  transform: scale(0.91);
   opacity: 0.0;
 }
 
 .pane.out {
-  transform: scale(1.2);
+  transform: scale(1.1);
   opacity: 0.0;
 }
 

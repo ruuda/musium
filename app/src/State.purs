@@ -325,6 +325,7 @@ navigateTo newLocation state =
     unless (paneBefore == paneAfter) $ do
       liftEffect $ Html.withElement paneBefore $ Html.addClass "out"
       liftEffect $ Html.withElement paneAfter $ do
+        Html.removeClass "inactive"
         Html.removeClass "out"
         Html.addClass "in"
       -- The css transition does not trigger if we immediately remove the "in"
@@ -332,7 +333,7 @@ navigateTo newLocation state =
       Aff.delay $ Milliseconds (5.0)
       liftEffect $ Html.withElement paneAfter $ Html.removeClass "in"
       -- After the transition-out is complete, hide the old element entirely.
-      Aff.delay $ Milliseconds (200.0)
+      Aff.delay $ Milliseconds (100.0)
       liftEffect $ Html.withElement paneBefore $ do
         Html.addClass "inactive"
         Html.removeClass "out"
