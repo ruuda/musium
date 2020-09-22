@@ -578,7 +578,7 @@ button.play-next::before {
 /* At 60rem width, we put the track list to the right of the album info, instead
  * of below the album info. */
 @media (min-width: 60rem) {
-  $browser {
+  #browser {
     /* Keep the album list at a fixed width, it does not need to be very wide,
      * we rather add whitespace elsewhere. */
     grid-template-columns: 20rem auto;
@@ -615,7 +615,14 @@ button.play-next::before {
 
 /* At this width, we can devote a bit more space to th album list, and we set a
  * limit on the width of the album info column. */
-@media (min-width: 70rem) {
+@media (min-width: 90rem) {
   #browser {
     grid-template-columns: 25rem auto;
   }
+  #album-view {
+    grid-template-columns: 2fr 35rem 35rem 3fr;
+    grid-template-areas:
+      "pad-left album-info track-list track-list"
+    ;
+  }
+}
