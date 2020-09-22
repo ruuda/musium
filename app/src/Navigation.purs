@@ -7,7 +7,6 @@
 
 module Navigation
   ( Location (..)
-  , Navigation (..)
   ) where
 
 import Model (Album)
@@ -16,7 +15,3 @@ data Location
   = Library
   | NowPlaying
   | Album Album
-
-type Navigation =
-  { location :: Location
-  }

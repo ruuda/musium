@@ -43,7 +43,7 @@ import Html (Html)
 import LocalStorage as LocalStorage
 import Model (Album (..), QueuedTrack (..), TrackId)
 import Model as Model
-import Navigation (Navigation)
+import Navigation (Location)
 import Navigation as Navigation
 import StatusBar (StatusBarState)
 import StatusBar as StatusBar
@@ -79,7 +79,7 @@ type AppState =
   , albumListState :: AlbumListState
     -- The index of the album at the top of the viewport.
   , albumListIndex :: Int
-  , navigation :: Navigation
+  , location :: Location
   , elements :: Elements
   , postEvent :: Event -> Aff Unit
   }
@@ -106,6 +106,7 @@ setupElements postEvent = Html.withElement Dom.body $ do
   paneNowPlaying <- Html.div $ do
     Html.setId "now-playing-pane"
     Html.addClass "pane"
+    Html.addClass "inactive"
     ask
 
   { paneBrowser, browser} <- Html.div $ do
@@ -118,11 +119,13 @@ setupElements postEvent = Html.withElement Dom.body $ do
   paneQueue <- Html.div $ do
     Html.setId "queue-pane"
     Html.addClass "pane"
+    Html.addClass "inactive"
     ask
 
   paneSearch <- Html.div $ do
     Html.setId "search-pane"
     Html.addClass "pane"
+    Html.addClass "inactive"
     ask
 
   Html.onScroll $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
@@ -144,7 +147,7 @@ new bus = do
     , statusBar: statusBar
     , albumListState: { elements: [], begin: 0, end: 0 }
     , albumListIndex: 0
-    , navigation: { location: Navigation.Library }
+    , location: Navigation.Library
     , elements: elements
     , postEvent: postEvent
     }
@@ -257,44 +260,33 @@ handleEvent event state = case event of
 
   Event.UpdateProgress -> updateProgressBar state
 
-  Event.OpenAlbum (Album album) -> liftEffect $ do
-    -- TODO: Make a function to switch the class.
-    Html.withElement state.elements.browser.browserElement $ do
-      Html.removeClass "nav-album-list-view"
-      Html.addClass "nav-album-view"
-
-    Html.withElement state.elements.browser.albumView $ do
+  Event.OpenAlbum (Album album) -> do
+    liftEffect $ Html.withElement state.elements.browser.albumView $ do
       Html.clear
       AlbumView.renderAlbum state.postEvent (Album album)
-    let navigation = state.navigation { location = Navigation.Album (Album album) }
-    History.pushState
-      navigation.location
+    let location =  Navigation.Album (Album album)
+    liftEffect $ History.pushState
+      location
       (album.title <> " by " <> album.artist)
       ("/album/" <> show album.id)
-    pure $ state { navigation = navigation }
+    navigateTo location state
 
-  Event.OpenLibrary -> liftEffect $ do
-    -- TODO: Make a function to switch the class.
-    Html.withElement state.elements.browser.browserElement $ do
-      Html.addClass "nav-album-list-view"
-      Html.removeClass "nav-album-view"
-
+  Event.OpenLibrary -> do
     -- Restore the scroll position.
-    case Array.index
+    liftEffect $ case Array.index
       state.albumListState.elements
       (state.albumListIndex - state.albumListState.begin)
       of
         Just element -> liftEffect $ Html.withElement element $ Html.scrollIntoView
         Nothing -> pure unit
 
-    pure $ state { navigation = state.navigation { location = Navigation.Library } }
+    navigateTo Navigation.Library state
 
   Event.OpenNowPlaying -> do
-    -- TODO: Add pane switcher.
     liftEffect $ History.pushState Navigation.NowPlaying "Now playing" "/now"
-    pure $ state { navigation = state.navigation { location = Navigation.NowPlaying } }
+    navigateTo Navigation.NowPlaying state
 
-  Event.ChangeViewport -> case state.navigation.location of
+  Event.ChangeViewport -> case state.location of
     -- When scrolling or resizing, only update the album list when it is
     -- actually visible.
     Navigation.Library -> liftEffect $ updateAlbumList state
@@ -307,6 +299,45 @@ handleEvent event state = case event of
     handleEvent
       (Event.UpdateQueue $ Array.snoc state.queue queuedTrack)
       state
+
+navigateTo :: Navigation.Location -> AppState -> Aff AppState
+navigateTo newLocation state =
+  let
+    getPane :: Navigation.Location -> Element
+    getPane loc = case loc of
+      Navigation.NowPlaying -> state.elements.paneNowPlaying
+      Navigation.Library -> state.elements.paneBrowser
+      Navigation.Album _ -> state.elements.paneBrowser
+    paneBefore = getPane state.location
+    paneAfter = getPane newLocation
+  in do
+    -- Inner level: Inside the browser pane, switch between the list and album.
+    liftEffect $ case newLocation of
+      Navigation.Album _ -> Html.withElement state.elements.browser.browserElement $ do
+        Html.removeClass "nav-album-list-view"
+        Html.addClass "nav-album-view"
+      Navigation.Library -> Html.withElement state.elements.browser.browserElement $ do
+        Html.removeClass "nav-album-view"
+        Html.addClass "nav-album-list-view"
+      _ -> pure unit
+
+    -- Outer level: switch the pane if we have to.
+    unless (paneBefore == paneAfter) $ do
+      liftEffect $ Html.withElement paneBefore $ Html.addClass "out"
+      liftEffect $ Html.withElement paneAfter $ do
+        Html.removeClass "out"
+        Html.addClass "in"
+      -- The css transition does not trigger if we immediately remove the "in"
+      -- class, so wait a bit.
+      Aff.delay $ Milliseconds (5.0)
+      liftEffect $ Html.withElement paneAfter $ Html.removeClass "in"
+      -- After the transition-out is complete, hide the old element entirely.
+      Aff.delay $ Milliseconds (200.0)
+      liftEffect $ Html.withElement paneBefore $ do
+        Html.addClass "inactive"
+        Html.removeClass "out"
+
+    pure $ state { location = newLocation }
 
 -- Schedule a new queue update at the given instant. Typically we would schedule
 -- it just after we expect the current track to end.

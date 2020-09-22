@@ -80,6 +80,10 @@ body {
   opacity: 0.0;
 }
 
+.pane.inactive {
+  display: none;
+}
+
 #browser {
   display: grid;
   overflow: hidden;

@@ -7,6 +7,12 @@
 
 "use strict";
 
+exports.eqElementImpl = function(x) {
+  return function(y) {
+    return x === y;
+  }
+}
+
 exports.createElement = function(tagName) {
   return function() {
     return document.createElement(tagName);

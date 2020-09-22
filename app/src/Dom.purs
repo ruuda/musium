@@ -40,6 +40,10 @@ import Data.Maybe (Maybe (..))
 
 foreign import data Element :: Type
 
+instance eqElement :: Eq Element where
+  eq = eqElementImpl
+
+foreign import eqElementImpl :: Element -> Element -> Boolean
 foreign import assumeElementById :: String -> Effect Element
 foreign import body :: Element
 foreign import clearElement :: Element -> Effect Unit
