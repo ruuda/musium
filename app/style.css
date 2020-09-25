@@ -183,6 +183,14 @@ a
   100% { transform: rotate(360deg); }
 }
 
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: #888;
+  background-color: transparent;
+  border: none;
+}
+
 ul
 {
   list-style-type: none;
@@ -472,11 +480,7 @@ img.thumb
 }
 
 .album-info button {
-  font-family: inherit;
-  font-size: inherit;
   color: #888;
-  background-color: transparent;
-  border: none;
   display: block;
   position: relative;
   padding-left: 0.75rem;
@@ -559,6 +563,49 @@ button.play-next::before {
 #statusbar .artist {
   font-size: 0.75rem;
   color: #777;
+}
+
+#now-playing-pane {
+  display: grid;
+  grid-template-columns: auto;
+  grid-template-rows: auto 3em;
+  grid-template-areas:
+    "album-info"
+    "volume-controls"
+  ;
+}
+
+.volume-controls {
+  grid-area: volume-controls;
+  display: grid;
+  grid-template-columns: 3em auto 3em;
+  grid-template-rows: auto;
+  grid-template-areas:
+    "volume-down volume-bar volume-up"
+  ;
+}
+
+.volume-controls button {
+  width: 3em;
+}
+
+button.volume-down { grid-area: volume-down; }
+button.volume-up { grid-area: volume-up; }
+
+.volume-controls .indicator {
+  margin-top: calc(1.5em - 1pt);
+  height: 2pt;
+  background-color: #f7f7f7;
+}
+
+.volume-controls .indicator > div {
+  width: 50%;
+  height: 2pt;
+  background: linear-gradient(
+    90deg,
+    #ddd 0%,
+    #ccc 100%
+  );
 }
 
 /* At 40rem width, we can show the album list side-by-side with a different

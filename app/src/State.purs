@@ -45,6 +45,7 @@ import Model (Album (..), QueuedTrack (..), TrackId)
 import Model as Model
 import Navigation (Location)
 import Navigation as Navigation
+import NowPlaying as NowPlaying
 import StatusBar (StatusBarState)
 import StatusBar as StatusBar
 import Time (Instant)
@@ -107,6 +108,7 @@ setupElements postEvent = Html.withElement Dom.body $ do
     Html.setId "now-playing-pane"
     Html.addClass "pane"
     Html.addClass "inactive"
+    NowPlaying.volumeControls
     ask
 
   { paneBrowser, browser} <- Html.div $ do
