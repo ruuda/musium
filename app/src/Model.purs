@@ -9,6 +9,7 @@ module Model
   ( ArtistId (..)
   , Album (..)
   , AlbumId (..)
+  , Decibel (..)
   , Track (..)
   , TrackId (..)
   , SearchArtist (..)
@@ -17,12 +18,16 @@ module Model
   , SearchTrack (..)
   , QueueId (..)
   , QueuedTrack (..)
+  , Volume (..)
+  , VolumeChange (..)
   , coverUrl
+  , changeVolume
   , enqueueTrack
   , formatDurationSeconds
   , getAlbums
-  , getTracks
   , getQueue
+  , getTracks
+  , getVolume
   , originalReleaseYear
   , search
   , thumbUrl

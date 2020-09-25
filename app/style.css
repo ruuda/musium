@@ -81,7 +81,7 @@ body {
 }
 
 .pane.inactive {
-  display: none;
+  display: none !important;
 }
 
 #browser {
@@ -599,6 +599,7 @@ button.volume-up { grid-area: volume-up; }
 }
 
 .volume-controls .indicator > div {
+  position: relative;
   width: 50%;
   height: 2pt;
   background: linear-gradient(
@@ -606,6 +607,15 @@ button.volume-up { grid-area: volume-up; }
     #ddd 0%,
     #ccc 100%
   );
+}
+
+.volume-controls .volume-label {
+  position: absolute;
+  top: -2rem;
+  right: -2rem;
+  width: 4rem;
+  text-align: center;
+  color: #bbb;
 }
 
 /* At 40rem width, we can show the album list side-by-side with a different

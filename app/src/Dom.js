@@ -143,6 +143,12 @@ exports.setTransitionImpl = function(transition, element) {
   }
 }
 
+exports.setWidthImpl = function(width, element) {
+  return function() {
+    element.style.width = width;
+  }
+}
+
 exports.setHeightImpl = function(height, element) {
   return function() {
     element.style.height = height;

@@ -11,20 +11,44 @@ module NowPlaying
   ) where
 
 import Control.Monad.Reader.Class (ask)
+import Effect.Aff (launchAff_)
+import Effect.Class (liftEffect)
 import Prelude
 
 import Dom (Element)
+import Dom as Dom
 import Html (Html)
 import Html as Html
-import Model (Album (Album), Track (Track))
+import Model (Album (Album), Decibel (Decibel), Track (Track), Volume (Volume))
 import Model as Model
 
 volumeControls :: Html Unit
 volumeControls = Html.div $ do
   Html.addClass "volume-controls"
-  _volumeBar <- Html.div $ do
+  { volumeBar, label } <- Html.div $ do
     Html.addClass "indicator"
-    Html.div $ ask
+    Html.div $ do
+      label <- Html.div $ do
+        Html.addClass "volume-label"
+        ask
+      volumeBar <- ask
+      pure $ { volumeBar, label }
+
+  -- Now that we have the elements that display the current volume,
+  -- define a function that alters those elements to display a certain volume.
+  let
+    setVolume (Decibel v) = do
+      -- Use -20 dB as the minimum of the bar and 10 dB as the maximum.
+      let percentage = max 0.0 $ min 100.0 $ (v + 20.0) / 0.3
+      Dom.setWidth (show percentage <> "%") volumeBar
+      Html.withElement label $ do
+        Html.clear
+        Html.text $ show v <> " dB"
+
+  -- Fetch the initial volume.
+  liftEffect $ launchAff_ $ do
+    Volume v <- Model.getVolume
+    liftEffect $ setVolume v.volume
 
   Html.button $ do
     Html.addClass "volume-down"

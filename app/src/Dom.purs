@@ -31,6 +31,7 @@ module Dom
   , setImage
   , setTransform
   , setTransition
+  , setWidth
   ) where
 
 import Data.Function.Uncurried (Fn2, runFn2, Fn3, runFn3)
@@ -69,6 +70,7 @@ foreign import setHeightImpl :: Fn2 String Element (Effect Unit)
 foreign import setIdImpl :: Fn2 String Element (Effect Unit)
 foreign import setTransformImpl :: Fn2 String Element (Effect Unit)
 foreign import setTransitionImpl :: Fn2 String Element (Effect Unit)
+foreign import setWidthImpl :: Fn2 String Element (Effect Unit)
 
 appendChild :: Element -> Element -> Effect Unit
 appendChild child container = runFn2 appendChildImpl child container
@@ -87,6 +89,9 @@ addClass className element = runFn2 addClassImpl className element
 
 removeClass :: String -> Element -> Effect Unit
 removeClass className element = runFn2 removeClassImpl className element
+
+setWidth :: String -> Element -> Effect Unit
+setWidth w element = runFn2 setWidthImpl w element
 
 setHeight :: String -> Element -> Effect Unit
 setHeight h element = runFn2 setHeightImpl h element
