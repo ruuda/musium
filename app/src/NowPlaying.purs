@@ -45,6 +45,10 @@ volumeControls = Html.div $ do
         Html.clear
         Html.text $ show v <> " dB"
 
+    changeVolume dir = liftEffect $ launchAff_ $ do
+      Volume newVolume <- Model.changeVolume dir
+      liftEffect $ setVolume newVolume.volume
+
   -- Fetch the initial volume.
   liftEffect $ launchAff_ $ do
     Volume v <- Model.getVolume
@@ -53,9 +57,11 @@ volumeControls = Html.div $ do
   Html.button $ do
     Html.addClass "volume-down"
     Html.text "V-"
+    Html.onClick $ changeVolume Model.VolumeDown
   Html.button $ do
     Html.addClass "volume-up"
     Html.text "V+"
+    Html.onClick $ changeVolume Model.VolumeUp
 
 nowPlayingAlbum :: Track -> Album -> Html Element
 nowPlayingAlbum (Track track) (Album album) = do
