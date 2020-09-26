@@ -468,7 +468,7 @@ img.thumb
 
 .album-info h1 {
   font-weight: 600;
-  font-size: 1.7em;
+  font-size: 1.4em;
   line-height: 1.1em;
   margin-top:  5rem;
   margin-left: 0.75rem;
@@ -585,9 +585,15 @@ button.play-next::before {
   grid-template-columns: auto;
   grid-template-rows: auto 4em;
   grid-template-areas:
-    "album-info"
+    "now-playing"
     "volume-controls"
   ;
+  overflow-y: auto;
+}
+
+.now-playing {
+  grid-area: now-playing;
+  margin-bottom: 2em;
 }
 
 .volume-controls {
@@ -652,6 +658,45 @@ button.volume-up { grid-area: volume-up; }
   .album-info button.back {
     display: none;
   }
+
+  /* For the now playing view, we can put the cover art and title side by side. */
+  #now-playing-pane {
+    grid-template-rows: auto auto auto 4em;
+    grid-template-areas:
+      "pad-top"
+      "now-playing"
+      "pad-bottom"
+      "volume-controls"
+    ;
+  }
+
+  .now-playing {
+    margin-bottom: 0;
+  }
+
+  .now-playing .album-info {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto;
+    grid-template-areas:
+      "cover info"
+    ;
+  }
+
+  .now-playing .album-info .cover {
+    grid-area: cover;
+    margin-right: 1em;
+  }
+
+  .now-playing .album-info hgroup {
+    grid-area: info;
+    margin-left: 1em;
+    padding-top: 12rem;
+  }
+
+  .now-playing .album-info h1 {
+    margin-top: 0;
+  }
 }
 
 /* At 60rem width, we put the track list to the right of the album info, instead
@@ -698,10 +743,15 @@ button.volume-up { grid-area: volume-up; }
   #browser {
     grid-template-columns: 25rem auto;
   }
+
   #album-view {
     grid-template-columns: 2fr 35rem 35rem 3fr;
     grid-template-areas:
       "pad-left album-info track-list track-list"
     ;
+  }
+
+  .album-info h1 {
+    font-size: 1.7rem;
   }
 }
