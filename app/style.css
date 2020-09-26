@@ -119,7 +119,7 @@ body {
   grid-area: album-list;
   overflow-y: scroll;
   background-color: #fefefe;
-  border-right: solid 1pt #eee;
+  border-left: solid 1pt #eee;
 }
 
 #album-view {
@@ -642,11 +642,15 @@ button.volume-up { grid-area: volume-up; }
 }
 
 /* At 40rem width, we can show the album list side-by-side with a different
- * view. */
+ * view. We move the album list to the right, the page looks a bit less chaotic
+ * with the two lists to the right. */
 @media (min-width: 40rem) {
   #browser {
     width: 100vw;
-    grid-template-columns: 30vw 70vw;
+    grid-template-columns: 70vw 30vw;
+    grid-template-areas:
+      "album-view album-list"
+    ;
   }
 
   /* When both columns are visible at once, no translation is needed. */
@@ -706,7 +710,7 @@ button.volume-up { grid-area: volume-up; }
   #browser {
     /* Keep the album list at a fixed width, it does not need to be very wide,
      * we rather add whitespace elsewhere. */
-    grid-template-columns: 20rem auto;
+    grid-template-columns: auto 20rem;
   }
 
   #album-view {
@@ -742,11 +746,11 @@ button.volume-up { grid-area: volume-up; }
  * limit on the width of the album info column. */
 @media (min-width: 90rem) {
   #browser {
-    grid-template-columns: 25rem auto;
+    grid-template-columns: auto 25rem;
   }
 
   #album-view {
-    grid-template-columns: 2fr 35rem 35rem 3fr;
+    grid-template-columns: 3fr 35rem 35rem 3fr;
     grid-template-areas:
       "pad-left album-info track-list track-list"
     ;
