@@ -85,12 +85,13 @@ type AppState =
   , postEvent :: Event -> Aff Unit
   }
 
-addBrowser :: Html BrowserElements
-addBrowser = Html.div $ do
+addBrowser :: (Event -> Aff Unit) -> Html BrowserElements
+addBrowser postEvent = Html.div $ do
   Html.setId "browser"
 
   { self: albumListView, runway: albumListRunway } <- Html.div $ do
     Html.setId "album-list-view"
+    Html.onScroll $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
     runway <- Html.div $ ask
     self <- ask
     pure { self, runway }
@@ -115,7 +116,7 @@ setupElements postEvent = Html.withElement Dom.body $ do
     Html.setId "browser-pane"
     Html.addClass "pane"
     paneBrowser <- ask
-    browser <- addBrowser
+    browser <- addBrowser postEvent
     pure $ { paneBrowser, browser }
 
   paneQueue <- Html.div $ do
@@ -130,7 +131,6 @@ setupElements postEvent = Html.withElement Dom.body $ do
     Html.addClass "inactive"
     ask
 
-  Html.onScroll $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
   liftEffect $ Dom.onResizeWindow $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
 
   pure { browser, paneNowPlaying, paneBrowser, paneQueue, paneSearch }
@@ -173,8 +173,8 @@ updateAlbumList state = do
       pure $ { target: { begin: 0, end: min 1 (Array.length state.albums) }, index: 0 }
     Just elem -> do
       entryHeight <- Dom.getOffsetHeight elem
-      viewportHeight <- Dom.getWindowHeight
-      y <- Dom.getScrollTop Dom.body
+      viewportHeight <- Dom.getOffsetHeight state.elements.browser.albumListView
+      y <- Dom.getScrollTop state.elements.browser.albumListView
       let
         headroom = 20
         i = Int.floor $ y / entryHeight
@@ -288,11 +288,7 @@ handleEvent event state = case event of
     liftEffect $ History.pushState Navigation.NowPlaying "Now playing" "/now"
     navigateTo Navigation.NowPlaying state
 
-  Event.ChangeViewport -> case state.location of
-    -- When scrolling or resizing, only update the album list when it is
-    -- actually visible.
-    Navigation.Library -> liftEffect $ updateAlbumList state
-    _ -> pure state
+  Event.ChangeViewport -> liftEffect $ updateAlbumList state
 
   Event.EnqueueTrack queuedTrack ->
     -- This is an internal update, after we enqueue a track. It allows updating
