@@ -12,7 +12,7 @@ network through the webinterface.
  * Designed to scale to hundreds of thousands of tracks.
  * User interface responds quickly, and indexing is fast.
  * Optimized to run in resource-constrained environments, such as a Raspberry Pi.
- * Responsive design, supports both for mobile and desktop.
+ * Responsive design, supports both mobile and desktop.
 
 ## Limitations
 

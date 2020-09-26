@@ -11,7 +11,7 @@ This environment is also tested on <abbr>CI</abbr>. Nix is a convenience, not
 a requirement. You are free to source the build tools elsewhere, for example
 from your system package repositories.
 
-The library browser is written in [Purescript][purescript]. There is a basic
+The webinterface is written in [Purescript][purescript]. There is a basic
 makefile that calls `purs` and `psc-package`:
 
     make -C app

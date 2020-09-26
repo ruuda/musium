@@ -16,16 +16,16 @@ pairs with `=` separator, and support `#` for comments.
     audio_device = UMC404HD 192k
     audio_volume_control = UMC404HD 192k Output
 
-## Options
+## Settings
 
-The following options are available. Unless noted otherwise, all options must be
-specified exactly once.
+The following settings are available. Unless noted otherwise, all options must
+be specified exactly once.
 
 ### `listen`
 
 The address and port to bind to, for example `0.0.0.0:80`. Use `0.0.0.0` as the
-address to listen for external connections, to make the player available to the
-entire local network, or use `localhost` to listen only on loopback.
+address to listen for external connections and make the player available to the
+entire local network. Use `localhost` to listen only on loopback.
 
 The listen address is optional and defaults to `0.0.0.0:8233`.
 
