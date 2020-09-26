@@ -653,6 +653,18 @@ button.volume-up { grid-area: volume-up; }
     ;
   }
 
+  /* Dim the album list, unless we are hovering it, to make it less distracting. */
+  #album-list {
+    opacity: 0.4;
+    filter: saturate(0.3);
+    transition: opacity 0.1s ease-in-out, filter 0.1s ease-in-out;
+  }
+
+  #album-list:hover {
+    opacity: 1;
+    filter: none;
+  }
+
   /* When both columns are visible at once, no translation is needed. */
   #browser.nav-album-view {
     transform: translateX(0);
@@ -750,7 +762,7 @@ button.volume-up { grid-area: volume-up; }
   }
 
   #album-view {
-    grid-template-columns: 3fr 35rem 35rem 3fr;
+    grid-template-columns: 4fr 35rem 35rem 3fr;
     grid-template-areas:
       "pad-left album-info track-list track-list"
     ;
