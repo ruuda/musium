@@ -6,7 +6,7 @@
 -- A copy of the License has been included in the root of the repository.
 
 module NowPlaying
-  ( nowPlayingAlbum
+  ( nowPlayingInfo
   , volumeControls
   ) where
 
@@ -15,11 +15,10 @@ import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import Prelude
 
-import Dom (Element)
 import Dom as Dom
 import Html (Html)
 import Html as Html
-import Model (Album (Album), Decibel (Decibel), Track (Track), Volume (Volume))
+import Model (Decibel (Decibel), QueuedTrack (QueuedTrack), Volume (Volume))
 import Model as Model
 
 volumeControls :: Html Unit
@@ -65,16 +64,16 @@ volumeControls = Html.div $ do
     Html.text "V+"
     Html.onClick $ changeVolume Model.VolumeUp
 
-nowPlayingAlbum :: Track -> Album -> Html Element
-nowPlayingAlbum (Track track) (Album album) = do
+nowPlayingInfo :: QueuedTrack -> Html Unit
+nowPlayingInfo (QueuedTrack track) = Html.div $ do
   -- This structure roughly follows that of the album view.
   Html.addClass "album-info"
   Html.div $ do
     Html.addClass "cover"
-    let alt = album.title <> " by " <> album.artist
-    Html.img (Model.thumbUrl album.id) alt $ Html.addClass "backdrop"
-    Html.img (Model.thumbUrl album.id) alt $ Html.addClass "lowres"
-    Html.img (Model.coverUrl album.id) alt $ pure unit
+    let alt = track.title <> " by " <> track.artist
+    Html.img (Model.thumbUrl track.albumId) alt $ Html.addClass "backdrop"
+    Html.img (Model.thumbUrl track.albumId) alt $ Html.addClass "lowres"
+    Html.img (Model.coverUrl track.albumId) alt $ pure unit
   Html.hgroup $ do
     Html.h1 $ Html.text track.title
     Html.h2 $ do
@@ -83,7 +82,5 @@ nowPlayingAlbum (Track track) (Album album) = do
         Html.text track.artist
       Html.text " ⋅ "
       Html.span $ do
-        Html.addClass "date"
-        Html.text album.date
-
-  ask
+        Html.addClass "album-title"
+        Html.text track.album

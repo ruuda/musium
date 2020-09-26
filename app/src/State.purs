@@ -68,6 +68,7 @@ type BrowserElements =
 
 type Elements =
   { browser :: BrowserElements
+  , nowPlaying :: Element
   , paneNowPlaying :: Element
   , paneBrowser :: Element
   , paneQueue :: Element
@@ -109,12 +110,16 @@ addBrowser postEvent = Html.div $ do
 
 setupElements :: (Event -> Aff Unit) -> Effect Elements
 setupElements postEvent = Html.withElement Dom.body $ do
-  paneNowPlaying <- Html.div $ do
+  { paneNowPlaying, nowPlaying } <- Html.div $ do
     Html.setId "now-playing-pane"
     Html.addClass "pane"
     Html.addClass "inactive"
+    nowPlaying <- Html.div $ do
+      Html.addClass "now-playing"
+      ask
     NowPlaying.volumeControls
-    ask
+    paneNowPlaying <- ask
+    pure $ { paneNowPlaying, nowPlaying }
 
   { paneBrowser, browser} <- Html.div $ do
     Html.setId "browser-pane"
@@ -137,7 +142,7 @@ setupElements postEvent = Html.withElement Dom.body $ do
 
   liftEffect $ Dom.onResizeWindow $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
 
-  pure { browser, paneNowPlaying, paneBrowser, paneQueue, paneSearch }
+  pure { browser, nowPlaying, paneNowPlaying, paneBrowser, paneQueue, paneSearch }
 
 new :: BusW Event -> Effect AppState
 new bus = do
@@ -255,6 +260,13 @@ handleEvent event state = case event of
   Event.UpdateQueue queue -> do
     statusBar' <- liftEffect $ StatusBar.updateStatusBar (Array.head queue) state.statusBar
     -- TODO: Possibly update the queue, if it is in view.
+
+    -- TODO: Only update when the track did not change.
+    liftEffect $ Html.withElement state.elements.nowPlaying $ do
+      Html.clear
+      case Array.head queue of
+        Nothing -> pure unit
+        Just currentTrack -> NowPlaying.nowPlayingInfo currentTrack
 
     -- Update the queue again either 30 seconds from now, or at the time when
     -- we expect the current track will run out, so the point where we expect

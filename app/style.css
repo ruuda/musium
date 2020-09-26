@@ -416,7 +416,7 @@ img.thumb
   height: 3em;
 }
 
-#album-view .cover {
+.album-info .cover {
   width: calc(100% - 7.5em);
   margin: 3.75em;
   position: relative;
@@ -432,7 +432,7 @@ img.thumb
   /* height: 0; */
 }
 
-#album-view .cover img {
+.album-info .cover img {
   position: absolute;
   width: 100%;
   height: auto;
@@ -441,7 +441,7 @@ img.thumb
   border-radius: 0.15rem;
 }
 
-#album-view .cover img.lowres {
+.album-info .cover img.lowres {
   /* Like in the album list view, add a background color that acts as a
    * placeholder, to show a square when the page is still loading. This does not
    * block the backdrop, because that one uses the same source, so both should
@@ -449,7 +449,7 @@ img.thumb
   background-color: #f8f8f8;
 }
 
-#album-view .cover img.backdrop {
+.album-info .cover img.backdrop {
   /* This one is first, so absolute vs relative does not matter so much, except
    * that relative ensures the parent is at least this tall. */
   position: relative;
@@ -461,7 +461,7 @@ img.thumb
   height: auto;
 }
 
-#album-view hgroup, #album-view .album-actions {
+.album-info hgroup, .album-info .album-actions {
   margin-left: 3rem;
   margin-right: 3rem;
 }
@@ -470,7 +470,7 @@ img.thumb
   font-weight: 600;
   font-size: 1.7em;
   line-height: 1.1em;
-  margin-top:  6rem;
+  margin-top:  5rem;
   margin-left: 0.75rem;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -485,7 +485,7 @@ img.thumb
   word-spacing: 0.2em;
 }
 
-.album-info h2 .artist {
+.album-info .artist {
   color: black;
   word-spacing: 0;
 }
