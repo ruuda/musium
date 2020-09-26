@@ -31,7 +31,7 @@ impl fmt::Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "  listen = {}\n", self.listen)?;
         write!(f, "  library_path = {}\n", self.library_path.to_string_lossy())?;
-        write!(f, "  covers_path = {}\n", self.library_path.to_string_lossy())?;
+        write!(f, "  covers_path = {}\n", self.covers_path.to_string_lossy())?;
         match &self.play_log_path {
             Some(p) => write!(f, "  play_log_path = {}\n", p.to_string_lossy())?,
             None => write!(f, "  play_log_path is not set\n")?,
