@@ -583,7 +583,7 @@ button.play-next::before {
 #now-playing-pane {
   display: grid;
   grid-template-columns: auto;
-  grid-template-rows: auto 3em;
+  grid-template-rows: auto 4em;
   grid-template-areas:
     "album-info"
     "volume-controls"
@@ -593,7 +593,7 @@ button.play-next::before {
 .volume-controls {
   grid-area: volume-controls;
   display: grid;
-  grid-template-columns: 3em auto 3em;
+  grid-template-columns: 4em auto 4em;
   grid-template-rows: auto;
   grid-template-areas:
     "volume-down volume-bar volume-up"
@@ -601,14 +601,14 @@ button.play-next::before {
 }
 
 .volume-controls button {
-  width: 3em;
+  width: 4em;
 }
 
 button.volume-down { grid-area: volume-down; }
 button.volume-up { grid-area: volume-up; }
 
 .volume-controls .indicator {
-  margin-top: calc(1.5em - 1pt);
+  margin-top: calc(2em - 1pt);
   height: 2pt;
   background-color: #f7f7f7;
 }

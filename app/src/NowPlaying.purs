@@ -39,7 +39,9 @@ volumeControls = Html.div $ do
   let
     setVolume (Decibel v) = do
       -- Use -20 dB as the minimum of the bar and 10 dB as the maximum.
-      let percentage = max 0.0 $ min 100.0 $ (v + 20.0) / 0.3
+      -- Set the minimum width to 1% so you can see that there is something that
+      -- fills the volume bar.
+      let percentage = max 1.0 $ min 100.0 $ (v + 20.0) / 0.3
       Dom.setWidth (show percentage <> "%") volumeBar
       Html.withElement label $ do
         Html.clear
