@@ -389,10 +389,18 @@
         <h1 id="loudness-normalization">Loudness normalization</h1>
 <p>Musium can normalize the perceptual playback loudness based on loudness
 information in flac tags.</p>
-<ul>
-<li>TODO: How is it handled, do we keep the softest track at 100% volume and make
-   everything else softer? Or is there a configurable target loudness level?</li>
-</ul>
+<p>The volume slider in Musium treats 0 dB volume as 0 dB gain for the output
+device, but it does compensate for track or album loudness relative to a target
+loudness of -23 <abbr>LUFS</abbr>. When the Musium volume slider is set to 0 dB,
+this means that a track with a loudness of -23 <abbr>LUFS</abbr> will play back
+without volume adjustment (at maximum volume of the device), and a track with a
+loudness of -10 <abbr>LUFS</abbr> will play back with device volume at -13 dB.
+When the Musium volume slider is set to -5 dB, a track with a loudness of -10
+<abbr>LUFS</abbr> will play back with device volume at -18 dB.</p>
+<p>It is possible to set volumes beyond 0 dB in Musium, but this is only effective
+for inherently loud tracks: a track with a loudness of -23 <abbr>LUFS</abbr> is
+already playing at the maximum device volume, but a track with a loudness of
+-13 <abbr>LUFS</abbr> has enough headroom to allow the volume to be set to 10 dB.</p>
 <h2 id="tags">Tags</h2>
 <p>Two tags affect loudness normalization:</p>
 <ul>
