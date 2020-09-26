@@ -20,6 +20,7 @@ html
   font-size: 16px;
   font-family: 'Work Sans';
   line-height: 1.5em;
+  height: 100vh;
 }
 
 ::-webkit-scrollbar {
@@ -46,10 +47,13 @@ body {
    * minimal viewport height; the size of the viewport when the address bar is
    * visible. But when the address bar is hidden, we get this extra area below
    * the viewport. Setting 'position' to 'fixed' changes this behavior so 100vh
-   * always refers to the current viewport height. */
+   * always refers to the current viewport height. It took me some further
+   * fiddling, but with 100vh on the outer <html> element, and 100% height +
+   * position fixed here, it finally has the right height on mobile. See also
+   * https://developers.google.com/web/updates/2016/12/url-bar-resizing. */
   position: fixed;
   width: 100vw;
-  height: 100vh;
+  height: 100%;
 
   grid-template-columns: auto;
   grid-template-rows: auto 5em;
