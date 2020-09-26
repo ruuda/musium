@@ -88,6 +88,12 @@ exports.getScrollTop = function(element) {
   }
 }
 
+exports.setScrollTopImpl = function(off, element) {
+  return function() {
+    element.scrollTop = off;
+  }
+}
+
 exports.scrollIntoView = function(element) {
   return function() {
     element.scrollIntoView({

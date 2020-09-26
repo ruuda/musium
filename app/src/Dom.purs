@@ -29,6 +29,7 @@ module Dom
   , setHeight
   , setId
   , setImage
+  , setScrollTop
   , setTransform
   , setTransition
   , setWidth
@@ -44,11 +45,11 @@ foreign import data Element :: Type
 instance eqElement :: Eq Element where
   eq = eqElementImpl
 
-foreign import eqElementImpl :: Element -> Element -> Boolean
 foreign import assumeElementById :: String -> Effect Element
 foreign import body :: Element
 foreign import clearElement :: Element -> Effect Unit
 foreign import createElement :: String -> Effect Element
+foreign import eqElementImpl :: Element -> Element -> Boolean
 foreign import getOffsetHeight :: Element -> Effect Number
 foreign import getScrollTop :: Element -> Effect Number
 foreign import getValue :: Element -> Effect String
@@ -58,16 +59,17 @@ foreign import scrollIntoView :: Element -> Effect Unit
 
 foreign import addClassImpl :: Fn2 String Element (Effect Unit)
 foreign import addEventListenerImpl :: Fn3 String (Effect Unit) Element (Effect Unit)
-foreign import onScrollImpl :: Fn2 (Effect Unit) Element (Effect Unit)
 foreign import appendChildImpl :: Fn2 Element Element (Effect Unit)
 foreign import appendTextImpl :: Fn2 String Element (Effect Unit)
 foreign import getElementByIdImpl :: Fn3 String (Element -> Maybe Element) (Maybe Element) (Effect (Maybe Element))
+foreign import onScrollImpl :: Fn2 (Effect Unit) Element (Effect Unit)
 foreign import removeChildImpl :: Fn2 Element Element (Effect Unit)
 foreign import removeClassImpl :: Fn2 String Element (Effect Unit)
 foreign import setAttributeImpl :: Fn3 String String Element (Effect Unit)
-foreign import setImageImpl :: Fn3 String String Element (Effect Unit)
 foreign import setHeightImpl :: Fn2 String Element (Effect Unit)
 foreign import setIdImpl :: Fn2 String Element (Effect Unit)
+foreign import setImageImpl :: Fn3 String String Element (Effect Unit)
+foreign import setScrollTopImpl :: Fn2 Number Element (Effect Unit)
 foreign import setTransformImpl :: Fn2 String Element (Effect Unit)
 foreign import setTransitionImpl :: Fn2 String Element (Effect Unit)
 foreign import setWidthImpl :: Fn2 String Element (Effect Unit)
@@ -104,6 +106,9 @@ setTransform transform element = runFn2 setTransformImpl transform element
 
 setTransition :: String -> Element -> Effect Unit
 setTransition transition element = runFn2 setTransitionImpl transition element
+
+setScrollTop :: Number -> Element -> Effect Unit
+setScrollTop off element = runFn2 setScrollTopImpl off element
 
 setAttribute :: String -> String -> Element -> Effect Unit
 setAttribute attribute value element = runFn3 setAttributeImpl attribute value element

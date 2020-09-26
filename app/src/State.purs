@@ -289,6 +289,8 @@ handleEvent event state = case event of
         liftEffect $ Html.withElement state.elements.browser.albumView $ do
           Html.clear
           AlbumView.renderAlbum state.postEvent album
+          -- Reset the scroll position, as we recycle the container.
+          Html.setScrollTop 0.0
     navigateTo location mode state
 
   Event.ChangeViewport -> liftEffect $ updateAlbumList state

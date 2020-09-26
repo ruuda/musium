@@ -27,6 +27,7 @@ module Html
   , scrollIntoView
   , setHeight
   , setId
+  , setScrollTop
   , setTitle
   , setTransform
   , setTransition
@@ -102,6 +103,9 @@ onInput callback = ReaderT $ \container ->
 
 scrollIntoView :: Html Unit
 scrollIntoView = ReaderT Dom.scrollIntoView
+
+setScrollTop :: Number -> Html Unit
+setScrollTop off = ReaderT $ \container -> Dom.setScrollTop off container
 
 div :: forall a. Html a -> Html a
 div children = node "div" children
