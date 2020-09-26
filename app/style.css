@@ -615,6 +615,7 @@ button.volume-down { grid-area: volume-down; }
 button.volume-up { grid-area: volume-up; }
 
 .volume-controls .indicator {
+  grid-area: volume-bar;
   margin-top: calc(2em - 1pt);
   height: 2pt;
   background-color: #f7f7f7;
@@ -713,6 +714,15 @@ button.volume-up { grid-area: volume-up; }
 
   .now-playing .album-info h1 {
     margin-top: 0;
+  }
+
+  /* Limit the width of the volume bar, there is no point in stretching it out
+   * too much. */
+  .volume-controls {
+    grid-template-columns: auto 4em 18em 4em auto;
+    grid-template-areas:
+      "pad-left volume-down volume-bar volume-up pad-right"
+    ;
   }
 }
 
