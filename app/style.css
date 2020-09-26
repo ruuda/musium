@@ -617,8 +617,8 @@ button.volume-up { grid-area: volume-up; }
 .volume-controls .volume-label {
   position: absolute;
   top: -2rem;
-  right: -2rem;
-  width: 4rem;
+  right: -2.5rem;
+  width: 5rem;
   text-align: center;
   color: #bbb;
 }
