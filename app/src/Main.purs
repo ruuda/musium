@@ -17,6 +17,7 @@ import Effect.Class.Console as Console
 import Prelude
 
 import Event as Event
+import Event (HistoryMode (NoRecordHistory))
 import History as History
 import Model as Model
 import Navigation as Navigation
@@ -37,14 +38,12 @@ main = launchAff_ $ do
     Console.log "Loaded albums"
     initialState.postEvent $ Event.Initialize albums
 
-  liftEffect $ History.pushState Navigation.Library "Musium" "/"
+  liftEffect $ History.pushState Navigation.Library "Musium"
   liftEffect $ History.onPopState $ launchAff_ <<< case _ of
-    -- TODO: Avoid double pushes here.
-    Nothing -> initialState.postEvent Event.OpenLibrary
-    Just location -> case location of
-      Navigation.Album album -> initialState.postEvent $ Event.OpenAlbum album
-      Navigation.Library     -> initialState.postEvent Event.OpenLibrary
-      Navigation.NowPlaying  -> initialState.postEvent Event.OpenNowPlaying
+    -- For navigation events triggered by the back button, we don't record that
+    -- navigation, as it is already present in the history stack.
+    Nothing -> initialState.postEvent $ Event.NavigateTo Navigation.Library NoRecordHistory
+    Just location -> initialState.postEvent $ Event.NavigateTo location NoRecordHistory
 
   -- The main loop handles events in a loop.
   let

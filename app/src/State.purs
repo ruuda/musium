@@ -19,6 +19,7 @@ import Data.Array as Array
 import Data.Int as Int
 import Data.Maybe (Maybe (Just, Nothing))
 import Data.Time.Duration (Milliseconds (..))
+import Data.Tuple (Tuple (..))
 import Effect (Effect)
 import Effect.Aff (Aff, Fiber)
 import Effect.Aff as Aff
@@ -28,6 +29,8 @@ import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (Error)
 import Effect.Exception as Exception
+import Foreign.Object (Object)
+import Foreign.Object as Object
 import Prelude
 
 import AlbumListView (AlbumListState)
@@ -35,13 +38,13 @@ import AlbumListView as AlbumListView
 import AlbumView as AlbumView
 import Dom (Element)
 import Dom as Dom
-import Event (Event)
+import Event (Event, HistoryMode)
 import Event as Event
 import History as History
 import Html as Html
 import Html (Html)
 import LocalStorage as LocalStorage
-import Model (Album (..), QueuedTrack (..), TrackId)
+import Model (Album (..), AlbumId (..), QueuedTrack (..), TrackId)
 import Model as Model
 import Navigation (Location)
 import Navigation as Navigation
@@ -73,6 +76,7 @@ type Elements =
 
 type AppState =
   { albums :: Array Album
+  , albumsById :: Object Album
   , queue :: Array QueuedTrack
   , nextQueueFetch :: Fiber Unit
   , nextProgressUpdate :: Fiber Unit
@@ -143,6 +147,7 @@ new bus = do
   never <- Aff.launchSuspendedAff Aff.never
   pure
     { albums: []
+    , albumsById: Object.empty
     , queue: []
     , nextQueueFetch: never
     , nextProgressUpdate: never
@@ -158,6 +163,9 @@ currentTrackId :: AppState -> Maybe TrackId
 currentTrackId state = case Array.head state.queue of
   Just (QueuedTrack t) -> Just t.trackId
   Nothing              -> Nothing
+
+getAlbum :: AlbumId -> AppState -> Maybe Album
+getAlbum (AlbumId id) state = Object.lookup id state.albumsById
 
 -- Bring the album list in sync with the viewport (the album list index and
 -- the number of entries per viewport).
@@ -226,6 +234,11 @@ handleEvent event state = case event of
     -- list.
     state' <- fetchQueue state
 
+    -- Build a hash map from album id to album, so we can look them up by id.
+    let
+      withId album@(Album a) = let (AlbumId id) = a.id in Tuple id album
+      albumsById = Object.fromFoldable $ map withId albums
+
     liftEffect $ do
       runway <- Html.withElement state'.elements.browser.albumListView $ do
         Html.clear
@@ -233,6 +246,7 @@ handleEvent event state = case event of
 
       updateAlbumList $ state'
         { albums = albums
+        , albumsById = albumsById
         , elements = state'.elements
           { browser = state'.elements.browser { albumListRunway = runway }
           }
@@ -262,31 +276,20 @@ handleEvent event state = case event of
 
   Event.UpdateProgress -> updateProgressBar state
 
-  Event.OpenAlbum (Album album) -> do
-    liftEffect $ Html.withElement state.elements.browser.albumView $ do
-      Html.clear
-      AlbumView.renderAlbum state.postEvent (Album album)
-    let location =  Navigation.Album (Album album)
-    liftEffect $ History.pushState
-      location
-      (album.title <> " by " <> album.artist)
-      ("/album/" <> show album.id)
-    navigateTo location state
+  Event.NavigateTo location@Navigation.Library mode ->
+    navigateTo location mode state
 
-  Event.OpenLibrary -> do
-    -- Restore the scroll position.
-    liftEffect $ case Array.index
-      state.albumListState.elements
-      (state.albumListIndex - state.albumListState.begin)
-      of
-        Just element -> liftEffect $ Html.withElement element $ Html.scrollIntoView
-        Nothing -> pure unit
+  Event.NavigateTo location@Navigation.NowPlaying mode ->
+    navigateTo location mode state
 
-    navigateTo Navigation.Library state
-
-  Event.OpenNowPlaying -> do
-    liftEffect $ History.pushState Navigation.NowPlaying "Now playing" "/now"
-    navigateTo Navigation.NowPlaying state
+  Event.NavigateTo location@(Navigation.Album albumId) mode -> do
+    case getAlbum albumId state of
+      Nothing -> fatal $ "Album " <> (show albumId) <> " does not exist."
+      Just album ->
+        liftEffect $ Html.withElement state.elements.browser.albumView $ do
+          Html.clear
+          AlbumView.renderAlbum state.postEvent album
+    navigateTo location mode state
 
   Event.ChangeViewport -> liftEffect $ updateAlbumList state
 
@@ -298,8 +301,8 @@ handleEvent event state = case event of
       (Event.UpdateQueue $ Array.snoc state.queue queuedTrack)
       state
 
-navigateTo :: Navigation.Location -> AppState -> Aff AppState
-navigateTo newLocation state =
+navigateTo :: Navigation.Location -> HistoryMode -> AppState -> Aff AppState
+navigateTo newLocation historyMode state =
   let
     getPane :: Navigation.Location -> Element
     getPane loc = case loc of
@@ -308,7 +311,17 @@ navigateTo newLocation state =
       Navigation.Album _ -> state.elements.paneBrowser
     paneBefore = getPane state.location
     paneAfter = getPane newLocation
-  in do
+    title = case newLocation of
+      Navigation.NowPlaying -> "Now playing"
+      Navigation.Library -> "Library"
+      Navigation.Album albumId -> case getAlbum albumId state of
+        Just (Album album) -> album.title <> " by " <> album.artist
+        Nothing            -> "Album " <> (show albumId) <> " does not exist"
+  in if newLocation == state.location then pure state else do
+    case historyMode of
+      Event.NoRecordHistory -> pure unit
+      Event.RecordHistory -> liftEffect $ History.pushState newLocation title
+
     -- Inner level: Inside the browser pane, switch between the list and album.
     liftEffect $ case newLocation of
       Navigation.Album _ -> Html.withElement state.elements.browser.browserElement $ do

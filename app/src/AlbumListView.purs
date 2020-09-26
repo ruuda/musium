@@ -24,12 +24,13 @@ import Test.Assert (assert', assertEqual')
 
 import Dom (Element)
 import Dom as Dom
+import Event (Event, HistoryMode (RecordHistory))
+import Event as Event
 import Html (Html)
 import Html as Html
 import Model (Album (..))
 import Model as Model
-import Event (Event)
-import Event as Event
+import Navigation as Navigation
 
 -- Render the "runway" in which albums can sroll, but put no contents in it.
 -- The contents are added later by 'updateAlbumList'.
@@ -155,4 +156,5 @@ renderAlbum postEvent (Album album) = Html.div $ do
       -- the first 4 characters to get the year.
       Html.text (CodeUnits.take 4 album.date)
 
-  Html.onClick $ void $ launchAff $ postEvent $ Event.OpenAlbum $ Album album
+  Html.onClick $ void $ launchAff $ postEvent $
+    Event.NavigateTo (Navigation.Album album.id) RecordHistory

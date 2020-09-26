@@ -7,16 +7,20 @@
 
 module Event
   ( Event (..)
+  , HistoryMode (..)
   ) where
 
 import Model (Album, QueuedTrack)
+import Navigation (Location)
+
+data HistoryMode
+  = RecordHistory
+  | NoRecordHistory
 
 data Event
   = Initialize (Array Album)
   | UpdateQueue (Array QueuedTrack)
-  | OpenLibrary
-  | OpenAlbum Album
-  | OpenNowPlaying
+  | NavigateTo Location HistoryMode
   | ChangeViewport
     -- This event is generated internally after enqueueing a track, to
     -- immediately bring the queue in sync without having to refresh it fully.
