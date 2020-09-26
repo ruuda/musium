@@ -17,12 +17,13 @@ import Effect.Aff (Aff, joinFiber, launchAff, launchAff_)
 import Effect.Class (liftEffect)
 import Prelude
 
+import Event (Event, HistoryMode (RecordHistory))
+import Event as Event
 import Html (Html)
 import Html as Html
 import Model (Album (..), QueuedTrack (..), Track (..))
 import Model as Model
-import Event (Event)
-import Event as Event
+import Navigation as Navigation
 import Time as Time
 
 renderAlbum :: (Event -> Aff Unit) -> Album -> Html Unit
@@ -36,6 +37,10 @@ renderAlbum postEvent (Album album) = do
 
   Html.div $ do
     Html.addClass "album-info"
+    Html.button $ do
+      Html.addClass "back"
+      Html.text "←"
+      Html.onClick $ launchAff_ $ postEvent $ Event.NavigateTo Navigation.Library RecordHistory
     Html.div $ do
       Html.addClass "cover"
       let alt = album.title <> " by " <> album.artist

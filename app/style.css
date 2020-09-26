@@ -403,6 +403,17 @@ img.thumb
 .album-info {
   grid-area: album-info;
   padding: 1em;
+  position: relative;
+}
+
+.album-info button.back {
+  color: #aaa;
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 0;
+  width: 3em;
+  height: 3em;
 }
 
 #album-view .cover {
@@ -634,6 +645,12 @@ button.volume-up { grid-area: volume-up; }
   /* When both columns are visible at once, no translation is needed. */
   #browser.nav-album-view {
     transform: translateX(0);
+  }
+
+  /* The back button no longer makes sense when the album list is already
+   * visible. */
+  .album-info button.back {
+    display: none;
   }
 }
 
