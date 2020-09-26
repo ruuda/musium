@@ -72,6 +72,7 @@ body {
   transform-origin: center;
   /* background-color: #fff; */
   transition: transform 0.1s ease-in-out, opacity 0.1s ease-in-out;
+  will-change: transform;
 }
 
 .pane.in {
