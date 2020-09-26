@@ -25,13 +25,12 @@ import Prelude
 
 import Dom (Element)
 import Dom as Dom
-import Event (Event, HistoryMode (RecordHistory))
+import Event (Event)
 import Event as Event
 import Html (Html)
 import Html as Html
 import Model (QueuedTrack (..), TrackId)
 import Model as Model
-import Navigation as Navigation
 import Time (Duration)
 import Time as Time
 
@@ -80,7 +79,7 @@ new :: (Event -> Aff Unit) -> Html StatusBarState
 new postEvent = Html.div $ do
   Html.setId "statusbar"
   Html.addClass "empty"
-  Html.onClick $ launchAff_ $ postEvent $ Event.NavigateTo Navigation.NowPlaying RecordHistory
+  Html.onClick $ launchAff_ $ postEvent $ Event.ClickStatusBar
   statusBar <- ask
   pure { current: Nothing, statusBar }
 

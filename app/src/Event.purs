@@ -21,6 +21,7 @@ data Event
   = Initialize (Array Album)
   | UpdateQueue (Array QueuedTrack)
   | NavigateTo Location HistoryMode
+  | ClickStatusBar
   | ChangeViewport
     -- This event is generated internally after enqueueing a track, to
     -- immediately bring the queue in sync without having to refresh it fully.

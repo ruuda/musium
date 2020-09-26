@@ -38,7 +38,7 @@ import AlbumListView as AlbumListView
 import AlbumView as AlbumView
 import Dom (Element)
 import Dom as Dom
-import Event (Event, HistoryMode)
+import Event (Event, HistoryMode (RecordHistory))
 import Event as Event
 import History as History
 import Html as Html
@@ -275,6 +275,18 @@ handleEvent event state = case event of
       }
 
   Event.UpdateProgress -> updateProgressBar state
+
+  Event.ClickStatusBar ->
+    -- When clicking the status bar, navigate to "Now playing", except when we
+    -- are already there, then navigate to the album page of the playing album.
+    let
+      destination = case state.location of
+        Navigation.NowPlaying -> case Array.head state.queue of
+          Just (QueuedTrack current) -> Navigation.Album current.albumId
+          Nothing                    -> Navigation.Library
+        _                            -> Navigation.NowPlaying
+    in
+      handleEvent (Event.NavigateTo destination RecordHistory) state
 
   Event.NavigateTo location@Navigation.Library mode ->
     navigateTo location mode state
