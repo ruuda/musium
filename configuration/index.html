@@ -399,14 +399,15 @@ library_path = /home/media/music
 covers_path = /var/cache/musium/covers
 
 audio_device = UMC404HD 192k
+audio_volume_control = UMC404HD 192k Output
 </code></pre>
-<h2 id="options">Options</h2>
-<p>The following options are available. Unless noted otherwise, all options must be
-specified exactly once.</p>
+<h2 id="settings">Settings</h2>
+<p>The following settings are available. Unless noted otherwise, all options must
+be specified exactly once.</p>
 <h3 id="listen"><code>listen</code></h3>
 <p>The address and port to bind to, for example <code>0.0.0.0:80</code>. Use <code>0.0.0.0</code> as the
-address to listen for external connections, to make the player available to the
-entire local network, or use <code>localhost</code> to listen only on loopback.</p>
+address to listen for external connections and make the player available to the
+entire local network. Use <code>localhost</code> to listen only on loopback.</p>
 <p>The listen address is optional and defaults to <code>0.0.0.0:8233</code>.</p>
 <h3 id="library_path"><code>library_path</code></h3>
 <p>The directory to recursively scan for flac files.</p>
@@ -423,6 +424,16 @@ path is optional: when not set, play logs are not written.</p>
 be found, Musium will list all of the cards that are available. Musium uses the
 <abbr>Alsa</abbr> hardware device directly, there is no need nor support for
 PulseAudio.</p>
+<h3 id="audio_volume_control">audio_volume_control</h3>
+<p>The <abbr>Alsa</abbr> simple mixer control that controls playback volume. Often
+there are controls named <code>Master</code>, <code>PCM</code>, and <code>Speakers</code>, but this differs from
+card to card. Use <code>amixer scontrols</code> to list available controls. Be sure to run
+this with the right privileges (possibly as superuser, or as a user in the
+<code>audio</code> group) to reveal all available controls.</p>
+<p>Musium assumes exclusive control over this mixer control, so you should not
+manipulate it manually with tools like Alsamixer after starting Musium. In
+particular, Musium adjusts the volume to perform loudness normalization, so even
+for a constant target playback volume, Musium will manipulate the mixer control.</p>
       </article>
       <nav id="nav-prev-next">
         <a id="nav-prev" href="../building/" title="Building">Previous</a>
@@ -443,7 +454,7 @@ PulseAudio.</p>
                current"><a href="./">Configuration</a></li>
             <li><ul>
                 <li class="toc-heading"><a href="#example">Example</a></li>
-                <li class="toc-heading"><a href="#options">Options</a></li>
+                <li class="toc-heading"><a href="#settings">Settings</a></li>
                 </ul></li>
                
             <li class="toc-chapter

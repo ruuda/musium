@@ -389,14 +389,17 @@
         <h1 id="api">API</h1>
 <p>Endpoints:</p>
 <ul>
-<li><code>GET /track/:track_id.flac</code>: Return the track itself.</li>
-<li><code>GET /album/:album_id</code>:      Return json album metadata.</li>
-<li><code>GET /albums</code>:               Return a json list of all albums.</li>
-<li><code>GET /cover/:album_id</code>:      Return cover art in original resolution.</li>
-<li><code>GET /thumb/:album_id</code>:      Return downsampled cover art.</li>
-<li><code>GET /search?q=</code>:            Return json search results.</li>
-<li><code>GET /queue</code>:                Return the current play queue.</li>
-<li><code>PUT /queue/:track_id</code>:      Enqueue the track with the given id.</li>
+<li><code>GET  /track/:track_id.flac</code>: Return the track itself.</li>
+<li><code>GET  /album/:album_id</code>:      Return json album metadata.</li>
+<li><code>GET  /albums</code>:               Return a json list of all albums.</li>
+<li><code>GET  /cover/:album_id</code>:      Return cover art in original resolution.</li>
+<li><code>GET  /thumb/:album_id</code>:      Return downsampled cover art.</li>
+<li><code>GET  /search?q=</code>:            Return json search results.</li>
+<li><code>GET  /queue</code>:                Return the current play queue.</li>
+<li><code>PUT  /queue/:track_id</code>:      Enqueue the track with the given id.</li>
+<li><code>GET  /volume</code>:               Return the current volume.</li>
+<li><code>POST /volume/up</code>:            Increase the volume by 1 dB.</li>
+<li><code>POST /volume/down</code>:          Decrease the volume by 1 dB.</li>
 </ul>
       </article>
       <nav id="nav-prev-next">
