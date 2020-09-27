@@ -267,11 +267,7 @@ impl MetaServer {
             .boxed()
     }
 
-    fn handle_search(&self, request: &Request) -> ResponseBox {
-        let raw_query = match request.url().strip_prefix("/search?") {
-            Some(q) => q,
-            None => "",
-        };
+    fn handle_search(&self, raw_query: &str) -> ResponseBox {
         let mut opt_query = None;
         for (k, v) in url::form_urlencoded::parse(raw_query.as_bytes()) {
             if k == "q" {
@@ -325,13 +321,21 @@ impl MetaServer {
     fn handle_request(&self, request: Request) {
         println!("Request: {:?}", request);
 
-        let mut parts = request
-            .url()
-            .splitn(3, '/')
-            .filter(|x| x.len() > 0);
+        // Break url into the part before the ? and the part after. The part
+        // before we split on slashes.
+        let mut url_iter = request.url().splitn(2, '?');
 
-        let p0 = parts.next();
-        let p1 = parts.next();
+        let mut p0 = None;
+        let mut p1 = None;
+
+        if let Some(base) = url_iter.next() {
+            let mut parts = base.splitn(3, '/').filter(|x| x.len() > 0);
+
+            p0 = parts.next();
+            p1 = parts.next();
+        }
+
+        let query = url_iter.next().unwrap_or("");
 
         // A very basic router. See also docs/api.md for an overview.
         let response = match (request.method(), p0, p1) {
@@ -341,7 +345,7 @@ impl MetaServer {
             (&Get, Some("track"),  Some(t)) => self.handle_track(t),
             (&Get, Some("album"),  Some(a)) => self.handle_album(a),
             (&Get, Some("albums"), None)    => self.handle_albums(),
-            (&Get, Some("search"), None)    => self.handle_search(&request),
+            (&Get, Some("search"), None)    => self.handle_search(query),
             (&Get, Some("queue"),  None)    => self.handle_queue(),
             (&Put, Some("queue"),  Some(t)) => self.handle_enqueue(t),
 
