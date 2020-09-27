@@ -321,35 +321,31 @@ img.thumb
   color: #999;
 }
 
-#search
-{
-  position: sticky;
-  top: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-#search-query
-{
-  padding: 1em;
-  background-color: rgba(255, 255, 255, 0.92);
-  border-bottom: 0.8pt solid #eee;
-  backdrop-filter: blur(2pt) brightness(110%);
+#search-pane {
+  display: grid;
+  grid-template-columns: auto;
+  grid-template-rows: 3em auto;
+  grid-template-areas:
+    "search-box"
+    "result-box"
+  ;
 }
 
 #search-box
 {
-  font: inherit;
-  border: none;
-  width: 100%;
   background: transparent;
+  border: none;
+  border-bottom: 0.8pt solid #eee;
+  font: inherit;
+  grid-area: search-box;
+  padding: 1em;
+  width: 100%;
 }
 
 #search-results
 {
-  display: none;
+  grid-area: result-box;
   padding-bottom: 1em;
-  top: 2em;
   overflow-y: auto;
 }
 
@@ -390,12 +386,6 @@ img.thumb
   margin-top: 0.2em;
   margin-right: 0.2em;
 }
-
-/* Hide the album list while searching, but do not set it to "display: none".
- * This avoids style recalculations, and preserves the scroll position. */
-.searching #album-list { visibility: hidden }
-.searching #search-results { display: block }
-.searching #search { height: 100vh }
 
 .album-info {
   grid-area: album-info;

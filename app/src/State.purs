@@ -51,6 +51,8 @@ import Navigation as Navigation
 import NowPlaying as NowPlaying
 import StatusBar (StatusBarState)
 import StatusBar as StatusBar
+import Search (SearchElements)
+import Search as Search
 import Time (Instant)
 import Time as Time
 
@@ -68,6 +70,7 @@ type BrowserElements =
 
 type Elements =
   { browser :: BrowserElements
+  , search :: SearchElements
   , nowPlaying :: Element
   , paneNowPlaying :: Element
   , paneBrowser :: Element
@@ -134,15 +137,25 @@ setupElements postEvent = Html.withElement Dom.body $ do
     Html.addClass "inactive"
     ask
 
-  paneSearch <- Html.div $ do
+  { paneSearch, search } <- Html.div $ do
     Html.setId "search-pane"
     Html.addClass "pane"
     Html.addClass "inactive"
-    ask
+    search <- Search.new
+    paneSearch <- ask
+    pure $ { paneSearch, search }
 
   liftEffect $ Dom.onResizeWindow $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
 
-  pure { browser, nowPlaying, paneNowPlaying, paneBrowser, paneQueue, paneSearch }
+  pure
+    { browser
+    , search
+    , nowPlaying
+    , paneNowPlaying
+    , paneBrowser
+    , paneQueue
+    , paneSearch
+    }
 
 new :: BusW Event -> Effect AppState
 new bus = do
