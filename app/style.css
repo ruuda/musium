@@ -324,7 +324,7 @@ img.thumb
 #search-pane {
   display: grid;
   grid-template-columns: auto;
-  grid-template-rows: 3em auto;
+  grid-template-rows: 4em auto;
   grid-template-areas:
     "search-box"
     "result-box"
@@ -338,7 +338,7 @@ img.thumb
   border-bottom: 0.8pt solid #eee;
   font: inherit;
   grid-area: search-box;
-  padding: 1em;
+  padding: 1.5em;
   width: 100%;
 }
 
