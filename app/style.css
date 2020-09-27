@@ -355,7 +355,7 @@ img.thumb
   letter-spacing: 0.2em;
   font-weight: 600;
   font-size: 1em;
-  margin: 0.5em;
+  margin-top: 1em;
   margin-left: 1em;
   color: #ccc;
 }
@@ -364,7 +364,7 @@ img.thumb
 {
   padding-left: 1em;
   padding-right: 1em;
-  padding-bottom: 0.5em;
+  padding-top: 0.5em;
 }
 
 #search-artists .name
