@@ -149,4 +149,5 @@ input :: forall a. String -> Html a -> Html a
 input placeholder (ReaderT children) =
   node "input" $ ReaderT $ \self -> do
     Dom.setAttribute "placeholder" placeholder self
+    Dom.setAttribute "autocomplete" "off" self
     children self
