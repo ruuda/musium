@@ -135,10 +135,6 @@ body {
   ;
 }
 
-#statusbar {
-  grid-area: statusbar;
-}
-
 a
 {
   color: inherit;
@@ -520,9 +516,10 @@ button.play-next::before {
 }
 
 #statusbar {
+  grid-area: statusbar;
   border-top: 0.8pt solid rgba(0, 0, 0, 0.065);
   background-color: rgba(252, 251, 251, 0.92);
-  backdrop-filter: blur(3pt) brightness(110%);
+  position: relative;
 }
 
 #statusbar .current-track {
@@ -531,6 +528,8 @@ button.play-next::before {
   width: 100%;
   opacity: 1.0;
   transition: opacity 0.15s ease-in-out;
+  /* Allow the buttons to go in front, when needed. */
+  z-index: 1;
 }
 
 #statusbar .current-track.fade-in {
@@ -579,6 +578,16 @@ button.play-next::before {
 #statusbar .artist {
   font-size: 0.75rem;
   color: #777;
+}
+
+#statusbar button.goto-search {
+  position: absolute;
+  width: 3em;
+  height: 3em;
+  right: 1em;
+  top: 1em;
+  /* Go in front of the current track div, so we capture the click. */
+  z-index: 2;
 }
 
 #now-playing-pane {

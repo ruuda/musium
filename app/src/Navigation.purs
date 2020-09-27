@@ -20,6 +20,7 @@ import Model (AlbumId (..))
 data Location
   = Library
   | NowPlaying
+  | Search
   | Album AlbumId
 
 derive instance eqLocation :: Eq Location
@@ -28,6 +29,7 @@ toUrl :: Location -> String
 toUrl loc = case loc of
   Library -> "/"
   NowPlaying -> "/?now"
+  Search -> "/?search"
   Album (AlbumId id) -> "/?album=" <> id
 
 fromUrl :: String -> Location
@@ -35,5 +37,6 @@ fromUrl url = case stripPrefix (Pattern "/?album=") url of
   Just albumId -> Album (AlbumId albumId)
   Nothing      -> case url of
     "/?now"    -> NowPlaying
+    "/?search" -> Search
     "/"        -> Library
     _          -> Library

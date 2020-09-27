@@ -306,6 +306,9 @@ handleEvent event state = case event of
   Event.NavigateTo location@Navigation.NowPlaying mode ->
     navigateTo location mode state
 
+  Event.NavigateTo location@Navigation.Search mode ->
+    navigateTo location mode state
+
   Event.NavigateTo location@(Navigation.Album albumId) mode -> do
     case getAlbum albumId state of
       Nothing -> fatal $ "Album " <> (show albumId) <> " does not exist."
@@ -333,12 +336,14 @@ navigateTo newLocation historyMode state =
     getPane :: Navigation.Location -> Element
     getPane loc = case loc of
       Navigation.NowPlaying -> state.elements.paneNowPlaying
+      Navigation.Search  -> state.elements.paneSearch
       Navigation.Library -> state.elements.paneBrowser
       Navigation.Album _ -> state.elements.paneBrowser
     paneBefore = getPane state.location
     paneAfter = getPane newLocation
     title = case newLocation of
       Navigation.NowPlaying -> "Now playing"
+      Navigation.Search  -> "Search"
       Navigation.Library -> "Library"
       Navigation.Album albumId -> case getAlbum albumId state of
         Just (Album album) -> album.title <> " by " <> album.artist
