@@ -319,8 +319,13 @@ handleEvent event state = case event of
   Event.NavigateTo location@Navigation.NowPlaying mode ->
     navigateTo location mode state
 
-  Event.NavigateTo location@Navigation.Search mode ->
-    navigateTo location mode state
+  Event.NavigateTo location@Navigation.Search mode -> do
+    -- Clear before transition, so we transition to the clean search page.
+    liftEffect $ Search.clear state.elements.search
+    result <- navigateTo location mode state
+    -- But focus after, because it only works when the text box is visible.
+    liftEffect $ Search.focus state.elements.search
+    pure result
 
   Event.NavigateTo location@(Navigation.Album albumId) mode -> do
     case getAlbum albumId state of

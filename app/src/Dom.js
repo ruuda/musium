@@ -72,6 +72,12 @@ exports.getValue = function(element) {
   }
 }
 
+exports.setValueImpl = function(value, element) {
+  return function() {
+    element.value = value;
+  }
+}
+
 exports.getOffsetHeight = function(element) {
   return function() {
     return element.offsetHeight;
@@ -103,6 +109,12 @@ exports.scrollIntoView = function(element) {
       block: 'start',
       inline: 'nearest',
     });
+  }
+}
+
+exports.focusElement = function(element) {
+  return function() {
+    return element.focus();
   }
 }
 

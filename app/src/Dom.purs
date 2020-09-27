@@ -15,6 +15,7 @@ module Dom
   , body
   , clearElement
   , createElement
+  , focusElement
   , getElementById
   , getOffsetHeight
   , getScrollTop
@@ -32,6 +33,7 @@ module Dom
   , setScrollTop
   , setTransform
   , setTransition
+  , setValue
   , setWidth
   ) where
 
@@ -50,6 +52,7 @@ foreign import body :: Element
 foreign import clearElement :: Element -> Effect Unit
 foreign import createElement :: String -> Effect Element
 foreign import eqElementImpl :: Element -> Element -> Boolean
+foreign import focusElement :: Element -> Effect Unit
 foreign import getOffsetHeight :: Element -> Effect Number
 foreign import getScrollTop :: Element -> Effect Number
 foreign import getValue :: Element -> Effect String
@@ -73,6 +76,7 @@ foreign import setScrollTopImpl :: Fn2 Number Element (Effect Unit)
 foreign import setTransformImpl :: Fn2 String Element (Effect Unit)
 foreign import setTransitionImpl :: Fn2 String Element (Effect Unit)
 foreign import setWidthImpl :: Fn2 String Element (Effect Unit)
+foreign import setValueImpl :: Fn2 String Element (Effect Unit)
 
 appendChild :: Element -> Element -> Effect Unit
 appendChild child container = runFn2 appendChildImpl child container
@@ -91,6 +95,9 @@ addClass className element = runFn2 addClassImpl className element
 
 removeClass :: String -> Element -> Effect Unit
 removeClass className element = runFn2 removeClassImpl className element
+
+setValue :: String -> Element -> Effect Unit
+setValue v element = runFn2 setValueImpl v element
 
 setWidth :: String -> Element -> Effect Unit
 setWidth w element = runFn2 setWidthImpl w element

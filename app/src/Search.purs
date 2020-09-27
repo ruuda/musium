@@ -8,18 +8,22 @@
 module Search
   ( SearchElements
   , new
+  , focus
+  , clear
   ) where
 
 import Control.Monad.Reader.Class (ask, local)
 import Data.Array as Array
 import Data.Foldable (for_)
 import Data.String.CodeUnits as CodeUnits
+import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Prelude
 
 import Dom (Element)
+import Dom as Dom
 import Html (Html)
 import Html as Html
 import Model (SearchArtist (..), SearchAlbum (..), SearchTrack (..))
@@ -119,3 +123,9 @@ new = do
                 Html.ul $ for_ result.tracks renderSearchTrack
 
   pure $ { searchBox, resultBox }
+
+clear :: SearchElements -> Effect Unit
+clear elements = Dom.setValue "" elements.searchBox
+
+focus :: SearchElements -> Effect Unit
+focus elements = Dom.focusElement elements.searchBox
