@@ -141,7 +141,7 @@ setupElements postEvent = Html.withElement Dom.body $ do
     Html.setId "search-pane"
     Html.addClass "pane"
     Html.addClass "inactive"
-    search <- Search.new
+    search <- Search.new postEvent
     paneSearch <- ask
     pure $ { paneSearch, search }
 

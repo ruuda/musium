@@ -17,17 +17,20 @@ import Data.Array as Array
 import Data.Foldable (for_)
 import Data.String.CodeUnits as CodeUnits
 import Effect (Effect)
-import Effect.Aff (launchAff_)
+import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Prelude
 
 import Dom (Element)
 import Dom as Dom
+import Event (Event, HistoryMode (RecordHistory))
+import Event as Event
 import Html (Html)
 import Html as Html
 import Model (SearchArtist (..), SearchAlbum (..), SearchTrack (..))
 import Model as Model
+import Navigation as Navigation
 
 type SearchElements =
   { searchBox :: Element
@@ -47,8 +50,8 @@ renderSearchArtist (SearchArtist artist) = do
         Html.img (Model.thumbUrl albumId) ("An album by " <> artist.name) $ pure unit
 
 -- TODO: Deduplicate between here and album component.
-renderSearchAlbum :: SearchAlbum -> Html Unit
-renderSearchAlbum (SearchAlbum album) = do
+renderSearchAlbum :: (Event -> Aff Unit) -> SearchAlbum -> Html Unit
+renderSearchAlbum postEvent (SearchAlbum album) = do
   Html.li $ do
     Html.addClass "album"
     Html.img (Model.thumbUrl album.id) (album.title <> " by " <> album.artist) $ do
@@ -66,11 +69,14 @@ renderSearchAlbum (SearchAlbum album) = do
         -- the first 4 characters to get the year.
         Html.text (CodeUnits.take 4 album.date)
 
-renderSearchTrack :: SearchTrack -> Html Unit
-renderSearchTrack (SearchTrack track) = do
+    Html.onClick $ launchAff_ $ postEvent $ Event.NavigateTo
+      (Navigation.Album $ album.id)
+      RecordHistory
+
+renderSearchTrack :: (Event -> Aff Unit) -> SearchTrack -> Html Unit
+renderSearchTrack postEvent (SearchTrack track) = do
   Html.li $ do
     Html.addClass "track"
-    -- TODO: Turn album rendering into re-usable function.
     Html.img (Model.thumbUrl track.albumId) track.album $ do
       Html.addClass "thumb"
     Html.span $ do
@@ -80,8 +86,13 @@ renderSearchTrack (SearchTrack track) = do
       Html.addClass "artist"
       Html.text track.artist
 
-new :: Html SearchElements
-new = do
+    -- TODO: Add a way to emphasize that track after navigating to the album.
+    Html.onClick $ launchAff_ $ postEvent $ Event.NavigateTo
+      (Navigation.Album $ track.albumId)
+      RecordHistory
+
+new :: (Event -> Aff Unit) -> Html SearchElements
+new postEvent = do
   searchBox <- Html.input "search" $ do
     Html.setId "search-box"
     ask
@@ -114,18 +125,20 @@ new = do
               Html.h2 $ Html.text "Albums"
               Html.div $ do
                 Html.setId "search-albums"
-                Html.ul $ for_ result.albums renderSearchAlbum
+                Html.ul $ for_ result.albums $ renderSearchAlbum postEvent
 
             when (not $ Array.null result.tracks) $ do
               Html.h2 $ Html.text "Tracks"
               Html.div $ do
                 Html.setId "search-tracks"
-                Html.ul $ for_ result.tracks renderSearchTrack
+                Html.ul $ for_ result.tracks $ renderSearchTrack postEvent
 
   pure $ { searchBox, resultBox }
 
 clear :: SearchElements -> Effect Unit
-clear elements = Dom.setValue "" elements.searchBox
+clear elements = do
+  Dom.setValue "" elements.searchBox
+  Dom.clearElement elements.resultBox
 
 focus :: SearchElements -> Effect Unit
 focus elements = Dom.focusElement elements.searchBox
