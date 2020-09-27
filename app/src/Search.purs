@@ -119,19 +119,25 @@ new postEvent = do
               Html.h2 $ Html.text "Artists"
               Html.div $ do
                 Html.setId "search-artists"
-                Html.ul $ for_ result.artists renderSearchArtist
+                -- Limit the number of results rendered at once to keep search
+                -- responsive. TODO: Render overflow button.
+                Html.ul $ for_ (Array.take 10 result.artists) renderSearchArtist
 
             when (not $ Array.null result.albums) $ do
               Html.h2 $ Html.text "Albums"
               Html.div $ do
                 Html.setId "search-albums"
-                Html.ul $ for_ result.albums $ renderSearchAlbum postEvent
+                -- Limit the number of results rendered at once to keep search
+                -- responsive. TODO: Render overflow button.
+                Html.ul $ for_ (Array.take 25 result.albums) $ renderSearchAlbum postEvent
 
             when (not $ Array.null result.tracks) $ do
               Html.h2 $ Html.text "Tracks"
               Html.div $ do
                 Html.setId "search-tracks"
-                Html.ul $ for_ result.tracks $ renderSearchTrack postEvent
+                -- Limit the number of results rendered at once to keep search
+                -- responsive. TODO: Render overflow button.
+                Html.ul $ for_ (Array.take 25 result.tracks) $ renderSearchTrack postEvent
 
   pure $ { searchBox, resultBox }
 
