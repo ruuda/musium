@@ -22,7 +22,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Dict, Union
+from typing import Dict, Union, Iterator
 
 
 class EventType(Enum):
@@ -51,22 +51,58 @@ class Event:
 
     @staticmethod
     def from_dict(data: Dict[str, Union[str, int]]) -> Event:
-        args = {
+        event: str = data['event']
+        time: str = data['time']
+        args: Dict[str, Union[str, int, datetime, EventType]] = {
             **data,
-            'time': datetime.fromisoformat(data['time'].replace('Z', '+00:00')),
-            'event': EventType(data['event']),
+            'time': datetime.fromisoformat(time.replace('Z', '+00:00')),
+            'event': EventType(event),
         }
         return Event(**args)
 
 
-def read_play_log(fname: str) -> Iterable[Event]:
+def read_play_log(fname: str) -> Iterator[Event]:
     with open(fname, 'r', encoding='utf-8') as f:
         for line in f:
             yield Event.from_dict(json.loads(line))
 
 
+def events_to_scrobble(events: Iterator[Event]) -> Iterator[Event]:
+    """
+    Return the completed event of listens to scrobble.
+    * Match up started and completed events.
+    * Apply Last.fm requirements for when to scrobble.
+    """
+    try:
+        prev_event = next(events)
+    except StopIteration:
+        return
+
+    for event in events:
+        duration = event.time - prev_event.time
+        if (
+            # Check that we have the end of a started-completed pair.
+            event.event == EventType.completed
+            and prev_event.event == EventType.started
+            # Confirm that the pair matches.
+            and event.queue_id == prev_event.queue_id
+            and event.track_id == prev_event.track_id
+            # Sanity check: confirm that the time between start and completed
+            # agrees with the alleged duration of the track.
+            and abs(duration.total_seconds() - event.duration_seconds) < 10.0
+            # Last.fm requirement: The track must at least be 30 seconds long.
+            # The playtime requirement is implied by the above check.
+            and event.duration_seconds > 30
+        ):
+            yield event
+
+        prev_event = event
+
+
 def main(play_log: str) -> None:
-    for event in read_play_log(play_log):
+    events = read_play_log(play_log)
+    scrobble_events = events_to_scrobble(events)
+    for event in scrobble_events:
         print(event)
 
 
