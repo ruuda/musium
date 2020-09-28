@@ -66,6 +66,7 @@ class Event:
     duration_seconds: int
     track_number: int
     disc_number: int
+    musicbrainz_trackid: Optional[str]
 
     def __post_init__(self) -> None:
         assert self.time.tzinfo is not None
@@ -75,6 +76,8 @@ class Event:
         event: str = data['event']
         time: str = data['time']
         args: Dict[str, Union[str, int, datetime, EventType]] = {
+            # Ensure the argument is present, even when the value is not.
+            'musicbrainz_trackid': None,
             **data,
             'time': datetime.fromisoformat(time.replace('Z', '+00:00')),
             'event': EventType(event),
@@ -98,12 +101,13 @@ class Event:
             indexed('album'): self.album,
             indexed('trackNumber'): str(self.track_number),
             indexed('duration'): str(self.duration_seconds),
+            # Last.fm says "The album artist - if this differs from the track artist."
+            # But if we don't include it, it echos back empty string in the response.
+            indexed('albumArtist'): self.album_artist,
         }
 
-        # Last.fm says "The album artist - if this differs from the track artist."
-        # My interpretation is that we shouldn't include it unless it differs.
-        if self.album_artist != self.artist:
-            result[indexed('albumArtist')] = self.album_artist
+        if self.musicbrainz_trackid is not None:
+            result[indexed('mbid')] = self.musicbrainz_trackid
 
         return result
 
@@ -220,11 +224,23 @@ def cmd_scrobble(play_log: str) -> None:
     events = read_play_log(play_log)
     scrobble_events = events_to_scrobble(events)
 
+    n_scrobbled = 0
+
     # Last.fm allows submitting batches of at most 50 scrobbles at once.
     for batch in iter_chunks(scrobble_events, n=50):
         req = format_batch_request(batch)
         response = json.load(urlopen(req))
-        print(response)
+
+        num_accepted = response['scrobbles']['@attr']['accepted']
+
+        if num_accepted != len(batch):
+            print(f'Error after {n_scrobbled} submissions:')
+            print(json.dumps(response, indent=2))
+            break
+
+        else:
+            print(f'Scrobbled {num_accepted} listens.')
+            n_scrobbled += num_accepted
 
 
 def cmd_authenticate() -> None:
