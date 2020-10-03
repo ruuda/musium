@@ -54,6 +54,7 @@ fn initialize_db(connection: &sqlite::Connection) -> Result<Database> {
         -- General track metadata.
         , track_title      string  not null
         , album_title      string  not null
+        , track_artist     string  not null
         , album_artist     string  not null
         , duration_seconds integer not null
         , track_number     integer null
@@ -92,6 +93,7 @@ fn initialize_db(connection: &sqlite::Connection) -> Result<Database> {
         , album_artist_id
         , track_title
         , album_title
+        , track_artist
         , album_artist
         , duration_seconds
         , track_number
@@ -99,7 +101,7 @@ fn initialize_db(connection: &sqlite::Connection) -> Result<Database> {
         , source
         )
         values
-        ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'musium');
+        ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'musium');
         "
     )?;
 
@@ -145,10 +147,11 @@ fn insert_started(
     db.insert_started.bind(5, album.artist_id.0 as i64)?;
     db.insert_started.bind(6, index.get_string(track.title))?;
     db.insert_started.bind(7, index.get_string(album.title))?;
-    db.insert_started.bind(8, index.get_string(artist.name))?;
-    db.insert_started.bind(9, track.duration_seconds as i64)?;
-    db.insert_started.bind(10, track.track_number as i64)?;
-    db.insert_started.bind(11, track.disc_number as i64)?;
+    db.insert_started.bind(8, index.get_string(track.artist))?;
+    db.insert_started.bind(9, index.get_string(artist.name))?;
+    db.insert_started.bind(10, track.duration_seconds as i64)?;
+    db.insert_started.bind(11, track.track_number as i64)?;
+    db.insert_started.bind(12, track.disc_number as i64)?;
 
     let result = db.insert_started.next()?;
     // This query returns no rows, it should be done immediately.
