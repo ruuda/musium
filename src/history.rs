@@ -70,6 +70,18 @@ fn initialize_db(connection: &sqlite::Connection) -> Result<Database> {
         "
     )?;
 
+    // We can record timestamps in sub-second granularity, but external systems
+    // do not always support this. Last.fm only has second granularity. So if we
+    // produce a listen, submit it to Last.fm, and later import it back, then we
+    // should not get a duplicate. Therefore, create a unique index on the the
+    // time truncated to seconds (%s formats seconds since epoch).
+    connection.execute(
+        "
+        create unique index if not exists ix_listens_unique_second
+        on listens (strftime('%s', started_at));
+        "
+    )?;
+
     let insert_started = connection.prepare(
         "
         insert into listens
