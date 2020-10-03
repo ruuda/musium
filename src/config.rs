@@ -21,7 +21,7 @@ pub struct Config {
     pub listen: String,
     pub library_path: PathBuf,
     pub covers_path: PathBuf,
-    pub play_log_path: Option<PathBuf>,
+    pub data_path: PathBuf,
     // TODO: Make this optional; pick the first one by default.
     pub audio_device: String,
     pub audio_volume_control: String,
@@ -32,10 +32,7 @@ impl fmt::Display for Config {
         write!(f, "  listen = {}\n", self.listen)?;
         write!(f, "  library_path = {}\n", self.library_path.to_string_lossy())?;
         write!(f, "  covers_path = {}\n", self.covers_path.to_string_lossy())?;
-        match &self.play_log_path {
-            Some(p) => write!(f, "  play_log_path = {}\n", p.to_string_lossy())?,
-            None => write!(f, "  play_log_path is not set\n")?,
-        }
+        write!(f, "  data_path = {}\n", self.data_path.to_string_lossy())?;
         write!(f, "  audio_device = {}\n", self.audio_device)?;
         write!(f, "  audio_volume_control = {}", self.audio_volume_control)?;
         Ok(())
@@ -51,7 +48,7 @@ impl Config {
         let mut listen = None;
         let mut library_path = None;
         let mut covers_path = None;
-        let mut play_log_path = None;
+        let mut data_path = None;
         let mut audio_device = None;
         let mut audio_volume_control = None;
 
@@ -75,7 +72,7 @@ impl Config {
                     "listen" => listen = Some(String::from(value)),
                     "library_path" => library_path = Some(PathBuf::from(value)),
                     "covers_path" => covers_path = Some(PathBuf::from(value)),
-                    "play_log_path" => play_log_path = Some(PathBuf::from(value)),
+                    "data_path" => data_path = Some(PathBuf::from(value)),
                     "audio_device" => audio_device = Some(String::from(value)),
                     "audio_volume_control" => audio_volume_control = Some(String::from(value)),
                     _ => {
@@ -109,7 +106,12 @@ impl Config {
                     "Covers path not set. Expected 'covers_path ='-line."
                 )),
             },
-            play_log_path: play_log_path,
+            data_path: match data_path {
+                Some(p) => p,
+                None => return Err(Error::IncompleteConfig(
+                    "Data path not set. Expected 'data_path ='-line."
+                )),
+            },
             audio_device: match audio_device {
                 Some(d) => d,
                 None => return Err(Error::IncompleteConfig(
@@ -140,6 +142,7 @@ mod test {
             "listen = localhost:8000",
             "library_path = /home/user/music",
             "covers_path = /home/user/.cache/musium/covers",
+            "data_path = /home/user/.local/share/musium",
             "",
             "audio_device = UCM404HD 192k",
             "audio_volume_control = UMC404HD 192k Output",
@@ -148,6 +151,7 @@ mod test {
         assert_eq!(&config.listen[..], "localhost:8000");
         assert_eq!(config.library_path.as_path(), Path::new("/home/user/music"));
         assert_eq!(config.covers_path.as_path(), Path::new("/home/user/.cache/musium/covers"));
+        assert_eq!(config.data_path.as_path(), Path::new("/home/user/.local/share/musium"));
         assert_eq!(&config.audio_device[..], "UCM404HD 192k");
         assert_eq!(&config.audio_volume_control[..], "UMC404HD 192k Output");
     }

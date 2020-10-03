@@ -179,41 +179,6 @@ pub fn write_queue_json<W: Write>(
     write!(w, "]")
 }
 
-pub fn write_playback_event<W: Write>(
-    index: &dyn MetaIndex,
-    mut w: W,
-    time: chrono::DateTime<chrono::Utc>,
-    event: &str,
-    queue_id: QueueId,
-    track_id: TrackId,
-) -> io::Result<()> {
-    let track = index.get_track(track_id).unwrap();
-    let album = index.get_album(track.album_id).unwrap();
-    let artist = index.get_artist(album.artist_id).unwrap();
-    let use_zulu_suffix = true;
-    let time_str = time.to_rfc3339_opts(chrono::SecondsFormat::Millis, use_zulu_suffix);
-    write!(w, r#"{{"time":"{}""#, time_str)?;
-    write!(w, r#","event":"{}""#, event)?;
-    write!(w, r#","queue_id":"{}""#, queue_id)?;
-    write!(w, r#","track_id":"{}","title":"#, track_id)?;
-    serde_json::to_writer(&mut w, index.get_string(track.title))?;
-    write!(w, r#","album_id":"{}","album":"#, track.album_id)?;
-    serde_json::to_writer(&mut w, index.get_string(album.title))?;
-    write!(w, r#","artist":"#)?;
-    serde_json::to_writer(&mut w, index.get_string(track.artist))?;
-    write!(w, r#","album_artist_id":"{}","album_artist":"#, album.artist_id)?;
-    serde_json::to_writer(&mut w, index.get_string(artist.name))?;
-    write!(w, r#","duration_seconds":{}"#, track.duration_seconds)?;
-    write!(w, r#","track_number":{}"#, track.track_number)?;
-    write!(w, r#","disc_number":{}}}"#, track.disc_number)?;
-    // TODO: Log the MusicBrainz track id as well, as it can be scrobbled,
-    // and it makes it a lot easier to later match the track again when I
-    // parse my listens from ListenBrainz.
-    // As this piece of metadata is not stored in the index, we will have to
-    // read it from the metadata when we decode the track, and then pass it here.
-    Ok(())
-}
-
 pub fn write_volume_json<W: Write>(mut w: W, current_volume: Millibel) -> io::Result<()> {
     write!(w, r#"{{"volume_db":{:.02}}}"#, current_volume.0 as f32 * 0.01)
 }

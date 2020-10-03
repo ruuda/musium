@@ -33,7 +33,7 @@ type FlacReader = claxon::FlacReader<fs::File>;
 /// (queued, playing, history). Having a unique id per queued track allows e.g.
 /// distinguishing the same track queued twice in succession.
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct QueueId(u64);
+pub struct QueueId(pub u64);
 
 impl fmt::Display for QueueId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -748,7 +748,7 @@ impl Player {
         index: Arc<dyn MetaIndex + Send + Sync>,
         card_name: String,
         volume_name: String,
-        play_log_path: Option<PathBuf>,
+        db_path: PathBuf,
     ) -> Player {
         // Build the channel to send playback events to the history thread. That
         // thread is expected to process them immediately and be idle most of
@@ -785,11 +785,12 @@ impl Player {
 
         let builder = std::thread::Builder::new();
         let index_for_history = index.clone();
+
         let history_join_handle = builder
             .name("history".into())
             .spawn(move || {
                 history::main(
-                    play_log_path,
+                    db_path,
                     &*index_for_history,
                     receiver,
                 );
