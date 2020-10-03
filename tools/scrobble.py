@@ -14,6 +14,7 @@ Usage:
 
     scrobble.py authenticate
     scrobble.py scrobble plays.log
+    scrobble.py insert plays.log musium.sqlite3
 
 The following environment variables are expected to be set:
 
@@ -30,6 +31,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sqlite3
 import sys
 import urllib
 
@@ -118,7 +120,7 @@ def read_play_log(fname: str) -> Iterator[Event]:
             yield Event.from_dict(json.loads(line))
 
 
-def events_to_scrobble(events: Iterator[Event]) -> Iterator[Event]:
+def events_to_scrobble(events: Iterator[Event]) -> Iterator[Tuple[Event, Event]]:
     """
     Return the started event of listens to scrobble.
     * Match up started and completed events.
@@ -143,11 +145,11 @@ def events_to_scrobble(events: Iterator[Event]) -> Iterator[Event]:
             and abs(duration.total_seconds() - event.duration_seconds) < 10.0
             # Last.fm requirement: The track must at least be 30 seconds long.
             # The playtime requirement is implied by the above check.
-            and event.duration_seconds > 30
+            # and event.duration_seconds > 30
         ):
             # We yield the started event, not the completion event, because for
             # a scrobble we need the time at which the track started playing.
-            yield prev_event
+            yield (prev_event, event)
 
         prev_event = event
 
@@ -243,6 +245,59 @@ def cmd_scrobble(play_log: str) -> None:
             n_scrobbled += num_accepted
 
 
+def cmd_insert(play_log: str, db_file: str) -> None:
+    events = read_play_log(play_log)
+    scrobble_events = events_to_scrobble(events)
+
+    def id_as_i64(hex_str: str) -> int:
+        bs = bytes.fromhex(hex_str)
+        return int.from_bytes(bytes.fromhex(hex_str), byteorder='big', signed=True)
+
+
+    with sqlite3.connect(db_file) as connection:
+        c = connection.cursor();
+        for begin, end in scrobble_events:
+            c.execute(
+                """
+                insert into listens
+                ( started_at
+                , completed_at
+                , queue_id
+                , track_id
+                , album_id
+                , album_artist_id
+                , track_title
+                , album_title
+                , track_artist
+                , album_artist
+                , duration_seconds
+                , track_number
+                , disc_number
+                , source
+                )
+                values
+                ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'musium');
+                """,
+                (
+                    begin.time.isoformat().replace('000+00:00', 'Z'),
+                    end.time.isoformat().replace('000+00:00', 'Z'),
+                    id_as_i64(begin.queue_id),
+                    id_as_i64(begin.track_id),
+                    id_as_i64(begin.album_id),
+                    id_as_i64(begin.album_artist_id),
+                    begin.title,
+                    begin.album,
+                    begin.artist,
+                    begin.album_artist,
+                    begin.duration_seconds,
+                    begin.track_number,
+                    begin.disc_number,
+                )
+            )
+
+        connection.commit()
+
+
 def cmd_authenticate() -> None:
     req = format_signed_request(
         http_method='GET',
@@ -277,6 +332,9 @@ if __name__ == '__main__':
 
     elif command == 'scrobble' and len(sys.argv) == 3:
         cmd_scrobble(sys.argv[2])
+
+    elif command == 'insert' and len(sys.argv) == 4:
+        cmd_insert(sys.argv[2], sys.argv[3])
 
     else:
         print(__doc__)
