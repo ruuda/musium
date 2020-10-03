@@ -125,6 +125,7 @@ fn insert_started(
     let album = index.get_album(track.album_id).unwrap();
     let artist = index.get_artist(album.artist_id).unwrap();
 
+    db.insert_started.reset()?;
     db.insert_started.bind(1, &time_str[..])?;
     db.insert_started.bind(2, queue_id.0 as i64)?;
     db.insert_started.bind(3, track_id.0 as i64)?;
@@ -161,6 +162,7 @@ fn update_completed(
     let use_zulu_suffix = true;
     let time_str = time.to_rfc3339_opts(chrono::SecondsFormat::Millis, use_zulu_suffix);
 
+    db.update_completed.reset()?;
     db.update_completed.bind(1, &time_str[..])?;
     db.update_completed.bind(2, row_id)?;
     db.update_completed.bind(3, queue_id.0 as i64)?;
