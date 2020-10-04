@@ -7,16 +7,36 @@
 
 module Navigation
   ( Location (..)
-  , Navigation (..)
+  , toUrl
+  , fromUrl
   ) where
 
-import Model (Album)
+import Data.Maybe (Maybe (Just, Nothing))
+import Data.String (Pattern (..), stripPrefix)
+import Prelude
+
+import Model (AlbumId (..))
 
 data Location
   = Library
   | NowPlaying
-  | Album Album
+  | Search
+  | Album AlbumId
 
-type Navigation =
-  { location :: Location
-  }
+derive instance eqLocation :: Eq Location
+
+toUrl :: Location -> String
+toUrl loc = case loc of
+  Library -> "/"
+  NowPlaying -> "/?now"
+  Search -> "/?search"
+  Album (AlbumId id) -> "/?album=" <> id
+
+fromUrl :: String -> Location
+fromUrl url = case stripPrefix (Pattern "/?album=") url of
+  Just albumId -> Album (AlbumId albumId)
+  Nothing      -> case url of
+    "/?now"    -> NowPlaying
+    "/?search" -> Search
+    "/"        -> Library
+    _          -> Library

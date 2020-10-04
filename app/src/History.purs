@@ -16,12 +16,22 @@ import Effect (Effect)
 import Prelude
 
 import Navigation (Location)
+import Navigation as Navigation
 
-foreign import pushStateImpl :: Fn3 Location String String (Effect Unit)
-foreign import onPopStateImpl :: Fn3 (Maybe Location) (Location -> Maybe Location) (Maybe Location -> Effect Unit) (Effect Unit)
+foreign import pushStateImpl :: Fn3 String String String (Effect Unit)
+foreign import onPopStateImpl :: Fn3 (Maybe String) (String -> Maybe String) (Maybe String -> Effect Unit) (Effect Unit)
 
-pushState :: Location -> String -> String -> Effect Unit
-pushState state title url = runFn3 pushStateImpl state title url
+pushState :: Location -> String -> Effect Unit
+pushState location title =
+  let
+    url = Navigation.toUrl location
+  in
+    -- We reuse the url as the state. Previously I tried storing the Location
+    -- directly, but that lead to pattern match failures, presumably PureScript
+    -- ADTs don't round-trip well through the history API.
+    runFn3 pushStateImpl url title url
 
 onPopState :: (Maybe Location -> Effect Unit) -> Effect Unit
-onPopState handler = runFn3 onPopStateImpl Nothing Just handler
+onPopState handler = runFn3 onPopStateImpl Nothing Just $ \loc -> case loc of
+  Just url -> handler $ Just $ Navigation.fromUrl url
+  Nothing  -> handler $ Nothing

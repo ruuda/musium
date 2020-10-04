@@ -20,9 +20,12 @@ exports.onPopStateImpl = function(nothing, just, callback) {
     history.scrollRestoration = 'manual';
 
     window.onpopstate = function(event) {
-      if (Object.keys(event.state).length === 0) {
+      if (event.state === null) {
+        callback(nothing)();
+      } else if (Object.keys(event.state).length === 0) {
         callback(nothing)();
       } else {
+        console.log(event.state);
         callback(just(event.state))();
       }
     };

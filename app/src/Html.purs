@@ -27,6 +27,7 @@ module Html
   , scrollIntoView
   , setHeight
   , setId
+  , setScrollTop
   , setTitle
   , setTransform
   , setTransition
@@ -103,6 +104,9 @@ onInput callback = ReaderT $ \container ->
 scrollIntoView :: Html Unit
 scrollIntoView = ReaderT Dom.scrollIntoView
 
+setScrollTop :: Number -> Html Unit
+setScrollTop off = ReaderT $ \container -> Dom.setScrollTop off container
+
 div :: forall a. Html a -> Html a
 div children = node "div" children
 
@@ -145,4 +149,5 @@ input :: forall a. String -> Html a -> Html a
 input placeholder (ReaderT children) =
   node "input" $ ReaderT $ \self -> do
     Dom.setAttribute "placeholder" placeholder self
+    Dom.setAttribute "autocomplete" "off" self
     children self

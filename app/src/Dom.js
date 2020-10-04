@@ -7,6 +7,12 @@
 
 "use strict";
 
+exports.eqElementImpl = function(x) {
+  return function(y) {
+    return x === y;
+  }
+}
+
 exports.createElement = function(tagName) {
   return function() {
     return document.createElement(tagName);
@@ -66,6 +72,12 @@ exports.getValue = function(element) {
   }
 }
 
+exports.setValueImpl = function(value, element) {
+  return function() {
+    element.value = value;
+  }
+}
+
 exports.getOffsetHeight = function(element) {
   return function() {
     return element.offsetHeight;
@@ -82,6 +94,12 @@ exports.getScrollTop = function(element) {
   }
 }
 
+exports.setScrollTopImpl = function(off, element) {
+  return function() {
+    element.scrollTop = off;
+  }
+}
+
 exports.scrollIntoView = function(element) {
   return function() {
     element.scrollIntoView({
@@ -91,6 +109,12 @@ exports.scrollIntoView = function(element) {
       block: 'start',
       inline: 'nearest',
     });
+  }
+}
+
+exports.focusElement = function(element) {
+  return function() {
+    return element.focus();
   }
 }
 
@@ -137,6 +161,12 @@ exports.setTransitionImpl = function(transition, element) {
   }
 }
 
+exports.setWidthImpl = function(width, element) {
+  return function() {
+    element.style.width = width;
+  }
+}
+
 exports.setHeightImpl = function(height, element) {
   return function() {
     element.style.height = height;
@@ -147,6 +177,7 @@ exports.addEventListenerImpl = function(eventName, callback, element) {
   return function() {
     element.addEventListener(eventName, function(evt) {
       callback();
+      evt.stopPropagation();
       return false;
     });
   }

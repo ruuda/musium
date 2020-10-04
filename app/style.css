@@ -20,18 +20,119 @@ html
   font-size: 16px;
   font-family: 'Work Sans';
   line-height: 1.5em;
+  height: 100vh;
 }
 
-body
-{
+::-webkit-scrollbar {
+  width: 0.5em;
+}
+
+::-webkit-scrollbar-track {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.00)  0%,
+    rgba(0, 0, 0, 0.02) 90%
+  );
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+body {
   color: black;
-  /* Always show the scroll bar. If we don't, then when you switch from the
-   * album list to the album view, for a brief moment the track list is still
-   * loading, so the height of the page is suddenly a lot less, and the scroll
-   * bar disappears, only to re-appear when the track list loads. That causes a
-   * pop where all the content moves left. The track list popping in is not
-   * visually disturbing, but the horizontal displacement is. */
+  display: grid;
+
+  /* NOTE: The 100vh unit has a peculiar behavior on Chrome: it refers to the
+   * minimal viewport height; the size of the viewport when the address bar is
+   * visible. But when the address bar is hidden, we get this extra area below
+   * the viewport. Setting 'position' to 'fixed' changes this behavior so 100vh
+   * always refers to the current viewport height. It took me some further
+   * fiddling, but with 100vh on the outer <html> element, and 100% height +
+   * position fixed here, it finally has the right height on mobile. See also
+   * https://developers.google.com/web/updates/2016/12/url-bar-resizing. */
+  position: fixed;
+  width: 100vw;
+  height: 100%;
+
+  grid-template-columns: auto;
+  grid-template-rows: auto 5em;
+  grid-template-areas:
+    "content"
+    "statusbar"
+  ;
+}
+
+.pane {
+  grid-area: content;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  opacity: 1.0;
+  transform-origin: center;
+  /* background-color: #fff; */
+  transition: transform 0.1s ease-in-out, opacity 0.1s ease-in-out;
+  will-change: transform;
+}
+
+.pane.in {
+  transform: scale(0.91);
+  opacity: 0.0;
+}
+
+.pane.out {
+  transform: scale(1.1);
+  opacity: 0.0;
+}
+
+.pane.inactive {
+  display: none !important;
+}
+
+#browser {
+  display: grid;
+  overflow: hidden;
+  height: 100%;
+
+  /* At the narrowest viewports, we show one pane, but the browser itself is
+   * wider than that. We use translation to determine which pane is visible. */
+  width: 200vw;
+  grid-template-columns: 100vw 100vw;
+  grid-template-rows: auto;
+  grid-template-areas:
+    "album-list album-view"
+  ;
+
+  transition: transform 0.15s ease-in-out;
+}
+
+#browser.nav-album-list-view {
+  transform: translateX(0);
+}
+
+#browser.nav-album-view {
+  /* Slide 1 viewport to the left, so the album view is at x=0. */
+  transform: translateX(-100vw);
+}
+
+#album-list-view {
+  grid-area: album-list;
   overflow-y: scroll;
+  background-color: #fefefe;
+  border-left: solid 1pt #eee;
+}
+
+#album-view {
+  grid-area: album-view;
+  overflow-y: scroll;
+
+  display: grid;
+  grid-template-columns: auto;
+  grid-template-rows: auto auto;
+  grid-template-areas:
+    "album-info"
+    "track-list"
+  ;
 }
 
 a
@@ -39,6 +140,8 @@ a
   color: inherit;
   text-decoration: none;
 }
+
+/* Initial loading animation. */
 
 #loader
 {
@@ -81,29 +184,23 @@ a
   100% { transform: rotate(360deg); }
 }
 
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: #888;
+  background-color: transparent;
+  border: none;
+}
+
 ul
 {
   list-style-type: none;
-}
-
-.inactive {
-  display: none !important;
-}
-
-#album-list-view {
-  /* Reserve room for the status bar. */
-  padding-bottom: calc(5em + 0.8pt);
 }
 
 #album-list
 {
   padding-bottom: 1em;
   position: relative;
-
-  /* Still fill the viewport, even if there are not enough albums to fill the
-   * viewport. We have the 5em + 0.8pt outer padding for the status bar, and
-   * then 1em padding here. */
-  min-height: calc(100vh - 6em - 0.8pt);
 }
 
 #album-list li
@@ -166,6 +263,8 @@ img.thumb
 
 .track-list
 {
+  grid-area: track-list;
+
   margin-top: 1em;
   padding-top: 1.5em;
   padding-bottom: 1.5rem;
@@ -222,35 +321,31 @@ img.thumb
   color: #999;
 }
 
-#search
-{
-  position: sticky;
-  top: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-#search-query
-{
-  padding: 1em;
-  background-color: rgba(255, 255, 255, 0.92);
-  border-bottom: 0.8pt solid #eee;
-  backdrop-filter: blur(2pt) brightness(110%);
+#search-pane {
+  display: grid;
+  grid-template-columns: auto;
+  grid-template-rows: 4em auto;
+  grid-template-areas:
+    "search-box"
+    "result-box"
+  ;
 }
 
 #search-box
 {
-  font: inherit;
-  border: none;
-  width: 100%;
   background: transparent;
+  border: none;
+  border-bottom: 0.8pt solid #eee;
+  font: inherit;
+  grid-area: search-box;
+  padding: 1.5em;
+  width: 100%;
 }
 
 #search-results
 {
-  display: none;
+  grid-area: result-box;
   padding-bottom: 1em;
-  top: 2em;
   overflow-y: auto;
 }
 
@@ -260,7 +355,7 @@ img.thumb
   letter-spacing: 0.2em;
   font-weight: 600;
   font-size: 1em;
-  margin: 0.5em;
+  margin-top: 1em;
   margin-left: 1em;
   color: #ccc;
 }
@@ -269,7 +364,7 @@ img.thumb
 {
   padding-left: 1em;
   padding-right: 1em;
-  padding-bottom: 0.5em;
+  padding-top: 0.5em;
 }
 
 #search-artists .name
@@ -292,44 +387,48 @@ img.thumb
   margin-right: 0.2em;
 }
 
-/* Hide the album list while searching, but do not set it to "display: none".
- * This avoids style recalculations, and preserves the scroll position. */
-.searching #album-list { visibility: hidden }
-.searching #search-results { display: block }
-.searching #search { height: 100vh }
-
-#album-view {
-  min-height: calc(100% - 5em - 0.8pt);
-
-  /* Reserve room for the status bar. */
-  padding-bottom: calc(5em + 0.8pt);
-}
-
-#album-view .album-info {
+.album-info {
+  grid-area: album-info;
   padding: 1em;
+  position: relative;
 }
 
-#album-view .cover {
+.album-info button.back {
+  color: #aaa;
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 0;
+  width: 3em;
+  height: 3em;
+}
+
+.album-info .cover {
   width: calc(100% - 7.5em);
   margin: 3.75em;
   position: relative;
+  max-width: 20rem;
+  margin-left: auto;
+  margin-right: auto;
+  /* TODO: This no longer applies when we have a max-width.
+   * But do we really *need* covers to be square? */
   /* Hack: the cover should be square, but there is no direct way in css to say
    * "the height should be equal to the width". We can abuse the fact that a
    * padding percentage is part of the width instead. */
-  padding-bottom: calc(100% - 7.5em);
-  height: 0;
+  /* padding-bottom: calc(100% - 7.5em); */
+  /* height: 0; */
 }
 
-#album-view .cover img {
+.album-info .cover img {
   position: absolute;
   width: 100%;
-  height: 100%;
+  height: auto;
   top: 0;
   left: 0;
   border-radius: 0.15rem;
 }
 
-#album-view .cover img.lowres {
+.album-info .cover img.lowres {
   /* Like in the album list view, add a background color that acts as a
    * placeholder, to show a square when the page is still loading. This does not
    * block the backdrop, because that one uses the same source, so both should
@@ -337,7 +436,7 @@ img.thumb
   background-color: #f8f8f8;
 }
 
-#album-view .cover img.backdrop {
+.album-info .cover img.backdrop {
   /* This one is first, so absolute vs relative does not matter so much, except
    * that relative ensures the parent is at least this tall. */
   position: relative;
@@ -349,22 +448,22 @@ img.thumb
   height: auto;
 }
 
-#album-view hgroup, #album-view .album-actions {
+.album-info hgroup, .album-info .album-actions {
   margin-left: 3rem;
   margin-right: 3rem;
 }
 
-#album-view .album-info h1 {
+.album-info h1 {
   font-weight: 600;
-  font-size: 1.7em;
+  font-size: 1.5em;
   line-height: 1.1em;
-  margin-top: -0.75rem;
+  margin-top:  5rem;
   margin-left: 0.75rem;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-#album-view .album-info h2 {
+.album-info h2 {
   font-weight: 400;
   font-size: 1em;
   margin-top: 0.5rem;
@@ -373,7 +472,7 @@ img.thumb
   word-spacing: 0.2em;
 }
 
-#album-view .album-info h2 .artist {
+.album-info .artist {
   color: black;
   word-spacing: 0;
 }
@@ -382,12 +481,8 @@ img.thumb
   padding-top: 1rem;
 }
 
-#album-view .album-info button {
-  font-family: inherit;
-  font-size: inherit;
+.album-info button {
   color: #888;
-  background-color: transparent;
-  border: none;
   display: block;
   position: relative;
   padding-left: 0.75rem;
@@ -411,19 +506,10 @@ button.play-next::before {
 }
 
 #statusbar {
-  height: 5rem;
+  grid-area: statusbar;
   border-top: 0.8pt solid rgba(0, 0, 0, 0.065);
-  position: fixed;
-  bottom: 0;
-  width: 100vw;
   background-color: rgba(252, 251, 251, 0.92);
-  backdrop-filter: blur(3pt) brightness(110%);
-  transition: height 0.2s ease-in-out, background-color 0.2s;
-}
-
-#statusbar.up {
-  height: 100vh;
-  background-color: #fff;
+  position: relative;
 }
 
 #statusbar .current-track {
@@ -432,6 +518,8 @@ button.play-next::before {
   width: 100%;
   opacity: 1.0;
   transition: opacity 0.15s ease-in-out;
+  /* Allow the buttons to go in front, when needed. */
+  z-index: 1;
 }
 
 #statusbar .current-track.fade-in {
@@ -482,56 +570,190 @@ button.play-next::before {
   color: #777;
 }
 
-@media (min-width: 30rem) and (max-width: 50rem) {
-  #album-view {
-    display: grid;
-    grid-template-columns: 1fr 30rem 1fr;
-  }
-
-  #album-view .album-info {
-    grid-column: 2;
-  }
-
-  #album-view .track-list
-  {
-    grid-column: 1 / 4;
-    display: grid;
-    grid-template-columns: inherit;
-  }
-
-  #album-view .track-list .track
-  {
-    grid-column: 2 / 4;
-  }
+#statusbar button.goto-search {
+  position: absolute;
+  width: 3em;
+  height: 3em;
+  right: 1em;
+  top: 1em;
+  /* Go in front of the current track div, so we capture the click. */
+  z-index: 2;
 }
 
+#now-playing-pane {
+  display: grid;
+  grid-template-columns: auto;
+  grid-template-rows: auto 4em;
+  grid-template-areas:
+    "now-playing"
+    "volume-controls"
+  ;
+  overflow-y: auto;
+}
+
+.now-playing {
+  grid-area: now-playing;
+  margin-bottom: 2em;
+}
+
+.volume-controls {
+  grid-area: volume-controls;
+  display: grid;
+  grid-template-columns: 4em auto 4em;
+  grid-template-rows: auto;
+  grid-template-areas:
+    "volume-down volume-bar volume-up"
+  ;
+}
+
+.volume-controls button {
+  width: 4em;
+}
+
+button.volume-down { grid-area: volume-down; }
+button.volume-up { grid-area: volume-up; }
+
+.volume-controls .indicator {
+  grid-area: volume-bar;
+  margin-top: calc(2em - 1pt);
+  height: 2pt;
+  background-color: #f7f7f7;
+}
+
+.volume-controls .indicator > div {
+  position: relative;
+  width: 50%;
+  height: 2pt;
+  background: linear-gradient(
+    90deg,
+    #ddd 0%,
+    #ccc 100%
+  );
+  transition: width 0.1s ease-in-out;
+}
+
+.volume-controls .volume-label {
+  position: absolute;
+  top: -2rem;
+  right: -2.5rem;
+  width: 5rem;
+  text-align: center;
+  color: #bbb;
+}
+
+/* At 40rem width, we can show the album list side-by-side with a different
+ * view. We move the album list to the right, the page looks a bit less chaotic
+ * with the two lists to the right. */
 @media (min-width: 40rem) {
-  #album-list-view {
-    display: grid;
-    grid-template-columns: 1fr 4fr;
-    background-color: #fdfdfd;
+  #browser {
+    width: 100vw;
+    grid-template-columns: 70vw 30vw;
+    grid-template-areas:
+      "album-view album-list"
+    ;
   }
 
+  /* Dim the album list, unless we are hovering it, to make it less distracting. */
   #album-list {
-    grid-column: 2;
-    background-color: white;
-    border-left: 0.8pt solid #eee;
+    opacity: 0.4;
+    filter: saturate(0.3);
+    transition: opacity 0.1s ease-in-out, filter 0.1s ease-in-out;
+  }
+
+  #album-list:hover {
+    opacity: 1;
+    filter: none;
+  }
+
+  /* When both columns are visible at once, no translation is needed. */
+  #browser.nav-album-view {
+    transform: translateX(0);
+  }
+
+  /* The back button no longer makes sense when the album list is already
+   * visible. */
+  .album-info button.back {
+    display: none;
+  }
+
+  /* For the now playing view, we can put the cover art and title side by side. */
+  #now-playing-pane {
+    grid-template-rows: auto auto auto 4em;
+    grid-template-areas:
+      "pad-top"
+      "now-playing"
+      "pad-bottom"
+      "volume-controls"
+    ;
+  }
+
+  .now-playing {
+    margin-bottom: 0;
+  }
+
+  .now-playing .album-info {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto;
+    grid-template-areas:
+      "cover info"
+    ;
+  }
+
+  .now-playing .album-info .cover {
+    grid-area: cover;
+    margin-right: 1em;
+  }
+
+  .now-playing .album-info hgroup {
+    grid-area: info;
+    margin-left: 1em;
+    padding-top: 12rem;
+  }
+
+  .now-playing .album-info h1 {
+    margin-top: 0;
+  }
+
+  /* Limit the width of the volume bar, there is no point in stretching it out
+   * too much. */
+  .volume-controls {
+    grid-template-columns: auto 4em 18em 4em auto;
+    grid-template-areas:
+      "pad-left volume-down volume-bar volume-up pad-right"
+    ;
   }
 }
 
-@media (min-width: 50rem) {
+/* At 60rem width, we put the track list to the right of the album info, instead
+ * of below the album info. */
+@media (min-width: 60rem) {
+  #browser {
+    /* Keep the album list at a fixed width, it does not need to be very wide,
+     * we rather add whitespace elsewhere. */
+    grid-template-columns: auto 20rem;
+  }
+
   #album-view {
-    display: grid;
-    grid-template-columns: 1fr 24rem 26rem 3fr;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto;
+    grid-template-areas:
+      "album-info track-list"
+    ;
   }
 
-  #album-view .album-info {
-    grid-column: 2;
+  #album-view .cover {
+    max-width: none;
   }
 
-  #album-view .track-list
-  {
-    grid-column: 3 / 5;
+  .album-info h1 {
+    /* When the cover could be centered above the title, we need plenty of
+     * whitespace to not make it look weird, but when it is aligned to the
+     * borders, we can do with less. */
+    margin-top: 0;
+  }
+
+  .track-list {
     margin-top: 0;
     padding-top: 4rem;
     padding-left: 1rem;
@@ -539,42 +761,23 @@ button.play-next::before {
     border-top: none;
     border-left: 0.8pt solid #eee;
   }
-
-  #album-list-view {
-    grid-template-columns: 1fr 2fr;
-  }
 }
 
-@media (min-width: 54rem) {
-  #album-view {
-    grid-template-columns: 1fr 27.5rem 28.5rem 2fr;
-  }
-}
-
-@media (min-width: 62rem) {
-  #album-view {
-    grid-template-columns: 1fr 30rem 30rem 1.5fr;
-  }
-}
-
-@media (min-width: 66rem) {
-  #album-view {
-    grid-template-columns: 1fr 32rem 32rem 1fr;
-  }
-}
-
-@media (min-width: 70rem) {
-  #album-view {
-    grid-template-columns: 1fr 34rem 34rem 1fr;
+/* At this width, we can devote a bit more space to th album list, and we set a
+ * limit on the width of the album info column. */
+@media (min-width: 90rem) {
+  #browser {
+    grid-template-columns: auto 25rem;
   }
 
-  #album-list-view {
-    grid-template-columns: 2fr 3fr;
-  }
-}
-
-@media (min-width: 74rem) {
   #album-view {
-    grid-template-columns: 1fr 36rem 36rem 1fr;
+    grid-template-columns: 4fr 35rem 35rem 3fr;
+    grid-template-areas:
+      "pad-left album-info track-list track-list"
+    ;
+  }
+
+  .album-info h1 {
+    font-size: 1.7rem;
   }
 }
