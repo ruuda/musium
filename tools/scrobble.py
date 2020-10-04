@@ -42,9 +42,9 @@ from urllib.parse import urlencode
 from typing import Dict, Union, Iterator
 
 
-API_KEY = os.getenv('LAST_FM_API_KEY')
-SECRET = os.getenv('LAST_FM_SECRET')
-SESSION_KEY = os.getenv('LAST_FM_SESSION_KEY')
+API_KEY = os.getenv('LAST_FM_API_KEY', '')
+SECRET = os.getenv('LAST_FM_SECRET', '')
+SESSION_KEY = os.getenv('LAST_FM_SESSION_KEY', '')
 
 
 @dataclass(frozen=True)
@@ -66,11 +66,8 @@ class Listen:
 
     def format_scrobble(self, index: int) -> Dict[str, str]:
         """
-        Format a completed event as parameters for a form/url-encoded request
-        to scrobble the track.
+        Format as parameters for a form/url-encoded request to scrobble the track.
         """
-        assert self.event == EventType.started
-
         def indexed(key: str) -> str:
             return f'{key}[{index}]'
 
@@ -140,6 +137,26 @@ def get_listens_to_scrobble(
         values[1] = datetime.fromisoformat(row[1].replace('Z', '+00:00'))
         values[2] = datetime.fromisoformat(row[2].replace('Z', '+00:00'))
         yield Listen(*values)
+
+
+def set_scrobbled(
+    connection: sqlite3.Connection,
+    now: datetime,
+    row_ids: List[int],
+) -> Iterator[Listen]:
+    """
+    Update the rows to set scrobbled_at.
+    """
+    assert now.tzinfo is not None
+    now_str = now.isoformat()
+    params = [(now_str, row_id) for row_id in row_ids]
+    connection.executemany(
+        """
+        update listens set scrobbled_at = ? where id = ?;
+        """,
+        params,
+    )
+    connection.commit()
 
 
 def iter_chunks(events: Iterator[Event], n: int) -> Iterator[List[Event]]:
@@ -213,28 +230,54 @@ def format_signed_request(
 def cmd_scrobble(db_file: str) -> None:
     now = datetime.now(tz=timezone.utc)
 
+    if API_KEY == '':
+        print('LAST_FM_API_KEY is not set, authentication will fail.')
+    if SECRET == '':
+        print('LAST_FM_SECRET is not set, authentication will fail.')
+    if SESSION_KEY == '':
+        print('LAST_FM_SESSION_KEY is not set, authentication will fail.')
+
     with sqlite3.connect(db_file) as connection:
         listens = get_listens_to_scrobble(connection, now)
-        for listen in listens:
-            print(listen)
 
-    sys.exit(0)
+        n_scrobbled = 0
 
-    n_scrobbled = 0
+        # Last.fm allows submitting batches of at most 50 scrobbles at once.
+        for batch in iter_chunks(listens, n=50):
+            req = format_batch_request(batch)
+            response = json.load(urlopen(req))
 
-    # Last.fm allows submitting batches of at most 50 scrobbles at once.
-    for batch in iter_chunks(scrobble_events, n=50):
-        req = format_batch_request(batch)
-        response = json.load(urlopen(req))
+            num_accepted = response['scrobbles']['@attr']['accepted']
+            ids_accepted = []
 
-        num_accepted = response['scrobbles']['@attr']['accepted']
+            # The Last.fm API uses heuristics to convert their xml-oriented API
+            # into a json API. When a tag occurs more than once it turns into a
+            # list, but when there is a single one, the list is omitted. This
+            # means that if the batch happened to contain a single listen, then
+            # we now get an object instead of a list. Make that uniform again.
+            scrobbles = response['scrobbles']['scrobble']
+            if not isinstance(scrobbles, list):
+                scrobbles = [scrobbles]
 
-        if num_accepted != len(batch):
-            print(f'Error after {n_scrobbled} submissions:')
-            print(json.dumps(response, indent=2))
-            break
+            # If Last.fm rejected a scrobble, the error code of "ignoredMessage"
+            # is nonzero. In theory the error code tells us why the scrobble was
+            # rejected, but in practice the API is buggy, so we don't bother to
+            # figure out what was wrong. See also
+            # https://support.last.fm/t/all-scrobbles-ignored-with-code-1-artist-ignored-why/6754
+            for listen, scrobble in zip(batch, scrobbles):
+                was_accepted = scrobble['ignoredMessage']['code'] == '0'
+                if was_accepted:
+                    ids_accepted.append(listen.id)
+                else:
+                    print(
+                        f'ERROR: Last.fm rejected {listen}, response:',
+                        json.dumps(scrobble),
+                    )
 
-        else:
+            # Store that these listens have been scrobbled now.
+            set_scrobbled(connection, now, ids_accepted)
+
+            assert len(ids_accepted) == num_accepted
             print(f'Scrobbled {num_accepted} listens.')
             n_scrobbled += num_accepted
 
