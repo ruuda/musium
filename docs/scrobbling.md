@@ -1,8 +1,8 @@
 # Scrobbling to Last.fm
 
 Musium can be set up to scrobble plays to Last.fm. Musium logs plays to a SQLite
-database in the data directory. An enclosed script can batch-submit plays to
-Last.fm. Running the script regularly ensures that all plays get scrobbled.
+database in the data directory. An enclosed script can batch-submit those plays
+to Last.fm. Running the script regularly ensures that all plays get scrobbled.
 Musium does not currently offer immediate scrobbling or *now playing* updates.
 
 ## Authenticating
@@ -15,7 +15,7 @@ as `LAST_FM_API_KEY` and `LAST_FM_SECRET`.
 Next, you need to authorize the script to submit scrobbles to your account. In
 the repository, run
 
-    $ tools/scrobble.py authenticate
+    tools/scrobble.py authenticate
 
 This will print a `LAST_FM_SESSION_KEY`, which you also need to put in the
 environment to be able to submit scrobbles.
@@ -25,7 +25,7 @@ environment to be able to submit scrobbles.
 With the environment variables set up, run the `scrobble` command in the
 repository:
 
-    $ tools/scrobble.py scrobble /data_path/musium.sqlite3
+    tools/scrobble.py scrobble /data_path/musium.sqlite3
 
 The data path is the [`data_path` as configured](configuration.md#data_path).
 Musium stores `musium.sqlite3` in that directory.
@@ -40,15 +40,16 @@ once.
 Systemd timers can be useful for scrobbling periodically. First create a
 one-shot service that runs the scrobble script:
 
-```
+```systemd
 [Unit]
 Description=Musium Scrobbler
 
 [Service]
 Type=oneshot
-ExecStart=/home/media/checkouts/musium/tools/scrobble.py scrobble /var/lib/musium/musium.sqlite3
+ExecStart=/checkouts/musium/tools/scrobble.py scrobble /var/lib/musium/musium.sqlite3
 
 # The values below are randomly generated examples, they are not real secrets.
+# Replace them with your persional secrets.
 Environment=LAST_FM_API_KEY=5d41402abc4b2a76b9719d911017c592
 Environment=LAST_FM_SECRET=f330c2f5a4e075a21593f477b9ee967a
 Environment=LAST_FM_SESSION_KEY=gE7P1f444dLu6NbZeMs4wb9V4roITlAF
@@ -57,4 +58,27 @@ Environment=LAST_FM_SESSION_KEY=gE7P1f444dLu6NbZeMs4wb9V4roITlAF
 WantedBy=default.target
 ```
 
-Write it to `/etc/systemd/system/musium-scrobble.service`.
+Write it to `/etc/systemd/system/musium-scrobble.service`. Then add a timer to
+start the script periodically:
+
+```systemd
+[Unit]
+Description=Musium Scrobbler
+
+[Timer]
+# Run daily, between 08:00 and 08:15 local time.
+OnCalendar=*-*-* 08:00:00
+RandomizedDelaySec=900
+
+# Run after boot if the system was powered off at the previous scheduled time.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Write it to `/etc/systemd/system/musium-scrobble.timer`, then start the timer:
+
+    systemctl daemon-reload
+    systemctl enable musium-scrobble.timer
+    systemctl start musium-scrobble.timer
