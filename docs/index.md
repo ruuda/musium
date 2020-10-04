@@ -17,8 +17,6 @@ network through the webinterface.
 ## Limitations
 
  * Musium is not a tagger, it expects your files to be tagged correctly already.
- * Musium is not a database, it does not store mutable data such as playcounts.
-   It can log plays for processing by other tools, however.
  * Supports only flac, with no intention to support other audio formats.
  * Requires Linux, with no intention to become cross-platform.
  * Uses raw Alsa, with no intention to support PulseAudio.
