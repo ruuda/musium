@@ -10,6 +10,7 @@ nav:
     - Building: building.md
     - Configuration: configuration.md
     - Running: running.md
+    - Scrobbling to Last.fm: scrobbling.md
     - Tagging: tagging.md
     - Loudness normalization: loudness.md
   - API Reference: api.md
