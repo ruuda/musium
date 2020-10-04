@@ -9,7 +9,7 @@
   -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Building — Musium</title>
+  <title>Scrobbling to Last.fm — Musium</title>
   <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
@@ -381,35 +381,84 @@
     <div id="main">
       <nav id="breadcrumbs">
         <a href="..">Musium</a>
-         › <a href="./">User Guide</a> 
-         › <a href="./">Building</a> 
+         › <a href="../building/">User Guide</a> 
+         › <a href="./">Scrobbling to Last.fm</a> 
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="building">Building</h1>
-<p>Musium is written in <a href="https://rust-lang.org">Rust</a> and <a href="http://www.purescript.org/">Purescript</a>, so you need to
-have the build tools for these available. An easy way to get them is through
-<a href="https://nixos.org/">the Nix package manager</a>. The following command enters a shell in which
-all of the required build tools are available:</p>
-<pre><code>nix run --command $SHELL
+        <h1 id="scrobbling-to-lastfm">Scrobbling to Last.fm</h1>
+<p>Musium can be set up to scrobble plays to Last.fm. Musium logs plays to a SQLite
+database in the data directory. An enclosed script can batch-submit those plays
+to Last.fm. Running the script regularly ensures that all plays get scrobbled.
+Musium does not currently offer immediate scrobbling or <em>now playing</em> updates.</p>
+<h2 id="authenticating">Authenticating</h2>
+<p>To scrobble to Last.fm, you need an <abbr>API</abbr> key and secret. Create those
+at <a href="https://www.last.fm/api/account/create">last.fm/api/account/create</a>.
+Ensure that the <abbr>API</abbr> key and secret are available in the environment
+as <code>LAST_FM_API_KEY</code> and <code>LAST_FM_SECRET</code>.</p>
+<p>Next, you need to authorize the script to submit scrobbles to your account. In
+the repository, run</p>
+<pre><code>tools/scrobble.py authenticate
 </code></pre>
-<p>This environment is also tested on <abbr>CI</abbr>. Nix is a convenience, not
-a requirement. You are free to source the build tools elsewhere, for example
-from your system package repositories.</p>
-<p>The webinterface is written in <a href="http://www.purescript.org/">Purescript</a>. There is a basic
-makefile that calls <code>purs</code> and <code>psc-package</code>:</p>
-<pre><code>make -C app
-stat app/output/app.js
+<p>This will print a <code>LAST_FM_SESSION_KEY</code>, which you also need to put in the
+environment to be able to submit scrobbles.</p>
+<h2 id="running-manually">Running manually</h2>
+<p>With the environment variables set up, run the <code>scrobble</code> command in the
+repository:</p>
+<pre><code>tools/scrobble.py scrobble /data_path/musium.sqlite3
 </code></pre>
-<p>The server will serve <code>app.js</code> and other static files alongside the API. The
-server itself is written in <a href="https://rust-lang.org">Rust</a> and builds with Cargo:</p>
-<pre><code>cargo build --release
+<p>The data path is the <a href="../configuration/#data_path"><code>data_path</code> as configured</a>.
+Musium stores <code>musium.sqlite3</code> in that directory.</p>
+<p>The script only scrobbles listens that originated from Musium itself, it does
+not scrobble imported listening history. Listens that were scrobbled
+successfully get marked as such in the database, so they are only scrobbled
+once.</p>
+<h2 id="with-systemd">With systemd</h2>
+<p>Systemd timers can be useful for scrobbling periodically. First create a
+one-shot service that runs the scrobble script:</p>
+<pre><code class="systemd">[Unit]
+Description=Musium Scrobbler
+
+[Service]
+Type=oneshot
+ExecStart=/checkouts/musium/tools/scrobble.py scrobble /var/lib/musium/musium.sqlite3
+
+# The values below are randomly generated examples, they are not real secrets.
+# Replace them with your persional secrets.
+Environment=LAST_FM_API_KEY=5d41402abc4b2a76b9719d911017c592
+Environment=LAST_FM_SECRET=f330c2f5a4e075a21593f477b9ee967a
+Environment=LAST_FM_SESSION_KEY=gE7P1f444dLu6NbZeMs4wb9V4roITlAF
+
+[Install]
+WantedBy=default.target
 </code></pre>
-<p>The binary can then be found in <code>target/release/musium</code>.</p>
+
+<p>Write it to <code>/etc/systemd/system/musium-scrobble.service</code>. Then add a timer to
+start the script periodically:</p>
+<pre><code class="systemd">[Unit]
+Description=Musium Scrobbler
+
+[Timer]
+# Run daily, between 08:00 and 08:15 local time.
+OnCalendar=*-*-* 08:00:00
+RandomizedDelaySec=900
+
+# Run after boot if the system was powered off at the previous scheduled time.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+</code></pre>
+
+<p>Write it to <code>/etc/systemd/system/musium-scrobble.timer</code>, then start the timer:</p>
+<pre><code>systemctl daemon-reload
+systemctl enable musium-scrobble.timer
+systemctl start musium-scrobble.timer
+</code></pre>
       </article>
       <nav id="nav-prev-next">
-        <a id="nav-prev" href=".." title="Overview">Previous</a>
-        <a id="nav-next" href="../configuration/" title="Configuration">Next</a>
+        <a id="nav-prev" href="../running/" title="Running">Previous</a>
+        <a id="nav-next" href="../tagging/" title="Tagging">Next</a>
         </nav>
       </div>
     <aside>
@@ -417,10 +466,10 @@ server itself is written in <a href="https://rust-lang.org">Rust</a> and builds 
         <ul>
         <li class="toc-section"><a href="..">Overview</a></li>
           <li class="toc-section
-            "><a href="./">User Guide</a></li>
+            "><a href="../building/">User Guide</a></li>
           
             <li class="toc-chapter
-               current"><a href="./">Building</a></li>
+              "><a href="../building/">Building</a></li>
             
             <li class="toc-chapter
               "><a href="../configuration/">Configuration</a></li>
@@ -429,8 +478,13 @@ server itself is written in <a href="https://rust-lang.org">Rust</a> and builds 
               "><a href="../running/">Running</a></li>
             
             <li class="toc-chapter
-              "><a href="../scrobbling/">Scrobbling to Last.fm</a></li>
-            
+               current"><a href="./">Scrobbling to Last.fm</a></li>
+            <li><ul>
+                <li class="toc-heading"><a href="#authenticating">Authenticating</a></li>
+                <li class="toc-heading"><a href="#running-manually">Running manually</a></li>
+                <li class="toc-heading"><a href="#with-systemd">With systemd</a></li>
+                </ul></li>
+               
             <li class="toc-chapter
               "><a href="../tagging/">Tagging</a></li>
             
