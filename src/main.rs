@@ -323,8 +323,6 @@ impl MetaServer {
     }
 
     fn handle_request(&self, request: Request) {
-        println!("Request: {:?}", request);
-
         let mut parts = request
             .url()
             .splitn(3, '/')
