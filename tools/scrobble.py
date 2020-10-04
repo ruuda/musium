@@ -8,13 +8,12 @@
 # A copy of the License has been included in the root of the repository.
 
 """
-scrobble.py -- Scrobble the play log to Last.fm.
+scrobble.py -- Scrobble listens to Last.fm.
 
 Usage:
 
     scrobble.py authenticate
-    scrobble.py scrobble plays.log
-    scrobble.py insert plays.log musium.sqlite3
+    scrobble.py scrobble musium.sqlite3
 
 The following environment variables are expected to be set:
 
@@ -36,7 +35,7 @@ import sys
 import urllib
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from urllib.request import Request, urlopen
 from urllib.parse import urlencode
@@ -48,43 +47,22 @@ SECRET = os.getenv('LAST_FM_SECRET')
 SESSION_KEY = os.getenv('LAST_FM_SESSION_KEY')
 
 
-class EventType(Enum):
-    started = 'started'
-    completed = 'completed'
-
-
 @dataclass(frozen=True)
-class Event:
-    time: datetime
-    event: EventType
-    queue_id: str
-    track_id: str
-    album_id: str
-    album_artist_id: str
-    title: str
-    album: str
-    artist: str
+class Listen:
+    id: int
+    started_at: datetime
+    completed_at: datetime
+    track_title: str
+    album_title: str
+    track_artist: str
     album_artist: str
     duration_seconds: int
     track_number: int
     disc_number: int
-    musicbrainz_trackid: Optional[str]
 
     def __post_init__(self) -> None:
-        assert self.time.tzinfo is not None
-
-    @staticmethod
-    def from_dict(data: Dict[str, Union[str, int]]) -> Event:
-        event: str = data['event']
-        time: str = data['time']
-        args: Dict[str, Union[str, int, datetime, EventType]] = {
-            # Ensure the argument is present, even when the value is not.
-            'musicbrainz_trackid': None,
-            **data,
-            'time': datetime.fromisoformat(time.replace('Z', '+00:00')),
-            'event': EventType(event),
-        }
-        return Event(**args)
+        assert self.started_at.tzinfo is not None
+        assert self.completed_at.tzinfo is not None
 
     def format_scrobble(self, index: int) -> Dict[str, str]:
         """
@@ -97,10 +75,10 @@ class Event:
             return f'{key}[{index}]'
 
         result = {
-            indexed('artist'): self.artist,
-            indexed('track'): self.title,
-            indexed('timestamp'): str(int(self.time.timestamp())),
-            indexed('album'): self.album,
+            indexed('artist'): self.track_artist,
+            indexed('track'): self.track_title,
+            indexed('timestamp'): str(int(self.started_at.timestamp())),
+            indexed('album'): self.album_title,
             indexed('trackNumber'): str(self.track_number),
             indexed('duration'): str(self.duration_seconds),
             # Last.fm says "The album artist - if this differs from the track artist."
@@ -108,50 +86,60 @@ class Event:
             indexed('albumArtist'): self.album_artist,
         }
 
-        if self.musicbrainz_trackid is not None:
-            result[indexed('mbid')] = self.musicbrainz_trackid
-
         return result
 
 
-def read_play_log(fname: str) -> Iterator[Event]:
-    with open(fname, 'r', encoding='utf-8') as f:
-        for line in f:
-            yield Event.from_dict(json.loads(line))
-
-
-def events_to_scrobble(events: Iterator[Event]) -> Iterator[Tuple[Event, Event]]:
+def get_listens_to_scrobble(
+    connection: sqlite3.Connection,
+    now: datetime,
+) -> Iterator[Listen]:
     """
-    Return the started event of listens to scrobble.
-    * Match up started and completed events.
-    * Apply Last.fm requirements for when to scrobble.
+    Iterate unscrobbled listens that are eligible for scrobbling.
     """
-    try:
-        prev_event = next(events)
-    except StopIteration:
-        return
+    assert now.tzinfo == timezone.utc
 
-    for event in events:
-        duration = event.time - prev_event.time
-        if (
-            # Check that we have the end of a started-completed pair.
-            event.event == EventType.completed
-            and prev_event.event == EventType.started
-            # Confirm that the pair matches.
-            and event.queue_id == prev_event.queue_id
-            and event.track_id == prev_event.track_id
-            # Sanity check: confirm that the time between start and completed
-            # agrees with the alleged duration of the track.
-            and abs(duration.total_seconds() - event.duration_seconds) < 10.0
-            # Last.fm requirement: The track must at least be 30 seconds long.
-            # The playtime requirement is implied by the above check.
-            # and event.duration_seconds > 30
-        ):
-            # We yield the started event, not the completion event, because for
-            # a scrobble we need the time at which the track started playing.
-            yield (prev_event, event)
+    # Last.fm allows submitting scrobbles up to 14 days after their timestamp.
+    # Any later, there is no point in submitting the scrobble any more.
+    since = (now - timedelta(days=14)).timestamp()
 
-        prev_event = event
+    results = connection.cursor().execute(
+        """
+        select
+          id,
+          started_at,
+          completed_at,
+          track_title,
+          album_title,
+          track_artist,
+          album_artist,
+          duration_seconds,
+          track_number,
+          disc_number
+        from
+          listens
+        where
+          -- Select all listens originating from us that still need to be scrobbled.
+          scrobbled_at is null
+          and source = 'musium'
+
+          -- But only those that Last.fm would accept. We have an index on the
+          -- convert-to-seconds-since-epoch expression for uniqueness already,
+          -- so this comparison can leverage that index.
+          and cast(strftime('%s', started_at) as integer) > ?
+
+          -- Last.fm guidelines say to only scrobble after playing for at least
+          -- 30 seconds.
+          and cast(strftime('%s', completed_at) as integer) -
+              cast(strftime('%s', started_at) as integer) > 30;
+        """,
+        (since,)
+    )
+
+    for row in results:
+        values = list(row)
+        values[1] = datetime.fromisoformat(row[1].replace('Z', '+00:00'))
+        values[2] = datetime.fromisoformat(row[2].replace('Z', '+00:00'))
+        yield Listen(*values)
 
 
 def iter_chunks(events: Iterator[Event], n: int) -> Iterator[List[Event]]:
@@ -222,9 +210,15 @@ def format_signed_request(
     )
 
 
-def cmd_scrobble(play_log: str) -> None:
-    events = read_play_log(play_log)
-    scrobble_events = events_to_scrobble(events)
+def cmd_scrobble(db_file: str) -> None:
+    now = datetime.now(tz=timezone.utc)
+
+    with sqlite3.connect(db_file) as connection:
+        listens = get_listens_to_scrobble(connection, now)
+        for listen in listens:
+            print(listen)
+
+    sys.exit(0)
 
     n_scrobbled = 0
 
@@ -243,59 +237,6 @@ def cmd_scrobble(play_log: str) -> None:
         else:
             print(f'Scrobbled {num_accepted} listens.')
             n_scrobbled += num_accepted
-
-
-def cmd_insert(play_log: str, db_file: str) -> None:
-    events = read_play_log(play_log)
-    scrobble_events = events_to_scrobble(events)
-
-    def id_as_i64(hex_str: str) -> int:
-        bs = bytes.fromhex(hex_str)
-        return int.from_bytes(bytes.fromhex(hex_str), byteorder='big', signed=True)
-
-
-    with sqlite3.connect(db_file) as connection:
-        c = connection.cursor();
-        for begin, end in scrobble_events:
-            c.execute(
-                """
-                insert into listens
-                ( started_at
-                , completed_at
-                , queue_id
-                , track_id
-                , album_id
-                , album_artist_id
-                , track_title
-                , album_title
-                , track_artist
-                , album_artist
-                , duration_seconds
-                , track_number
-                , disc_number
-                , source
-                )
-                values
-                ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'musium');
-                """,
-                (
-                    begin.time.isoformat().replace('000+00:00', 'Z'),
-                    end.time.isoformat().replace('000+00:00', 'Z'),
-                    id_as_i64(begin.queue_id),
-                    id_as_i64(begin.track_id),
-                    id_as_i64(begin.album_id),
-                    id_as_i64(begin.album_artist_id),
-                    begin.title,
-                    begin.album,
-                    begin.artist,
-                    begin.album_artist,
-                    begin.duration_seconds,
-                    begin.track_number,
-                    begin.disc_number,
-                )
-            )
-
-        connection.commit()
 
 
 def cmd_authenticate() -> None:
@@ -332,9 +273,6 @@ if __name__ == '__main__':
 
     elif command == 'scrobble' and len(sys.argv) == 3:
         cmd_scrobble(sys.argv[2])
-
-    elif command == 'insert' and len(sys.argv) == 4:
-        cmd_insert(sys.argv[2], sys.argv[3])
 
     else:
         print(__doc__)

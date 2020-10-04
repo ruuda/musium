@@ -79,7 +79,7 @@ fn initialize_db(connection: &sqlite::Connection) -> Result<Database> {
     connection.execute(
         "
         create unique index if not exists ix_listens_unique_second
-        on listens (strftime('%s', started_at));
+        on listens (cast(strftime('%s', started_at) as integer));
         "
     )?;
 
