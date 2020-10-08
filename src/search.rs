@@ -6,6 +6,7 @@
 // A copy of the License has been included in the root of the repository.
 
 use std::cmp;
+use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::iter;
 
@@ -105,6 +106,31 @@ impl<'a, I: 'a + WordIndex> Union<'a, I> where I::Item: cmp::Ord {
     pub fn len(&self) -> usize {
         self.value_slices.iter().map(|v| v.len as usize).sum()
     }
+
+    /// Peek the value of the next element in the union.
+    fn peek_value(&self) -> Option<&'a I::Item> {
+        match self.iters.peek() {
+            None => None,
+            Some(iter) => iter.peek_value(),
+        }
+    }
+
+    /// Peek the word metadata of the next element in the union.
+    fn peek_meta(&self) -> Option<&'a WordMeta> {
+        match self.iters.peek() {
+            None => None,
+            Some(iter) => iter.peek_meta(),
+        }
+    }
+
+    /// Step ahead to the next element in the union.
+    fn advance(&mut self) {
+        let mut iter = self.iters.pop().expect("Should only advance if peek was succesful.");
+        iter.advance();
+        if !iter.is_empty() {
+            self.iters.push(iter);
+        }
+    }
 }
 
 impl<'a, I: 'a + WordIndex> iter::Iterator for Union<'a, I> where I::Item: cmp::Ord {
@@ -125,6 +151,103 @@ impl<'a, I: 'a + WordIndex> iter::Iterator for Union<'a, I> where I::Item: cmp::
                 Some((value, meta))
             }
         }
+    }
+}
+
+fn intersect<'a, I: 'a + WordIndex, F: FnMut(&I::Item, &[WordMeta])>(
+    index: &'a I,
+    full_word_slices: &[Values],
+    mut prefix_values: Union<'a, I>,
+    mut on_match: F,
+) where
+  I::Item: cmp::Ord + Copy
+{
+    let mut iters = Vec::new();
+    let mut values = Vec::new();
+    let mut metas = Vec::new();
+
+    for &vs in full_word_slices {
+        let iter = IndexIter::new(index, vs);
+
+        match iter.peek_value() {
+            // If any of the iterators is empty, the intersection is empty,
+            // so we have nothing to do here.
+            None => return,
+            Some(v) => {
+                iters.push(iter);
+                values.push(v);
+            }
+        }
+    }
+
+    match prefix_values.peek_value() {
+        None => return,
+        Some(v) => values.push(v),
+    }
+
+    let mut value = *values.iter().max().expect("We have at least the union value.");
+
+    'matches: loop {
+        metas.clear();
+
+        'iters: for iter in iters.iter_mut() {
+            'values: while let Some(ref v) = iter.peek_value() {
+                match value.cmp(v) {
+                    Ordering::Less => {
+                        // This iterator is still less than the maximum, advance
+                        // until we match or pass it.
+                        iter.advance();
+                        continue 'values
+                    }
+                    Ordering::Equal => {
+                        // Looks like we have a match so far, let's collect the
+                        // associated metadata as well.
+                        // TODO: Skip match if meta is not unique, for dupe words.
+                        metas.push(*iter.peek_meta().expect("Meta must match value."));
+                        continue 'iters
+                    }
+                    Ordering::Greater => {
+                        // We found a new maximum, now we need to start over
+                        // with the other iters to see if they match.
+                        value = v;
+                        continue 'matches
+                    }
+                }
+            }
+
+            // If we get here, then one of the iterators is exhausted, which
+            // means the remainder is not in the intersection, so we can stop.
+            return
+        }
+
+        // If we get here, then all iterators are currently peeking the same
+        // value, which means we potentially have a match. We still have to
+        // check the final union iterator as well.
+        'final_values: while let Some(ref v) = prefix_values.peek_value() {
+            match value.cmp(v) {
+                Ordering::Less => {
+                    prefix_values.advance();
+                    continue 'final_values
+                }
+                Ordering::Equal => {
+                    // We found an element of the intersection!
+                    metas.push(*prefix_values.peek_meta().expect("Meta must match value."));
+                    // Report the match through the callback.
+                    on_match(value, &metas[..]);
+                    // Then advance all iterators to move on to the next match.
+                    for iter in iters.iter_mut() { iter.advance(); }
+                    prefix_values.advance();
+                    continue 'matches
+                }
+                Ordering::Greater => {
+                    value = v;
+                    continue 'matches
+                }
+            }
+        }
+        // If we get here, then the union iterator is exhausted, and the
+        // intersection also ends.
+        return
     }
 }
 
