@@ -99,7 +99,7 @@ impl WordMeta {
     ///    the album artist, in the track index.
     /// 2. Primary, the word occurs in the album title or track title.
     ///
-    /// This means that higher ranks are better, and an a track or album should
+    /// This means that higher ranks are better, and a track or album should
     /// have at least one word of nonzero rank to be included in the results.
     #[inline]
     pub fn rank(self) -> u32 {
