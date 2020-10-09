@@ -159,6 +159,9 @@ pub trait WordIndex {
     /// Return the number of words in the index.
     fn len(&self) -> usize;
 
+    /// Return the value range associated with `word`.
+    fn search_exact(&self, word: &str) -> Option<Values>;
+
     /// Return the value ranges for all keys of which `prefix` is a prefix.
     fn search_prefix(&self, prefix: &str) -> &[Values];
 
@@ -398,6 +401,18 @@ impl<T> WordIndex for MemoryWordIndex<T> {
 
     fn get_meta(&self, offset: u32) -> &WordMeta {
         &self.meta_data[offset as usize]
+    }
+
+    fn search_exact(&self, word: &str) -> Option<Values> {
+        let index = self.find_lower(word);
+
+        if index >= self.key_slices.len() { return None }
+        let key = self.get_key(self.key_slices[index]);
+
+        match key == word {
+            true  => Some(self.value_slices[index]),
+            false => None,
+        }
     }
 
     fn search_prefix(&self, prefix: &str) -> &[Values] {
@@ -641,5 +656,28 @@ mod test {
 
         assert_eq!(index.find_lower("ク"), 2);
         assert_eq!(index.find_upper("ク"), 3);
+    }
+
+    #[test]
+    fn test_search_exact() {
+        let mut elems = BTreeSet::new();
+        elems.insert(("a".to_string(),        1, M0));
+        elems.insert(("as".to_string(),       2, M0));
+        elems.insert(("tea".to_string(),      3, M0));
+        elems.insert(("the".to_string(),      4, M0));
+        elems.insert(("theo".to_string(),     5, M0));
+        elems.insert(("theremin".to_string(), 6, M0));
+        elems.insert(("thermos".to_string(),  7, M0));
+
+        let index = MemoryWordIndex::new(&elems);
+
+        assert!(index.search_exact("").is_none());
+        assert!(index.search_exact("astrophysics").is_none());
+        assert!(index.search_exact("thermo").is_none());
+        assert!(index.search_exact("water").is_none());
+
+        assert_eq!(index.get_values(index.search_exact("a").unwrap()),   &[1]);
+        assert_eq!(index.get_values(index.search_exact("as").unwrap()),  &[2]);
+        assert_eq!(index.get_values(index.search_exact("the").unwrap()), &[4]);
     }
 }
