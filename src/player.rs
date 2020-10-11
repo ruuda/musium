@@ -304,6 +304,8 @@ impl DecodeTask {
             }
         }
 
+        out.shrink_to_fit();
+
         let format = Format {
             sample_rate_hz: streaminfo.sample_rate,
             bits_per_sample: 16,
@@ -651,9 +653,10 @@ fn decode_burst(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>) {
     // until the next batch of decodes, which keeps the system quiet too.
     // However, we do need to be able to hold all decoded samples in memory
     // then, and there is some risk of the decode being wasted work when the
-    // queue changes. 85 MB will hold about 8 minutes of 16-bit 44.1 kHz audio.
+    // queue changes. 85 MB will hold about 8 minutes of 16-bit 44.1 kHz audio,
+    // 105 MB will hold about 10 minutes of 16-bit 44.1 kHz audio.
     // TODO: Make this configurable.
-    let stop_after_bytes = 85_000_000;
+    let stop_after_bytes = 105_000_000;
     let mut previous_result = None;
 
     loop {
@@ -696,8 +699,15 @@ fn decode_burst(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>) {
         println!("  Duration: {:.3} seconds", pending_duration_ms as f32 / 1000.0);
         println!("  Memory:   {:.3} / {:.3} MB", bytes_used as f32 * 1e-6, stop_after_bytes as f32 * 1e-6);
         println!("  Budget:   {:.3} MB", bytes_left as f32 * 1e-6);
-        let result = task.run(index, bytes_left);
-        println!("Decoded {:.3} MB.", result.block.len() as f32 * 1e-6);
+        // Decode at most 10 MB at a time. This ensures that we produce the data
+        // in blocks of at most 10 MB, which in turn ensures that we can free
+        // the memory early when we are done playing. Without this, when the
+        // buffer runs low and we need to do a new decode, we might not be able
+        // to decode as much, because most of the memory is taken up by
+        // already-played samples in a large block where the playhead is at the
+        // end of the block.
+        let result = task.run(index, bytes_left.min(10_000_000));
+        println!("Decoded {:.3} MB.", result.block.size_bytes() as f32 * 1e-6);
         previous_result = Some(result);
     }
 }
