@@ -160,7 +160,7 @@ fn intersect<'a, I: 'a + WordIndex, F: FnMut(&I::Item, &[WordMeta])>(
     mut prefix_values: Union<'a, I>,
     mut on_match: F,
 ) where
-  I::Item: cmp::Ord + Copy + std::fmt::Debug
+  I::Item: cmp::Ord + Copy
 {
     let mut iters = Vec::new();
     let mut values = Vec::new();
@@ -274,7 +274,7 @@ pub fn search<'a, I: 'a + WordIndex, W: 'a + AsRef<str>>(
     index: &'a I,
     words: &'a [W],
     into: &mut Vec<I::Item>
-) where I::Item: cmp::Ord + Copy + std::fmt::Debug{
+) where I::Item: cmp::Ord + Copy {
     let mut results = Vec::new();
 
     // Break the search query in words to search only exact matches for, and the
@@ -301,11 +301,22 @@ pub fn search<'a, I: 'a + WordIndex, W: 'a + AsRef<str>>(
     let prefix_ranges = index.search_prefix(prefix_word);
     let prefix_matches = Union::new(index, prefix_ranges);
 
+    let mut prev_item = None;
+
     intersect(
         index,
         &exact_ranges[..],
         prefix_matches,
         |item, metas| {
+            // Skip duplicate matches. These can happen if a query word occurs
+            // multiple times in a title, then we may get a match for each of it
+            // occurrences.
+            if Some(*item) == prev_item {
+                return
+            } else {
+                prev_item = Some(*item);
+            }
+
             for (meta, word) in metas.iter().zip(words.iter()) {
                 if meta.rank() > 0 {
                     // TODO: Take all metas into account when searching.
