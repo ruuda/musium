@@ -7,8 +7,10 @@
 
 //! Defines an in-memory thumbnail cache.
 
-use std::path::Path;
+use std::fs;
 use std::io;
+use std::io::Read;
+use std::path::Path;
 
 use crate::{AlbumId, ArtistId};
 use crate::album_table::AlbumTable;
@@ -16,8 +18,8 @@ use crate::album_table::AlbumTable;
 /// References a single image in the larger concatenated array.
 #[derive(Copy, Clone, Debug)]
 struct ImageReference {
-    offset: u32,
-    len: u32,
+    begin: u32,
+    end: u32,
 }
 
 /// A memory-backed dictionary of album id to cover art thumbnail.
@@ -54,17 +56,61 @@ pub struct ThumbCache {
 }
 
 impl ThumbCache {
+    /// Read the cover art thumbnails for the given albums into memory.
+    ///
+    /// The thumbnails are stored sequentially in an internal buffer in the
+    /// order given. Therefore this function accepts a slice that includes the
+    /// album id, even though it is not used: this way the artist-sorted album
+    /// list from the index can be used as input, which means that covers by the
+    /// same artist end up adjacent in memory. It probably does not make a big
+    /// difference for performance, because thumbs are large relative to cache
+    /// lines, but it doesn’t hurt either.
     pub fn new(&self, albums: &[(ArtistId, AlbumId)], thumb_dir: &Path) -> io::Result<ThumbCache> {
-        let mut buf = thumb_dir.to_path_buf();
+        use std::u32;
+        let mut fname = thumb_dir.to_path_buf();
 
-        let dummy = ImageReference { offset: 0, len: 0 };
+        // Make an conservative initial guess of 5 kB per image. We probably
+        // need more, but we can at least save the initial few relocations. We
+        // could do better by first stat-ing all files and computing exactly how
+        // much we need, but this happens only once during statup, so let's not
+        // worry about performance too much here.
+        let mut buffer = Vec::with_capacity(albums.len() * 5_000);
+
+        let dummy = ImageReference { begin: 0, end: 0 };
         let mut references = AlbumTable::new(albums.len(), dummy);
 
+        for (_, album_id) in albums {
+            fname.push(format!("{}.jpg", album_id));
+            match fs::File::open(&fname) {
+                Ok(mut f) => {
+                    let begin = buffer.len() as u32;
+                    f.read_to_end(&mut buffer)?;
+                    assert!(
+                        buffer.len() < u32::MAX as usize,
+                        "Can't have more than 4 GiB of thumbnails.",
+                    );
+                    let end = buffer.len() as u32;
+                    let img_ref = ImageReference { begin, end };
+                    references.insert(*album_id, img_ref);
+                }
+                // If there is no thumb for this album, simply skip it.
+                Err(err) if err.kind() == io::ErrorKind::NotFound => {}
+                Err(err) => return Err(err),
+            };
+            fname.pop();
+        }
+
         let result = ThumbCache {
-            data: vec![].into_boxed_slice(),
+            data: buffer.into_boxed_slice(),
             references: references
         };
 
         Ok(result)
+    }
+
+    pub fn get(&self, album_id: AlbumId) -> Option<&[u8]> {
+        let img_ref = self.references.get(album_id)?;
+        let img = &self.data[img_ref.begin as usize..img_ref.end as usize];
+        Some(img)
     }
 }
