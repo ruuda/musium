@@ -306,27 +306,18 @@ pub trait MetaIndex {
     fn get_album_ids_ordered_by_artist(&self) -> &[(ArtistId, AlbumId)];
 
     /// Search for artists where the word occurs in the name.
-    ///
-    /// TODO: Would be nice to have one or more slices of ids (one for each
-    /// prefix).
-    fn search_artist(&self, word: &str, into: &mut Vec<ArtistId>);
+    fn search_artist(&self, words: &[String], into: &mut Vec<ArtistId>);
 
-    /// Search for albums where the word occurs in the title.
-    ///
-    /// TODO: Would be nice to have one or more slices of ids (one for each
-    /// prefix).
-    fn search_album(&self, word: &str, into: &mut Vec<AlbumId>);
+    /// Search for albums where the word occurs in the title or artist.
+    fn search_album(&self, words: &[String], into: &mut Vec<AlbumId>);
 
-    /// Search for tracks where the word occurs in the title track artist.
+    /// Search for tracks where the word occurs in the title or track artist.
     ///
     /// A word in the track artist will only match on words that are not also
     /// part of the album artist. That is, this search will not turn up all
     /// tracks by an artist, only those for which `search_album` would not
     /// already find the entire album.
-    ///
-    /// TODO: Would be nice to have one or more slices of ids (one for each
-    /// prefix).
-    fn search_track(&self, word: &str, into: &mut Vec<TrackId>);
+    fn search_track(&self, words: &[String], into: &mut Vec<TrackId>);
 }
 
 #[derive(Debug)]
@@ -1677,16 +1668,16 @@ impl MetaIndex for MemoryMetaIndex {
         &self.albums_by_artist[..]
     }
 
-    fn search_artist(&self, word: &str, into: &mut Vec<ArtistId>) {
-        search::search(&self.words_artist, word, into);
+    fn search_artist(&self, words: &[String], into: &mut Vec<ArtistId>) {
+        search::search(&self.words_artist, words, into);
     }
 
-    fn search_album(&self, word: &str, into: &mut Vec<AlbumId>) {
-        search::search(&self.words_album, word, into);
+    fn search_album(&self, words: &[String], into: &mut Vec<AlbumId>) {
+        search::search(&self.words_album, words, into);
     }
 
-    fn search_track(&self, word: &str, into: &mut Vec<TrackId>) {
-        search::search(&self.words_track, word, into);
+    fn search_track(&self, words: &[String], into: &mut Vec<TrackId>) {
+        search::search(&self.words_track, words, into);
     }
 }
 

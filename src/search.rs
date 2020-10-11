@@ -160,7 +160,7 @@ fn intersect<'a, I: 'a + WordIndex, F: FnMut(&I::Item, &[WordMeta])>(
     mut prefix_values: Union<'a, I>,
     mut on_match: F,
 ) where
-  I::Item: cmp::Ord + Copy
+  I::Item: cmp::Ord + Copy + std::fmt::Debug
 {
     let mut iters = Vec::new();
     let mut values = Vec::new();
@@ -193,7 +193,7 @@ fn intersect<'a, I: 'a + WordIndex, F: FnMut(&I::Item, &[WordMeta])>(
         'iters: for iter in iters.iter_mut() {
             'values: while let Some(ref v) = iter.peek_value() {
                 match value.cmp(v) {
-                    Ordering::Less => {
+                    Ordering::Greater => {
                         // This iterator is still less than the maximum, advance
                         // until we match or pass it.
                         iter.advance();
@@ -206,7 +206,7 @@ fn intersect<'a, I: 'a + WordIndex, F: FnMut(&I::Item, &[WordMeta])>(
                         metas.push(*iter.peek_meta().expect("Meta must match value."));
                         continue 'iters
                     }
-                    Ordering::Greater => {
+                    Ordering::Less => {
                         // We found a new maximum, now we need to start over
                         // with the other iters to see if they match.
                         value = v;
@@ -225,7 +225,7 @@ fn intersect<'a, I: 'a + WordIndex, F: FnMut(&I::Item, &[WordMeta])>(
         // check the final union iterator as well.
         'final_values: while let Some(ref v) = prefix_values.peek_value() {
             match value.cmp(v) {
-                Ordering::Less => {
+                Ordering::Greater => {
                     prefix_values.advance();
                     continue 'final_values
                 }
@@ -239,7 +239,8 @@ fn intersect<'a, I: 'a + WordIndex, F: FnMut(&I::Item, &[WordMeta])>(
                     prefix_values.advance();
                     continue 'matches
                 }
-                Ordering::Greater => {
+                Ordering::Less => {
+                    // It was not a match after all, we have a new max now.
                     value = v;
                     continue 'matches
                 }
@@ -251,20 +252,53 @@ fn intersect<'a, I: 'a + WordIndex, F: FnMut(&I::Item, &[WordMeta])>(
     }
 }
 
-pub fn search<'a, I: 'a + WordIndex>(
+pub fn search<'a, I: 'a + WordIndex, W: 'a + AsRef<str>>(
     index: &'a I,
-    word: &'a str,
+    words: &'a [W],
     into: &mut Vec<I::Item>
-) where I::Item: cmp::Ord + Copy {
+) where I::Item: cmp::Ord + Copy + std::fmt::Debug{
     let mut results = Vec::new();
-    let ranges = index.search_prefix(word);
-    for (item, meta) in Union::new(index, ranges) {
-        if meta.rank() > 0 {
-            results.push((*item, *meta));
+
+    // Break the search query in words to search only exact matches for, and the
+    // final word, for which we also search for prefix matches. The idea is that
+    // for search-as-you-type, the last word is incomplete, but the others are
+    // complete.
+    let mut words_iter = words.iter().rev();
+    let prefix_word = match words_iter.next() {
+        // If there are no search words at all, then there are no results either.
+        None => return,
+        Some(word) => word.as_ref(),
+    };
+
+    let mut exact_ranges = Vec::with_capacity(words.len() - 1);
+    for word in words_iter {
+        match index.search_exact(word.as_ref()) {
+            // If any of the query words is not present in the index, then the
+            // result is empty.
+            None => return,
+            Some(range) => exact_ranges.push(range),
         }
     }
 
-    results.sort_by_key(|&(_, meta)| {
+    let prefix_ranges = index.search_prefix(prefix_word);
+    let prefix_matches = Union::new(index, prefix_ranges);
+
+    intersect(
+        index,
+        &exact_ranges[..],
+        prefix_matches,
+        |item, metas| {
+            for (meta, word) in metas.iter().zip(words.iter()) {
+                if meta.rank() > 0 {
+                    // TODO: Take all metas into account when searching.
+                    results.push((*item, word.as_ref(), *meta));
+                    break
+                }
+            }
+        },
+    );
+
+    results.sort_by_key(|&(_, word, meta)| {
         let mut penalty = 0_i32;
 
         // Add a penalty quadratic in the excess word length. This way we still
@@ -311,7 +345,7 @@ pub fn search<'a, I: 'a + WordIndex>(
         (penalty, -100 * meta.word_len() as i32 / meta.total_len() as i32)
     });
 
-    for (item, _meta) in results.drain(..) {
+    for (item, _word, _meta) in results.drain(..) {
         into.push(item);
     }
 }

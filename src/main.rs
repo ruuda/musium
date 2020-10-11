@@ -285,12 +285,9 @@ impl MetaServer {
         let mut albums = Vec::new();
         let mut tracks = Vec::new();
 
-        for word in words {
-            // TODO: Take intersection of word results, instead of append.
-            self.index.search_artist(&word, &mut artists);
-            self.index.search_album(&word, &mut albums);
-            self.index.search_track(&word, &mut tracks);
-        }
+        self.index.search_artist(&words[..], &mut artists);
+        self.index.search_album(&words[..], &mut albums);
+        self.index.search_track(&words[..], &mut tracks);
 
         // Cap the number of search results we serve. We can easily produce many
         // many results (especially when searching for "t", a prefix of "the",
@@ -743,24 +740,6 @@ fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &Path) {
     gen_thumbs.drain();
 }
 
-/// Intersect two ascending sequences into a new ascending sequence.
-fn intersect<T: Ord + Clone>(xs: &[T], ys: &[T], out: &mut Vec<T>) {
-    use std::cmp::Ordering;
-    let mut i = 0;
-    let mut j = 0;
-    while i < xs.len() && j < ys.len() {
-        match xs[i].cmp(&ys[j]) {
-            Ordering::Less => i += 1,
-            Ordering::Greater => j += 1,
-            Ordering::Equal => {
-                out.push(xs[i].clone());
-                i += 1;
-                j += 1;
-            }
-        }
-    }
-}
-
 fn match_listens(
     index: &MemoryMetaIndex,
     in_path: String,
@@ -791,23 +770,8 @@ fn match_listens(
         let mut words = Vec::new();
         let mut tracks = Vec::new();
         musium::normalize_words(track_name, &mut words);
-        for (i, word) in words.iter().enumerate() {
-            if i == 0 {
-                index.search_track(&word, &mut tracks);
-                tracks.sort();
-            } else {
-                let tracks_first = tracks;
-                tracks = Vec::new();
-                let mut tracks_second = Vec::new();
-                index.search_track(&word, &mut tracks_second);
-                // TODO: This is terribly inefficient, we collect the search
-                // union into a vector, sort it, then sort it again, and then
-                // intersect the vectors ... I should just make an intersection
-                // iterator that intersects unions.
-                tracks_second.sort();
-                intersect(&tracks_first, &tracks_second, &mut tracks);
-            }
-        }
+        // TODO: Add a way to turn off prefix search for the last word.
+        index.search_track(&words[..], &mut tracks);
 
         let mut found = false;
 
