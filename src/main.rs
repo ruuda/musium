@@ -28,8 +28,9 @@ use tiny_http::Method::{Get, Post, Put};
 use musium::config::Config;
 use musium::error;
 use musium::player::{Millibel, Player};
-use musium::{AlbumId, MetaIndex, MemoryMetaIndex, TrackId};
 use musium::serialization;
+use musium::thumb_cache::ThumbCache;
+use musium::{AlbumId, MetaIndex, MemoryMetaIndex, TrackId};
 
 fn header_content_type(content_type: &str) -> Header {
     Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes())
@@ -47,19 +48,19 @@ fn header_expires_seconds(age_seconds: i64) -> Header {
 
 struct MetaServer {
     index: Arc<MemoryMetaIndex>,
-    cache_dir: PathBuf,
+    thumb_cache: ThumbCache,
     player: Player,
 }
 
 impl MetaServer {
     fn new(
         index: Arc<MemoryMetaIndex>,
-        cache_dir: PathBuf,
+        thumb_cache: ThumbCache,
         player: Player,
     ) -> MetaServer {
         MetaServer {
             index: index,
-            cache_dir: cache_dir,
+            thumb_cache: thumb_cache,
             player: player,
         }
     }
@@ -132,15 +133,13 @@ impl MetaServer {
             None => return self.handle_bad_request("Invalid album id."),
         };
 
-        let mut fname: PathBuf = PathBuf::from(&self.cache_dir);
-        fname.push(format!("{}.jpg", album_id));
-        let file = match fs::File::open(fname) {
-            Ok(f) => f,
-            // TODO: This is not entirely accurate. Also, try to generate the
-            // thumbnail if it does not exist.
-            Err(..) => return self.handle_not_found(),
+        let img = match self.thumb_cache.get(album_id) {
+            // TODO: Generate thumbs lazily?
+            None => return self.handle_not_found(),
+            Some(bytes) => bytes,
         };
-        Response::from_file(file)
+
+        Response::from_data(img)
             .with_header(header_content_type("image/jpeg"))
             .with_header(header_expires_seconds(3600 * 24 * 30))
             .boxed()
@@ -882,7 +881,15 @@ fn main() {
         "serve" => {
             let index = make_index(&config.library_path);
             let arc_index = std::sync::Arc::new(index);
-            println!("Indexing complete, starting server on {}.", config.listen);
+            println!("Indexing complete.");
+            println!("Loading cover art thumbnails ...");
+
+            let thumb_cache = ThumbCache::new(
+                arc_index.get_album_ids_ordered_by_artist(),
+                &config.covers_path,
+            ).expect("Failed to load cover art thumbnails.");
+
+            println!("Starting server on {}.", config.listen);
 
             let mut db_path = config.data_path.clone();
             db_path.push("musium.sqlite3");
@@ -892,7 +899,7 @@ fn main() {
                 config.audio_volume_control,
                 db_path,
             );
-            let service = MetaServer::new(arc_index.clone(), config.covers_path, player);
+            let service = MetaServer::new(arc_index.clone(), thumb_cache, player);
             serve(&config.listen, Arc::new(service));
         }
         "cache" => {

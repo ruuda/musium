@@ -65,7 +65,7 @@ impl ThumbCache {
     /// same artist end up adjacent in memory. It probably does not make a big
     /// difference for performance, because thumbs are large relative to cache
     /// lines, but it doesn’t hurt either.
-    pub fn new(&self, albums: &[(ArtistId, AlbumId)], thumb_dir: &Path) -> io::Result<ThumbCache> {
+    pub fn new(albums: &[(ArtistId, AlbumId)], thumb_dir: &Path) -> io::Result<ThumbCache> {
         use std::u32;
         let mut fname = thumb_dir.to_path_buf();
 
