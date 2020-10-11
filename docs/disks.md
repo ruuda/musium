@@ -13,7 +13,7 @@ Furthermore, disks can spin down to save power when unused. While this does
 reduce audible noise, it also causes access latencies of dozens of seconds when
 accessing the disk after a period of inactivity.
 
-## Disk optimizations
+## Playback disk optimizations
 
 To optimize for disks that aggressively try to spin down, Musium takes the
 following actions:
@@ -28,6 +28,22 @@ following actions:
    still acceptable even on a Raspberry Pi.
  * Resume decoding well in time to allow for the disk to spin up before the
    buffer runs out.
+
+## Indexing disk optimizations
+
+Indexing is typically <abbr>IO</abbr>-bound when the music library is not in the
+page cache. (And the only reason why it would be in the page cache, is because
+you indexed the library a moment ago.) Musium optimizes for this by indexing
+using many threads, to cause many parallel reads. This disk access pattern gives
+the operating system many <abbr>IO</abbr> operations to work with when
+minimizing seek distance.
+
+To make this optimization more effective, the <abbr>IO</abbr> queue of your
+disk should be sufficiently large. Set the size using e.g.
+
+    echo 2048 | sudo tee /sys/block/sda/queue/nr_requests
+
+A queue size of 2 versus 2048 can make a factor 2 difference in indexing time!
 
 ## The play database
 
