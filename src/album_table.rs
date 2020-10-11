@@ -187,4 +187,25 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn album_table_insert_then_get_some_collisions() {
+        // Try insertion in 5 different orders.
+        for base in 0..5 {
+            let mut t = AlbumTable::with_capacity(5, 0_u64);
+            for i in 0..5 {
+                let k = 1 + ((base + i) % 5);
+                // In this test the keys fall into two equivalence classes
+                // modulo 8, so keys collide, but not all on the same base
+                // bucket.
+                t.insert(AlbumId(k * 4), k);
+            }
+            for i in 1..6 {
+                assert_eq!(t.get(AlbumId(i * 4)), Some(i));
+            }
+            for i in 6..11 {
+                assert_eq!(t.get(AlbumId(i * 4)), None);
+            }
+        }
+    }
 }
