@@ -202,9 +202,20 @@ fn intersect<'a, I: 'a + WordIndex, F: FnMut(&I::Item, &[WordMeta])>(
                     Ordering::Equal => {
                         // Looks like we have a match so far, let's collect the
                         // associated metadata as well.
-                        // TODO: Skip match if meta is not unique, for dupe words.
-                        metas.push(*iter.peek_meta().expect("Meta must match value."));
-                        continue 'iters
+                        let meta = iter.peek_meta().expect("Meta must match value.");
+
+                        // If the match is truly new, count it, and move on to
+                        // check the next iterator. But if we already have that
+                        // match, it means that a word occurs twice in the
+                        // search query, and we should not match twice in the
+                        // same location, so advance.
+                        if !metas.contains(meta) {
+                            metas.push(*meta);
+                            continue 'iters
+                        } else {
+                            iter.advance();
+                            continue 'values
+                        }
                     }
                     Ordering::Less => {
                         // We found a new maximum, now we need to start over
@@ -231,13 +242,20 @@ fn intersect<'a, I: 'a + WordIndex, F: FnMut(&I::Item, &[WordMeta])>(
                 }
                 Ordering::Equal => {
                     // We found an element of the intersection!
-                    metas.push(*prefix_values.peek_meta().expect("Meta must match value."));
-                    // Report the match through the callback.
-                    on_match(value, &metas[..]);
-                    // Then advance all iterators to move on to the next match.
-                    for iter in iters.iter_mut() { iter.advance(); }
-                    prefix_values.advance();
-                    continue 'matches
+                    let meta = prefix_values.peek_meta().expect("Meta must match value.");
+                    if !metas.contains(meta) {
+                        metas.push(*meta);
+                        // Report the match through the callback.
+                        on_match(value, &metas[..]);
+                        // Then advance all iterators to move on to the next match.
+                        for iter in iters.iter_mut() { iter.advance(); }
+                        prefix_values.advance();
+                        continue 'matches
+                    } else {
+                        // We already matched this word, skip over it.
+                        prefix_values.advance();
+                        continue 'final_values
+                    }
                 }
                 Ordering::Less => {
                     // It was not a match after all, we have a new max now.
