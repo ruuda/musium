@@ -34,7 +34,7 @@ impl<T: Copy> AlbumTable<T> {
     /// We need to provide a dummy value to initialize unused slots. The dummy
     /// value is never exposed on lookups, so it does not have to be a sentinel
     /// value, it can be a value that would normally be valid.
-    pub fn with_capacity(n: usize, dummy: T) -> AlbumTable<T> {
+    pub fn new(n: usize, dummy: T) -> AlbumTable<T> {
         let num_slots = n.next_power_of_two();
         AlbumTable {
             elements: vec![(AlbumId(0), dummy); num_slots].into_boxed_slice(),
@@ -130,7 +130,7 @@ mod tests {
 
     #[test]
     fn album_table_offset_non_wrapping() {
-        let t = AlbumTable::with_capacity(64, 0_u64);
+        let t = AlbumTable::new(64, 0_u64);
         assert_eq!(t.offset(0, 0), 0);
         assert_eq!(t.offset(0, 10), 10);
         assert_eq!(t.offset(0, 63), 63);
@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn album_table_offset_wrapping() {
-        let t = AlbumTable::with_capacity(64, 0_u64);
+        let t = AlbumTable::new(64, 0_u64);
         assert_eq!(t.offset(0, 0), 0);
         assert_eq!(t.offset(10, 0), 54);
         assert_eq!(t.offset(63, 0), 1);
@@ -152,7 +152,7 @@ mod tests {
     fn album_table_insert_then_get_no_collisions() {
         // Try insertion in 5 different orders.
         for base in 0..5 {
-            let mut t = AlbumTable::with_capacity(5, 0_u64);
+            let mut t = AlbumTable::new(5, 0_u64);
             for i in 0..5 {
                 // In this test the keys are all distinct, and smaller than the
                 // capacity, so there are never collisions.
@@ -172,7 +172,7 @@ mod tests {
     fn album_table_insert_then_get_all_collisions() {
         // Try insertion in 5 different orders.
         for base in 0..5 {
-            let mut t = AlbumTable::with_capacity(5, 0_u64);
+            let mut t = AlbumTable::new(5, 0_u64);
             for i in 0..5 {
                 let k = 1 + ((base + i) % 5);
                 // In this test the keys are all equivalent modulo 8 (the
@@ -192,12 +192,13 @@ mod tests {
     fn album_table_insert_then_get_some_collisions() {
         // Try insertion in 5 different orders.
         for base in 0..5 {
-            let mut t = AlbumTable::with_capacity(5, 0_u64);
+            let mut t = AlbumTable::new(5, 0_u64);
             for i in 0..5 {
                 let k = 1 + ((base + i) % 5);
                 // In this test the keys fall into two equivalence classes
                 // modulo 8, so keys collide, but not all on the same base
                 // bucket.
+                // capacity of the table), so every insert is a collision.
                 t.insert(AlbumId(k * 4), k);
             }
             for i in 1..6 {

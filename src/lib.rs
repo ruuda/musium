@@ -28,6 +28,7 @@ pub mod net;
 pub mod playback;
 pub mod player;
 pub mod serialization;
+pub mod thumb_cache;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::collections::btree_map;
@@ -297,6 +298,12 @@ pub trait MetaIndex {
     /// Includes the artist too, because the associations are stored as a flat
     /// array of (artist id, album id) pairs.
     fn get_albums_by_artist(&self, _: ArtistId) -> &[(ArtistId, AlbumId)];
+
+    /// Return all (artist id, album id) pairs.
+    ///
+    /// The resulting index is sorted by artist id first, and then by ascending
+    /// release date of the album.
+    fn get_album_ids_ordered_by_artist(&self) -> &[(ArtistId, AlbumId)];
 
     /// Search for artists where the word occurs in the name.
     ///
@@ -1663,6 +1670,11 @@ impl MetaIndex for MemoryMetaIndex {
         // Only the albums for the desired artist are in this slice, and they
         // are already sorted on ascending release date.
         &candidates[..end]
+    }
+
+    #[inline]
+    fn get_album_ids_ordered_by_artist(&self) -> &[(ArtistId, AlbumId)] {
+        &self.albums_by_artist[..]
     }
 
     fn search_artist(&self, word: &str, into: &mut Vec<ArtistId>) {
