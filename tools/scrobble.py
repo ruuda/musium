@@ -278,7 +278,9 @@ def cmd_scrobble(db_file: str) -> None:
             set_scrobbled(connection, now, ids_accepted)
 
             assert len(ids_accepted) == num_accepted
-            print(f'Scrobbled {num_accepted} listens.')
+            # Flush, even when stdout is not a terminal, such as when running
+            # under systemd, so we get accurate timestamps in the journal.
+            print(f'Scrobbled {num_accepted} listens.', flush=True)
             n_scrobbled += num_accepted
 
 
