@@ -13,6 +13,7 @@ nav:
     - Scrobbling to Last.fm: scrobbling.md
     - Tagging: tagging.md
     - Loudness normalization: loudness.md
+    - Disks: disks.md
   - API Reference: api.md
   - Internals:
     - Search: search.md
