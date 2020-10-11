@@ -12,6 +12,7 @@ anywhere on the local network through a webinterface.
  * Optimized to run in resource-constrained environments, such as a Raspberry Pi.
  * Responsive design, supports both mobile and desktop.
  * Logarithmic volume control.
+ * Last.fm scrobbling.
 
 ## Limitations
 
