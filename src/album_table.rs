@@ -104,18 +104,19 @@ impl<T: Copy> AlbumTable<T> {
     }
 
     pub fn get(&self, key: AlbumId) -> Option<T> {
+        debug_assert_ne!(key, AlbumId(0), "Album id 0 is the sentinel, it is never present.");
         let base_index = self.index(key);
 
         // Probe from the ideal position, until either we find an empty slot
         // (and then we know the key is not present), or until the max probe
         // length (and then we also know we aren't going to find the key).
-        for off in 0..self.max_probe_len {
+        for off in 0..=self.max_probe_len {
             let index = (base_index + off) & self.mask;
             match self.elements[index].0 {
-                x if x == key => Some(self.elements[index].1),
-                AlbumId(0) => None,
+                x if x == key => return Some(self.elements[index].1),
+                AlbumId(0) => return None,
                 _ => continue,
-            };
+            }
         }
 
         None
@@ -124,6 +125,7 @@ impl<T: Copy> AlbumTable<T> {
 
 #[cfg(test)]
 mod tests {
+    use crate::AlbumId;
     use super::AlbumTable;
 
     #[test]
@@ -144,5 +146,45 @@ mod tests {
         assert_eq!(t.offset(63, 0), 1);
         assert_eq!(t.offset(33, 32), 63);
         assert_eq!(t.offset(59, 49), 54);
+    }
+
+    #[test]
+    fn album_table_insert_then_get_no_collisions() {
+        // Try insertion in 5 different orders.
+        for base in 0..5 {
+            let mut t = AlbumTable::with_capacity(5, 0_u64);
+            for i in 0..5 {
+                // In this test the keys are all distinct, and smaller than the
+                // capacity, so there are never collisions.
+                let k = 1 + ((base + i) % 5);
+                t.insert(AlbumId(k), k);
+            }
+            for i in 1..6 {
+                assert_eq!(t.get(AlbumId(i)), Some(i));
+            }
+            for i in 6..11 {
+                assert_eq!(t.get(AlbumId(i)), None);
+            }
+        }
+    }
+
+    #[test]
+    fn album_table_insert_then_get_all_collisions() {
+        // Try insertion in 5 different orders.
+        for base in 0..5 {
+            let mut t = AlbumTable::with_capacity(5, 0_u64);
+            for i in 0..5 {
+                let k = 1 + ((base + i) % 5);
+                // In this test the keys are all equivalent modulo 8 (the
+                // capacity of the table), so every insert is a collision.
+                t.insert(AlbumId(k * 8), k);
+            }
+            for i in 1..6 {
+                assert_eq!(t.get(AlbumId(i * 8)), Some(i));
+            }
+            for i in 6..11 {
+                assert_eq!(t.get(AlbumId(i * 8)), None);
+            }
+        }
     }
 }
