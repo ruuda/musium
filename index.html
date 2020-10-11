@@ -387,10 +387,9 @@
       </nav>
       <article>
         <h1 id="musium">Musium</h1>
-<p>Music playback daemon with a web-based library browser.</p>
-<p>Musium is an album-centered music player designed to run on an always-on device
-connected to speakers. Playback can be controlled from anywhere on the local
-network through the webinterface.</p>
+<p>Musium is an album-centered music player. It is designed to run as a daemon on
+an always-on device connected to speakers. Playback can be controlled from
+anywhere on the local network through a webinterface.</p>
 <h2 id="features">Features</h2>
 <ul>
 <li>Respects album artist and original release date metadata.</li>
@@ -398,6 +397,7 @@ network through the webinterface.</p>
 <li>User interface responds quickly, and indexing is fast.</li>
 <li>Optimized to run in resource-constrained environments, such as a Raspberry Pi.</li>
 <li>Responsive design, supports both mobile and desktop.</li>
+<li>Logarithmic volume control.</li>
 </ul>
 <h2 id="limitations">Limitations</h2>
 <ul>
@@ -453,6 +453,9 @@ target/release/musium cache musium.conf
             
             <li class="toc-chapter
               "><a href="loudness/">Loudness normalization</a></li>
+            
+            <li class="toc-chapter
+              "><a href="disks/">Disks</a></li>
             <li class="toc-section"><a href="api/">API Reference</a></li>
           <li class="toc-section
             "><a href="search/">Internals</a></li>

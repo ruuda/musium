@@ -9,7 +9,7 @@
   -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Search — Musium</title>
+  <title>Disks — Musium</title>
   <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
@@ -381,82 +381,60 @@
     <div id="main">
       <nav id="breadcrumbs">
         <a href="..">Musium</a>
-         › <a href="./">Internals</a> 
-         › <a href="./">Search</a> 
+         › <a href="../building/">User Guide</a> 
+         › <a href="./">Disks</a> 
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="search">Search</h1>
-<p>Each of the three Musium data types (artists, albums, and tracks) can be
-searched from a single search box, that searches all three simultaneously.
-To facilitate search, Musium maintains indexes from words to artists, albums,
-and tracks. Indexes are sorted on normalized word, so we can locate the words
-with a given prefix in logarithmic time.</p>
-<h2 id="single-search">Single search</h2>
-<p>Musium has a one search box. It should be able to find what you need from a
-single query, without the need to select what you are searching for, and without
-the need for separate browsers for artists, albums, and tracks, with independent
-search functions.</p>
-<h2 id="minimal-results">Minimal results</h2>
-<p>Search should find everything that is relevant, but nothing more. For example,
-when searching for “queen”, we should show the artist Queen, but not every
-individual track by that artist, otherwise “Dancing Queen” by Abba would get
-lost in that noise. Similarly, a search for an artist should not list all albums
-by that artist, unless they are relevant results by themselves. This happens for
-self-titled albums, but also for the word “who” in “Who’s Next” by The Who, for
-instance.</p>
-<p>Consider a search for “abba dancing queen”.</p>
+        <h1 id="disks">Disks</h1>
+<p>Musium is built to handle music libraries in the order of terabytes in size.
+Spinning disks are still the most cost-effective storage medium at this scale,
+but storing your music on a spinning disk has downsides:</p>
 <ul>
-<li>Suppose we index the track artist in addition to the title, then we would
-   find “Dancing Queen” by Abba with this query. But we would also find it for
-   the prefix “abba”, which is undesirable.</li>
-<li>Suppose we do not index the track artist, then we would not find the track at
-   all, because the word “abba” does not occur in the title.</li>
+<li>Disks are slow, with high latency for reads, e.g. when starting a track.</li>
+<li>Disks are noisy, you can hear them spin up, or hear them rattle when seeking.</li>
 </ul>
-<p>On the other hand, if the track artist differs from the album artist (maybe
-because it includes a feat. artist, because the track is part of a compilation
-album), then we cannot reach that track through the artist search results, so
-then we do need to include the track itself, to make it discoverable.</p>
-<p>Similarly, a seac</p>
-<p>Conclusion:</p>
+<p>Especially for a music player, these can be a nuisance.</p>
+<p>Furthermore, disks can spin down to save power when unused. While this does
+reduce audible noise, it also causes access latencies of dozens of seconds when
+accessing the disk after a period of inactivity.</p>
+<h2 id="playback-disk-optimizations">Playback disk optimizations</h2>
+<p>To optimize for disks that aggressively try to spin down, Musium takes the
+following actions:</p>
 <ul>
-<li>Words that occur in the track artist and also in the album artist, should not
-   make the track show up, because we can also reach the track through the
-   artist search result.</li>
-<li>If we consider the track for a different reason, then the presence of a word
-   that does not occur in the track title, but which does occur in the track
-   artist, should not cause the track to be excluded.</li>
-<li>Words that occur in the track artist, but not in the album artist, should
-   make the track show up.</li>
+<li>Load all resources required to serve the webinterface into memory (aside from
+   full-resolution cover art), to enable browsing the library without disk
+   access.</li>
+<li>Decode in bursts, and buffer about 10 minutes of audio in memory. When the
+   play queue is full, this means that the disk only has to spin up about once
+   every 10 minutes, and it can be silent in the meantime. The cost for 10
+   minutes of 16-bit, 44.1 kHz stereo audio is about 105 MB of memory, which is
+   still acceptable even on a Raspberry Pi.</li>
+<li>Resume decoding well in time to allow for the disk to spin up before the
+   buffer runs out.</li>
 </ul>
-<h2 id="search-combinations">Search combinations</h2>
-<p>We want to support the following queries:</p>
-<ul>
-<li>Track title only, e.g. “dancing queen”</li>
-<li>Album title only, e.g. “arrival”</li>
-<li>Album artist only, e.g. “abba”</li>
-<li>Track title and artist, e.g. “abba dancing queen”</li>
-<li>Album title and artist, e.g. “abba arrival”</li>
-</ul>
-<p>The following queries are out of scope:</p>
-<ul>
-<li>Track title and album, e.g. “arrival dancing queen”</li>
-<li>Artist, album, and track, e.g. “abba arrival dancing queen”</li>
-</ul>
-<h2 id="indexes">Indexes</h2>
-<p>Based on the above considerations, we need the following indexes:</p>
-<ul>
-<li>Album artist words.</li>
-<li>Album title + album artist words, with a marker to tell whether the entry is
-   for the album title or album artist.</li>
-<li>Track title + track artist words, with a marker to tell whether the entry is
-   for the track title or artist, and if it is for the artist, a marker to tell
-   whether the word occurs in the album artist too.</li>
-</ul>
+<h2 id="indexing-disk-optimizations">Indexing disk optimizations</h2>
+<p>Indexing is typically <abbr>IO</abbr>-bound when the music library is not in the
+page cache. (And the only reason why it would be in the page cache, is because
+you indexed the library a moment ago.) Musium optimizes for this by indexing
+using many threads, to cause many parallel reads. This disk access pattern gives
+the operating system many <abbr>IO</abbr> operations to work with when
+minimizing seek distance.</p>
+<p>To make this optimization more effective, the <abbr>IO</abbr> queue of your
+disk should be sufficiently large. Set the size using e.g.</p>
+<pre><code>echo 2048 | sudo tee /sys/block/sda/queue/nr_requests
+</code></pre>
+<p>A queue size of 2 versus 2048 can make a factor 2 difference in indexing time!</p>
+<h2 id="the-play-database">The play database</h2>
+<p>Musium keeps a record of which songs you played in a database. It writes to this
+database every time a new track starts playing. When you keep this database on
+a spinning disk, that undermines the above optimizations. Fortunately, the
+database should not be terabytes in size, so it can easily be kept on
+solid-state storage, for example on the <abbr>SD</abbr> card of a Raspberry Pi.</p>
       </article>
       <nav id="nav-prev-next">
-        <a id="nav-prev" href="../api/" title="API Reference">Previous</a>
-        <a id="nav-next" href="../performance/" title="Performance">Next</a>
+        <a id="nav-prev" href="../loudness/" title="Loudness normalization">Previous</a>
+        <a id="nav-next" href="../api/" title="API Reference">Next</a>
         </nav>
       </div>
     <aside>
@@ -485,20 +463,19 @@ then we do need to include the track itself, to make it discoverable.</p>
               "><a href="../loudness/">Loudness normalization</a></li>
             
             <li class="toc-chapter
-              "><a href="../disks/">Disks</a></li>
-            <li class="toc-section"><a href="../api/">API Reference</a></li>
+               current"><a href="./">Disks</a></li>
+            <li><ul>
+                <li class="toc-heading"><a href="#playback-disk-optimizations">Playback disk optimizations</a></li>
+                <li class="toc-heading"><a href="#indexing-disk-optimizations">Indexing disk optimizations</a></li>
+                <li class="toc-heading"><a href="#the-play-database">The play database</a></li>
+                </ul></li>
+               <li class="toc-section"><a href="../api/">API Reference</a></li>
           <li class="toc-section
-            "><a href="./">Internals</a></li>
+            "><a href="../search/">Internals</a></li>
           
             <li class="toc-chapter
-               current"><a href="./">Search</a></li>
-            <li><ul>
-                <li class="toc-heading"><a href="#single-search">Single search</a></li>
-                <li class="toc-heading"><a href="#minimal-results">Minimal results</a></li>
-                <li class="toc-heading"><a href="#search-combinations">Search combinations</a></li>
-                <li class="toc-heading"><a href="#indexes">Indexes</a></li>
-                </ul></li>
-               
+              "><a href="../search/">Search</a></li>
+            
             <li class="toc-chapter
               "><a href="../performance/">Performance</a></li>
             
