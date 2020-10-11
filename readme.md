@@ -2,13 +2,11 @@
   <img src="app/logo.svg" alt="Musium" width="400">
 </a></h1>
 
-Music playback daemon with web-based library browser.
-
 [![Build Status][ci-img]][ci]
 
-Musium is an album-centered music player designed to run on an always-on device
-connected to speakers. Playback can be controlled from anywhere on the local
-network through the webinterface.
+Musium is an album-centered music player. It is designed to run as a daemon on
+an always-on device connected to speakers. Playback can be controlled from
+anywhere on the local network through a webinterface.
 
  * [Overview and getting started guide](https://ruuda.github.io/musium/)
  * [Building](https://ruuda.github.io/musium/building/)

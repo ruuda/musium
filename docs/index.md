@@ -1,10 +1,8 @@
 # Musium
 
-Music playback daemon with a web-based library browser.
-
-Musium is an album-centered music player designed to run on an always-on device
-connected to speakers. Playback can be controlled from anywhere on the local
-network through the webinterface.
+Musium is an album-centered music player. It is designed to run as a daemon on
+an always-on device connected to speakers. Playback can be controlled from
+anywhere on the local network through a webinterface.
 
 ## Features
 
@@ -13,6 +11,7 @@ network through the webinterface.
  * User interface responds quickly, and indexing is fast.
  * Optimized to run in resource-constrained environments, such as a Raspberry Pi.
  * Responsive design, supports both mobile and desktop.
+ * Logarithmic volume control.
 
 ## Limitations
 
