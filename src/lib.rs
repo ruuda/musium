@@ -19,6 +19,7 @@ extern crate unicode_normalization;
 mod flat_tree; // TODO: Rename.
 mod search;
 mod word_index;
+mod album_table;
 
 pub mod config;
 pub mod error;
