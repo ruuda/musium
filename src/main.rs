@@ -888,6 +888,7 @@ fn main() {
                 arc_index.get_album_ids_ordered_by_artist(),
                 &config.covers_path,
             ).expect("Failed to load cover art thumbnails.");
+            println!("Thumb cache size: {}", thumb_cache.size());
 
             println!("Starting server on {}.", config.listen);
 

@@ -121,6 +121,16 @@ impl<T: Copy> AlbumTable<T> {
 
         None
     }
+
+    /// Return the maximum number of elements that the table can hold.
+    pub fn capacity(&self) -> usize {
+        self.elements.len()
+    }
+
+    /// Return the maximum probe length required to look up any key.
+    pub fn max_probe_len(&self) -> usize {
+        self.max_probe_len
+    }
 }
 
 #[cfg(test)]

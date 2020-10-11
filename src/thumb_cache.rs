@@ -7,9 +7,10 @@
 
 //! Defines an in-memory thumbnail cache.
 
+use std::fmt;
 use std::fs;
-use std::io;
 use std::io::Read;
+use std::io;
 use std::path::Path;
 
 use crate::{AlbumId, ArtistId};
@@ -53,6 +54,24 @@ struct ImageReference {
 pub struct ThumbCache {
     data: Box<[u8]>,
     references: AlbumTable<ImageReference>,
+}
+
+pub struct ThumbCacheSize {
+    image_data_bytes: usize,
+    table_bytes: usize,
+    max_probe_len: usize,
+}
+
+impl fmt::Display for ThumbCacheSize {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f,
+            "{:4} kB ({:3} kB images, {:3} kB table), max probe length: {}",
+            (self.image_data_bytes + self.table_bytes) / 1000,
+            self.image_data_bytes / 1000,
+            self.table_bytes / 1000,
+            self.max_probe_len,
+        )
+    }
 }
 
 impl ThumbCache {
@@ -112,5 +131,15 @@ impl ThumbCache {
         let img_ref = self.references.get(album_id)?;
         let img = &self.data[img_ref.begin as usize..img_ref.end as usize];
         Some(img)
+    }
+
+    pub fn size(&self) -> ThumbCacheSize {
+        use std::mem;
+        assert_eq!(mem::size_of::<(AlbumId, ImageReference)>(), 16);
+        ThumbCacheSize {
+            image_data_bytes: self.data.len(),
+            table_bytes: self.references.capacity() * 16,
+            max_probe_len: self.references.max_probe_len(),
+        }
     }
 }
