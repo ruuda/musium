@@ -47,7 +47,7 @@ for listen in json.load(open(sys.argv[1], 'r', encoding='utf-8')):
     # Skip misencodings. Better would be to try and fix them, but for now we
     # just skip them. U+0018 is the Cancel control character, probably something
     # very bad happened to the data that made this appear.
-    if 'Ã©' in line or '\u0018' in line:
+    if 'Ã©' in line or '\u0018' in line or 'â€' in line:
         continue
 
     print(line)

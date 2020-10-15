@@ -740,6 +740,16 @@ fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &Path) {
     gen_thumbs.drain();
 }
 
+/// Return whether the two strings are equal after extracting normalized words.
+fn equals_normalized(x1: &str, x2: &str) -> bool {
+    // TODO: Figure out a faster way to do this.
+    let mut w1 = Vec::new();
+    let mut w2 = Vec::new();
+    musium::normalize_words(&x1[..], &mut w1);
+    musium::normalize_words(&x2[..], &mut w2);
+    w1 == w2
+}
+
 fn match_listens(
     index: &MemoryMetaIndex,
     in_path: String,
@@ -763,13 +773,14 @@ fn match_listens(
         let line = opt_line?;
         let mut parts = line.split('\t');
         let time_str = parts.next().expect("Expected seconds_since_epoch");
-        let track_name = parts.next().expect("Expected track");
+        let track_title = parts.next().expect("Expected track");
         let artist_name = parts.next().expect("Expected artist");
         let album_name = parts.next().expect("Expected album");
 
         let mut words = Vec::new();
         let mut tracks = Vec::new();
-        musium::normalize_words(track_name, &mut words);
+        musium::normalize_words(&track_title[..], &mut words);
+        musium::normalize_words(&artist_name[..], &mut words);
         // TODO: Add a way to turn off prefix search for the last word.
         index.search_track(&words[..], &mut tracks);
 
@@ -778,9 +789,10 @@ fn match_listens(
         for track_id in tracks {
             let track = index.get_track(track_id).expect("Search result should be in index.");
             let album = index.get_album(track.album_id).expect("Track album should be in index.");
-            let artist_ok = index.get_string(track.artist) == artist_name;
-            let album_ok = index.get_string(album.title) == album_name;
-            if artist_ok && album_ok {
+            let track_ok = equals_normalized(index.get_string(track.title), track_title);
+            let artist_ok = equals_normalized(index.get_string(track.artist), artist_name);
+            let album_ok = equals_normalized(index.get_string(album.title), album_name);
+            if track_ok && artist_ok && album_ok {
                 if !found {
                     write!(w, "{}\t{}\n", time_str, track_id)?;
                     found = true;
@@ -788,7 +800,7 @@ fn match_listens(
                 } else {
                     println!(
                         "AMBIGUOUS {}: at {} listened {} by {} from {}",
-                        track_id, time_str, track_name, artist_name, album_name,
+                        track_id, time_str, track_title, artist_name, album_name,
                     );
                 }
             }
@@ -797,7 +809,7 @@ fn match_listens(
         if !found {
             println!(
                 "MISSING: at {} listened {} by {} from {}",
-                time_str, track_name, artist_name, album_name,
+                time_str, track_title, artist_name, album_name,
             );
         }
 
