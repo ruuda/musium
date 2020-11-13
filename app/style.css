@@ -477,6 +477,13 @@ img.thumb
   word-spacing: 0;
 }
 
+/* For now-playing, we set the artist and album title over two lines. */
+.now-playing .album-info .album-title {
+  margin-top: 0.3em;
+  word-spacing: 0;
+  color: black;
+}
+
 #album-view .album-actions {
   padding-top: 1rem;
 }
@@ -708,7 +715,7 @@ button.volume-up { grid-area: volume-up; }
   .now-playing .album-info hgroup {
     grid-area: info;
     margin-left: 1em;
-    padding-top: 12rem;
+    padding-top: 11rem;
   }
 
   .now-playing .album-info h1 {

@@ -77,10 +77,8 @@ nowPlayingInfo (QueuedTrack track) = Html.div $ do
   Html.hgroup $ do
     Html.h1 $ Html.text track.title
     Html.h2 $ do
-      Html.span $ do
-        Html.addClass "artist"
-        Html.text track.artist
-      Html.text " ⋅ "
-      Html.span $ do
-        Html.addClass "album-title"
-        Html.text track.album
+      Html.addClass "artist"
+      Html.text track.artist
+    Html.h2 $ do
+      Html.addClass "album-title"
+      Html.text track.album
