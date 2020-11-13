@@ -114,30 +114,32 @@ new postEvent = do
         liftEffect $ do
           Html.withElement resultBox $ do
             Html.clear
+            Html.div $ do
+              Html.addClass "search-results-list"
 
-            when (not $ Array.null result.artists) $ do
-              Html.h2 $ Html.text "Artists"
-              Html.div $ do
-                Html.setId "search-artists"
-                -- Limit the number of results rendered at once to keep search
-                -- responsive. TODO: Render overflow button.
-                Html.ul $ for_ (Array.take 10 result.artists) renderSearchArtist
+              when (not $ Array.null result.artists) $ do
+                Html.div $ do
+                  Html.setId "search-artists"
+                  Html.h2 $ Html.text "Artists"
+                  -- Limit the number of results rendered at once to keep search
+                  -- responsive. TODO: Render overflow button.
+                  Html.ul $ for_ (Array.take 10 result.artists) renderSearchArtist
 
-            when (not $ Array.null result.albums) $ do
-              Html.h2 $ Html.text "Albums"
-              Html.div $ do
-                Html.setId "search-albums"
-                -- Limit the number of results rendered at once to keep search
-                -- responsive. TODO: Render overflow button.
-                Html.ul $ for_ (Array.take 25 result.albums) $ renderSearchAlbum postEvent
+              when (not $ Array.null result.albums) $ do
+                Html.div $ do
+                  Html.setId "search-albums"
+                  Html.h2 $ Html.text "Albums"
+                  -- Limit the number of results rendered at once to keep search
+                  -- responsive. TODO: Render overflow button.
+                  Html.ul $ for_ (Array.take 25 result.albums) $ renderSearchAlbum postEvent
 
-            when (not $ Array.null result.tracks) $ do
-              Html.h2 $ Html.text "Tracks"
-              Html.div $ do
-                Html.setId "search-tracks"
-                -- Limit the number of results rendered at once to keep search
-                -- responsive. TODO: Render overflow button.
-                Html.ul $ for_ (Array.take 25 result.tracks) $ renderSearchTrack postEvent
+              when (not $ Array.null result.tracks) $ do
+                Html.div $ do
+                  Html.setId "search-tracks"
+                  Html.h2 $ Html.text "Tracks"
+                  -- Limit the number of results rendered at once to keep search
+                  -- responsive. TODO: Render overflow button.
+                  Html.ul $ for_ (Array.take 25 result.tracks) $ renderSearchTrack postEvent
 
   pure $ { searchBox, resultBox }
 

@@ -240,7 +240,12 @@ img.thumb
   background-color: #f8f8f8;
 }
 
-.title, #album-list .artist, .track-list .artist
+.title,
+#album-list .artist,
+.track-list .artist,
+#search-artists .name,
+#search-albums .artist,
+#search-tracks .artist
 {
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -349,6 +354,11 @@ img.thumb
   overflow-y: auto;
 }
 
+#search-results div
+{
+  overflow: hidden;
+}
+
 #search-results h2
 {
   font-variant-caps: all-small-caps;
@@ -364,27 +374,21 @@ img.thumb
 {
   padding-left: 1em;
   padding-right: 1em;
-  padding-top: 0.5em;
-}
-
-#search-artists .name
-{
-  display: inline;
+  padding-top: 1em;
 }
 
 #search-artists .discography
 {
-  display: inline;
-  margin-left: 1em;
-  top: 0.3em;
-  position: relative;
+  white-space: nowrap;
+  overflow: visible;
 }
 
 #search-artists .discography img
 {
   height: 1.5em;
-  margin-top: 0.2em;
   margin-right: 0.2em;
+  position: relative;
+  top: 0.1em;
 }
 
 .album-info {
@@ -768,6 +772,22 @@ button.volume-up { grid-area: volume-up; }
     border-top: none;
     border-left: 0.8pt solid #eee;
   }
+
+  /* We can also start to render search results in three columns next to each
+   * other, instead of below one another. */
+  .search-results-list {
+    display: grid;
+    grid-template-columns: 2fr 3fr 3fr 3fr 2fr;
+  }
+
+  #search-results div:first-child {
+    grid-column: 2;
+  }
+
+  #search-box {
+    /* 2/13 to match the grid, 1em padding. */
+    padding-left: calc(1em + (200% / 13));
+  }
 }
 
 /* At this width, we can devote a bit more space to th album list, and we set a
@@ -786,5 +806,15 @@ button.volume-up { grid-area: volume-up; }
 
   .album-info h1 {
     font-size: 1.7rem;
+  }
+
+  .search-results-list {
+    display: grid;
+    grid-template-columns: 3fr 3fr 3fr 3fr 3fr;
+  }
+
+  #search-box {
+    /* 3/15 to match the grid, 1em padding. */
+    padding-left: calc(1em + (300% / 15));
   }
 }
