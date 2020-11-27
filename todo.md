@@ -13,5 +13,6 @@
        albums recently added to the library, etc.
  * [ ] Persist index to SQLite to avoid re-scan at startup
  * [ ] Re-index without restart (hot reload)
+ * [ ] Support albums with more than one artist
 
 [xspf]: https://xspf.org/jspf/
