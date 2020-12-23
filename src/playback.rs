@@ -259,11 +259,16 @@ fn ensure_buffers_full(
     player: &mut PlayerState,
 ) -> FillResult {
     loop {
-        match write_samples(device, format, io, player).expect("TODO: Failed to write samples.") {
-            WriteResult::NeedMore => continue,
-            WriteResult::ChangeFormat(new_format) => return FillResult::ChangeFormat(new_format),
-            WriteResult::Yield => return FillResult::Yield,
-            WriteResult::QueueEmpty => return FillResult::QueueEmpty,
+        match write_samples(device, format, io, player) {
+            Err(err) => {
+                println!("Error while writing samples: {:?}", err);
+                println!("Resuming ...");
+                continue
+            }
+            Ok(WriteResult::NeedMore) => continue,
+            Ok(WriteResult::ChangeFormat(new_format)) => return FillResult::ChangeFormat(new_format),
+            Ok(WriteResult::Yield) => return FillResult::Yield,
+            Ok(WriteResult::QueueEmpty) => return FillResult::QueueEmpty,
         }
     }
 }
