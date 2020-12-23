@@ -49,7 +49,7 @@ Type=oneshot
 ExecStart=/checkouts/musium/tools/scrobble.py scrobble /var/lib/musium/musium.sqlite3
 
 # The values below are randomly generated examples, they are not real secrets.
-# Replace them with your persional secrets.
+# Replace them with your personal secrets.
 Environment=LAST_FM_API_KEY=5d41402abc4b2a76b9719d911017c592
 Environment=LAST_FM_SECRET=f330c2f5a4e075a21593f477b9ee967a
 Environment=LAST_FM_SESSION_KEY=gE7P1f444dLu6NbZeMs4wb9V4roITlAF
