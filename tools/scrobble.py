@@ -396,35 +396,53 @@ class ListenbrainzBatch:
     request: Request
 
 
-def iter_requests_listenbrainz(listens: Iterable[Listen]) -> Iterable[ListenbrainzBatch]:
+def iter_requests_listenbrainz(listens: Iterator[Listen]) -> Iterator[ListenbrainzBatch]:
     """
     Break up the stream of listens into submission requests.
     """
     # At the time of writing (when listens do not include Musicbrainz
     # identifiers), sizes of individual listens are around 190-240 bytes.
     # So as a first guess, we are going to create batches that are expected to
-    # fit in one request, assuming 250 bytes per listen.
-    listens_per_batch = LISTENBRAINZ_MAX_BODY_BYTES // 250
+    # fit in one request, assuming 215 bytes per listen.
+    listens_per_batch = LISTENBRAINZ_MAX_BODY_BYTES // 215
 
-    for outer_batch in iter_chunks(listens, n=listens_per_batch):
-        listens_remaining = outer_batch
-        n = listens_per_batch
+    batches = iter_chunks(listens, n=listens_per_batch)
+    listens_remaining = []
 
-        while len(listens_remaining) > 0:
-            # Slice up the outer batch into smaller ones of size n, if needed.
-            inner_batch = listens_remaining[:n]
-            listens_remaining = listens_remaining[n:]
+    # We start out with this batch size, but refine it while trying to create
+    # batches, reduce n step by step if the batch is too large, and increase it
+    # again if we did have a batch that fit.
+    n = listens_per_batch
 
-            request = format_batch_request_listenbrainz(inner_batch)
+    while True:
+        # Replenish the buffer of listens when it runs low.
+        while len(listens_remaining) < 2 * listens_per_batch:
+            try:
+                listens_remaining.extend(next(batches))
 
-            if request is not None:
-                yield ListenbrainzBatch(inner_batch, request)
+            except StopIteration:
+                break
 
-            else:
-                # The inner batch is too big, reduce the size and try again.
-                listens_remaining = inner_batch + listens_remaining
-                n = n // 2
-                assert n >= 1, 'A listen is too big to submit'
+        # If after that the buffer is still empty, there was no new batch,
+        # and we are done.
+        if len(listens_remaining) == 0:
+            break
+
+        # Slice out a batch of size n from the buffer.
+        batch = listens_remaining[:n]
+        listens_remaining = listens_remaining[n:]
+        request = format_batch_request_listenbrainz(batch)
+
+        if request is not None:
+            assert len(batch) > 0
+            yield ListenbrainzBatch(batch, request)
+            n = n + 5
+
+        else:
+            # The batch is too big, reduce the size and try again.
+            listens_remaining = batch + listens_remaining
+            assert n > 1, 'A listen is too big to submit'
+            n = n - 1
 
 
 def cmd_submit_listens(db_file: str) -> None:
@@ -438,7 +456,12 @@ def cmd_submit_listens(db_file: str) -> None:
         n_scrobbled = 0
 
         for batch in iter_requests_listenbrainz(listens):
-            print('Batch of ', len(batch.listens))
+            n_scrobbled += len(batch.listens)
+
+            print(f'Scrobbled {len(batch.listens)} listens.', flush=True)
+
+        print(n_scrobbled)
+
             #response = json.load(urlopen(req))
 
 
