@@ -8,9 +8,10 @@
 # A copy of the License has been included in the root of the repository.
 
 """
-scrobble.py -- Scrobble listens to Last.fm.
+scrobble.py -- Scrobble listens to Last.fm or Listenbrainz.
 
-Usage:
+Last.fm Usage
+-------------
 
     scrobble.py authenticate
     scrobble.py scrobble musium.sqlite3
@@ -22,6 +23,18 @@ The following environment variables are expected to be set:
     LAST_FM_SESSION_KEY   Printed by authenticate, only needed for scrobble.
 
 You can create an API key and secret at https://www.last.fm/api/account/create.
+
+
+Listenbrainz Usage
+------------------
+
+    scrobble.py submit-listens musium.sqlite
+
+The following environment variables are expected to be set:
+
+    LISTENBRAINZ_USER_TOKEN  Listenbrainz user token
+
+You can obtain a user token at https://listenbrainz.org/profile/.
 
 """
 
@@ -39,7 +52,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from urllib.request import Request, urlopen
 from urllib.parse import urlencode
-from typing import Any, Dict, Iterator, List, Union, TypeVar
+from typing import Any, Dict, Iterator, List, Optional, Union, TypeVar
 
 
 API_KEY = os.getenv('LAST_FM_API_KEY', '')
@@ -108,16 +121,15 @@ class Listen:
 
 def get_listens_to_scrobble(
     connection: sqlite3.Connection,
-    now: datetime,
     *,
-    only_recent: bool,
+    since: Optional[datetime] = None,
 ) -> Iterator[Listen]:
     """
-    Iterate unscrobbled listens that are eligible for scrobbling. When
-    'only_recent' is set, we select only listens that happened within 14 days
-    before 'now'; Last.fm does not allow backdating scrobbles further.
+    Iterate unscrobbled listens that are eligible for scrobbling. When 'since'
+    is set, we select only listens that happened within after that instant.
+    This is needed for Last.fm, which does not allow backdating scrobbles further.
     """
-    assert now.tzinfo == timezone.utc
+    assert since is None or since.tzinfo is not None, 'since must have tzinfo'
 
     common = (
         """
@@ -148,20 +160,15 @@ def get_listens_to_scrobble(
         """
     )
 
-    if only_recent:
-        # Last.fm allows submitting scrobbles up to 14 days after their timestamp.
-        # Any later, there is no point in submitting the scrobble any more.
-        since = (now - timedelta(days=14)).timestamp()
-
+    if since is not None:
         results = connection.cursor().execute(
             f"""
             {common}
-            -- Only scrobble those listens that Last.fm would accept. We have an
-            -- index on the convert-to-seconds-since-epoch expression for
-            -- uniqueness already, so this comparison can leverage that index.
+            -- We have an index on the convert-to-seconds-since-epoch expression
+            -- for uniqueness already, so this comparison can leverage that index.
             and cast(strftime('%s', started_at) as integer) > ?;
             """,
-            (since,)
+            (since.timestamp(),)
         )
 
     else:
@@ -275,7 +282,9 @@ def cmd_scrobble(db_file: str) -> None:
         print('LAST_FM_SESSION_KEY is not set, authentication will fail.')
 
     with sqlite3.connect(db_file) as connection:
-        listens = get_listens_to_scrobble(connection, now, only_recent=True)
+        # Last.fm allows submitting scrobbles up to 14 days after their timestamp.
+        # Any later, there is no point in submitting the scrobble any more.
+        listens = get_listens_to_scrobble(connection, since=now - timedelta(days=14))
 
         n_scrobbled = 0
 
