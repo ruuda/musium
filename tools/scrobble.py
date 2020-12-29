@@ -198,7 +198,7 @@ def format_signed_request(
     data: Dict[str, str],
 ) -> Request:
     """
-    Format a signed request to
+    Format a signed request with the data encoded in query params.
     """
     params = {
         **data,
