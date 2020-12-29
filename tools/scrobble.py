@@ -39,7 +39,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from urllib.request import Request, urlopen
 from urllib.parse import urlencode
-from typing import Dict, Union, Iterator
+from typing import Any, Dict, Iterator, List, Union, TypeVar
 
 
 API_KEY = os.getenv('LAST_FM_API_KEY', '')
@@ -64,9 +64,10 @@ class Listen:
         assert self.started_at.tzinfo is not None
         assert self.completed_at.tzinfo is not None
 
-    def format_scrobble(self, index: int) -> Dict[str, str]:
+    def format_lastfm_scrobble(self, index: int) -> Dict[str, str]:
         """
-        Format as parameters for a form/url-encoded request to scrobble the track.
+        Format as parameters for a form/url-encoded request to scrobble the
+        track to the Last.fm API.
         """
         def indexed(key: str) -> str:
             return f'{key}[{index}]'
@@ -85,21 +86,40 @@ class Listen:
 
         return result
 
+    def format_listenbrainz_listen(self) -> Dict[str, Any]:
+        """
+        Format as a dict that can be submitted as json to the Listenbrainz API.
+        See also https://listenbrainz.readthedocs.io/en/production/dev/json/#json-doc.
+        """
+        return {
+            'listened_at': int(self.started_at.timestamp()),
+            'track_metadata': {
+                'additional_info': {
+                    'listening_from': 'Musium',
+                    # TODO: Include release_mbid, artist_mbids, recording_mbid,
+                    # once we track that in the listens database.
+                },
+                'artist_name': self.track_artist,
+                'track_name': self.track_title,
+                'release_name': self.album_title,
+            }
+        }
+
 
 def get_listens_to_scrobble(
     connection: sqlite3.Connection,
     now: datetime,
+    *,
+    only_recent: bool,
 ) -> Iterator[Listen]:
     """
-    Iterate unscrobbled listens that are eligible for scrobbling.
+    Iterate unscrobbled listens that are eligible for scrobbling. When
+    'only_recent' is set, we select only listens that happened within 14 days
+    before 'now'; Last.fm does not allow backdating scrobbles further.
     """
     assert now.tzinfo == timezone.utc
 
-    # Last.fm allows submitting scrobbles up to 14 days after their timestamp.
-    # Any later, there is no point in submitting the scrobble any more.
-    since = (now - timedelta(days=14)).timestamp()
-
-    results = connection.cursor().execute(
+    common = (
         """
         select
           id,
@@ -119,18 +139,33 @@ def get_listens_to_scrobble(
           scrobbled_at is null
           and source = 'musium'
 
-          -- But only those that Last.fm would accept. We have an index on the
-          -- convert-to-seconds-since-epoch expression for uniqueness already,
-          -- so this comparison can leverage that index.
-          and cast(strftime('%s', started_at) as integer) > ?
-
           -- Last.fm guidelines say to only scrobble after playing for at least
-          -- 30 seconds.
+          -- 30 seconds. Listenbrainz guidelines say to only scroble full tracks
+          -- or at least 4 minutes, but Musium only plays full tracks (when
+          -- completed_at is not null), so that is implied by the query.
           and cast(strftime('%s', completed_at) as integer) -
-              cast(strftime('%s', started_at) as integer) > 30;
-        """,
-        (since,)
+              cast(strftime('%s', started_at) as integer) > 30
+        """
     )
+
+    if only_recent:
+        # Last.fm allows submitting scrobbles up to 14 days after their timestamp.
+        # Any later, there is no point in submitting the scrobble any more.
+        since = (now - timedelta(days=14)).timestamp()
+
+        results = connection.cursor().execute(
+            f"""
+            {common}
+            -- Only scrobble those listens that Last.fm would accept. We have an
+            -- index on the convert-to-seconds-since-epoch expression for
+            -- uniqueness already, so this comparison can leverage that index.
+            and cast(strftime('%s', started_at) as integer) > ?;
+            """,
+            (since,)
+        )
+
+    else:
+        results = connection.cursor().execute(f'{common};')
 
     for row in results:
         values = list(row)
@@ -143,7 +178,7 @@ def set_scrobbled(
     connection: sqlite3.Connection,
     now: datetime,
     row_ids: List[int],
-) -> Iterator[Listen]:
+) -> None:
     """
     Update the rows to set scrobbled_at.
     """
@@ -159,7 +194,9 @@ def set_scrobbled(
     connection.commit()
 
 
-def iter_chunks(events: Iterator[Event], n: int) -> Iterator[List[Event]]:
+T = TypeVar('T')
+
+def iter_chunks(events: Iterator[T], n: int) -> Iterator[List[T]]:
     """
     Yield chunks of n items from the original iterator.
     The last chunk may be smaller.
@@ -176,19 +213,19 @@ def iter_chunks(events: Iterator[Event], n: int) -> Iterator[List[Event]]:
         yield result
 
 
-def format_batch_request(events: List[Event]) -> Request:
+def format_batch_request(listens: List[Listen]) -> Request:
     """
-    Format a POST request to scrobble the given events.
+    Format a POST request to scrobble the given listens.
     """
-    assert len(events) <= 50, 'Last.fm allows at most 50 scrobbles per batch.'
+    assert len(listens) <= 50, 'Last.fm allows at most 50 scrobbles per batch.'
 
     params = {
         'method': 'track.scrobble',
         'sk': SESSION_KEY,
     }
 
-    for i, event in enumerate(events):
-        params.update(event.format_scrobble(i))
+    for i, listen in enumerate(listens):
+        params.update(listen.format_lastfm_scrobble(i))
 
     return format_signed_request(http_method='POST', data=params)
 
@@ -238,7 +275,7 @@ def cmd_scrobble(db_file: str) -> None:
         print('LAST_FM_SESSION_KEY is not set, authentication will fail.')
 
     with sqlite3.connect(db_file) as connection:
-        listens = get_listens_to_scrobble(connection, now)
+        listens = get_listens_to_scrobble(connection, now, only_recent=True)
 
         n_scrobbled = 0
 
