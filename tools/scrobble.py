@@ -58,6 +58,12 @@ from typing import Any, Dict, Iterator, List, Optional, Union, TypeVar
 LAST_FM_API_KEY = os.getenv('LAST_FM_API_KEY', '')
 LAST_FM_SECRET = os.getenv('LAST_FM_SECRET', '')
 LAST_FM_SESSION_KEY = os.getenv('LAST_FM_SESSION_KEY', '')
+LISTENBRAINZ_USER_TOKEN = os.getenv('LISTENBRAINZ_USER_TOKEN', '')
+
+# Listenbrainz enforces a max request body size.
+# See https://listenbrainz.readthedocs.io/en/production/dev/api/,
+# anchor #listenbrainz.webserver.views.api_tools.MAX_LISTEN_SIZE.
+LISTENBRAINZ_MAX_BODY_BYTES = 10240
 
 
 @dataclass(frozen=True)
@@ -109,8 +115,14 @@ class Listen:
             'track_metadata': {
                 'additional_info': {
                     'listening_from': 'Musium',
-                    # TODO: Include release_mbid, artist_mbids, recording_mbid,
-                    # once we track that in the listens database.
+                    'tracknumber': self.track_number,
+                    # TODO: Include Musicbrainz ids, once we track those in the
+                    # listens database. In particular:
+                    # * artist_mbids
+                    # * release_mbid
+                    # * recording_mbid
+                    # * track_mbid
+                    # * ISRC
                 },
                 'artist_name': self.track_artist,
                 'track_name': self.track_title,
@@ -220,9 +232,9 @@ def iter_chunks(events: Iterator[T], n: int) -> Iterator[List[T]]:
         yield result
 
 
-def format_batch_request(listens: List[Listen]) -> Request:
+def format_batch_request_last_fm(listens: List[Listen]) -> Request:
     """
-    Format a POST request to scrobble the given listens.
+    Format a POST request to scrobble the given listens to Last.fm.
     """
     assert len(listens) <= 50, 'Last.fm allows at most 50 scrobbles per batch.'
 
@@ -290,7 +302,7 @@ def cmd_scrobble(db_file: str) -> None:
 
         # Last.fm allows submitting batches of at most 50 scrobbles at once.
         for batch in iter_chunks(listens, n=50):
-            req = format_batch_request(batch)
+            req = format_batch_request_last_fm(batch)
             response = json.load(urlopen(req))
 
             num_accepted = response['scrobbles']['@attr']['accepted']
@@ -354,6 +366,82 @@ def cmd_authenticate() -> None:
     print(f'LAST_FM_SESSION_KEY={session_key}')
 
 
+def format_batch_request_listenbrainz(listens: List[Listen]) -> Optional[Request]:
+    """
+    Format a POST request to submit the given listens to Listenbrainz.
+
+    Returns None when trying to submit too many listens in one request.
+    """
+
+    body_dict = {
+        'listen_type': 'import',
+        'payload': [listen.format_listenbrainz_listen() for listen in listens],
+    }
+    body_bytes = json.dumps(body_dict).encode('utf-8')
+
+    if len(body_bytes) > LISTENBRAINZ_MAX_BODY_BYTES:
+        return None
+
+    return Request(
+        url='https://api.listenbrainz.org/1/submit-listens',
+        method='POST',
+        headers={'Authorization': f'Token {LISTENBRAINZ_USER_TOKEN}'},
+        data=body_bytes,
+    )
+
+
+@dataclass(frozen=True)
+class ListenbrainzBatch:
+    listens: List[Listen]
+    request: Request
+
+
+def iter_requests_listenbrainz(listens: Iterable[Listen]) -> Iterable[ListenbrainzBatch]:
+    """
+    Break up the stream of listens into submission requests.
+    """
+    # At the time of writing (when listens do not include Musicbrainz
+    # identifiers), sizes of individual listens are around 190-240 bytes.
+    # So as a first guess, we are going to create batches that are expected to
+    # fit in one request, assuming 250 bytes per listen.
+    listens_per_batch = LISTENBRAINZ_MAX_BODY_BYTES // 250
+
+    for outer_batch in iter_chunks(listens, n=listens_per_batch):
+        listens_remaining = outer_batch
+        n = listens_per_batch
+
+        while len(listens_remaining) > 0:
+            # Slice up the outer batch into smaller ones of size n, if needed.
+            inner_batch = listens_remaining[:n]
+            listens_remaining = listens_remaining[n:]
+
+            request = format_batch_request_listenbrainz(inner_batch)
+
+            if request is not None:
+                yield ListenbrainzBatch(inner_batch, request)
+
+            else:
+                # The inner batch is too big, reduce the size and try again.
+                listens_remaining = inner_batch + listens_remaining
+                n = n // 2
+                assert n >= 1, 'A listen is too big to submit'
+
+
+def cmd_submit_listens(db_file: str) -> None:
+    now = datetime.now(tz=timezone.utc)
+
+    if LISTENBRAINZ_USER_TOKEN == '':
+        print('LISTENBRAINZ_USER_TOKEN is not set, authorization will fail.')
+
+    with sqlite3.connect(db_file) as connection:
+        listens = get_listens_to_scrobble(connection)
+        n_scrobbled = 0
+
+        for batch in iter_requests_listenbrainz(listens):
+            print('Batch of ', len(batch.listens))
+            #response = json.load(urlopen(req))
+
+
 if __name__ == '__main__':
     command = ''
     if len(sys.argv) > 1:
@@ -364,6 +452,9 @@ if __name__ == '__main__':
 
     elif command == 'scrobble' and len(sys.argv) == 3:
         cmd_scrobble(sys.argv[2])
+
+    elif command == 'submit-listens' and len(sys.argv) == 3:
+        cmd_submit_listens(sys.argv[2])
 
     else:
         print(__doc__)
