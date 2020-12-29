@@ -55,9 +55,9 @@ from urllib.parse import urlencode
 from typing import Any, Dict, Iterator, List, Optional, Union, TypeVar
 
 
-API_KEY = os.getenv('LAST_FM_API_KEY', '')
-SECRET = os.getenv('LAST_FM_SECRET', '')
-SESSION_KEY = os.getenv('LAST_FM_SESSION_KEY', '')
+LAST_FM_API_KEY = os.getenv('LAST_FM_API_KEY', '')
+LAST_FM_SECRET = os.getenv('LAST_FM_SECRET', '')
+LAST_FM_SESSION_KEY = os.getenv('LAST_FM_SESSION_KEY', '')
 
 
 @dataclass(frozen=True)
@@ -228,7 +228,7 @@ def format_batch_request(listens: List[Listen]) -> Request:
 
     params = {
         'method': 'track.scrobble',
-        'sk': SESSION_KEY,
+        'sk': LAST_FM_SESSION_KEY,
     }
 
     for i, listen in enumerate(listens):
@@ -246,13 +246,13 @@ def format_signed_request(
     """
     params = {
         **data,
-        'api_key': API_KEY,
+        'api_key': LAST_FM_API_KEY,
     }
 
     # Sort alphabetically by key, as required for the signature.
     params = {k: v for k, v in sorted(params.items())}
 
-    sign_input = ''.join(f'{k}{v}' for k, v in params.items()) + SECRET
+    sign_input = ''.join(f'{k}{v}' for k, v in params.items()) + LAST_FM_SECRET
     params['api_sig'] = hashlib.md5(sign_input.encode('utf-8')).hexdigest()
 
     # The "format" key is not part of the signature input, we need to add it
@@ -274,11 +274,11 @@ def format_signed_request(
 def cmd_scrobble(db_file: str) -> None:
     now = datetime.now(tz=timezone.utc)
 
-    if API_KEY == '':
+    if LAST_FM_API_KEY == '':
         print('LAST_FM_API_KEY is not set, authentication will fail.')
-    if SECRET == '':
+    if LAST_FM_SECRET == '':
         print('LAST_FM_SECRET is not set, authentication will fail.')
-    if SESSION_KEY == '':
+    if LAST_FM_SESSION_KEY == '':
         print('LAST_FM_SESSION_KEY is not set, authentication will fail.')
 
     with sqlite3.connect(db_file) as connection:
@@ -339,7 +339,7 @@ def cmd_authenticate() -> None:
     token = response['token']
 
     print('Please authorize the application at the following page:\n')
-    print(f'https://www.last.fm/api/auth/?api_key={API_KEY}&token={token}\n')
+    print(f'https://www.last.fm/api/auth/?api_key={LAST_FM_API_KEY}&token={token}\n')
     input('Press Enter to continue.')
 
     req = format_signed_request(
