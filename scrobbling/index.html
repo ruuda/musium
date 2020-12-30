@@ -387,10 +387,11 @@
       </nav>
       <article>
         <h1 id="scrobbling-to-lastfm">Scrobbling to Last.fm</h1>
-<p>Musium can be set up to scrobble plays to Last.fm. Musium logs plays to a SQLite
-database in the data directory. An enclosed script can batch-submit those plays
-to Last.fm. Running the script regularly ensures that all plays get scrobbled.
-Musium does not currently offer immediate scrobbling or <em>now playing</em> updates.</p>
+<p>Musium can be set up to scrobble plays to <a href="https://last.fm/">Last.fm</a>. Musium logs plays to a
+SQLite database in the data directory. An enclosed script can batch-submit those
+plays to Last.fm. Running the script regularly ensures that all plays get
+scrobbled.  Musium does not currently offer immediate scrobbling or <em>now
+playing</em> updates.</p>
 <h2 id="authenticating">Authenticating</h2>
 <p>To scrobble to Last.fm, you need an <abbr>API</abbr> key and secret. Create those
 at <a href="https://www.last.fm/api/account/create">last.fm/api/account/create</a>.
@@ -424,7 +425,7 @@ Type=oneshot
 ExecStart=/checkouts/musium/tools/scrobble.py scrobble /var/lib/musium/musium.sqlite3
 
 # The values below are randomly generated examples, they are not real secrets.
-# Replace them with your persional secrets.
+# Replace them with your personal secrets.
 Environment=LAST_FM_API_KEY=5d41402abc4b2a76b9719d911017c592
 Environment=LAST_FM_SECRET=f330c2f5a4e075a21593f477b9ee967a
 Environment=LAST_FM_SESSION_KEY=gE7P1f444dLu6NbZeMs4wb9V4roITlAF
@@ -457,8 +458,8 @@ systemctl start musium-scrobble.timer
 </code></pre>
       </article>
       <nav id="nav-prev-next">
-        <a id="nav-prev" href="../running/" title="Running">Previous</a>
-        <a id="nav-next" href="../tagging/" title="Tagging">Next</a>
+        <a id="nav-prev" href="../loudness/" title="Loudness normalization">Previous</a>
+        <a id="nav-next" href="../listenbrainz/" title="Submitting to Listenbrainz">Next</a>
         </nav>
       </div>
     <aside>
@@ -478,6 +479,12 @@ systemctl start musium-scrobble.timer
               "><a href="../running/">Running</a></li>
             
             <li class="toc-chapter
+              "><a href="../tagging/">Tagging</a></li>
+            
+            <li class="toc-chapter
+              "><a href="../loudness/">Loudness normalization</a></li>
+            
+            <li class="toc-chapter
                current"><a href="./">Scrobbling to Last.fm</a></li>
             <li><ul>
                 <li class="toc-heading"><a href="#authenticating">Authenticating</a></li>
@@ -486,10 +493,7 @@ systemctl start musium-scrobble.timer
                 </ul></li>
                
             <li class="toc-chapter
-              "><a href="../tagging/">Tagging</a></li>
-            
-            <li class="toc-chapter
-              "><a href="../loudness/">Loudness normalization</a></li>
+              "><a href="../listenbrainz/">Submitting to Listenbrainz</a></li>
             
             <li class="toc-chapter
               "><a href="../disks/">Disks</a></li>

@@ -9,7 +9,7 @@
   -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Loudness normalization — Musium</title>
+  <title>Submitting to Listenbrainz — Musium</title>
   <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
@@ -382,64 +382,44 @@
       <nav id="breadcrumbs">
         <a href="..">Musium</a>
          › <a href="../building/">User Guide</a> 
-         › <a href="./">Loudness normalization</a> 
+         › <a href="./">Submitting to Listenbrainz</a> 
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="loudness-normalization">Loudness normalization</h1>
-<p>Musium can normalize the perceptual playback loudness based on loudness
-information in flac tags.</p>
-<p>The volume slider in Musium treats 0 dB volume as 0 dB gain for the output
-device, but it does compensate for track or album loudness relative to a target
-loudness of -23 <abbr>LUFS</abbr>. When the Musium volume slider is set to 0 dB,
-this means that a track with a loudness of -23 <abbr>LUFS</abbr> will play back
-without volume adjustment (at maximum volume of the device), and a track with a
-loudness of -10 <abbr>LUFS</abbr> will play back with device volume at -13 dB.
-When the Musium volume slider is set to -5 dB, a track with a loudness of -10
-<abbr>LUFS</abbr> will play back with device volume at -18 dB.</p>
-<p>It is possible to set volumes beyond 0 dB in Musium, but this is only effective
-for inherently loud tracks: a track with a loudness of -23 <abbr>LUFS</abbr> is
-already playing at the maximum device volume, but a track with a loudness of
--13 <abbr>LUFS</abbr> has enough headroom to allow the volume to be set to 10 dB.</p>
-<h2 id="tags">Tags</h2>
-<p>Two tags affect loudness normalization:</p>
+        <h1 id="submitting-listens-to-listenbrainz">Submitting listens to Listenbrainz</h1>
+<p>Musium can be set up to submit plays to <a href="https://listenbrainz.org">Listenbrainz</a>. Musium logs plays to
+a SQLite database in the data directory. An enclosed script can batch-submit
+those plays to Listenbrainz. Running the script regularly ensures that all plays
+get submitted. Musium does not currently offer immediate submission or <em>now
+playing</em> updates.</p>
+<h2 id="running-manually">Running manually</h2>
+<p>To submit listens to your profile, you need to obtain your <em>user token</em> from
+<a href="https://listenbrainz.org/profile/">listenbrainz.org/profile</a>. Make this
+available in the <code>LISTENBRAINZ_USER_TOKEN</code> environment variable, for example:</p>
+<pre><code>export LISTENBRAINZ_USER_TOKEN=ab32823b-57e7-4953-80be-f10294b26058
+</code></pre>
+<p>With this set up, we can run the submission script located in the <code>tools</code>
+directory of the repository:</p>
+<pre><code>tools/scrobble.py submit-listens /data_path/musium.sqlite3
+</code></pre>
+<p>The data path is the <a href="../configuration/#data_path"><code>data_path</code> as configured</a>.
+Musium stores <code>musium.sqlite3</code> in that directory.</p>
+<p>The script only submits listens that originated from Musium itself, it does
+not submit imported listening history. Listens that were submitted successfully
+get marked as such in the database, so they are only submitted once.</p>
+<h2 id="with-systemd">With systemd</h2>
+<p>Systemd timers can be useful for submitting listens periodically. This works the
+same as <a href="../scrobbling/#with-systemd">Last.fm scrobbling with systemd</a>, with two
+small differences:</p>
 <ul>
-<li><code>BS17704_TRACK_LOUDNESS</code></li>
-<li><code>BS17704_ALBUM_LOUDNESS</code></li>
+<li>The command is <code>scrobble.py submit-listens</code>, not <code>scrobble.py scrobble</code>.</li>
+<li>The environment variable to set is <code>LISTENBRAINZ_USER_TOKEN</code>, the
+   <code>LAST_FM_*</code> variables are not needed.</li>
 </ul>
-<p>The tags must store the integrated loudness as defined in
-<a href="https://www.itu.int/rec/R-REC-BS.1770-4-201510-I/en"><abbr>ITU-R BS.1770-4</abbr></a>, for the track, and the concatenation
-of all tracks respectively. The value must be a decimal number, followed by the
-suffix “<abbr>LUFS</abbr>” for Loudness Units Full Scale. For example,
-<code>-9.317 LUFS</code>. The value for album loudness must be consistent across all tracks
-in the album.</p>
-<h2 id="replaygain">ReplayGain</h2>
-<p>ReplayGain has been very influential for loudness normalization, and it is
-widely supported by both taggers and players, but unfortunately it has become
-ambiguous over time. ReplayGain does not store the loudness of the track
-directly, instead it stores the <em>gain</em> that is needed to bring the track to
-target loudness. The target loudness was initially well-defined, but tools
-started offering different options to accomodate to the reference loudness of
-different standards such as <abbr>EBU R-128</abbr>, <abbr>ATSC A/85</abbr>, and
-ReplayGain 2.0. This means that ReplayGain tags from different sources do not
-necessarily have the same meaning, which defeats the purpose of normalization.
-In practice this means that ReplayGain is only really useful if you can be
-certain that all tags were produced by the same program with the same settings.</p>
-<p>The <code>BS17704_*</code> tags used by Musium aim to sidestep this problem by storing the
-observed loudness, instead of the gain. The gain can easily be computed by the
-player, and the particular target loudness that is used is not important anyway
-for normalizing loudness in a collection of music. (It does matter when you want
-to match the loudness of your music to e.g. external streaming services.)
-Furthermore, by naming the tag after the revision of the standard, future
-revisions to <abbr>BS.1770</abbr> will not create ambiguities in the meaning of
-existing tags.</p>
-<h2 id="writing-bs1770-4-tags">Writing BS.1770-4 tags</h2>
-<p><a href="https://github.com/ruuda/bs1770#tagging-flac-files">The <abbr>BS1770</abbr> <code>flacgain</code> utility</a> can be used to analyze a
-collection of flac files, and to add <code>BS17704_*</code> tags.</p>
       </article>
       <nav id="nav-prev-next">
-        <a id="nav-prev" href="../tagging/" title="Tagging">Previous</a>
-        <a id="nav-next" href="../scrobbling/" title="Scrobbling to Last.fm">Next</a>
+        <a id="nav-prev" href="../scrobbling/" title="Scrobbling to Last.fm">Previous</a>
+        <a id="nav-next" href="../disks/" title="Disks">Next</a>
         </nav>
       </div>
     <aside>
@@ -462,19 +442,18 @@ collection of flac files, and to add <code>BS17704_*</code> tags.</p>
               "><a href="../tagging/">Tagging</a></li>
             
             <li class="toc-chapter
-               current"><a href="./">Loudness normalization</a></li>
-            <li><ul>
-                <li class="toc-heading"><a href="#tags">Tags</a></li>
-                <li class="toc-heading"><a href="#replaygain">ReplayGain</a></li>
-                <li class="toc-heading"><a href="#writing-bs1770-4-tags">Writing BS.1770-4 tags</a></li>
-                </ul></li>
-               
+              "><a href="../loudness/">Loudness normalization</a></li>
+            
             <li class="toc-chapter
               "><a href="../scrobbling/">Scrobbling to Last.fm</a></li>
             
             <li class="toc-chapter
-              "><a href="../listenbrainz/">Submitting to Listenbrainz</a></li>
-            
+               current"><a href="./">Submitting to Listenbrainz</a></li>
+            <li><ul>
+                <li class="toc-heading"><a href="#running-manually">Running manually</a></li>
+                <li class="toc-heading"><a href="#with-systemd">With systemd</a></li>
+                </ul></li>
+               
             <li class="toc-chapter
               "><a href="../disks/">Disks</a></li>
             <li class="toc-section"><a href="../api/">API Reference</a></li>
