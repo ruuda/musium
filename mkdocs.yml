@@ -10,10 +10,10 @@ nav:
     - Building: building.md
     - Configuration: configuration.md
     - Running: running.md
-    - Scrobbling to Last.fm: scrobbling.md
-    - Submitting to Listenbrainz: listenbrainz.md
     - Tagging: tagging.md
     - Loudness normalization: loudness.md
+    - Scrobbling to Last.fm: scrobbling.md
+    - Submitting to Listenbrainz: listenbrainz.md
     - Disks: disks.md
   - API Reference: api.md
   - Internals:
