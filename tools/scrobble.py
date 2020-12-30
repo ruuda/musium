@@ -383,7 +383,10 @@ def format_batch_request_listenbrainz(listens: List[Listen]) -> Optional[Request
     return Request(
         url='https://api.listenbrainz.org/1/submit-listens',
         method='POST',
-        headers={'Authorization': f'Token {LISTENBRAINZ_USER_TOKEN}'},
+        headers={
+            'Authorization': f'Token {LISTENBRAINZ_USER_TOKEN}',
+            'Content-Type': 'application/json; charset=utf-8',
+        },
         data=body_bytes,
     )
 
