@@ -12,6 +12,10 @@ anywhere on the local network through a webinterface.
  * [Building](https://ruuda.github.io/musium/building/)
  * [Running](https://ruuda.github.io/musium/running/)
 
+<p align="center"><a href="https://github.com/ruuda/musium/tree/master/screenshots">
+  <img src="screenshots/exhibition.svg" alt="Musium screenshots" width="600">
+</a></p>
+
 ## Status
 
 Musium is in a usable state, but many features are still missing. For example,
