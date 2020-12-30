@@ -50,8 +50,9 @@ import urllib
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 from typing import Any, Dict, Iterator, List, Optional, Union, TypeVar
 
 
@@ -298,8 +299,6 @@ def cmd_scrobble(db_file: str) -> None:
         # Any later, there is no point in submitting the scrobble any more.
         listens = get_listens_to_scrobble(connection, since=now - timedelta(days=14))
 
-        n_scrobbled = 0
-
         # Last.fm allows submitting batches of at most 50 scrobbles at once.
         for batch in iter_chunks(listens, n=50):
             req = format_batch_request_last_fm(batch)
@@ -339,7 +338,6 @@ def cmd_scrobble(db_file: str) -> None:
             # Flush, even when stdout is not a terminal, such as when running
             # under systemd, so we get accurate timestamps in the journal.
             print(f'Scrobbled {num_accepted} listens.', flush=True)
-            n_scrobbled += num_accepted
 
 
 def cmd_authenticate() -> None:
@@ -407,7 +405,7 @@ def iter_requests_listenbrainz(listens: Iterator[Listen]) -> Iterator[Listenbrai
     listens_per_batch = LISTENBRAINZ_MAX_BODY_BYTES // 215
 
     batches = iter_chunks(listens, n=listens_per_batch)
-    listens_remaining = []
+    listens_remaining: List[Listen] = []
 
     # We start out with this batch size, but refine it while trying to create
     # batches, reduce n step by step if the batch is too large, and increase it
@@ -453,16 +451,35 @@ def cmd_submit_listens(db_file: str) -> None:
 
     with sqlite3.connect(db_file) as connection:
         listens = get_listens_to_scrobble(connection)
-        n_scrobbled = 0
 
         for batch in iter_requests_listenbrainz(listens):
-            n_scrobbled += len(batch.listens)
+            try:
+                print('Body:', batch.request.data)
+                print('Body:', batch.request.method)
+                response = urlopen(batch.request)
+                assert response.status == 200
+                ids_accepted = [listen.id for listen in batch.listens]
+                set_scrobbled(connection, now, ids_accepted)
+                print(json.load(response))
+                # Flush, even when stdout is not a terminal, such as when running
+                # under systemd, so we get accurate timestamps in the journal.
+                print(f'Submitted {len(batch.listens)} listens.', flush=True)
 
-            print(f'Scrobbled {len(batch.listens)} listens.', flush=True)
+                # Try to avoid exceeding the rate limit, never let the number of
+                # calls remaining go to 0. See also
+                # https://listenbrainz.readthedocs.io/en/production/dev/api/#rate-limiting.
+                if int(response.headers.get('X-RateLimit-Remaining', '10')) <= 1:
+                    sleep_seconds = float(response.headers.get('X-RateLimit-Reset-In', '1'))
+                    time.sleep(sleep_seconds)
 
-        print(n_scrobbled)
-
-            #response = json.load(urlopen(req))
+            except HTTPError as err:
+                print(f'Unexpected response, status {err.status}.')
+                # Re-format the body for easier debugging. If the body is not
+                # json this fails, but we already printed the error. If the
+                # error is temporary, like a 503, then we just fail, and the
+                # next time that this script runs we hope for better luck.
+                print(json.dumps(json.load(err), indent=2))
+                sys.exit(1)
 
 
 if __name__ == '__main__':
