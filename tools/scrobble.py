@@ -457,13 +457,10 @@ def cmd_submit_listens(db_file: str) -> None:
 
         for batch in iter_requests_listenbrainz(listens):
             try:
-                print('Body:', batch.request.data)
-                print('Body:', batch.request.method)
                 response = urlopen(batch.request)
                 assert response.status == 200
                 ids_accepted = [listen.id for listen in batch.listens]
                 set_scrobbled(connection, now, ids_accepted)
-                print(json.load(response))
                 # Flush, even when stdout is not a terminal, such as when running
                 # under systemd, so we get accurate timestamps in the journal.
                 print(f'Submitted {len(batch.listens)} listens.', flush=True)
