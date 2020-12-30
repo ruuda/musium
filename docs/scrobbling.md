@@ -1,9 +1,12 @@
 # Scrobbling to Last.fm
 
-Musium can be set up to scrobble plays to Last.fm. Musium logs plays to a SQLite
-database in the data directory. An enclosed script can batch-submit those plays
-to Last.fm. Running the script regularly ensures that all plays get scrobbled.
-Musium does not currently offer immediate scrobbling or *now playing* updates.
+Musium can be set up to scrobble plays to [Last.fm][lfm]. Musium logs plays to a
+SQLite database in the data directory. An enclosed script can batch-submit those
+plays to Last.fm. Running the script regularly ensures that all plays get
+scrobbled.  Musium does not currently offer immediate scrobbling or *now
+playing* updates.
+
+[lfm]: https://last.fm/
 
 ## Authenticating
 
