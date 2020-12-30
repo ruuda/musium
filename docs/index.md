@@ -11,8 +11,8 @@ anywhere on the local network through a webinterface.
  * User interface responds quickly, and indexing is fast.
  * Optimized to run in resource-constrained environments, such as a Raspberry Pi.
  * Responsive design, supports both mobile and desktop.
- * Logarithmic volume control.
- * Last.fm scrobbling.
+ * Logarithmic volume control and loudness normalization.
+ * Last.fm and Listenbrainz scrobbling.
 
 ## Limitations
 
