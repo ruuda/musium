@@ -13,7 +13,8 @@ anywhere on the local network through a webinterface.
  * [Running](https://ruuda.github.io/musium/running/)
 
 <p align="center"><a href="https://github.com/ruuda/musium/tree/master/screenshots">
-  <img src="screenshots/exhibition.svg" alt="Musium screenshots" width="600">
+  <!-- The png is the rasterized version of the svg. -->
+  <img src="screenshots/exhibition.png" alt="Musium screenshots" width="600">
 </a></p>
 
 ## Status
