@@ -5,9 +5,6 @@
 // you may not use this file except in compliance with the License.
 // A copy of the License has been included in the root of the repository.
 
-// TODO: Remove once near-stable.
-#![allow(dead_code)]
-
 extern crate alsa;
 extern crate claxon;
 extern crate crossbeam;

@@ -39,7 +39,7 @@ pub enum IssueDetail {
 
     /// Two different artists were found for albums with the same mbid.
     /// Contains the artist used, and the discarded alternative.
-    AlbumArtistMismatch(AlbumId, String, String),
+    AlbumArtistMismatch(AlbumId, ArtistId, ArtistId),
 
     /// Two different album loudnesses were found for albums with the same mbid.
     /// Contains the loudness used, and the discarded alternative.
@@ -210,7 +210,11 @@ pub fn albums_different(
     }
 
     if a.artist_id != b.artist_id {
-        unimplemented!("TODO: Look up artist names.");
+        return Some(IssueDetail::AlbumArtistMismatch(
+            id,
+            a.artist_id,
+            b.artist_id,
+        ));
     }
 
     None
