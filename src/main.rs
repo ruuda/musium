@@ -28,9 +28,10 @@ use tiny_http::Method::{Get, Post, Put};
 use musium::config::Config;
 use musium::error;
 use musium::player::{Millibel, Player};
+use musium::prim::{AlbumId, TrackId};
 use musium::serialization;
 use musium::thumb_cache::ThumbCache;
-use musium::{AlbumId, MetaIndex, MemoryMetaIndex, TrackId};
+use musium::{MetaIndex, MemoryMetaIndex};
 
 fn header_content_type(content_type: &str) -> Header {
     Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes())
