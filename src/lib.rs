@@ -16,7 +16,6 @@ extern crate nix;
 extern crate serde_json;
 extern crate unicode_normalization;
 
-mod flat_tree; // TODO: Rename.
 mod search;
 mod word_index;
 mod album_table;
