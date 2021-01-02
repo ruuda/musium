@@ -215,3 +215,57 @@ impl fmt::Display for Date {
         write!(f, "-{:02}", self.day)
     }
 }
+
+impl fmt::Display for TrackId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:016x}", self.0)
+    }
+}
+
+impl fmt::Display for AlbumId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:016x}", self.0)
+    }
+}
+
+impl fmt::Display for ArtistId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:016x}", self.0)
+    }
+}
+
+pub fn get_track_id(album_id: AlbumId,
+                disc_number: u8,
+                track_number: u8)
+                -> TrackId {
+    // Take the bits from the album id, so all the tracks within one album are
+    // adjacent. This is desirable, because two tracks fit in a cache line,
+    // halving the memory access cost of looking up an entire album. It also
+    // makes memory access more predictable. Finally, if the 52 most significant
+    // bits uniquely identify the album (which we assume), then all tracks are
+    // guaranteed to be adjacent, and we can use an efficient range query to
+    // find them.
+    let high = album_id.0 & 0xffff_ffff_ffff_f000;
+
+    // Finally, within an album the disc number and track number should uniquely
+    // identify the track.
+    let mid = ((disc_number & 0xf) as u64) << 8;
+    let low = track_number as u64;
+
+    TrackId(high | mid | low)
+}
+
+#[test]
+fn struct_sizes_are_as_expected() {
+    use std::mem;
+    // TODO: Enable these again once I sort out how to fit the loudness in and
+    // still keep a (TrackId, Track) 32 bytes.
+    // assert_eq!(mem::size_of::<Track>(), 24);
+    // assert_eq!(mem::size_of::<Album>(), 16);
+    assert_eq!(mem::size_of::<Artist>(), 8);
+    // assert_eq!(mem::size_of::<(TrackId, Track)>(), 32);
+
+    assert_eq!(mem::align_of::<Track>(), 8);
+    assert_eq!(mem::align_of::<Album>(), 8);
+    assert_eq!(mem::align_of::<Artist>(), 4);
+}

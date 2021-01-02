@@ -30,6 +30,7 @@ use musium::error;
 use musium::player::{Millibel, Player};
 use musium::prim::{AlbumId, TrackId};
 use musium::serialization;
+use musium::string_utils::normalize_words;
 use musium::thumb_cache::ThumbCache;
 use musium::{MetaIndex, MemoryMetaIndex};
 
@@ -280,7 +281,7 @@ impl MetaServer {
         };
 
         let mut words = Vec::new();
-        musium::normalize_words(query.as_ref(), &mut words);
+        normalize_words(query.as_ref(), &mut words);
 
         let mut artists = Vec::new();
         let mut albums = Vec::new();
@@ -746,8 +747,8 @@ fn equals_normalized(x1: &str, x2: &str) -> bool {
     // TODO: Figure out a faster way to do this.
     let mut w1 = Vec::new();
     let mut w2 = Vec::new();
-    musium::normalize_words(&x1[..], &mut w1);
-    musium::normalize_words(&x2[..], &mut w2);
+    normalize_words(&x1[..], &mut w1);
+    normalize_words(&x2[..], &mut w2);
     w1 == w2
 }
 
@@ -780,8 +781,8 @@ fn match_listens(
 
         let mut words = Vec::new();
         let mut tracks = Vec::new();
-        musium::normalize_words(&track_title[..], &mut words);
-        musium::normalize_words(&artist_name[..], &mut words);
+        normalize_words(&track_title[..], &mut words);
+        normalize_words(&artist_name[..], &mut words);
         // TODO: Add a way to turn off prefix search for the last word.
         index.search_track(&words[..], &mut tracks);
 
