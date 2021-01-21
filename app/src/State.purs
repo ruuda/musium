@@ -86,6 +86,7 @@ type AppState =
   , queue :: Array QueuedTrack
   , nextQueueFetch :: Fiber Unit
   , nextProgressUpdate :: Fiber Unit
+  , navBar :: NavBarState
   , statusBar :: StatusBarState
   , albumListState :: AlbumListState
     -- The index of the album at the top of the viewport.
@@ -172,6 +173,7 @@ new bus = do
     , queue: []
     , nextQueueFetch: never
     , nextProgressUpdate: never
+    , navBar: navBar
     , statusBar: statusBar
     , albumListState: { elements: [], begin: 0, end: 0 }
     , albumListIndex: 0
@@ -373,6 +375,8 @@ navigateTo newLocation historyMode state =
     case historyMode of
       Event.NoRecordHistory -> pure unit
       Event.RecordHistory -> liftEffect $ History.pushState newLocation title
+
+    liftEffect $ NavBar.selectTab newLocation state.navBar
 
     -- Inner level: Inside the browser pane, switch between the list and album.
     liftEffect $ case newLocation of

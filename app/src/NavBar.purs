@@ -8,9 +8,12 @@
 module NavBar
   ( NavBarState
   , new
+  , selectTab
   ) where
 
 import Control.Monad.Reader.Class (ask)
+import Data.Foldable (traverse_)
+import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Prelude
 
@@ -19,9 +22,17 @@ import Event (Event)
 import Event as Event
 import Html (Html)
 import Html as Html
+import Navigation (Location)
+import Navigation as Navigation
 
 type NavBarState =
   { navBar :: Element
+  , tabLibrary :: Element
+  , tabArtist :: Element
+  , tabAlbum :: Element
+  , tabQueue :: Element
+  , tabNowPlaying :: Element
+  , tabSearch :: Element
   }
 
 new :: (Event -> Aff Unit) -> Html NavBarState
@@ -30,16 +41,49 @@ new postEvent = Html.nav $ do
   Html.onClick $ launchAff_ $ postEvent $ Event.ClickStatusBar
 
   let
+    navTab :: String -> Html Element
     navTab title = Html.div $ do
       Html.addClass "nav-tab"
       Html.text title
+      ask
 
-  navTab "Library"
-  navTab "Artist"
-  navTab "Album"
-  navTab "Queue"
-  navTab "Now Playing"
-  navTab "Search"
+  tabLibrary    <- navTab "Library"
+  tabArtist     <- navTab "Artist"
+  tabAlbum      <- navTab "Album"
+  tabQueue      <- navTab "Queue"
+  tabNowPlaying <- navTab "Now Playing"
+  tabSearch     <- navTab "Search"
 
   navBar <- ask
-  pure { navBar }
+  pure
+    { navBar
+    , tabLibrary
+    , tabArtist
+    , tabAlbum
+    , tabQueue
+    , tabNowPlaying
+    , tabSearch
+    }
+
+tabs :: NavBarState -> Array Element
+tabs state =
+  [ state.tabLibrary
+  , state.tabArtist
+  , state.tabAlbum
+  , state.tabQueue
+  , state.tabNowPlaying
+  , state.tabSearch
+  ]
+
+selectTab :: Location -> NavBarState -> Effect Unit
+selectTab location state =
+  let
+    deactivate element = Html.withElement element $ Html.removeClass "active"
+    activate element   = Html.withElement element $ Html.addClass "active"
+  in do
+    traverse_ deactivate $ tabs state
+    activate $ case location of
+      Navigation.Library    -> state.tabLibrary
+      Navigation.NowPlaying -> state.tabNowPlaying
+      Navigation.Search     -> state.tabSearch
+      Navigation.Album _    -> state.tabAlbum
