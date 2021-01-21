@@ -22,7 +22,6 @@ import Event (Event)
 import Event as Event
 import Html (Html)
 import Html as Html
-import Icons (Icons)
 import Navigation (Location)
 import Navigation as Navigation
 
@@ -36,24 +35,24 @@ type NavBarState =
   , tabSearch :: Element
   }
 
-new :: Icons -> (Event -> Aff Unit) -> Html NavBarState
-new icons postEvent = Html.nav $ do
+new :: (Event -> Aff Unit) -> Html NavBarState
+new postEvent = Html.nav $ do
   Html.setId "navbar"
   Html.onClick $ launchAff_ $ postEvent $ Event.ClickStatusBar
 
   let
-    navTab :: String -> Element -> Html Element
-    navTab title _icon = Html.div $ do
+    navTab :: String -> Html Element
+    navTab title = Html.div $ do
       Html.addClass "nav-tab"
       Html.text title
       ask
 
-  tabLibrary    <- navTab "Library" icons.iconLibrary
-  tabArtist     <- navTab "Artist"  icons.iconArtist
-  tabAlbum      <- navTab "Album"   icons.iconAlbum
-  tabQueue      <- navTab "Queue"   icons.iconQueue
-  tabNowPlaying <- navTab "Current" icons.iconCurrent
-  tabSearch     <- navTab "Search"  icons.iconSearch
+  tabLibrary    <- navTab "Library"
+  tabArtist     <- navTab "Artist"
+  tabAlbum      <- navTab "Album"
+  tabQueue      <- navTab "Queue"
+  tabNowPlaying <- navTab "Current"
+  tabSearch     <- navTab "Search"
 
   navBar <- ask
   pure

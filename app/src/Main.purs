@@ -20,7 +20,6 @@ import Dom as Dom
 import Event (HistoryMode (NoRecordHistory))
 import Event as Event
 import History as History
-import Icons as Icons
 import Model as Model
 import Navigation as Navigation
 import State (AppState)
@@ -38,9 +37,6 @@ main = launchAff_ $ do
     Console.log "Loaded albums"
     pure albums
 
-  -- Also load all icons asynchronously.
-  icons <- Icons.load
-
   -- Now we are ready to start building the UI. Remove the spinner to make room.
   liftEffect $ do
     loader <- Dom.getElementById "loader"
@@ -48,7 +44,7 @@ main = launchAff_ $ do
       Just elem -> Dom.removeChild elem Dom.body
       Nothing -> Console.log "Error, the loader should be present."
 
-  initialState <- liftEffect $ State.new icons busIn
+  initialState <- liftEffect $ State.new busIn
 
   liftEffect $ History.pushState Navigation.Library "Musium"
   liftEffect $ History.onPopState $ launchAff_ <<< case _ of

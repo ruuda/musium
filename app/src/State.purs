@@ -43,7 +43,6 @@ import Event as Event
 import History as History
 import Html (Html)
 import Html as Html
-import Icons (Icons)
 import LocalStorage as LocalStorage
 import Model (Album (..), AlbumId (..), QueuedTrack (..), TrackId)
 import Model as Model
@@ -161,10 +160,10 @@ setupElements postEvent = Html.withElement Dom.body $ do
     , paneSearch
     }
 
-new :: Icons -> BusW Event -> Effect AppState
-new icons bus = do
+new :: BusW Event -> Effect AppState
+new bus = do
   let postEvent event = Bus.write event bus
-  navBar <- Html.withElement Dom.body $ NavBar.new icons postEvent
+  navBar <- Html.withElement Dom.body $ NavBar.new postEvent
   elements <- setupElements postEvent
   statusBar <- Html.withElement Dom.body $ StatusBar.new postEvent
   never <- Aff.launchSuspendedAff Aff.never
