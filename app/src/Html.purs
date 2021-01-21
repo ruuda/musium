@@ -18,6 +18,7 @@ module Html
   , img
   , input
   , li
+  , nav
   , node
   , onClick
   , onInput
@@ -127,6 +128,9 @@ button children = node "button" children
 
 hgroup :: forall a. Html a -> Html a
 hgroup children = node "hgroup" children
+
+nav :: forall a. Html a -> Html a
+nav children = node "nav" children
 
 span :: forall a. Html a -> Html a
 span children = node "span" children

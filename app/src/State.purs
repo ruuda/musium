@@ -48,6 +48,8 @@ import Model (Album (..), AlbumId (..), QueuedTrack (..), TrackId)
 import Model as Model
 import Navigation (Location)
 import Navigation as Navigation
+import NavBar (NavBarState)
+import NavBar as NavBar
 import NowPlaying as NowPlaying
 import StatusBar (StatusBarState)
 import StatusBar as StatusBar
@@ -160,6 +162,7 @@ setupElements postEvent = Html.withElement Dom.body $ do
 new :: BusW Event -> Effect AppState
 new bus = do
   let postEvent event = Bus.write event bus
+  navBar <- Html.withElement Dom.body $ NavBar.new postEvent
   elements <- setupElements postEvent
   statusBar <- Html.withElement Dom.body $ StatusBar.new postEvent
   never <- Aff.launchSuspendedAff Aff.never
