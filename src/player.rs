@@ -443,6 +443,7 @@ impl PlayerState {
     }
 
     /// Assert that invariants hold, for use in testing, or debugging.
+    #[allow(dead_code)] // Not dead, used in tests.
     fn assert_invariants(&self) {
         let mut saw_empty = false;
         for (i, qt) in self.queue.iter().enumerate() {
