@@ -41,20 +41,21 @@ import Dom as Dom
 import Event (Event, HistoryMode (RecordHistory))
 import Event as Event
 import History as History
-import Html as Html
 import Html (Html)
+import Html as Html
+import Icons (Icons)
 import LocalStorage as LocalStorage
 import Model (Album (..), AlbumId (..), QueuedTrack (..), TrackId)
 import Model as Model
-import Navigation (Location)
-import Navigation as Navigation
 import NavBar (NavBarState)
 import NavBar as NavBar
+import Navigation (Location)
+import Navigation as Navigation
 import NowPlaying as NowPlaying
-import StatusBar (StatusBarState)
-import StatusBar as StatusBar
 import Search (SearchElements)
 import Search as Search
+import StatusBar (StatusBarState)
+import StatusBar as StatusBar
 import Time (Instant)
 import Time as Time
 
@@ -160,10 +161,10 @@ setupElements postEvent = Html.withElement Dom.body $ do
     , paneSearch
     }
 
-new :: BusW Event -> Effect AppState
-new bus = do
+new :: Icons -> BusW Event -> Effect AppState
+new icons bus = do
   let postEvent event = Bus.write event bus
-  navBar <- Html.withElement Dom.body $ NavBar.new postEvent
+  navBar <- Html.withElement Dom.body $ NavBar.new icons postEvent
   elements <- setupElements postEvent
   statusBar <- Html.withElement Dom.body $ StatusBar.new postEvent
   never <- Aff.launchSuspendedAff Aff.never

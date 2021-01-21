@@ -25,6 +25,14 @@ exports.appendChildImpl = function(child, container) {
   }
 }
 
+exports.renderHtml = function(html) {
+  return function() {
+    const range = document.createRange();
+    range.selectNode(document.body);
+    return range.createContextualFragment(html);
+  }
+}
+
 exports.removeChildImpl = function(child, container) {
   return function() {
     container.removeChild(child);

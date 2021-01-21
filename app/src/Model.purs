@@ -25,6 +25,7 @@ module Model
   , enqueueTrack
   , formatDurationSeconds
   , getAlbums
+  , getIcon
   , getQueue
   , getTracks
   , getVolume
@@ -38,6 +39,7 @@ import Prelude
 
 import Affjax as Http
 import Affjax.ResponseFormat as Http.ResponseFormat
+import Affjax.StatusCode (StatusCode (..))
 import Control.Monad.Error.Class (class MonadThrow, throwError)
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (decodeJson, getField) as Json
@@ -383,3 +385,11 @@ formatDurationSeconds dtSeconds =
 originalReleaseYear :: Album -> String
 originalReleaseYear (Album album) = String.take 4 album.date
 
+getIcon :: String -> Aff String
+getIcon path = do
+  result <- Http.get Http.ResponseFormat.string path
+  case result of
+    Left err -> fatal $ "Failed to retrieve icon: " <> Http.printError err
+    Right response -> case response.status of
+      StatusCode 200 -> pure response.body
+      _ -> fatal $ "Failed to retrieve icon: " <> response.body

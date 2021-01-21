@@ -25,6 +25,7 @@ module Dom
   , onResizeWindow
   , removeChild
   , removeClass
+  , renderHtml
   , scrollIntoView
   , setAttribute
   , setHeight
@@ -59,6 +60,9 @@ foreign import getValue :: Element -> Effect String
 foreign import getWindowHeight :: Effect Number
 foreign import onResizeWindow :: (Effect Unit) -> (Effect Unit)
 foreign import scrollIntoView :: Element -> Effect Unit
+-- This actually returns a DocumentFragment at runtime, but it can be used in
+-- the same way that an Element can.
+foreign import renderHtml :: String -> Effect Element
 
 foreign import addClassImpl :: Fn2 String Element (Effect Unit)
 foreign import addEventListenerImpl :: Fn3 String (Effect Unit) Element (Effect Unit)

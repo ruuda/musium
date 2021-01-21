@@ -24,6 +24,7 @@ module Html
   , onInput
   , onScroll
   , p
+  , pureElement
   , removeClass
   , scrollIntoView
   , setHeight
@@ -52,6 +53,9 @@ withElement container (ReaderT f) = f container
 
 clear :: Html Unit
 clear = ReaderT $ \container -> Dom.clearElement container
+
+pureElement :: Element -> Html Unit
+pureElement element = ReaderT $ \container -> Dom.appendChild element container
 
 node :: forall a. String -> Html a -> Html a
 node tagName (ReaderT children) =

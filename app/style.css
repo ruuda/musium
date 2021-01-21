@@ -85,6 +85,8 @@ body {
   bottom: -0.1em;
 }
 
+#tab-library { mask: url('/tab-library.svg') no-repeat center; }
+
 .pane {
   grid-area: content;
   width: 100%;

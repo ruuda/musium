@@ -354,10 +354,13 @@ impl MetaServer {
             (&Get, None,                    None) => self.handle_static_file("app/index.html", "text/html"),
             (&Get, Some("style.css"),       None) => self.handle_static_file("app/style.css", "text/css"),
             (&Get, Some("dark.css"),        None) => self.handle_static_file("app/dark.css", "text/css"),
-            (&Get, Some("icon.svg"),        None) => self.handle_static_file("app/icon.svg", "image/svg+xml"),
-            (&Get, Some("icon-lowres.svg"), None) => self.handle_static_file("app/icon-lowres.svg", "image/svg+xml"),
             (&Get, Some("manifest.json"),   None) => self.handle_static_file("app/manifest.json", "text/javascript"),
             (&Get, Some("app.js"),          None) => self.handle_static_file("app/output/app.js", "text/javascript"),
+            (&Get, Some(path),              None) if path.ends_with(".svg") => {
+                let mut file_path = "app/".to_string();
+                file_path.push_str(path);
+                self.handle_static_file(&file_path, "image/svg+xml")
+            }
             // Fallback.
             (&Get, _, _) => self.handle_not_found(),
             _ => self.handle_bad_request("Expected a GET request."),
