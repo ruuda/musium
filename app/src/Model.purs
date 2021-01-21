@@ -25,7 +25,7 @@ module Model
   , enqueueTrack
   , formatDurationSeconds
   , getAlbums
-  , getIcon
+  , getString
   , getQueue
   , getTracks
   , getVolume
@@ -385,11 +385,12 @@ formatDurationSeconds dtSeconds =
 originalReleaseYear :: Album -> String
 originalReleaseYear (Album album) = String.take 4 album.date
 
-getIcon :: String -> Aff String
-getIcon path = do
+-- Load a path, return the body as string.
+getString :: String -> Aff String
+getString path = do
   result <- Http.get Http.ResponseFormat.string path
   case result of
-    Left err -> fatal $ "Failed to retrieve icon: " <> Http.printError err
+    Left err -> fatal $ "Failed to retrieve " <> path <> ": " <> Http.printError err
     Right response -> case response.status of
       StatusCode 200 -> pure response.body
-      _ -> fatal $ "Failed to retrieve icon: " <> response.body
+      _ -> fatal $ "Failed to retrieve " <> path <> ": " <> response.body

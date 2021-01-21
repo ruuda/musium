@@ -9,7 +9,7 @@
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    width="32"
    height="32"
-   viewBox="0 0 8.4666665 8.4666669"
+   viewBox="0 0 32 32"
    version="1.1"
    id="svg8"
    inkscape:version="1.0.1 (3bc2e813f5, 2020-09-07, custom)"
@@ -32,7 +32,7 @@
      showgrid="true"
      units="px"
      inkscape:window-width="1920"
-     inkscape:window-height="1046"
+     inkscape:window-height="1019"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="1">
@@ -57,16 +57,15 @@
      inkscape:groupmode="layer"
      id="layer1">
     <circle
-       style="opacity:1;fill:#000000;fill-opacity:0.914504;fill-rule:evenodd;stroke-width:0.661459;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke"
+       style="opacity:1;fill:#000000;fill-opacity:0.914504;fill-rule:evenodd;stroke-width:2.5;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke"
        id="path1726"
-       cx="4.2333331"
-       cy="2.3812499"
-       r="1.3229166" />
+       cx="15.999999"
+       cy="8.000001"
+       r="4.9999995" />
     <path
        id="path1726-2"
        style="opacity:1;fill:#000000;fill-opacity:0.914504;fill-rule:evenodd;stroke-width:5.50004;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke"
-       d="M 16,16 C 9.9248678,16 5,20.924868 5,27 c 1e-7,2 0.140973,3.024059 0.4179688,4.000001 H 26.582031 C 26.859027,30.024059 27,29 27,27 27,20.924868 22.075132,16 16,16 Z"
-       transform="scale(0.26458333)"
+       d="M 16,15 C 9.9248679,15 5.0000006,19.924868 5.0000006,25.999999 5.0000008,27.999998 5.1409736,29.024058 5.4179694,30 H 26.582029 c 0.276997,-0.975942 0.417969,-2.000002 0.417969,-4.000001 C 26.999998,19.924868 22.075131,15 16,15 Z"
        sodipodi:nodetypes="sccccs" />
   </g>
 </svg>

@@ -42,21 +42,18 @@ new icons postEvent = Html.nav $ do
   Html.onClick $ launchAff_ $ postEvent $ Event.ClickStatusBar
 
   let
-    navTab :: String -> String -> Html Element
-    navTab title id = Html.div $ do
+    navTab :: String -> Element -> Html Element
+    navTab title _icon = Html.div $ do
       Html.addClass "nav-tab"
-      Html.span $ Html.pureElement icons.iconLibrary
-      Html.span $ do
-        Html.setId id
-        Html.text title
+      Html.text title
       ask
 
-  tabLibrary    <- navTab "Library" "tab-library"
-  tabArtist     <- navTab "Artist"  "tab-artist"
-  tabAlbum      <- navTab "Album"   "tab-album"
-  tabQueue      <- navTab "Queue"   "tab-queue"
-  tabNowPlaying <- navTab "Current" "tab-current"
-  tabSearch     <- navTab "Search"  "tab-search"
+  tabLibrary    <- navTab "Library" icons.iconLibrary
+  tabArtist     <- navTab "Artist"  icons.iconArtist
+  tabAlbum      <- navTab "Album"   icons.iconAlbum
+  tabQueue      <- navTab "Queue"   icons.iconQueue
+  tabNowPlaying <- navTab "Current" icons.iconCurrent
+  tabSearch     <- navTab "Search"  icons.iconSearch
 
   navBar <- ask
   pure

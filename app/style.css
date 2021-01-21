@@ -56,7 +56,7 @@ body {
   height: 100%;
 
   grid-template-columns: auto;
-  grid-template-rows: 4.5em auto 5em;
+  grid-template-rows: 2.4em auto 5em;
   grid-template-areas:
     "navbar"
     "content"
@@ -74,18 +74,20 @@ body {
 .nav-tab {
   color: #999;
   padding: 0.5em;
-  transition: color 0.2s ease-in-out;
+  transition: color 0.1s ease-out, border-color 0.1s ease-out;
+  border-bottom: 0.2rem solid transparent;
+
+  text-align: center;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5;
+  font-weight: 500;
 }
 
 .nav-tab.active {
-  font-weight: 700;
-  color: #888;
-  position: relative;
-  border-bottom: 0.2em solid #ccc;
-  bottom: -0.1em;
+  color: #555;
+  border-bottom: 0.2rem solid #ccc;
 }
-
-#tab-library { mask: url('/tab-library.svg') no-repeat center; }
 
 .pane {
   grid-area: content;
@@ -676,6 +678,11 @@ button.volume-up { grid-area: volume-up; }
   color: #bbb;
 }
 
+/* On very narrow viewports, squeeze the text a bit. */
+@media (max-width: 25rem) {
+  .nav-tab { letter-spacing: 0.5; }
+}
+
 /* At 40rem width, we can show the album list side-by-side with a different
  * view. We move the album list to the right, the page looks a bit less chaotic
  * with the two lists to the right. */
@@ -700,11 +707,31 @@ button.volume-up { grid-area: volume-up; }
     display: block;
   }
 
+  .nav-tab {
+    text-align: left;
+    font-size: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    font-weight: inherit;
+    border-right: 0.2em solid transparent;
+    border-bottom: none;
+
+    /* For some reason there are white pixels between the nav area border,
+     * and the highlight border-right. Fix that by moving everything a bit
+     * to the right. */
+    position: relative;
+    left: 0.1em;
+  }
+
   .nav-tab.active {
     border-bottom: none;
-    bottom: 0;
     border-right: 0.2em solid #ccc;
-    right: -0.1em;
+
+    /* Focus more with weight than color. For the horizontal tabs, using
+     * weight disturbs the lay-out, but for these vertical tabs, it is
+     * fine. */
+    font-weight: 600;
+    color: #777;
   }
 
   #browser {
