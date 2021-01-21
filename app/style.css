@@ -55,16 +55,25 @@ body {
   width: 100vw;
   height: 100%;
 
-  grid-template-columns: 5em auto;
-  grid-template-rows: auto 5em;
+  grid-template-columns: auto;
+  grid-template-rows: 5em auto 5em;
   grid-template-areas:
-    "navbar    content"
-    "statusbar statusbar"
+    "navbar"
+    "content"
+    "statusbar"
   ;
 }
 
 #navbar {
   grid-area: navbar;
+  border-bottom: 1pt solid #eee;
+}
+
+.nav-tab {
+  display: inline-block;
+  width: 2.5em;
+  color: #888;
+  padding: 0.5em;
 }
 
 .pane {
@@ -660,6 +669,28 @@ button.volume-up { grid-area: volume-up; }
  * view. We move the album list to the right, the page looks a bit less chaotic
  * with the two lists to the right. */
 @media (min-width: 40rem) {
+  /* Move the navigation bar from top to left, it becomes a sidebar. */
+  body {
+    grid-template-columns: 9em auto;
+    grid-template-rows: auto 5em;
+    grid-template-areas:
+      "navbar    content"
+      "statusbar statusbar"
+    ;
+  }
+
+  #navbar {
+    border-bottom: none;
+    border-right: 1pt solid #eee;
+    padding-top: 0.5em;
+    padding-left: 0.5em;
+  }
+
+  .nav-tab {
+    display: block;
+    width: auto;
+  }
+
   #browser {
     width: 100vw;
     grid-template-columns: 70vw 30vw;

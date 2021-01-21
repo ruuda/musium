@@ -29,5 +29,17 @@ new postEvent = Html.nav $ do
   Html.setId "navbar"
   Html.onClick $ launchAff_ $ postEvent $ Event.ClickStatusBar
 
+  let
+    navTab title = Html.div $ do
+      Html.addClass "nav-tab"
+      Html.text title
+
+  navTab "Library"
+  navTab "Artist"
+  navTab "Album"
+  navTab "Queue"
+  navTab "Now Playing"
+  navTab "Search"
+
   navBar <- ask
   pure { navBar }
