@@ -14,6 +14,7 @@ module NavBar
 import Control.Monad.Reader.Class (ask)
 import Data.Foldable (traverse_)
 import Effect (Effect)
+import Effect.Class (liftEffect)
 import Effect.Aff (Aff, launchAff_)
 import Prelude
 
@@ -53,6 +54,9 @@ new postEvent = Html.nav $ do
   tabQueue      <- navTab "Queue"
   tabNowPlaying <- navTab "Current"
   tabSearch     <- navTab "Search"
+
+  -- The library is active at startup.
+  liftEffect $ Html.withElement tabLibrary $ Html.addClass "active"
 
   navBar <- ask
   pure
