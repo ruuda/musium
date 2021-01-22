@@ -115,43 +115,14 @@ body {
   display: none !important;
 }
 
-#browser {
-  display: grid;
-  overflow: hidden;
+.album-list-view {
   height: 100%;
-
-  /* At the narrowest viewports, we show one pane, but the browser itself is
-   * wider than that. We use translation to determine which pane is visible. */
-  width: 200vw;
-  grid-template-columns: 100vw 100vw;
-  grid-template-rows: auto;
-  grid-template-areas:
-    "album-list album-view"
-  ;
-
-  transition: transform 0.15s ease-in-out;
-}
-
-#browser.nav-album-list-view {
-  transform: translateX(0);
-}
-
-#browser.nav-album-view {
-  /* Slide 1 viewport to the left, so the album view is at x=0. */
-  transform: translateX(-100vw);
-}
-
-#album-list-view {
-  grid-area: album-list;
   overflow-y: scroll;
-  background-color: #fefefe;
-  border-left: solid 1pt #eee;
 }
 
 #album-view {
-  grid-area: album-view;
+  height: 100%;
   overflow-y: scroll;
-
   display: grid;
   grid-template-columns: auto;
   grid-template-rows: auto auto;
@@ -508,7 +479,7 @@ img.thumb
 }
 
 /* For now-playing, we set the artist and album title over two lines. */
-.now-playing .album-info .album-title {
+.current .album-info .album-title {
   margin-top: 0.3em;
   word-spacing: 0;
   color: black;
@@ -607,19 +578,19 @@ button.play-next::before {
   color: #777;
 }
 
-#now-playing-pane {
+#current-pane {
   display: grid;
   grid-template-columns: auto;
   grid-template-rows: auto 4em;
   grid-template-areas:
-    "now-playing"
+    "current"
     "volume-controls"
   ;
   overflow-y: auto;
 }
 
-.now-playing {
-  grid-area: now-playing;
+.current {
+  grid-area: current;
   margin-bottom: 2em;
 }
 
@@ -724,53 +695,22 @@ button.volume-up { grid-area: volume-up; }
     color: #777;
   }
 
-  #browser {
-    width: 100vw;
-    grid-template-columns: 70vw 30vw;
-    grid-template-areas:
-      "album-view album-list"
-    ;
-  }
-
-  /* Dim the album list, unless we are hovering it, to make it less distracting. */
-  #album-list {
-    opacity: 0.4;
-    filter: saturate(0.3);
-    transition: opacity 0.1s ease-in-out, filter 0.1s ease-in-out;
-  }
-
-  #album-list:hover {
-    opacity: 1;
-    filter: none;
-  }
-
-  /* When both columns are visible at once, no translation is needed. */
-  #browser.nav-album-view {
-    transform: translateX(0);
-  }
-
-  /* The back button no longer makes sense when the album list is already
-   * visible. */
-  .album-info button.back {
-    display: none;
-  }
-
   /* For the now playing view, we can put the cover art and title side by side. */
-  #now-playing-pane {
+  #current-pane {
     grid-template-rows: auto auto auto 4em;
     grid-template-areas:
       "pad-top"
-      "now-playing"
+      "current"
       "pad-bottom"
       "volume-controls"
     ;
   }
 
-  .now-playing {
+  .current {
     margin-bottom: 0;
   }
 
-  .now-playing .album-info {
+  .current .album-info {
     display: grid;
     grid-template-columns: 1fr 1fr;
     grid-template-rows: auto;
@@ -779,18 +719,18 @@ button.volume-up { grid-area: volume-up; }
     ;
   }
 
-  .now-playing .album-info .cover {
+  .current .album-info .cover {
     grid-area: cover;
     margin-right: 1em;
   }
 
-  .now-playing .album-info hgroup {
+  .current .album-info hgroup {
     grid-area: info;
     margin-left: 1em;
     padding-top: 11rem;
   }
 
-  .now-playing .album-info h1 {
+  .current .album-info h1 {
     margin-top: 0;
   }
 
@@ -807,10 +747,11 @@ button.volume-up { grid-area: volume-up; }
 /* At 60rem width, we put the track list to the right of the album info, instead
  * of below the album info. */
 @media (min-width: 60rem) {
-  #browser {
-    /* Keep the album list at a fixed width, it does not need to be very wide,
-     * we rather add whitespace elsewhere. */
-    grid-template-columns: auto 20rem;
+  /* Also move the album list a bit more to the middle. */
+  .album-list-view {
+    background-color: #fefefe;
+    border-left: solid 1pt #eee;
+    margin-left: 40%;
   }
 
   #album-view {
@@ -861,10 +802,6 @@ button.volume-up { grid-area: volume-up; }
 /* At this width, we can devote a bit more space to th album list, and we set a
  * limit on the width of the album info column. */
 @media (min-width: 90rem) {
-  #browser {
-    grid-template-columns: auto 25rem;
-  }
-
   #album-view {
     grid-template-columns: 4fr 35rem 35rem 3fr;
     grid-template-areas:

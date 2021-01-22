@@ -66,17 +66,19 @@ type EventBus = BusW Event
 type BrowserElements =
   { albumListView :: Element
   , albumListRunway :: Element
-  , albumView :: Element
-  , browserElement :: Element
   }
 
 type Elements =
-  { browser :: BrowserElements
+  { libraryBrowser :: BrowserElements
+  , artistBrowser :: BrowserElements
+  , albumView :: Element
+  , currentView :: Element
   , search :: SearchElements
-  , nowPlaying :: Element
-  , paneNowPlaying :: Element
-  , paneBrowser :: Element
+  , paneLibrary :: Element
+  , paneArtist :: Element
+  , paneAlbum :: Element
   , paneQueue :: Element
+  , paneCurrent :: Element
   , paneSearch :: Element
   }
 
@@ -98,47 +100,56 @@ type AppState =
 
 addBrowser :: (Event -> Aff Unit) -> Html BrowserElements
 addBrowser postEvent = Html.div $ do
-  Html.setId "browser"
-
-  { self: albumListView, runway: albumListRunway } <- Html.div $ do
-    Html.setId "album-list-view"
-    Html.onScroll $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
-    runway <- Html.div $ ask
-    self <- ask
-    pure { self, runway }
-
-  albumView <- Html.div $ do
-    Html.setId "album-view"
-    ask
-
-  browserElement <- ask
-  pure $ { albumListView, albumListRunway, albumView, browserElement }
+  Html.addClass "album-list-view"
+  Html.onScroll $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
+  albumListRunway <- Html.div $ ask
+  albumListView <- ask
+  pure $ { albumListView, albumListRunway }
 
 setupElements :: (Event -> Aff Unit) -> Effect Elements
 setupElements postEvent = Html.withElement Dom.body $ do
-  { paneNowPlaying, nowPlaying } <- Html.div $ do
-    Html.setId "now-playing-pane"
+  { paneLibrary, libraryBrowser } <- Html.div $ do
+    Html.setId "library-pane"
+    Html.addClass "pane"
+    paneLibrary <- ask
+    libraryBrowser <- addBrowser postEvent
+    pure $ { paneLibrary, libraryBrowser }
+
+  { paneArtist, artistBrowser } <- Html.div $ do
+    Html.setId "artist-pane"
     Html.addClass "pane"
     Html.addClass "inactive"
-    nowPlaying <- Html.div $ do
-      Html.addClass "now-playing"
-      ask
-    NowPlaying.volumeControls
-    paneNowPlaying <- ask
-    pure $ { paneNowPlaying, nowPlaying }
+    paneArtist <- ask
+    artistBrowser <- addBrowser postEvent
+    pure $ { paneArtist, artistBrowser }
 
-  { paneBrowser, browser} <- Html.div $ do
-    Html.setId "browser-pane"
+  { paneAlbum, albumView } <- Html.div $ do
+    Html.setId "album-pane"
     Html.addClass "pane"
-    paneBrowser <- ask
-    browser <- addBrowser postEvent
-    pure $ { paneBrowser, browser }
+    Html.addClass "inactive"
+    paneAlbum <- ask
+    -- TODO: Does it still need to be wrapped?
+    albumView <- Html.div $ do
+      Html.setId "album-view"
+      ask
+    pure { paneAlbum, albumView }
 
   paneQueue <- Html.div $ do
     Html.setId "queue-pane"
     Html.addClass "pane"
     Html.addClass "inactive"
     ask
+
+  { paneCurrent, currentView } <- Html.div $ do
+    Html.setId "current-pane"
+    Html.addClass "pane"
+    Html.addClass "inactive"
+    currentView <- Html.div $ do
+      Html.addClass "current"
+      ask
+    NowPlaying.volumeControls
+    paneCurrent <- ask
+    pure $ { paneCurrent, currentView }
 
   { paneSearch, search } <- Html.div $ do
     Html.setId "search-pane"
@@ -151,12 +162,16 @@ setupElements postEvent = Html.withElement Dom.body $ do
   liftEffect $ Dom.onResizeWindow $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
 
   pure
-    { browser
+    { libraryBrowser
+    , artistBrowser
+    , albumView
+    , currentView
     , search
-    , nowPlaying
-    , paneNowPlaying
-    , paneBrowser
+    , paneLibrary
+    , paneArtist
+    , paneAlbum
     , paneQueue
+    , paneCurrent
     , paneSearch
     }
 
@@ -204,8 +219,8 @@ updateAlbumList state = do
       pure $ { target: { begin: 0, end: min 1 (Array.length state.albums) }, index: 0 }
     Just elem -> do
       entryHeight <- Dom.getOffsetHeight elem
-      viewportHeight <- Dom.getOffsetHeight state.elements.browser.albumListView
-      y <- Dom.getScrollTop state.elements.browser.albumListView
+      viewportHeight <- Dom.getOffsetHeight state.elements.libraryBrowser.albumListView
+      y <- Dom.getScrollTop state.elements.libraryBrowser.albumListView
       let
         headroom = 20
         i = Int.floor $ y / entryHeight
@@ -221,7 +236,7 @@ updateAlbumList state = do
   scrollState <- AlbumListView.updateAlbumList
     state.albums
     state.postEvent
-    state.elements.browser.albumListRunway
+    state.elements.libraryBrowser.albumListRunway
     target
     state.albumListState
   pure $ state { albumListState = scrollState, albumListIndex = index }
@@ -263,7 +278,7 @@ handleEvent event state = case event of
       albumsById = Object.fromFoldable $ map withId albums
 
     liftEffect $ do
-      runway <- Html.withElement state'.elements.browser.albumListView $ do
+      runway <- Html.withElement state'.elements.libraryBrowser.albumListView $ do
         Html.clear
         AlbumListView.renderAlbumListRunway $ Array.length albums
 
@@ -271,7 +286,7 @@ handleEvent event state = case event of
         { albums = albums
         , albumsById = albumsById
         , elements = state'.elements
-          { browser = state'.elements.browser { albumListRunway = runway }
+          { libraryBrowser = state'.elements.libraryBrowser { albumListRunway = runway }
           }
         }
 
@@ -280,7 +295,7 @@ handleEvent event state = case event of
     -- TODO: Possibly update the queue, if it is in view.
 
     -- TODO: Only update when the track did not change.
-    liftEffect $ Html.withElement state.elements.nowPlaying $ do
+    liftEffect $ Html.withElement state.elements.currentView $ do
       Html.clear
       case Array.head queue of
         Nothing -> pure unit
@@ -324,7 +339,7 @@ handleEvent event state = case event of
     case getAlbum albumId state of
       Nothing -> fatal $ "Album " <> (show albumId) <> " does not exist."
       Just album ->
-        liftEffect $ Html.withElement state.elements.browser.albumView $ do
+        liftEffect $ Html.withElement state.elements.albumView $ do
           Html.clear
           AlbumView.renderAlbum state.postEvent album
           -- Reset the scroll position, as we recycle the container.
@@ -346,16 +361,16 @@ navigateTo newLocation historyMode state =
   let
     getPane :: Navigation.Location -> Element
     getPane loc = case loc of
-      Navigation.NowPlaying -> state.elements.paneNowPlaying
-      Navigation.Search  -> state.elements.paneSearch
-      Navigation.Library -> state.elements.paneBrowser
-      Navigation.Album _ -> state.elements.paneBrowser
+      Navigation.Library    -> state.elements.paneLibrary
+      Navigation.Album _    -> state.elements.paneAlbum
+      Navigation.NowPlaying -> state.elements.paneCurrent
+      Navigation.Search     -> state.elements.paneSearch
     paneBefore = getPane state.location
     paneAfter = getPane newLocation
     title = case newLocation of
-      Navigation.NowPlaying -> "Now playing"
-      Navigation.Search  -> "Search"
-      Navigation.Library -> "Library"
+      Navigation.NowPlaying -> "Current"
+      Navigation.Search     -> "Search"
+      Navigation.Library    -> "Library"
       Navigation.Album albumId -> case getAlbum albumId state of
         Just (Album album) -> album.title <> " by " <> album.artist
         Nothing            -> "Album " <> (show albumId) <> " does not exist"
@@ -366,17 +381,7 @@ navigateTo newLocation historyMode state =
 
     liftEffect $ NavBar.selectTab newLocation state.navBar
 
-    -- Inner level: Inside the browser pane, switch between the list and album.
-    liftEffect $ case newLocation of
-      Navigation.Album _ -> Html.withElement state.elements.browser.browserElement $ do
-        Html.removeClass "nav-album-list-view"
-        Html.addClass "nav-album-view"
-      Navigation.Library -> Html.withElement state.elements.browser.browserElement $ do
-        Html.removeClass "nav-album-view"
-        Html.addClass "nav-album-list-view"
-      _ -> pure unit
-
-    -- Outer level: switch the pane if we have to.
+    -- Switch the pane if we have to.
     unless (paneBefore == paneAfter) $ do
       liftEffect $ Html.withElement paneBefore $ Html.addClass "out"
       liftEffect $ Html.withElement paneAfter $ do
