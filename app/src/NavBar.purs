@@ -39,21 +39,23 @@ type NavBarState =
 new :: (Event -> Aff Unit) -> Html NavBarState
 new postEvent = Html.nav $ do
   Html.setId "navbar"
-  Html.onClick $ launchAff_ $ postEvent $ Event.ClickStatusBar
 
   let
-    navTab :: String -> Html Element
-    navTab title = Html.div $ do
+    navTab :: String -> Event -> Html Element
+    navTab title event = Html.div $ do
       Html.addClass "nav-tab"
       Html.text title
+      Html.onClick $ launchAff_ $ postEvent event
       ask
 
-  tabLibrary    <- navTab "Library"
-  tabArtist     <- navTab "Artist"
-  tabAlbum      <- navTab "Album"
-  tabQueue      <- navTab "Queue"
-  tabNowPlaying <- navTab "Current"
-  tabSearch     <- navTab "Search"
+    navEvent loc = Event.NavigateTo loc Event.RecordHistory
+
+  tabLibrary    <- navTab "Library" $ navEvent Navigation.Library
+  tabArtist     <- navTab "Artist"  $ navEvent Navigation.Library -- TODO
+  tabAlbum      <- navTab "Album"   $ navEvent Navigation.Library -- TODO
+  tabQueue      <- navTab "Queue"   $ navEvent Navigation.Library -- TODO
+  tabNowPlaying <- navTab "Current" $ navEvent Navigation.NowPlaying
+  tabSearch     <- navTab "Search"  $ navEvent Navigation.Search
 
   -- The library is active at startup.
   liftEffect $ Html.withElement tabLibrary $ Html.addClass "active"

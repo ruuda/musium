@@ -607,16 +607,6 @@ button.play-next::before {
   color: #777;
 }
 
-#statusbar button.goto-search {
-  position: absolute;
-  width: 3em;
-  height: 3em;
-  right: 1em;
-  top: 1em;
-  /* Go in front of the current track div, so we capture the click. */
-  z-index: 2;
-}
-
 #now-playing-pane {
   display: grid;
   grid-template-columns: auto;

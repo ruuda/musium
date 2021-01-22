@@ -80,13 +80,8 @@ new :: (Event -> Aff Unit) -> Html StatusBarState
 new postEvent = Html.div $ do
   Html.setId "statusbar"
   Html.addClass "empty"
-  Html.onClick $ launchAff_ $ postEvent $ Event.ClickStatusBar
-
-  Html.button $ do
-    Html.addClass "goto-search"
-    Html.text "🔍"
-    Html.onClick $ launchAff_ $ postEvent $ Event.NavigateTo Navigation.Search RecordHistory
-
+  Html.onClick $ launchAff_ $ postEvent $
+    Event.NavigateTo Navigation.NowPlaying Event.RecordHistory
   statusBar <- ask
   pure { current: Nothing, statusBar }
 
