@@ -394,16 +394,6 @@ img.thumb
   position: relative;
 }
 
-.album-info button.back {
-  color: #aaa;
-  position: absolute;
-  left: 0;
-  top: 0;
-  padding: 0;
-  width: 3em;
-  height: 3em;
-}
-
 .album-info .cover {
   width: calc(100% - 7.5em);
   margin: 3.75em;

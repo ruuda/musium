@@ -37,10 +37,6 @@ renderAlbum postEvent (Album album) = do
 
   Html.div $ do
     Html.addClass "album-info"
-    Html.button $ do
-      Html.addClass "back"
-      Html.text "←"
-      Html.onClick $ launchAff_ $ postEvent $ Event.NavigateTo Navigation.Library RecordHistory
     Html.div $ do
       Html.addClass "cover"
       let alt = album.title <> " by " <> album.artist
