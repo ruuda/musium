@@ -8,7 +8,9 @@
 "use strict";
 
 exports.pushStateImpl = function(data, title, url) {
+  console.log('pushing, title = ' + title);
   return function() {
+    document.title = title;
     history.pushState(data, title, url);
   };
 }
@@ -25,7 +27,6 @@ exports.onPopStateImpl = function(nothing, just, callback) {
       } else if (Object.keys(event.state).length === 0) {
         callback(nothing)();
       } else {
-        console.log(event.state);
         callback(just(event.state))();
       }
     };

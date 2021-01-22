@@ -377,7 +377,8 @@ navigateTo newLocation historyMode state =
   in if newLocation == state.location then pure state else do
     case historyMode of
       Event.NoRecordHistory -> pure unit
-      Event.RecordHistory -> liftEffect $ History.pushState newLocation title
+      Event.RecordHistory -> liftEffect $
+        History.pushState newLocation ("Musium: " <> title)
 
     liftEffect $ NavBar.selectTab newLocation state.navBar
 
