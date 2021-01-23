@@ -23,6 +23,7 @@ import Html (Html)
 import Html as Html
 import Model (Album (..), QueuedTrack (..), Track (..))
 import Model as Model
+import Navigation as Navigation
 import Time as Time
 
 renderAlbum :: (Event -> Aff Unit) -> Album -> Html Unit
@@ -51,8 +52,8 @@ renderAlbum postEvent (Album album) = do
         Html.span $ do
           Html.addClass "artist"
           Html.text album.artist
-          -- Html.onClick $ do
-          --  Album.artistId
+          Html.onClick $ launchAff_ $
+            postEvent $ Event.NavigateTo (Navigation.Artist album.artistId) Event.RecordHistory
         Html.text " ⋅ "
         Html.span $ do
           Html.addClass "date"

@@ -105,8 +105,8 @@ trackUrl (TrackId id) = "/track/" <> id <> ".flac"
 newtype Album = Album
   { id :: AlbumId
   , title :: String
+  , artistId :: ArtistId
   , artist :: String
-  , artistId :: String
   , sortArtist :: String
   , date :: String
   }
@@ -116,9 +116,9 @@ instance decodeJsonAlbum :: DecodeJson Album where
     obj        <- Json.decodeJson json
     id         <- map AlbumId $ Json.getField obj "id"
     title      <- Json.getField obj "title"
+    artistId   <- map ArtistId $ Json.getField obj "artist_id"
     artist     <- Json.getField obj "artist"
     sortArtist <- Json.getField obj "sort_artist"
-    artistId   <- Json.getField obj "artist_id"
     date       <- Json.getField obj "date"
     pure $ Album { id, title, artist, artistId, sortArtist, date }
 
