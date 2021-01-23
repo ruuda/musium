@@ -51,6 +51,8 @@ renderAlbum postEvent (Album album) = do
         Html.span $ do
           Html.addClass "artist"
           Html.text album.artist
+          -- Html.onClick $ do
+          --  Album.artistId
         Html.text " ⋅ "
         Html.span $ do
           Html.addClass "date"

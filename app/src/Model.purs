@@ -106,6 +106,7 @@ newtype Album = Album
   { id :: AlbumId
   , title :: String
   , artist :: String
+  , artistId :: String
   , sortArtist :: String
   , date :: String
   }
@@ -117,8 +118,9 @@ instance decodeJsonAlbum :: DecodeJson Album where
     title      <- Json.getField obj "title"
     artist     <- Json.getField obj "artist"
     sortArtist <- Json.getField obj "sort_artist"
+    artistId   <- Json.getField obj "artist_id"
     date       <- Json.getField obj "date"
-    pure $ Album { id, title, artist, sortArtist, date }
+    pure $ Album { id, title, artist, artistId, sortArtist, date }
 
 getAlbums :: Aff (Array Album)
 getAlbums = do

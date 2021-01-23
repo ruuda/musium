@@ -27,7 +27,7 @@ pub fn write_albums_json<W: Write>(index: &dyn MetaIndex, mut w: W) -> io::Resul
         if !first { write!(w, ",")?; }
         write!(w, r#"{{"id":"{}","title":"#, id)?;
         serde_json::to_writer(&mut w, index.get_string(album.title))?;
-        write!(w, r#","artist":"#)?;
+        write!(w, r#","artist_id":"{}","artist":"#, album.artist_id)?;
         serde_json::to_writer(&mut w, index.get_string(artist.name))?;
         write!(w, r#","sort_artist":"#)?;
         serde_json::to_writer(&mut w, index.get_string(artist.name_for_sort))?;
