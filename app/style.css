@@ -641,9 +641,8 @@ button.volume-up { grid-area: volume-up; }
   .nav-tab { letter-spacing: 0.5; }
 }
 
-/* At 40rem width, we can show the album list side-by-side with a different
- * view. We move the album list to the right, the page looks a bit less chaotic
- * with the two lists to the right. */
+/* At 40rem width, we get a bit more room to put things side by side rather than
+ * above each other, to take advantage of the wider viewport. */
 @media (min-width: 40rem) {
   /* Move the navigation bar from top to left, it becomes a sidebar. */
   body {
@@ -692,6 +691,59 @@ button.volume-up { grid-area: volume-up; }
     color: #777;
   }
 
+
+  /* Limit the width of the volume bar, there is no point in stretching it out
+   * too much. */
+  .volume-controls {
+    grid-template-columns: auto 4em 18em 4em auto;
+    grid-template-areas:
+      "pad-left volume-down volume-bar volume-up pad-right"
+    ;
+  }
+}
+
+/* At 50rem width, we put the track list to the right of the album info, instead
+ * of below the album info. */
+@media (min-width: 50rem) {
+  #album-view {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto;
+    grid-template-areas:
+      "album-info track-list"
+    ;
+  }
+
+  #album-view .cover {
+    max-width: none;
+  }
+
+  .album-info h1 {
+    /* When the cover could be centered above the title, we need plenty of
+     * whitespace to not make it look weird, but when it is aligned to the
+     * borders, we can do with less. */
+    margin-top: 0;
+  }
+
+  .track-list {
+    margin-top: 0;
+    padding-top: 4rem;
+    padding-left: 1rem;
+    padding-bottom: 2.5rem;
+    border-top: none;
+    border-left: 0.8pt solid #eee;
+  }
+
+  /* We can also start to render search results in three columns next to each
+   * other, instead of below one another. */
+  .search-results-list {
+    display: grid;
+    grid-template-columns: 3fr 3fr 3fr;
+  }
+
+  #search-results div:first-child {
+    grid-column: 1;
+  }
+
   /* For the now playing view, we can put the cover art and title side by side. */
   #current-pane {
     grid-template-rows: auto auto auto 4em;
@@ -730,57 +782,11 @@ button.volume-up { grid-area: volume-up; }
   .current .album-info h1 {
     margin-top: 0;
   }
-
-  /* Limit the width of the volume bar, there is no point in stretching it out
-   * too much. */
-  .volume-controls {
-    grid-template-columns: auto 4em 18em 4em auto;
-    grid-template-areas:
-      "pad-left volume-down volume-bar volume-up pad-right"
-    ;
-  }
 }
 
-/* At 60rem width, we put the track list to the right of the album info, instead
- * of below the album info. */
-@media (min-width: 60rem) {
-  /* Also move the album list a bit more to the middle. */
-  .album-list-view {
-    background-color: #fefefe;
-    border-left: solid 1pt #eee;
-    margin-left: 40%;
-  }
-
-  #album-view {
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto;
-    grid-template-areas:
-      "album-info track-list"
-    ;
-  }
-
-  #album-view .cover {
-    max-width: none;
-  }
-
-  .album-info h1 {
-    /* When the cover could be centered above the title, we need plenty of
-     * whitespace to not make it look weird, but when it is aligned to the
-     * borders, we can do with less. */
-    margin-top: 0;
-  }
-
-  .track-list {
-    margin-top: 0;
-    padding-top: 4rem;
-    padding-left: 1rem;
-    padding-bottom: 2.5rem;
-    border-top: none;
-    border-left: 0.8pt solid #eee;
-  }
-
-  /* We can also start to render search results in three columns next to each
-   * other, instead of below one another. */
+@media (min-width: 70rem) {
+  /* Add a bit of padding around the search results, so they arent' too wide,
+   * which looks unnatural. */
   .search-results-list {
     display: grid;
     grid-template-columns: 2fr 3fr 3fr 3fr 2fr;
@@ -796,9 +802,9 @@ button.volume-up { grid-area: volume-up; }
   }
 }
 
-/* At this width, we can devote a bit more space to th album list, and we set a
- * limit on the width of the album info column. */
-@media (min-width: 90rem) {
+/* At this width, we can devote a bit more space to th album list, and we
+ * set a limit on the width of the album info column. */
+@media (min-width: 75rem) {
   #album-view {
     grid-template-columns: 4fr 35rem 35rem 3fr;
     grid-template-areas:
@@ -809,7 +815,10 @@ button.volume-up { grid-area: volume-up; }
   .album-info h1 {
     font-size: 1.7rem;
   }
+}
 
+@media (min-width: 90rem) {
+{
   .search-results-list {
     display: grid;
     grid-template-columns: 3fr 3fr 3fr 3fr 3fr;
