@@ -238,7 +238,7 @@ handleEvent event state = case event of
       Html.clear
       case Array.head queue of
         Nothing -> NowPlaying.nothingPlayingInfo
-        Just currentTrack -> NowPlaying.nowPlayingInfo currentTrack
+        Just currentTrack -> NowPlaying.nowPlayingInfo state.postEvent currentTrack
 
     -- Update the queue again either 30 seconds from now, or at the time when
     -- we expect the current track will run out, so the point where we expect

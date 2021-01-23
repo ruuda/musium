@@ -12,11 +12,14 @@ module NowPlaying
   ) where
 
 import Control.Monad.Reader.Class (ask)
-import Effect.Aff (launchAff_)
+import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
 import Prelude
 
 import Dom as Dom
+import Event (Event)
+import Event as Event
+import Navigation as Navigation
 import Html (Html)
 import Html as Html
 import Model (Decibel (Decibel), QueuedTrack (QueuedTrack), Volume (Volume))
@@ -65,8 +68,8 @@ volumeControls = Html.div $ do
     Html.text "V+"
     Html.onClick $ changeVolume Model.VolumeUp
 
-nowPlayingInfo :: QueuedTrack -> Html Unit
-nowPlayingInfo (QueuedTrack track) = Html.div $ do
+nowPlayingInfo :: (Event -> Aff Unit) -> QueuedTrack -> Html Unit
+nowPlayingInfo postEvent (QueuedTrack track) = Html.div $ do
   -- This structure roughly follows that of the album view.
   Html.addClass "album-info"
   Html.div $ do
@@ -83,6 +86,9 @@ nowPlayingInfo (QueuedTrack track) = Html.div $ do
     Html.h2 $ do
       Html.addClass "album-title"
       Html.text track.album
+      Html.onClick $ launchAff_ $ postEvent $ Event.NavigateTo
+        (Navigation.Album track.albumId)
+        Event.RecordHistory
 
 nothingPlayingInfo :: Html Unit
 nothingPlayingInfo = Html.div $ do
