@@ -6,7 +6,8 @@
 -- A copy of the License has been included in the root of the repository.
 
 module NowPlaying
-  ( nowPlayingInfo
+  ( nothingPlayingInfo
+  , nowPlayingInfo
   , volumeControls
   ) where
 
@@ -82,3 +83,8 @@ nowPlayingInfo (QueuedTrack track) = Html.div $ do
     Html.h2 $ do
       Html.addClass "album-title"
       Html.text track.album
+
+nothingPlayingInfo :: Html Unit
+nothingPlayingInfo = Html.div $ do
+  Html.addClass "nothing-playing"
+  Html.text "Nothing playing right now"

@@ -584,6 +584,13 @@ button.play-next::before {
   margin-bottom: 2em;
 }
 
+.current .nothing-playing {
+  text-align: center;
+  color: #aaa;
+  position: relative;
+  top: 50%;
+}
+
 .volume-controls {
   grid-area: volume-controls;
   display: grid;

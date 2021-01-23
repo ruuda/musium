@@ -298,7 +298,7 @@ handleEvent event state = case event of
     liftEffect $ Html.withElement state.elements.currentView $ do
       Html.clear
       case Array.head queue of
-        Nothing -> pure unit
+        Nothing -> NowPlaying.nothingPlayingInfo
         Just currentTrack -> NowPlaying.nowPlayingInfo currentTrack
 
     -- Update the queue again either 30 seconds from now, or at the time when
