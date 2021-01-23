@@ -43,7 +43,6 @@ import Event as Event
 import History as History
 import Html (Html)
 import Html as Html
-import LocalStorage as LocalStorage
 import Model (Album (..), AlbumId (..), QueuedTrack (..), TrackId)
 import Model as Model
 import NavBar (NavBarState)
@@ -91,8 +90,6 @@ type AppState =
   , navBar :: NavBarState
   , statusBar :: StatusBarState
   , albumListState :: AlbumListState
-    -- The index of the album at the top of the viewport.
-  , albumListIndex :: Int
   , location :: Location
   , elements :: Elements
   , postEvent :: Event -> Aff Unit
@@ -191,7 +188,6 @@ new bus = do
     , navBar: navBar
     , statusBar: statusBar
     , albumListState: { elements: [], begin: 0, end: 0 }
-    , albumListIndex: 0
     , location: Navigation.Library
     , elements: elements
     , postEvent: postEvent
@@ -232,14 +228,13 @@ updateAlbumList state = do
           }
         , index: i
         }
-  LocalStorage.set "albumListIndex" index
   scrollState <- AlbumListView.updateAlbumList
     state.albums
     state.postEvent
     state.elements.libraryBrowser.albumListRunway
     target
     state.albumListState
-  pure $ state { albumListState = scrollState, albumListIndex = index }
+  pure $ state { albumListState = scrollState }
 
 -- Update the progress bar, and schedule the next update event, if applicable.
 updateProgressBar :: AppState -> Aff AppState
