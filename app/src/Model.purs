@@ -131,28 +131,36 @@ getAlbums = do
       Left err -> fatal $ "Failed to parse albums: " <> err
       Right albums -> pure $ sortWith (\(Album a) -> a.date) albums
 
-newtype Artist = Artist
+newtype ArtistJson = ArtistJson
+  { name :: String
+  , albums :: Array Album
+  }
+
+type Artist =
   { id :: ArtistId
   , name :: String
   , albums :: Array Album
   }
 
-instance decodeJsonArtist :: DecodeJson Artist where
+instance decodeJsonArtist :: DecodeJson ArtistJson where
   decodeJson json = do
     obj        <- Json.decodeJson json
-    id         <- map ArtistId $ Json.getField obj "id"
     name       <- Json.getField obj "name"
     albums     <- Json.getField obj "albums"
-    pure $ Artist { id, name, albums }
+    pure $ ArtistJson { name, albums }
 
 getArtist :: ArtistId -> Aff Artist
 getArtist (ArtistId artistId) = do
-  result <- Http.get Http.ResponseFormat.json $ "/artists/" <> artistId
+  result <- Http.get Http.ResponseFormat.json $ "/artist/" <> artistId
   case result of
     Left err -> fatal $ "Failed to retrieve artist: " <> Http.printError err
     Right response -> case Json.decodeJson response.body of
       Left err -> fatal $ "Failed to parse artist: " <> err
-      Right artist -> pure artist
+      Right (ArtistJson artist) -> pure $
+        { id: ArtistId artistId
+        , name: artist.name
+        , albums: artist.albums
+        }
 
 enqueueTrack :: TrackId -> Aff QueueId
 enqueueTrack (TrackId trackId) = do

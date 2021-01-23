@@ -40,7 +40,7 @@ import Event (Event, HistoryMode)
 import Event as Event
 import History as History
 import Html as Html
-import Model (Artist (..), Album (..), AlbumId (..), QueuedTrack (..), TrackId)
+import Model (Artist, Album (..), AlbumId (..), QueuedTrack (..), TrackId)
 import Model as Model
 import NavBar (NavBarState)
 import NavBar as NavBar
@@ -275,12 +275,12 @@ handleEvent event state = case event of
     pure result
 
   Event.NavigateTo location@(Navigation.Artist artistId) mode -> do
-    Artist artist <- Model.getArtist artistId
+    artist <- Model.getArtist artistId
     albumView <- liftEffect $
       AlbumListView.setAlbums artist.albums state.elements.artistBrowser
     -- TODO Html.setScrollTop 0.0
     navigateTo location mode $ state
-      { currentArtist = Just $ Artist artist
+      { currentArtist = Just artist
       , elements = state.elements { artistBrowser = albumView }
       }
 
@@ -300,6 +300,9 @@ handleEvent event state = case event of
       Navigation.Library -> do
         view <- AlbumListView.updateViewport state.elements.libraryBrowser
         pure $ state { elements = state.elements { libraryBrowser = view } }
+      Navigation.Artist _ -> do
+        view <- AlbumListView.updateViewport state.elements.artistBrowser
+        pure $ state { elements = state.elements { artistBrowser = view } }
       _ -> pure state
 
   Event.EnqueueTrack queuedTrack ->
@@ -330,7 +333,7 @@ navigateTo newLocation historyMode state =
         Just (Album album) -> album.title <> " by " <> album.artist
         Nothing            -> "Album " <> (show albumId) <> " does not exist"
       Navigation.Artist artistId -> case state.currentArtist of
-        Just (Artist artist) | artist.id == artistId -> artist.name
+        Just artist | artist.id == artistId -> artist.name
         _ -> "Artist " <> (show artistId) <> " is not currently loaded"
   in if newLocation == state.location then pure state else do
     case historyMode of

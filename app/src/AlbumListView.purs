@@ -199,6 +199,11 @@ setAlbums albums state = do
   updateViewport $ state
     { albums = albums
     , albumListRunway = runway
+    , scrollState =
+      { elements: []
+      , begin: 0
+      , end: 0
+      }
     }
 
 -- Bring the album list in sync with the viewport (the album list index and
@@ -209,10 +214,13 @@ updateViewport state = do
   -- need to have at least one already. If we don't, then we take a slice of
   -- a single item to start with, and enqueue an event to update again after
   -- this update.
-  { target, index } <- case Array.head state.scrollState.elements of
+  { target, index, redo } <- case Array.head state.scrollState.elements of
     Nothing -> do
-      Aff.launchAff_ $ state.postEvent $ Event.ChangeViewport
-      pure $ { target: { begin: 0, end: min 1 (Array.length state.albums) }, index: 0 }
+      pure
+        { target: { begin: 0, end: min 1 (Array.length state.albums) }
+        , index: 0
+        , redo: true
+        }
     Just elem -> do
       entryHeight <- Dom.getOffsetHeight elem
       viewportHeight <- Dom.getOffsetHeight state.albumListView
@@ -221,17 +229,22 @@ updateViewport state = do
         headroom = 20
         i = Int.floor $ y / entryHeight
         albumsVisible = Int.ceil $ viewportHeight / entryHeight
-      pure $
+      pure
         { target:
           { begin: max 0 (i - headroom)
           , end: min (Array.length state.albums) (i + headroom + albumsVisible)
           }
         , index: i
+        , redo: false
         }
+
   scrollState <- updateElements
     state.albums
     state.postEvent
     state.albumListRunway
     target
     state.scrollState
-  pure $ state { scrollState = scrollState }
+
+  -- If we needed to add a single element first, for measurement, then do a
+  -- second iteration, ortherwise we are done now.
+  (if redo then updateViewport else pure) state { scrollState = scrollState }
