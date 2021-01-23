@@ -28,7 +28,7 @@ use tiny_http::Method::{Get, Post, Put};
 use musium::config::Config;
 use musium::error;
 use musium::player::{Millibel, Player};
-use musium::prim::{AlbumId, TrackId};
+use musium::prim::{ArtistId, AlbumId, TrackId};
 use musium::serialization;
 use musium::string_utils::normalize_words;
 use musium::thumb_cache::ThumbCache;
@@ -199,6 +199,28 @@ impl MetaServer {
             .boxed()
     }
 
+    fn handle_artist(&self, id: &str) -> ResponseBox {
+        let artist_id = match ArtistId::parse(id) {
+            Some(aid) => aid,
+            None => return self.handle_bad_request("Invalid artist id."),
+        };
+
+        let artist = match self.index.get_artist(artist_id) {
+            Some(a) => a,
+            None => return self.handle_not_found(),
+        };
+
+        let albums = self.index.get_albums_by_artist(artist_id);
+
+        let buffer = Vec::new();
+        let mut w = io::Cursor::new(buffer);
+        serialization::write_artist_json(&*self.index, &mut w, artist, albums).unwrap();
+
+        Response::from_data(w.into_inner())
+            .with_header(header_content_type("application/json"))
+            .boxed()
+    }
+
     fn handle_albums(&self) -> ResponseBox {
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
@@ -340,6 +362,7 @@ impl MetaServer {
             (&Get, Some("thumb"),  Some(t)) => self.handle_thumb(t),
             (&Get, Some("track"),  Some(t)) => self.handle_track(t),
             (&Get, Some("album"),  Some(a)) => self.handle_album(a),
+            (&Get, Some("artist"), Some(a)) => self.handle_artist(a),
             (&Get, Some("albums"), None)    => self.handle_albums(),
             (&Get, Some("search"), None)    => self.handle_search(query),
             (&Get, Some("queue"),  None)    => self.handle_queue(),

@@ -12,26 +12,40 @@ use serde_json;
 use std::io;
 use std::io::Write;
 
-use crate::{Album, AlbumId, ArtistId, MetaIndex, TrackId};
+use crate::{Album, AlbumId, Artist, ArtistId, MetaIndex, TrackId};
 use crate::player::{Millibel, QueueId};
+
+/// Write an album, but only with the album details, not its tracks.
+///
+/// Used for the list of all albums, and for the list of albums by artist.
+pub fn write_brief_album_json<W: Write>(
+    index: &dyn MetaIndex,
+    mut w: W,
+    album_id: AlbumId,
+    album: &Album,
+) -> io::Result<()> {
+    // The unwrap is safe here, in the sense that if the index is
+    // well-formed, it will never fail. The id is provided by the index
+    // itself, not user input, so the artist should be present.
+    let artist = index.get_artist(album.artist_id).unwrap();
+
+    write!(w, r#"{{"id":"{}","title":"#, album_id)?;
+    serde_json::to_writer(&mut w, index.get_string(album.title))?;
+    write!(w, r#","artist_id":"{}","artist":"#, album.artist_id)?;
+    serde_json::to_writer(&mut w, index.get_string(artist.name))?;
+    write!(w, r#","sort_artist":"#)?;
+    serde_json::to_writer(&mut w, index.get_string(artist.name_for_sort))?;
+    write!(w, r#","date":"{}"}}"#, album.original_release_date)?;
+    Ok(())
+}
 
 /// Write a json representation of the album list to the writer.
 pub fn write_albums_json<W: Write>(index: &dyn MetaIndex, mut w: W) -> io::Result<()> {
     write!(w, "[")?;
     let mut first = true;
-    for &(ref id, ref album) in index.get_albums() {
-        // The unwrap is safe here, in the sense that if the index is
-        // well-formed, it will never fail. The id is provided by the index
-        // itself, not user input, so the artist should be present.
-        let artist = index.get_artist(album.artist_id).unwrap();
+    for &(id, ref album) in index.get_albums() {
         if !first { write!(w, ",")?; }
-        write!(w, r#"{{"id":"{}","title":"#, id)?;
-        serde_json::to_writer(&mut w, index.get_string(album.title))?;
-        write!(w, r#","artist_id":"{}","artist":"#, album.artist_id)?;
-        serde_json::to_writer(&mut w, index.get_string(artist.name))?;
-        write!(w, r#","sort_artist":"#)?;
-        serde_json::to_writer(&mut w, index.get_string(artist.name_for_sort))?;
-        write!(w, r#","date":"{}"}}"#, album.original_release_date)?;
+        write_brief_album_json(index, &mut w, id, album)?;
         first = false;
     }
     write!(w, "]")
@@ -63,6 +77,29 @@ pub fn write_album_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: AlbumId, 
         write!(w, r#","artist":"#)?;
         serde_json::to_writer(&mut w, index.get_string(track.artist))?;
         write!(w, r#","duration_seconds":{}}}"#, track.duration_seconds)?;
+        first = false;
+    }
+    write!(w, "]}}")
+}
+
+/// Write a json representation of the artist and its albums.
+pub fn write_artist_json<W: Write>(
+    index: &dyn MetaIndex,
+    mut w: W,
+    artist: &Artist,
+    albums: &[(ArtistId, AlbumId)],
+) -> io::Result<()> {
+    write!(w, r#"{{"name":"#)?;
+    serde_json::to_writer(&mut w, index.get_string(artist.name))?;
+    write!(w, r#","albums":["#)?;
+    let mut first = true;
+    for &(_, album_id) in albums {
+        // The unwrap is safe here, in the sense that if the index is
+        // well-formed, it will never fail. The id is provided by the index
+        // itself, not user input, so the album should be present.
+        let album = index.get_album(album_id).unwrap();
+        if !first { write!(w, ",")?; }
+        write_brief_album_json(index, &mut w, album_id, album)?;
         first = false;
     }
     write!(w, "]}}")
