@@ -37,8 +37,8 @@ type SearchElements =
   , resultBox :: Element
   }
 
-renderSearchArtist :: SearchArtist -> Html Unit
-renderSearchArtist (SearchArtist artist) = do
+renderSearchArtist :: (Event -> Aff Unit) -> SearchArtist -> Html Unit
+renderSearchArtist postEvent (SearchArtist artist) = do
   Html.li $ do
     Html.addClass "artist"
     Html.div $ do
@@ -48,6 +48,10 @@ renderSearchArtist (SearchArtist artist) = do
       Html.addClass "discography"
       for_ artist.albums $ \albumId -> do
         Html.img (Model.thumbUrl albumId) ("An album by " <> artist.name) $ pure unit
+
+    Html.onClick $ launchAff_ $ postEvent $ Event.NavigateTo
+      (Navigation.Artist $ artist.id)
+      RecordHistory
 
 -- TODO: Deduplicate between here and album component.
 renderSearchAlbum :: (Event -> Aff Unit) -> SearchAlbum -> Html Unit
@@ -123,7 +127,7 @@ new postEvent = do
                   Html.h2 $ Html.text "Artists"
                   -- Limit the number of results rendered at once to keep search
                   -- responsive. TODO: Render overflow button.
-                  Html.ul $ for_ (Array.take 10 result.artists) renderSearchArtist
+                  Html.ul $ for_ (Array.take 10 result.artists) $ renderSearchArtist postEvent
 
               when (not $ Array.null result.albums) $ do
                 Html.div $ do
