@@ -15,28 +15,33 @@ import Data.Maybe (Maybe (Just, Nothing))
 import Data.String (Pattern (..), stripPrefix)
 import Prelude
 
-import Model (AlbumId (..))
+import Model (ArtistId (..), AlbumId (..))
 
 data Location
   = Library
+  | Artist ArtistId
+  | Album AlbumId
   | NowPlaying
   | Search
-  | Album AlbumId
 
 derive instance eqLocation :: Eq Location
 
 toUrl :: Location -> String
 toUrl loc = case loc of
   Library -> "/"
-  NowPlaying -> "/?now"
-  Search -> "/?search"
+  Artist (ArtistId id) -> "/?artist=" <> id
   Album (AlbumId id) -> "/?album=" <> id
+  NowPlaying -> "/?current"
+  Search -> "/?search"
 
 fromUrl :: String -> Location
-fromUrl url = case stripPrefix (Pattern "/?album=") url of
-  Just albumId -> Album (AlbumId albumId)
-  Nothing      -> case url of
-    "/?now"    -> NowPlaying
-    "/?search" -> Search
-    "/"        -> Library
-    _          -> Library
+fromUrl url =
+  case stripPrefix (Pattern "/?artist=") url of
+    Just artistId -> Artist (ArtistId artistId)
+    Nothing -> case stripPrefix (Pattern "/?album=") url of
+      Just albumId -> Album (AlbumId albumId)
+      Nothing       -> case url of
+        "/?current" -> NowPlaying
+        "/?search"  -> Search
+        "/"         -> Library
+        _           -> Library

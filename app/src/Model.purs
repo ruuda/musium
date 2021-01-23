@@ -6,7 +6,8 @@
 -- A copy of the License has been included in the root of the repository.
 
 module Model
-  ( ArtistId (..)
+  ( Artist (..)
+  , ArtistId (..)
   , Album (..)
   , AlbumId (..)
   , Decibel (..)
@@ -25,6 +26,7 @@ module Model
   , enqueueTrack
   , formatDurationSeconds
   , getAlbums
+  , getArtist
   , getString
   , getQueue
   , getTracks
@@ -63,6 +65,9 @@ newtype ArtistId = ArtistId String
 
 derive instance artistIdEq :: Eq ArtistId
 derive instance artistIdOrd :: Ord ArtistId
+
+instance showArtistId :: Show ArtistId where
+  show (ArtistId id) = id
 
 newtype AlbumId = AlbumId String
 
@@ -123,6 +128,29 @@ getAlbums = do
     Right response -> case Json.decodeJson response.body of
       Left err -> fatal $ "Failed to parse albums: " <> err
       Right albums -> pure $ sortWith (\(Album a) -> a.date) albums
+
+newtype Artist = Artist
+  { id :: ArtistId
+  , name :: String
+  , albums :: Array Album
+  }
+
+instance decodeJsonArtist :: DecodeJson Artist where
+  decodeJson json = do
+    obj        <- Json.decodeJson json
+    id         <- map ArtistId $ Json.getField obj "id"
+    name       <- Json.getField obj "name"
+    albums     <- Json.getField obj "albums"
+    pure $ Artist { id, name, albums }
+
+getArtist :: ArtistId -> Aff Artist
+getArtist (ArtistId artistId) = do
+  result <- Http.get Http.ResponseFormat.json $ "/artists/" <> artistId
+  case result of
+    Left err -> fatal $ "Failed to retrieve artist: " <> Http.printError err
+    Right response -> case Json.decodeJson response.body of
+      Left err -> fatal $ "Failed to parse artist: " <> err
+      Right artist -> pure artist
 
 enqueueTrack :: TrackId -> Aff QueueId
 enqueueTrack (TrackId trackId) = do

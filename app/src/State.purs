@@ -40,7 +40,7 @@ import Event (Event, HistoryMode)
 import Event as Event
 import History as History
 import Html as Html
-import Model (Album (..), AlbumId (..), QueuedTrack (..), TrackId)
+import Model (Artist (..), Album (..), AlbumId (..), QueuedTrack (..), TrackId)
 import Model as Model
 import NavBar (NavBarState)
 import NavBar as NavBar
@@ -76,6 +76,7 @@ type Elements =
 type AppState =
   { albums :: Array Album
   , albumsById :: Object Album
+  , currentArtist :: Maybe Artist
   , queue :: Array QueuedTrack
   , nextQueueFetch :: Fiber Unit
   , nextProgressUpdate :: Fiber Unit
@@ -165,6 +166,7 @@ new bus = do
   pure
     { albums: []
     , albumsById: Object.empty
+    , currentArtist: Nothing
     , queue: []
     , nextQueueFetch: never
     , nextProgressUpdate: never
@@ -272,6 +274,16 @@ handleEvent event state = case event of
     liftEffect $ Search.focus state.elements.search
     pure result
 
+  Event.NavigateTo location@(Navigation.Artist artistId) mode -> do
+    Artist artist <- Model.getArtist artistId
+    albumView <- liftEffect $
+      AlbumListView.setAlbums artist.albums state.elements.artistBrowser
+    -- TODO Html.setScrollTop 0.0
+    navigateTo location mode $ state
+      { currentArtist = Just $ Artist artist
+      , elements = state.elements { artistBrowser = albumView }
+      }
+
   Event.NavigateTo location@(Navigation.Album albumId) mode -> do
     case getAlbum albumId state of
       Nothing -> fatal $ "Album " <> (show albumId) <> " does not exist."
@@ -304,6 +316,7 @@ navigateTo newLocation historyMode state =
     getPane :: Navigation.Location -> Element
     getPane loc = case loc of
       Navigation.Library    -> state.elements.paneLibrary
+      Navigation.Artist _   -> state.elements.paneArtist
       Navigation.Album _    -> state.elements.paneAlbum
       Navigation.NowPlaying -> state.elements.paneCurrent
       Navigation.Search     -> state.elements.paneSearch
@@ -316,6 +329,9 @@ navigateTo newLocation historyMode state =
       Navigation.Album albumId -> case getAlbum albumId state of
         Just (Album album) -> album.title <> " by " <> album.artist
         Nothing            -> "Album " <> (show albumId) <> " does not exist"
+      Navigation.Artist artistId -> case state.currentArtist of
+        Just (Artist artist) | artist.id == artistId -> artist.name
+        _ -> "Artist " <> (show artistId) <> " is not currently loaded"
   in if newLocation == state.location then pure state else do
     case historyMode of
       Event.NoRecordHistory -> pure unit

@@ -25,7 +25,7 @@ import Prelude
 
 import Dom (Element)
 import Dom as Dom
-import Event (Event, HistoryMode (RecordHistory))
+import Event (Event)
 import Event as Event
 import Html (Html)
 import Html as Html

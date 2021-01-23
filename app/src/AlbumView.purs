@@ -17,13 +17,12 @@ import Effect.Aff (Aff, joinFiber, launchAff, launchAff_)
 import Effect.Class (liftEffect)
 import Prelude
 
-import Event (Event, HistoryMode (RecordHistory))
+import Event (Event)
 import Event as Event
 import Html (Html)
 import Html as Html
 import Model (Album (..), QueuedTrack (..), Track (..))
 import Model as Model
-import Navigation as Navigation
 import Time as Time
 
 renderAlbum :: (Event -> Aff Unit) -> Album -> Html Unit

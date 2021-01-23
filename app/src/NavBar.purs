@@ -90,6 +90,7 @@ selectTab location state =
     traverse_ deactivate $ tabs state
     activate $ case location of
       Navigation.Library    -> state.tabLibrary
+      Navigation.Artist _   -> state.tabArtist
+      Navigation.Album _    -> state.tabAlbum
       Navigation.NowPlaying -> state.tabNowPlaying
       Navigation.Search     -> state.tabSearch
-      Navigation.Album _    -> state.tabAlbum
