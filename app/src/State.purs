@@ -7,7 +7,6 @@
 
 module State
   ( AppState (..)
-  , BrowserElements (..)
   , Elements (..)
   , handleEvent
   , new
@@ -16,7 +15,6 @@ module State
 import Control.Monad.Error.Class (class MonadThrow, throwError)
 import Control.Monad.Reader.Class (ask)
 import Data.Array as Array
-import Data.Int as Int
 import Data.Maybe (Maybe (Just, Nothing))
 import Data.Time.Duration (Milliseconds (..))
 import Data.Tuple (Tuple (..))
@@ -33,7 +31,7 @@ import Foreign.Object (Object)
 import Foreign.Object as Object
 import Prelude
 
-import AlbumListView (AlbumListState)
+import AlbumListView (AlbumListView)
 import AlbumListView as AlbumListView
 import AlbumView as AlbumView
 import Dom (Element)
@@ -41,7 +39,6 @@ import Dom as Dom
 import Event (Event, HistoryMode)
 import Event as Event
 import History as History
-import Html (Html)
 import Html as Html
 import Model (Album (..), AlbumId (..), QueuedTrack (..), TrackId)
 import Model as Model
@@ -62,14 +59,9 @@ fatal = Exception.error >>> throwError
 
 type EventBus = BusW Event
 
-type BrowserElements =
-  { albumListView :: Element
-  , albumListRunway :: Element
-  }
-
 type Elements =
-  { libraryBrowser :: BrowserElements
-  , artistBrowser :: BrowserElements
+  { libraryBrowser :: AlbumListView
+  , artistBrowser :: AlbumListView
   , albumView :: Element
   , currentView :: Element
   , search :: SearchElements
@@ -89,19 +81,10 @@ type AppState =
   , nextProgressUpdate :: Fiber Unit
   , navBar :: NavBarState
   , statusBar :: StatusBarState
-  , albumListState :: AlbumListState
   , location :: Location
   , elements :: Elements
   , postEvent :: Event -> Aff Unit
   }
-
-addBrowser :: (Event -> Aff Unit) -> Html BrowserElements
-addBrowser postEvent = Html.div $ do
-  Html.addClass "album-list-view"
-  Html.onScroll $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
-  albumListRunway <- Html.div $ ask
-  albumListView <- ask
-  pure $ { albumListView, albumListRunway }
 
 setupElements :: (Event -> Aff Unit) -> Effect Elements
 setupElements postEvent = Html.withElement Dom.body $ do
@@ -109,7 +92,7 @@ setupElements postEvent = Html.withElement Dom.body $ do
     Html.setId "library-pane"
     Html.addClass "pane"
     paneLibrary <- ask
-    libraryBrowser <- addBrowser postEvent
+    libraryBrowser <- AlbumListView.new postEvent
     pure $ { paneLibrary, libraryBrowser }
 
   { paneArtist, artistBrowser } <- Html.div $ do
@@ -117,7 +100,7 @@ setupElements postEvent = Html.withElement Dom.body $ do
     Html.addClass "pane"
     Html.addClass "inactive"
     paneArtist <- ask
-    artistBrowser <- addBrowser postEvent
+    artistBrowser <- AlbumListView.new postEvent
     pure $ { paneArtist, artistBrowser }
 
   { paneAlbum, albumView } <- Html.div $ do
@@ -187,7 +170,6 @@ new bus = do
     , nextProgressUpdate: never
     , navBar: navBar
     , statusBar: statusBar
-    , albumListState: { elements: [], begin: 0, end: 0 }
     , location: Navigation.Library
     , elements: elements
     , postEvent: postEvent
@@ -200,41 +182,6 @@ currentTrackId state = case Array.head state.queue of
 
 getAlbum :: AlbumId -> AppState -> Maybe Album
 getAlbum (AlbumId id) state = Object.lookup id state.albumsById
-
--- Bring the album list in sync with the viewport (the album list index and
--- the number of entries per viewport).
-updateAlbumList :: AppState -> Effect AppState
-updateAlbumList state = do
-  -- To determine a good target, we need to know how tall an entry is, so we
-  -- need to have at least one already. If we don't, then we take a slice of
-  -- a single item to start with, and enqueue an event to update again after
-  -- this update.
-  { target, index } <- case Array.head state.albumListState.elements of
-    Nothing -> do
-      Aff.launchAff_ $ state.postEvent $ Event.ChangeViewport
-      pure $ { target: { begin: 0, end: min 1 (Array.length state.albums) }, index: 0 }
-    Just elem -> do
-      entryHeight <- Dom.getOffsetHeight elem
-      viewportHeight <- Dom.getOffsetHeight state.elements.libraryBrowser.albumListView
-      y <- Dom.getScrollTop state.elements.libraryBrowser.albumListView
-      let
-        headroom = 20
-        i = Int.floor $ y / entryHeight
-        albumsVisible = Int.ceil $ viewportHeight / entryHeight
-      pure $
-        { target:
-          { begin: max 0 (i - headroom)
-          , end: min (Array.length state.albums) (i + headroom + albumsVisible)
-          }
-        , index: i
-        }
-  scrollState <- AlbumListView.updateAlbumList
-    state.albums
-    state.postEvent
-    state.elements.libraryBrowser.albumListRunway
-    target
-    state.albumListState
-  pure $ state { albumListState = scrollState }
 
 -- Update the progress bar, and schedule the next update event, if applicable.
 updateProgressBar :: AppState -> Aff AppState
@@ -273,16 +220,11 @@ handleEvent event state = case event of
       albumsById = Object.fromFoldable $ map withId albums
 
     liftEffect $ do
-      runway <- Html.withElement state'.elements.libraryBrowser.albumListView $ do
-        Html.clear
-        AlbumListView.renderAlbumListRunway $ Array.length albums
-
-      updateAlbumList $ state'
+      libraryBrowser <- AlbumListView.setAlbums albums state.elements.libraryBrowser
+      pure state'
         { albums = albums
         , albumsById = albumsById
-        , elements = state'.elements
-          { libraryBrowser = state'.elements.libraryBrowser { albumListRunway = runway }
-          }
+        , elements = state'.elements { libraryBrowser = libraryBrowser }
         }
 
   Event.UpdateQueue queue -> do
@@ -341,7 +283,12 @@ handleEvent event state = case event of
           Html.setScrollTop 0.0
     navigateTo location mode state
 
-  Event.ChangeViewport -> liftEffect $ updateAlbumList state
+  Event.ChangeViewport ->
+    liftEffect $ case state.location of
+      Navigation.Library -> do
+        view <- AlbumListView.updateViewport state.elements.libraryBrowser
+        pure $ state { elements = state.elements { libraryBrowser = view } }
+      _ -> pure state
 
   Event.EnqueueTrack queuedTrack ->
     -- This is an internal update, after we enqueue a track. It allows updating

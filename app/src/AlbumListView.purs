@@ -6,19 +6,23 @@
 -- A copy of the License has been included in the root of the repository.
 
 module AlbumListView
-  ( AlbumListState
+  ( AlbumListView
+  , ScrollState
   , Slice
-  , renderAlbumListRunway
-  , updateAlbumList
+  , new
+  , setAlbums
+  , updateViewport
   ) where
 
 import Control.Monad.Reader.Class (ask)
 import Data.Array as Array
+import Data.Int as Int
 import Data.Maybe (Maybe (Just, Nothing))
 import Data.String.CodeUnits as CodeUnits
 import Data.Traversable (for_, sequence, sequence_)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff)
+import Effect.Aff as Aff
 import Prelude
 import Test.Assert (assert', assertEqual')
 
@@ -33,7 +37,7 @@ import Model as Model
 import Navigation as Navigation
 
 -- Render the "runway" in which albums can sroll, but put no contents in it.
--- The contents are added later by 'updateAlbumList'.
+-- The contents are added later by 'updateViewport'.
 renderAlbumListRunway :: Int -> Html Element
 renderAlbumListRunway numAlbums = do
   Html.ul $ do
@@ -49,24 +53,24 @@ type Slice =
   }
 
 -- The currently rendered albums, and which slice of the albums array that is.
-type AlbumListState =
+type ScrollState =
   { elements :: Array Element
   , begin :: Int
   , end :: Int
   }
 
 type Split =
-  { shared :: AlbumListState
+  { shared :: ScrollState
   , residue :: Array Element
   }
 
 -- An empty album list state with 'begin' set to the given index.
-emptyAt :: Int -> AlbumListState
+emptyAt :: Int -> ScrollState
 emptyAt i = { elements: [], begin: i, end: i }
 
 -- Split the state into a shared part that intersects the target, and a residue
 -- that can be reused.
-split3 :: Slice -> AlbumListState -> Split
+split3 :: Slice -> ScrollState -> Split
 split3 target state =
   let
     begin   = min state.end $ max state.begin target.begin
@@ -78,20 +82,20 @@ split3 target state =
   in
     { shared, residue }
 
-assertOk :: AlbumListState -> Effect Unit
+assertOk :: ScrollState -> Effect Unit
 assertOk state = assertEqual'
   "Elements array must contain as many elements as the covered range."
   { actual: Array.length state.elements, expected: state.end - state.begin }
 
 -- Mutate the album list DOM nodes to ensure that the desired slice is rendered.
-updateAlbumList
+updateElements
   :: Array Album
   -> (Event -> Aff Unit)
   -> Element
   -> Slice
-  -> AlbumListState
-  -> Effect AlbumListState
-updateAlbumList albums postEvent albumList target state = do
+  -> ScrollState
+  -> Effect ScrollState
+updateElements albums postEvent albumList target state = do
   let
     split = split3 target state
 
@@ -117,8 +121,8 @@ updateAlbumList albums postEvent albumList target state = do
         for_ (Array.take (-d) split.residue) $ \elem -> Dom.removeChild elem albumList
         pure (Array.drop (-d) split.residue)
       d | d > 0 -> do
-        new <- sequence $ Array.replicate d $ Html.withElement albumList $ Html.li ask
-        pure $ split.residue <> new
+        newElems <- sequence $ Array.replicate d $ Html.withElement albumList $ Html.li ask
+        pure $ split.residue <> newElems
       _ -> pure split.residue
 
   let
@@ -158,3 +162,76 @@ renderAlbum postEvent (Album album) = Html.div $ do
 
   Html.onClick $ void $ launchAff $ postEvent $
     Event.NavigateTo (Navigation.Album album.id) RecordHistory
+
+type AlbumListView =
+  { scrollState :: ScrollState
+  , albums :: Array Album
+  , albumListView :: Element
+  , albumListRunway :: Element
+  , postEvent :: Event -> Aff Unit
+  }
+
+new :: (Event -> Aff Unit) -> Html AlbumListView
+new postEvent = Html.div $ do
+  Html.addClass "album-list-view"
+  Html.onScroll $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
+  albumListRunway <- Html.div $ ask
+  albumListView <- ask
+  pure
+    { albumListView
+    , albumListRunway
+    , postEvent
+    , albums: []
+    , scrollState:
+      { elements: []
+      , begin: 0
+      , end: 0
+      }
+    }
+
+setAlbums :: Array Album -> AlbumListView -> Effect AlbumListView
+setAlbums albums state = do
+  -- TODO: Add a way to select a particular scroll position.
+  runway <- Html.withElement state.albumListView $ do
+    Html.clear
+    renderAlbumListRunway $ Array.length albums
+
+  updateViewport $ state
+    { albums = albums
+    , albumListRunway = runway
+    }
+
+-- Bring the album list in sync with the viewport (the album list index and
+-- the number of entries per viewport).
+updateViewport :: AlbumListView -> Effect AlbumListView
+updateViewport state = do
+  -- To determine a good target, we need to know how tall an entry is, so we
+  -- need to have at least one already. If we don't, then we take a slice of
+  -- a single item to start with, and enqueue an event to update again after
+  -- this update.
+  { target, index } <- case Array.head state.scrollState.elements of
+    Nothing -> do
+      Aff.launchAff_ $ state.postEvent $ Event.ChangeViewport
+      pure $ { target: { begin: 0, end: min 1 (Array.length state.albums) }, index: 0 }
+    Just elem -> do
+      entryHeight <- Dom.getOffsetHeight elem
+      viewportHeight <- Dom.getOffsetHeight state.albumListView
+      y <- Dom.getScrollTop state.albumListView
+      let
+        headroom = 20
+        i = Int.floor $ y / entryHeight
+        albumsVisible = Int.ceil $ viewportHeight / entryHeight
+      pure $
+        { target:
+          { begin: max 0 (i - headroom)
+          , end: min (Array.length state.albums) (i + headroom + albumsVisible)
+          }
+        , index: i
+        }
+  scrollState <- updateElements
+    state.albums
+    state.postEvent
+    state.albumListRunway
+    target
+    state.scrollState
+  pure $ state { scrollState = scrollState }
