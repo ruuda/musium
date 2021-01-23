@@ -70,6 +70,12 @@ volumeControls = Html.div $ do
 
 nowPlayingInfo :: (Event -> Aff Unit) -> QueuedTrack -> Html Unit
 nowPlayingInfo postEvent (QueuedTrack track) = Html.div $ do
+  let
+    onClickGoToAlbum = Html.onClick $ launchAff_ $
+      postEvent $ Event.NavigateTo
+        (Navigation.Album track.albumId)
+        Event.RecordHistory
+
   -- This structure roughly follows that of the album view.
   Html.addClass "album-info"
   Html.div $ do
@@ -78,6 +84,7 @@ nowPlayingInfo postEvent (QueuedTrack track) = Html.div $ do
     Html.img (Model.thumbUrl track.albumId) alt $ Html.addClass "backdrop"
     Html.img (Model.thumbUrl track.albumId) alt $ Html.addClass "lowres"
     Html.img (Model.coverUrl track.albumId) alt $ pure unit
+    onClickGoToAlbum
   Html.hgroup $ do
     Html.h1 $ Html.text track.title
     Html.h2 $ do
@@ -86,9 +93,7 @@ nowPlayingInfo postEvent (QueuedTrack track) = Html.div $ do
     Html.h2 $ do
       Html.addClass "album-title"
       Html.text track.album
-      Html.onClick $ launchAff_ $ postEvent $ Event.NavigateTo
-        (Navigation.Album track.albumId)
-        Event.RecordHistory
+      onClickGoToAlbum
 
 nothingPlayingInfo :: Html Unit
 nothingPlayingInfo = Html.div $ do
