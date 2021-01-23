@@ -8,7 +8,6 @@
 "use strict";
 
 exports.pushStateImpl = function(data, title, url) {
-  console.log('pushing, title = ' + title);
   return function() {
     document.title = title;
     history.pushState(data, title, url);

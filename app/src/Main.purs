@@ -34,7 +34,6 @@ main = launchAff_ $ do
   -- Begin loading the albums asynchronously.
   fiberAlbums <- forkAff $ do
     albums <- Model.getAlbums
-    Console.log "Loaded albums"
     pure albums
 
   -- Now we are ready to start building the UI. Remove the spinner to make room.
