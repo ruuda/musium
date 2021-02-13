@@ -14,5 +14,7 @@
  * [ ] Persist index to SQLite to avoid re-scan at startup
  * [ ] Re-index without restart (hot reload)
  * [ ] Support albums with more than one artist
+ * [ ] Allow triggering re-index from webinterface, render progress
+ * [ ] Record MBID of tracks, include when scrobbling
 
 [xspf]: https://xspf.org/jspf/
