@@ -12,15 +12,16 @@ benchmark.py -- Benchmark Musium indexing performance.
 
 Usage:
 
-    tools/benchmark.py <outfile> <command...>
+    tools/benchmark.py record <n_iters> <outfile> <command...>
 
 Example:
 
-    tools/benchmark.py before.tsv target/release/musium cache musium.conf
+    tools/benchmark.py record 50 before.tsv target/release/musium cache musium.conf
 """
 
-import sys
+import statistics
 import subprocess
+import sys
 
 from typing import List, NamedTuple
 
@@ -33,7 +34,7 @@ class Stat(NamedTuple):
     seconds_sys: str
 
 
-def stat(command: List[str]) -> None:
+def perf_stat(command: List[str]) -> None:
     result = subprocess.run(
         [
             'perf',
@@ -74,13 +75,30 @@ def stat(command: List[str]) -> None:
     return Stat(cycles, instructions, seconds_elapsed, seconds_user, seconds_sys)
 
 
-def main(outfile: str, command: List[str]) -> None:
-    print(stat(command))
+def main(n_iters: int, outfile: str, command: List[str]) -> None:
+    stats: List[Stat] = []
+    for i in range(n_iters):
+        print(f'\r[{i+1} / {n_iters}] Running {command}', end='', flush=True)
+        stats.append(perf_stat(command))
+
+    with open(outfile, 'w', encoding='utf-8') as f:
+        f.write('cycles\tinstructions\tseconds_elapsed\tseconds_user\tseconds_sys\n')
+        for s in stats:
+            f.write('\t'.join(s) + '\n')
+
+    print(f'\nResults written to {outfile}.')
+    print('Median instructions:', statistics.median(int(s.instructions) for s in stats))
+    print('Median seconds:     ', statistics.median(float(s.seconds_elapsed) for s in stats))
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 5:
         print(__doc__)
         sys.exit(1)
     else:
-        main(sys.argv[1], sys.argv[2:])
+        cmd = sys.argv[1]
+        if cmd == 'record':
+            main(int(sys.argv[2]), sys.argv[3], sys.argv[4:])
+        else:
+            print('Invalid command:', cmd)
+            sys.exit(1)
