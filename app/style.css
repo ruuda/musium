@@ -401,19 +401,15 @@ img.thumb
   max-width: 20rem;
   margin-left: auto;
   margin-right: auto;
-  /* TODO: This no longer applies when we have a max-width.
-   * But do we really *need* covers to be square? */
-  /* Hack: the cover should be square, but there is no direct way in css to say
-   * "the height should be equal to the width". We can abuse the fact that a
-   * padding percentage is part of the width instead. */
-  /* padding-bottom: calc(100% - 7.5em); */
-  /* height: 0; */
+  /* Ensure the container is square even when the image is missing. */
+  aspect-ratio: 1/1;
 }
 
 .album-info .cover img {
   position: absolute;
   width: 100%;
-  height: auto;
+  /* Stretch covers to be square, if need be. */
+  height: 100%;
   top: 0;
   left: 0;
   border-radius: 0.15rem;
@@ -428,15 +424,9 @@ img.thumb
 }
 
 .album-info .cover img.backdrop {
-  /* This one is first, so absolute vs relative does not matter so much, except
-   * that relative ensures the parent is at least this tall. */
-  position: relative;
   filter: contrast(0.8) saturate(1.5) brightness(0.9) blur(1.2rem);
   opacity: 0.4;
   transform: translateY(0.3rem);
-
-  /* Here we need to undo the 100% hack, due to the relative positioning. */
-  height: auto;
 }
 
 .album-info hgroup, .album-info .album-actions {
