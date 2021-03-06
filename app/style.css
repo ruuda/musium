@@ -421,6 +421,13 @@ img.thumb
    * block the backdrop, because that one uses the same source, so both should
    * load at the same time. */
   background-color: #f8f8f8;
+
+  /* When css aspect-ratio (on the parent container) is not supported,
+   * the cover art disappears, but we can fix that with the following
+   * rules. By making one of the three images position:relative, the
+   * parent container doesn’t collapse. */
+  position: relative;
+  height: auto;
 }
 
 .album-info .cover img.backdrop {
