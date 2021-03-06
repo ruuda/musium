@@ -13,7 +13,7 @@ use std::io;
 use std::io::Write;
 
 use crate::{Album, AlbumId, Artist, ArtistId, MetaIndex, TrackId};
-use crate::player::{Millibel, QueueId};
+use crate::player::{Millibel, TrackSnapshot};
 
 /// Write an album, but only with the album details, not its tracks.
 ///
@@ -173,44 +173,46 @@ pub fn write_search_track_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: Tr
     write!(w, r#"}}"#)
 }
 
-// TODO: Accept a QueueSnapshot directly.
+fn write_queued_track_json<W: Write>(
+    index: &dyn MetaIndex,
+    mut w: W,
+    queued_track: &TrackSnapshot,
+) -> io::Result<()> {
+    // Same as the search result track format, but additionally includes
+    // the duration, and playback information.
+    let track = index.get_track(queued_track.track_id).unwrap();
+    let album = index.get_album(track.album_id).unwrap();
+    write!(
+        w,
+        r#"{{"queue_id":"{}","track_id":"{}","title":"#,
+        queued_track.queue_id,
+        queued_track.track_id,
+    )?;
+    serde_json::to_writer(&mut w, index.get_string(track.title))?;
+    write!(w, r#","album_id":"{}","album":"#, track.album_id)?;
+    serde_json::to_writer(&mut w, index.get_string(album.title))?;
+    write!(w, r#","artist":"#)?;
+    serde_json::to_writer(&mut w, index.get_string(track.artist))?;
+    write!(w, r#","duration_seconds":{}"#, track.duration_seconds)?;
+
+    let position_seconds = queued_track.position_ms as f32 * 1e-3;
+    let buffered_seconds = queued_track.buffered_ms as f32 * 1e-3;
+    write!(w, r#","position_seconds":{:.03}"#, position_seconds)?;
+    write!(w, r#","buffered_seconds":{:.03}"#, buffered_seconds)?;
+    write!(w, r#","is_buffering":{}}}"#, queued_track.is_buffering)
+}
+
+
 pub fn write_queue_json<W: Write>(
     index: &dyn MetaIndex,
     mut w: W,
-    tracks: &[(QueueId, TrackId)],
-    position_seconds: f32,
-    buffered_seconds: f32,
+    tracks: &[TrackSnapshot],
 ) -> io::Result<()> {
     write!(w, "[")?;
     let mut first = true;
-    for &(queue_id, track_id) in tracks.iter() {
+    for queued_track in tracks.iter() {
         if !first { write!(w, ",")?; }
-
-        // Same as the search result track format, but additionally includes
-        // the duration, and playback information.
-        let track = index.get_track(track_id).unwrap();
-        let album = index.get_album(track.album_id).unwrap();
-        write!(w, r#"{{"queue_id":"{}","track_id":"{}","title":"#, queue_id, track_id)?;
-        serde_json::to_writer(&mut w, index.get_string(track.title))?;
-        write!(w, r#","album_id":"{}","album":"#, track.album_id)?;
-        serde_json::to_writer(&mut w, index.get_string(album.title))?;
-        write!(w, r#","artist":"#)?;
-        serde_json::to_writer(&mut w, index.get_string(track.artist))?;
-        write!(w, r#","duration_seconds":{}"#, track.duration_seconds)?;
-
-        if first {
-            write!(w, r#","position_seconds":{:.03}"#, position_seconds)?;
-            write!(w, r#","buffered_seconds":{:.03}}}"#, buffered_seconds)?;
-        } else {
-            // Note that the buffered seconds here is a bit of a lie, there
-            // can be more. When moving this out of the indexer and into the
-            // server module, we could return the correct buffered seconds.
-            // For now, the app only needs those for the current track, so
-            // this is fine.
-            write!(w, r#","position_seconds":0.0"#)?;
-            write!(w, r#","buffered_seconds":0.0}}"#)?;
-        }
-
+        write_queued_track_json(index, &mut w, queued_track)?;
         first = false;
     }
     write!(w, "]")

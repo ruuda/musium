@@ -743,15 +743,31 @@ pub struct Player {
     history_thread: JoinHandle<()>,
 }
 
-pub struct QueueSnapshot {
-    /// The queued tracks, index 0 is the currently playing track.
-    pub tracks: Vec<(QueueId, TrackId)>,
+pub struct TrackSnapshot {
+    /// Queue id of the queued track.
+    pub queue_id: QueueId,
+
+    /// Track id of the queued track.
+    pub track_id: TrackId,
 
     /// The current playback position in the track, in milliseconds.
     pub position_ms: u64,
 
     /// The duration of the decoded but unplayed audio data, in milliseconds.
     pub buffered_ms: u64,
+
+    /// Whether decoding is in progress for this track.
+    ///
+    /// This value goes to true when decoding is in progress, but when decoding
+    /// is in progress for a long time, it usually means that the decode thread
+    /// is blocked on IO. This can happen, for example when using spinning disks
+    /// that need to spin up, or seek to the file.
+    pub is_buffering: bool,
+}
+
+pub struct QueueSnapshot {
+    /// The queued tracks, index 0 is the currently playing track.
+    pub tracks: Vec<TrackSnapshot>,
 }
 
 impl Player {
@@ -856,21 +872,22 @@ impl Player {
 
         let mut tracks = Vec::with_capacity(state.queue.len());
         for queued_track in state.queue.iter() {
-            tracks.push((queued_track.queue_id, queued_track.track_id));
+            let t = TrackSnapshot {
+                queue_id: queued_track.queue_id,
+                track_id: queued_track.track_id,
+                position_ms: queued_track.position_ms(),
+                buffered_ms: queued_track.duration_ms(),
+                is_buffering: match queued_track.decode {
+                    Decode::Running => true,
+                    _ => false,
+                },
+            };
+            tracks.push(t);
         }
 
-        let mut result = QueueSnapshot {
+        QueueSnapshot {
             tracks: tracks,
-            position_ms: 0,
-            buffered_ms: 0,
-        };
-
-        if let Some(t) = state.queue.first() {
-            result.position_ms = t.position_ms();
-            result.buffered_ms = t.duration_ms();
         }
-
-        result
     }
 
     /// Return the current playback volume.
