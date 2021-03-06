@@ -305,6 +305,8 @@ newtype QueuedTrack = QueuedTrack
   , album :: String
   , albumId :: AlbumId
   , durationSeconds :: Int
+  , positionSeconds :: Number
+  , bufferedSeconds :: Number
   , isBuffering :: Boolean
   , startedAt :: Instant
   , refreshAt :: Instant
@@ -355,6 +357,8 @@ getQueue = do
       , album: track.album
       , albumId: track.albumId
       , durationSeconds: track.durationSeconds
+      , positionSeconds: track.positionSeconds
+      , bufferedSeconds: track.bufferedSeconds
       , isBuffering: track.isBuffering
       , startedAt: Time.add (Time.fromSeconds $ -track.positionSeconds) now
         -- Add a little delay after we expect the buffer to run out (which

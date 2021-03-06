@@ -560,9 +560,32 @@ button.play-next::before {
   transform: translateX(-1em);
 }
 
+#statusbar .thumb {
+  grid-area: thumb;
+  transition: opacity 0.2s ease-in-out;
+}
+
 #statusbar .artist {
   font-size: 0.75rem;
   color: #777;
+}
+
+#statusbar .spinner {
+  grid-area: thumb;
+  position: relative;
+  left: 50%;
+  top: 50%;
+  z-index: -1;
+  /* Hidden, unless .blocked, to avoid having to render the animations. */
+  display: none;
+}
+
+#statusbar .blocked .spinner {
+  display: block;
+}
+
+#statusbar .blocked .thumb {
+  opacity: 0;
 }
 
 #current-pane {

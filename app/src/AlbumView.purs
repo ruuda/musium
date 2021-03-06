@@ -119,7 +119,13 @@ renderTrack postEvent (Album album) (Track track) =
           , album: album.title
           , albumId: album.id
           , durationSeconds: track.durationSeconds
-          , isBuffering: true
+          , positionSeconds: 0.0
+          , bufferedSeconds: 0.0
+            -- Assume not buffering when we add the track, to avoid showing the
+            -- spinner in the happy case where playback starts instantly. In the
+            -- unhappy case where buffering takes a long time, the thumbnail
+            -- will dim later to reveal the spinner.
+          , isBuffering: false
           , startedAt: now
             -- Add a small delay before we refresh. If the queue was empty and
             -- the enqueue triggered the track, the server should focus on

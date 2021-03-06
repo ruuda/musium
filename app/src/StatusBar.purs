@@ -32,7 +32,7 @@ import Html as Html
 import Model (QueuedTrack (..), TrackId)
 import Model as Model
 import Navigation as Navigation
-import Time (Duration)
+import Time (Duration, Instant)
 import Time as Time
 
 type CurrentTrack =
@@ -62,6 +62,13 @@ newCurrentTrack (QueuedTrack currentTrack) = Html.div $ do
 
   Html.div $ do
     Html.addClass "track-info"
+    -- A spinner to indicate when the track is loading,
+    -- hidden unless the track is blocked.
+    Html.div $ do
+      Html.addClass "spinner"
+      Html.div $ pure unit
+      Html.div $ pure unit
+    -- Then the normal elements: thumb, title, and artist.
     Html.img
       (Model.thumbUrl $ currentTrack.albumId)
       (currentTrack.title <> " by " <> currentTrack.artist)
@@ -72,6 +79,10 @@ newCurrentTrack (QueuedTrack currentTrack) = Html.div $ do
     Html.span $ do
       Html.addClass "artist"
       Html.text $ currentTrack.artist
+
+  if isBlocked (QueuedTrack currentTrack)
+    then Html.addClass "blocked"
+    else pure unit
 
   container <- ask
   pure { track: currentTrack.trackId, container, progressBar }
@@ -138,6 +149,30 @@ updateStatusBar currentTrack state =
       Just old -> removeCurrentTrack state
       Nothing  -> pure state
 
+isBlocked :: QueuedTrack -> Boolean
+isBlocked (QueuedTrack track) = track.isBuffering && track.bufferedSeconds == 0.0
+
+type NextProgress =
+    -- The next progress value that we should indicate.
+  { completion :: Number
+    -- How long it should take to move the cursor to that value.
+  , animationDuration :: Duration
+  }
+
+nextProgressPlaying :: Instant -> QueuedTrack -> NextProgress
+nextProgressPlaying now (QueuedTrack currentTrack) =
+  let
+    -- Compute the completion 5 seconds from now, or at the end of the track,
+    -- whichever comes first, and set that as the target.
+    durationSeconds = Int.toNumber currentTrack.durationSeconds
+    endTime = Time.add (Time.fromSeconds durationSeconds) currentTrack.startedAt
+    target = min endTime $ Time.add (Time.fromSeconds 5.0) now
+    position = Time.subtract target currentTrack.startedAt
+    completion = max 0.0 $ min 1.0 $ (Time.toSeconds position) / durationSeconds
+    animationDuration = Time.subtract target now
+  in
+    { completion, animationDuration }
+
 -- Update the progress of the current track, return delay until the next update
 -- is needed. This does not confirm that the current track in the view matches
 -- the track passed to this function.
@@ -145,18 +180,24 @@ updateProgressBar :: QueuedTrack -> StatusBarState -> Effect Duration
 updateProgressBar (QueuedTrack currentTrack) state = do
   now <- Time.getCurrentInstant
   let
-    -- Compute the completion 5 seconds from now, or at the end of the track,
-    -- whichever comes first, and set that as the target. Then set a css
-    -- transition, to make sure that we reach the target at the desired time.
-    -- This way we get contiuous smooth updates without having to run code every
-    -- frame.
-    durationSeconds = Int.toNumber currentTrack.durationSeconds
-    endTime = Time.add (Time.fromSeconds durationSeconds) currentTrack.startedAt
-    target = min endTime $ Time.add (Time.fromSeconds 5.0) now
-    position = Time.subtract target currentTrack.startedAt
-    completion = max 0.0 $ min 1.0 $ (Time.toSeconds position) / durationSeconds
+    -- Compute the future position of the playhead, and how long it should take
+    -- to reach that position. When we are blocked, aim for the current position
+    -- with no extrapolation (but do add a bit of time for smooth animations and
+    -- to avoid busy-waiting). When we are not blocked, extrapolate up to 5s in
+    -- the future.
+    blocked = isBlocked (QueuedTrack currentTrack)
+    { completion, animationDuration } = if blocked
+      then
+        { completion: currentTrack.positionSeconds / Int.toNumber currentTrack.durationSeconds
+        , animationDuration: Time.fromSeconds 0.2
+        }
+      else
+        nextProgressPlaying now (QueuedTrack currentTrack)
+
+    -- Then set a css transition, to make sure that we reach the target at the
+    -- desired time. This way we get contiuous smooth updates without having to
+    -- run code every frame.
     transform = "translateX(" <> show (-100.0 * (1.0 - completion)) <> "%)"
-    animationDuration = Time.subtract target now
     -- Add a minimum duration; if we are close to the end, we may not reach 100%
     -- before the end then, but I prefer having a smooth animation over having
     -- pixel-perfect progress.
@@ -175,6 +216,12 @@ updateProgressBar (QueuedTrack currentTrack) state = do
       liftEffect $ Html.withElement t.progressBar $ Html.setTransition transition
       Aff.delay $ Milliseconds 17.0
       liftEffect $ Html.withElement t.progressBar $ Html.setTransform transform
+
+      -- Update the blocked status as well, to reveal or hide the spinner
+      -- underneath the thumbnail.
+      if blocked
+        then liftEffect $ Html.withElement t.container $ Html.addClass "blocked"
+        else liftEffect $ Html.withElement t.container $ Html.removeClass "blocked"
 
   -- Schedule the next update slightly before the animation completes, so we
   -- will not be too late to start the next one, which could cause a stutter.
