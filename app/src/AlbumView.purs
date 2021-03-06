@@ -119,6 +119,7 @@ renderTrack postEvent (Album album) (Track track) =
           , album: album.title
           , albumId: album.id
           , durationSeconds: track.durationSeconds
+          , isBuffering: true
           , startedAt: now
             -- Add a small delay before we refresh. If the queue was empty and
             -- the enqueue triggered the track, the server should focus on

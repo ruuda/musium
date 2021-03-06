@@ -294,6 +294,7 @@ newtype QueuedTrackRaw = QueuedTrackRaw
   , durationSeconds :: Int
   , positionSeconds :: Number
   , bufferedSeconds :: Number
+  , isBuffering :: Boolean
   }
 
 newtype QueuedTrack = QueuedTrack
@@ -304,6 +305,7 @@ newtype QueuedTrack = QueuedTrack
   , album :: String
   , albumId :: AlbumId
   , durationSeconds :: Int
+  , isBuffering :: Boolean
   , startedAt :: Instant
   , refreshAt :: Instant
   }
@@ -320,6 +322,7 @@ instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
     durationSeconds <- Json.getField obj "duration_seconds"
     positionSeconds <- Json.getField obj "position_seconds"
     bufferedSeconds <- Json.getField obj "buffered_seconds"
+    isBuffering     <- Json.getField obj "is_buffering"
     pure $ QueuedTrackRaw
       { queueId
       , trackId
@@ -330,6 +333,7 @@ instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
       , durationSeconds
       , positionSeconds
       , bufferedSeconds
+      , isBuffering
       }
 
 getQueue :: Aff (Array QueuedTrack)
@@ -351,6 +355,7 @@ getQueue = do
       , album: track.album
       , albumId: track.albumId
       , durationSeconds: track.durationSeconds
+      , isBuffering: track.isBuffering
       , startedAt: Time.add (Time.fromSeconds $ -track.positionSeconds) now
         -- Add a little delay after we expect the buffer to run out (which
         -- likely means the track will stop), before we really refresh the
