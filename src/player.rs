@@ -158,6 +158,11 @@ pub struct QueuedTrack {
     /// position in seconds.
     samples_played: u64,
 
+    /// The sample rate of the track in Hz.
+    ///
+    /// Only known after decoding has started; until then it is None.
+    sample_rate_hz: Option<u32>,
+
     /// Decoder for this track.
     decode: Decode,
 }
@@ -176,6 +181,7 @@ impl QueuedTrack {
             album_loudness: album_loudness,
             blocks: Vec::new(),
             samples_played: 0,
+            sample_rate_hz: None,
             decode: Decode::NotStarted,
         }
     }
@@ -187,16 +193,17 @@ impl QueuedTrack {
 
     /// Return the duration of the consumed samples in milliseconds.
     pub fn position_ms(&self) -> u64 {
-        if self.blocks.len() > 0 {
+        match self.sample_rate_hz {
             // Multiply by 1000 to go from seconds to milliseconds, divide by 2
             // because there are 2 channels. We need to work with u64 here, because
             // around 100s of stereo 44.1 kHz audio, the sample count times 500
             // overflows a u32 (and usize can be 32 bits). We can't move the 500
             // into the denominator, because the common sample rate of 44.1 kHz
             // is not a multiple of 500.
-            self.samples_played * 500 / (self.blocks[0].format.sample_rate_hz as u64)
-        } else {
-            0
+            Some(hz) => self.samples_played * 500 / (hz as u64),
+            // When the sample rate is not known, we definitely have not started
+            // playback.
+            None => 0
         }
     }
 
@@ -635,6 +642,10 @@ impl PlayerState {
             Decode::Running => {},
             _ => panic!("If we decoded for this track, it must have been marked running."),
         }
+        // Store the sample rate in the queued track as well as in the block, so
+        // we can compute the playback position in seconds even in case of a
+        // buffer underrun, when there are no blocks.
+        queued_track.sample_rate_hz = Some(result.block.format.sample_rate_hz);
         queued_track.blocks.push(result.block);
         queued_track.decode = match result.reader {
             Some(r) => Decode::Partial(r),
