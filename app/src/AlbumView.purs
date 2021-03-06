@@ -130,8 +130,10 @@ renderTrack postEvent (Album album) (Track track) =
             -- Add a small delay before we refresh. If the queue was empty and
             -- the enqueue triggered the track, the server should focus on
             -- playing and establishing a safe buffer first, before we bother it
-            -- with queue status requests.
-          , refreshAt: Time.add (Time.fromSeconds 0.2) now
+            -- with queue status requests. Also give it enough headroom that it
+            -- should not have an empty buffer by the time we poll again, to
+            -- prevent the spinner from showing up.
+          , refreshAt: Time.add (Time.fromSeconds 0.4) now
           }
         -- TODO: Remove class after track is no longer in queue.
         liftEffect $ Html.withElement trackElement $ do
