@@ -26,6 +26,7 @@ pub mod playback;
 pub mod player;
 pub mod prim;
 pub mod serialization;
+pub mod server;
 pub mod string_utils;
 pub mod thumb_cache;
 
