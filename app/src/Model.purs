@@ -291,6 +291,7 @@ newtype QueuedTrackRaw = QueuedTrackRaw
   , artist :: String
   , album :: String
   , albumId :: AlbumId
+  , albumArtistId :: ArtistId
   , durationSeconds :: Int
   , positionSeconds :: Number
   , bufferedSeconds :: Number
@@ -304,6 +305,7 @@ newtype QueuedTrack = QueuedTrack
   , artist :: String
   , album :: String
   , albumId :: AlbumId
+  , albumArtistId :: ArtistId
   , durationSeconds :: Int
   , positionSeconds :: Number
   , bufferedSeconds :: Number
@@ -314,13 +316,14 @@ newtype QueuedTrack = QueuedTrack
 
 instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
   decodeJson json = do
-    obj        <- Json.decodeJson json
-    queueId    <- map QueueId $ Json.getField obj "queue_id"
-    trackId    <- map TrackId $ Json.getField obj "track_id"
-    title      <- Json.getField obj "title"
-    artist     <- Json.getField obj "artist"
-    album      <- Json.getField obj "album"
-    albumId    <- map AlbumId $ Json.getField obj "album_id"
+    obj             <- Json.decodeJson json
+    queueId         <- map QueueId $ Json.getField obj "queue_id"
+    trackId         <- map TrackId $ Json.getField obj "track_id"
+    title           <- Json.getField obj "title"
+    artist          <- Json.getField obj "artist"
+    album           <- Json.getField obj "album"
+    albumId         <- map AlbumId $ Json.getField obj "album_id"
+    albumArtistId   <- map ArtistId $ Json.getField obj "album_artist_id"
     durationSeconds <- Json.getField obj "duration_seconds"
     positionSeconds <- Json.getField obj "position_seconds"
     bufferedSeconds <- Json.getField obj "buffered_seconds"
@@ -332,6 +335,7 @@ instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
       , artist
       , album
       , albumId
+      , albumArtistId
       , durationSeconds
       , positionSeconds
       , bufferedSeconds
@@ -356,6 +360,7 @@ getQueue = do
       , artist: track.artist
       , album: track.album
       , albumId: track.albumId
+      , albumArtistId: track.albumArtistId
       , durationSeconds: track.durationSeconds
       , positionSeconds: track.positionSeconds
       , bufferedSeconds: track.bufferedSeconds

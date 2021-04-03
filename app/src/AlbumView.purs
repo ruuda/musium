@@ -129,6 +129,7 @@ renderTrack postEvent (Album album) queuedTracks (Track track) =
           , artist: track.artist
           , album: album.title
           , albumId: album.id
+          , albumArtistId: album.artistId
           , durationSeconds: track.durationSeconds
           , positionSeconds: 0.0
           , bufferedSeconds: 0.0

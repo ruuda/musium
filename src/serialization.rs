@@ -189,7 +189,12 @@ fn write_queued_track_json<W: Write>(
         queued_track.track_id,
     )?;
     serde_json::to_writer(&mut w, index.get_string(track.title))?;
-    write!(w, r#","album_id":"{}","album":"#, track.album_id)?;
+    write!(
+        w,
+        r#","album_id":"{}","album_artist_id":"{}","album":"#,
+        track.album_id,
+        album.artist_id,
+    )?;
     serde_json::to_writer(&mut w, index.get_string(album.title))?;
     write!(w, r#","artist":"#)?;
     serde_json::to_writer(&mut w, index.get_string(track.artist))?;
