@@ -40,7 +40,7 @@ import Event (Event, HistoryMode)
 import Event as Event
 import History as History
 import Html as Html
-import Model (Artist, Album (..), AlbumId (..), QueuedTrack (..), TrackId)
+import Model (Artist, ArtistId, Album (..), AlbumId (..), QueuedTrack (..), TrackId)
 import Model as Model
 import NavBar (NavBarState)
 import NavBar as NavBar
@@ -83,6 +83,8 @@ type AppState =
   , navBar :: NavBarState
   , statusBar :: StatusBarState
   , location :: Location
+  , lastArtist :: Maybe ArtistId
+  , lastAlbum :: Maybe AlbumId
   , elements :: Elements
   , postEvent :: Event -> Aff Unit
   }
@@ -173,6 +175,8 @@ new bus = do
     , navBar: navBar
     , statusBar: statusBar
     , location: Navigation.Library
+    , lastArtist: Nothing
+    , lastAlbum: Nothing
     , elements: elements
     , postEvent: postEvent
     }
@@ -282,10 +286,11 @@ handleEvent event state = case event of
     navigateTo location mode $ state
       { currentArtist = Just artist
       , elements = state.elements { artistBrowser = albumView }
+      , lastArtist = Just artistId
       }
 
   Event.NavigateTo location@(Navigation.Album albumId) mode -> do
-    case getAlbum albumId state of
+    Album album <- case getAlbum albumId state of
       Nothing -> fatal $ "Album " <> (show albumId) <> " does not exist."
       Just album ->
         liftEffect $ Html.withElement state.elements.albumView $ do
@@ -293,7 +298,23 @@ handleEvent event state = case event of
           AlbumView.renderAlbum state.postEvent album
           -- Reset the scroll position, as we recycle the container.
           Html.setScrollTop 0.0
-    navigateTo location mode state
+          pure album
+    navigateTo location mode $ state
+      { lastAlbum = Just albumId
+      , lastArtist = Just album.artistId
+      }
+
+  Event.NavigateToArtist -> case state.lastArtist of
+    Nothing -> pure state
+    Just artistId -> handleEvent
+      (Event.NavigateTo (Navigation.Artist artistId) Event.RecordHistory)
+      state
+
+  Event.NavigateToAlbum -> case state.lastAlbum of
+    Nothing -> pure state
+    Just albumId -> handleEvent
+      (Event.NavigateTo (Navigation.Album albumId) Event.RecordHistory)
+      state
 
   Event.ChangeViewport ->
     liftEffect $ case state.location of

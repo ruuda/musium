@@ -51,8 +51,8 @@ new postEvent = Html.nav $ do
     navEvent loc = Event.NavigateTo loc Event.RecordHistory
 
   tabLibrary    <- navTab "Library" $ navEvent Navigation.Library
-  tabArtist     <- navTab "Artist"  $ navEvent Navigation.Library -- TODO
-  tabAlbum      <- navTab "Album"   $ navEvent Navigation.Library -- TODO
+  tabArtist     <- navTab "Artist"  $ Event.NavigateToArtist
+  tabAlbum      <- navTab "Album"   $ Event.NavigateToAlbum
   tabQueue      <- navTab "Queue"   $ navEvent Navigation.Library -- TODO
   tabNowPlaying <- navTab "Current" $ navEvent Navigation.NowPlaying
   tabSearch     <- navTab "Search"  $ navEvent Navigation.Search
