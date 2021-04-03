@@ -46,7 +46,7 @@ import Control.Monad.Error.Class (class MonadThrow, throwError)
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (decodeJson, getField) as Json
 import Data.Argonaut.Decode.Class (class DecodeJson)
-import Data.Array (sortWith)
+import Data.Array (reverse, sortWith)
 import Data.Either (Either (..))
 import Data.Int (rem)
 import Data.Maybe (Maybe (Nothing))
@@ -129,7 +129,7 @@ getAlbums = do
     Left err -> fatal $ "Failed to retrieve albums: " <> Http.printError err
     Right response -> case Json.decodeJson response.body of
       Left err -> fatal $ "Failed to parse albums: " <> err
-      Right albums -> pure $ sortWith (\(Album a) -> a.date) albums
+      Right albums -> pure $ reverse $ sortWith (\(Album a) -> a.date) albums
 
 newtype ArtistJson = ArtistJson
   { name :: String
@@ -159,7 +159,7 @@ getArtist (ArtistId artistId) = do
       Right (ArtistJson artist) -> pure $
         { id: ArtistId artistId
         , name: artist.name
-        , albums: artist.albums
+        , albums: reverse artist.albums
         }
 
 enqueueTrack :: TrackId -> Aff QueueId
