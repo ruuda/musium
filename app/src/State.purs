@@ -322,8 +322,7 @@ handleEvent event state = case event of
           -- If there is no previously visited page, but something is playing,
           -- use that instead.
           Nothing -> case Array.head state.queue of
-            -- TODO: Include album artist id in queued tracks.
-            Just (QueuedTrack qt) -> pure state
+            Just (QueuedTrack qt) -> go qt.albumArtistId
             Nothing -> pure state
 
   Event.NavigateToAlbum -> case state.location of
