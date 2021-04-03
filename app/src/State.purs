@@ -307,17 +307,25 @@ handleEvent event state = case event of
       , lastArtist = Just album.artistId
       }
 
-  Event.NavigateToArtist -> case state.lastArtist of
-    Nothing -> pure state
-    Just artistId -> handleEvent
-      (Event.NavigateTo (Navigation.Artist artistId) Event.RecordHistory)
-      state
+  Event.NavigateToArtist -> case state.location of
+    -- If we are already at an artist page, then lastArtist must be the artist
+    -- that we are currently viewing, so it makes no sense to navigate again.
+    Navigation.Artist _ -> pure state
+    _notArtist -> case state.lastArtist of
+      Nothing -> pure state
+      Just artistId -> handleEvent
+        (Event.NavigateTo (Navigation.Artist artistId) Event.RecordHistory)
+        state
 
-  Event.NavigateToAlbum -> case state.lastAlbum of
-    Nothing -> pure state
-    Just albumId -> handleEvent
-      (Event.NavigateTo (Navigation.Album albumId) Event.RecordHistory)
-      state
+  Event.NavigateToAlbum -> case state.location of
+    -- If we are already at an album page, then lastAlbum must be the album
+    -- that we are currently viewing, so it makes no sense to navigate again.
+    Navigation.Album _ -> pure state
+    _notAlbum -> case state.lastAlbum of
+      Nothing -> pure state
+      Just albumId -> handleEvent
+        (Event.NavigateTo (Navigation.Album albumId) Event.RecordHistory)
+        state
 
   Event.ChangeViewport ->
     liftEffect $ case state.location of
