@@ -311,21 +311,38 @@ handleEvent event state = case event of
     -- If we are already at an artist page, then lastArtist must be the artist
     -- that we are currently viewing, so it makes no sense to navigate again.
     Navigation.Artist _ -> pure state
-    _notArtist -> case state.lastArtist of
-      Nothing -> pure state
-      Just artistId -> handleEvent
-        (Event.NavigateTo (Navigation.Artist artistId) Event.RecordHistory)
-        state
+    _notArtist ->
+      let
+        go target = handleEvent
+          (Event.NavigateTo (Navigation.Artist target) Event.RecordHistory)
+          state
+      in
+        case state.lastArtist of
+          Just artistId -> go artistId
+          -- If there is no previously visited page, but something is playing,
+          -- use that instead.
+          Nothing -> case Array.head state.queue of
+            -- TODO: Include album artist id in queued tracks.
+            Just (QueuedTrack qt) -> pure state
+            Nothing -> pure state
 
   Event.NavigateToAlbum -> case state.location of
     -- If we are already at an album page, then lastAlbum must be the album
     -- that we are currently viewing, so it makes no sense to navigate again.
     Navigation.Album _ -> pure state
-    _notAlbum -> case state.lastAlbum of
-      Nothing -> pure state
-      Just albumId -> handleEvent
-        (Event.NavigateTo (Navigation.Album albumId) Event.RecordHistory)
-        state
+    _notAlbum ->
+      let
+        go target = handleEvent
+          (Event.NavigateTo (Navigation.Album target) Event.RecordHistory)
+          state
+      in
+        case state.lastAlbum of
+          Just albumId -> go albumId
+          -- If there is no previously visited page, but something is playing,
+          -- use that instead.
+          Nothing -> case Array.head state.queue of
+            Just (QueuedTrack qt) -> go qt.albumId
+            Nothing -> pure state
 
   Event.ChangeViewport ->
     liftEffect $ case state.location of
