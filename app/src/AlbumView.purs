@@ -21,18 +21,17 @@ import Event (Event)
 import Event as Event
 import Html (Html)
 import Html as Html
-import Model (Album (..), QueuedTrack (..), Track (..))
+import Model (Album (..), QueuedTrack (..), Track (..), TrackId)
 import Model as Model
 import Navigation as Navigation
 import Time as Time
 
-renderAlbum :: (Event -> Aff Unit) -> Album -> Html Unit
-renderAlbum postEvent (Album album) = do
-  -- Begin loading the tracks before we add the images. The current server is
-  -- single-threaded, and the album list can be served from memory, but the
-  -- cover art needs disk access. When the disks need to spin up, it can easily
-  -- take a few seconds to serve the cover art, and we should't block the track
-  -- list on that.
+renderAlbum :: (Event -> Aff Unit) -> Album -> Array TrackId -> Html Unit
+renderAlbum postEvent (Album album) queuedTracks = do
+  -- Begin loading the tracks before we add the images. The album list can be
+  -- served from memory, but the cover art needs disk access. When the disks
+  -- need to spin up, it can easily take a few seconds to serve the cover art,
+  -- and we should't block the track list on that.
   tracksAsync <- liftEffect $ launchAff $ Model.getTracks album.id
 
   Html.div $ do
@@ -75,19 +74,29 @@ renderAlbum postEvent (Album album) = do
   liftEffect $ launchAff_ $ do
     tracks <- joinFiber tracksAsync
     liftEffect $ Html.withElement trackList $ traverse_
-      (renderDisc postEvent $ Album album)
+      (renderDisc postEvent (Album album) queuedTracks)
       (Array.groupBy isSameDisc tracks)
 
 isSameDisc :: Track -> Track -> Boolean
 isSameDisc (Track t1) (Track t2) = t1.discNumber == t2.discNumber
 
-renderDisc :: (Event -> Aff Unit) -> Album -> NonEmptyArray Track -> Html Unit
-renderDisc postEvent album tracks = Html.div $ do
+renderDisc
+  :: (Event -> Aff Unit)
+  -> Album
+  -> Array TrackId
+  -> NonEmptyArray Track
+  -> Html Unit
+renderDisc postEvent album queuedTracks tracks = Html.div $ do
   Html.addClass "disc"
-  traverse_ (renderTrack postEvent album) tracks
+  traverse_ (renderTrack postEvent album queuedTracks) tracks
 
-renderTrack :: (Event -> Aff Unit) -> Album -> Track -> Html Unit
-renderTrack postEvent (Album album) (Track track) =
+renderTrack
+  :: (Event -> Aff Unit)
+  -> Album
+  -> Array TrackId
+  -> Track
+  -> Html Unit
+renderTrack postEvent (Album album) queuedTracks (Track track) =
   Html.li $ do
     Html.addClass "track"
 
@@ -105,6 +114,8 @@ renderTrack postEvent (Album album) (Track track) =
       Html.text track.artist
 
     trackElement <- ask
+
+    when (track.id `Array.elem` queuedTracks) $ Html.addClass "queued"
 
     Html.onClick $ do
       Html.withElement trackElement $ Html.addClass "queueing"

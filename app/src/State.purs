@@ -295,7 +295,10 @@ handleEvent event state = case event of
       Just album ->
         liftEffect $ Html.withElement state.elements.albumView $ do
           Html.clear
-          AlbumView.renderAlbum state.postEvent album
+          AlbumView.renderAlbum
+            state.postEvent
+            album
+            (getQueuedTracksForAlbum albumId state)
           -- Reset the scroll position, as we recycle the container.
           Html.setScrollTop 0.0
           pure album
@@ -418,3 +421,9 @@ fetchQueue state = do
     state.postEvent $ Event.UpdateQueue queue
 
   pure $ state { nextQueueFetch = fiber }
+
+getQueuedTracksForAlbum :: AlbumId -> AppState -> Array TrackId
+getQueuedTracksForAlbum albumId state = identity
+  $ map (case _ of QueuedTrack qt -> qt.trackId)
+  $ Array.filter (case _ of QueuedTrack qt -> qt.albumId == albumId)
+  $ state.queue
