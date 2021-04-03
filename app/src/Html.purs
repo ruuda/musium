@@ -31,6 +31,7 @@ module Html
   , setId
   , setScrollTop
   , setTitle
+  , setType
   , setTransform
   , setTransition
   , span
@@ -82,6 +83,9 @@ setTransition transition = ReaderT $ \container -> Dom.setTransition transition 
 
 setTitle :: String -> Html Unit
 setTitle title = ReaderT $ \self -> Dom.setAttribute "title" title self
+
+setType :: String -> Html Unit
+setType type_ = ReaderT $ \self -> Dom.setAttribute "type" type_ self
 
 addClass :: String -> Html Unit
 addClass className = ReaderT $ \container -> Dom.addClass className container

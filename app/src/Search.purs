@@ -99,6 +99,7 @@ new :: (Event -> Aff Unit) -> Html SearchElements
 new postEvent = do
   searchBox <- Html.input "search" $ do
     Html.setId "search-box"
+    Html.setType "search"
     ask
 
   resultBox <- Html.div $ do
