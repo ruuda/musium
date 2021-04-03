@@ -374,7 +374,7 @@ img.thumb
 #search-artists .discography
 {
   white-space: nowrap;
-  overflow: visible;
+  overflow: hidden;
 }
 
 #search-artists .discography img
