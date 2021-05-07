@@ -28,6 +28,7 @@ use musium::server::{MetaServer, serve};
 use musium::string_utils::normalize_words;
 use musium::thumb_cache::ThumbCache;
 use musium::{MetaIndex, MemoryMetaIndex};
+use musium::status::{StatusSink, WriteStatusSink};
 
 fn make_index(dir: &Path) -> MemoryMetaIndex {
     let wd = walkdir::WalkDir::new(dir)
@@ -39,7 +40,8 @@ fn make_index(dir: &Path) -> MemoryMetaIndex {
     let index;
     {
         let stdout = std::io::stdout();
-        let mut lock = stdout.lock();
+        let lock = stdout.lock();
+        let mut reporter = WriteStatusSink::new(lock);
 
         // First enumerate all flac files, before indexing them. It turns out
         // that this is faster than indexing them on the go (and not first
@@ -65,14 +67,13 @@ fn make_index(dir: &Path) -> MemoryMetaIndex {
             // instant, but indexing tends to happen with cold caches.
             k += 1;
             if k % 64 == 0 {
-                write!(&mut lock, "\r{} files discovered", k).unwrap();
-                lock.flush().unwrap();
+                reporter.report_discover_progress(k).unwrap();
             }
             paths.push(p);
         }
-        writeln!(&mut lock, "\r{} files discovered", k).unwrap();
+        reporter.report_discover_progress(k).unwrap();
 
-        index = musium::MemoryMetaIndex::from_paths(&paths[..], &mut lock);
+        index = musium::MemoryMetaIndex::from_paths(&paths[..], &mut reporter);
     };
 
     let index = index.expect("Failed to build index.");

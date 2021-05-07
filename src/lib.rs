@@ -28,12 +28,12 @@ pub mod player;
 pub mod prim;
 pub mod serialization;
 pub mod server;
+pub mod status;
 pub mod string_utils;
 pub mod thumb_cache;
 
 use std::collections::btree_map;
 use std::collections::BTreeSet;
-use std::io::Write;
 use std::io;
 use std::mem;
 use std::path::PathBuf;
@@ -46,6 +46,7 @@ use crate::prim::{ArtistId, Artist, AlbumId, Album, TrackId, Track, Lufs, String
 use crate::word_index::{MemoryWordIndex};
 use crate::string_utils::StringDeduper;
 use crate::scan::{BuildMetaIndex, Issue, Progress, artists_different, albums_different};
+use crate::status::StatusSink;
 
 pub trait MetaIndex {
     /// Return the number of tracks in the index.
@@ -428,8 +429,8 @@ impl MemoryMetaIndex {
     /// Index the given files.
     ///
     /// Reports progress to `out`, which can be `std::io::stdout().lock()`.
-    pub fn from_paths<W>(paths: &[PathBuf], mut out: W) -> Result<MemoryMetaIndex>
-    where W: Write {
+    pub fn from_paths<S>(paths: &[PathBuf], out: &mut S) -> Result<MemoryMetaIndex>
+    where S: StatusSink {
         let (tx_progress, rx_progress) = sync_channel(8);
 
         // When we are IO bound, we need enough threads to keep the IO scheduler
@@ -457,25 +458,16 @@ impl MemoryMetaIndex {
             }
 
             // Print issues live as indexing happens.
-            let mut printed_count = false;
             let mut count = 0;
             for progress in rx_progress {
                 match progress {
-                    Progress::Issue(issue) => {
-                        if printed_count { write!(out, "\r")?; }
-                        writeln!(out, "{}\n", issue)?;
-                        printed_count = false;
-                    }
+                    Progress::Issue(issue) => out.report_issue(&issue)?,
                     Progress::Indexed(n) => {
                         count += n;
-                        if printed_count { write!(out, "\r")?; }
-                        write!(out, "{} tracks indexed", count)?;
-                        out.flush()?;
-                        printed_count = true;
+                        out.report_index_progress(count, paths.len() as u32)?;
                     }
                 }
             }
-            if printed_count { writeln!(out, "").unwrap(); }
 
             // We return `Ok` here so the return type of the scope closure is
             // `io::Result`, which allows using `?` above; that's a bit nicer
@@ -491,8 +483,10 @@ impl MemoryMetaIndex {
 
         // Report issues that resulted from merging.
         for issue in &issues {
-            writeln!(out, "{}\n", issue).unwrap();
+            out.report_issue(issue).unwrap();
         }
+
+        out.report_done_indexing();
 
         Ok(memory_index)
     }
