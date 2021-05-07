@@ -23,6 +23,10 @@ install:
   # Trigger Rustup to download and install the Rust toolchain.
   - cargo --version
 
+  # Install libsystemd, because we want to link against the system one,
+  # not the one from Nixpkgs.
+  - sudo apt install libsystemd-dev
+
 script:
   - cargo build
   - cargo test
