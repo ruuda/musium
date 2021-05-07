@@ -904,6 +904,7 @@ impl Player {
         // so this will block indefinitely.
         self.playback_thread.join().unwrap();
         self.decode_thread.join().unwrap();
+        self.history_thread.join().unwrap();
     }
 
     /// Enqueue the track for playback at the end of the queue.
