@@ -23,7 +23,7 @@ use claxon::metadata::StreamInfo;
 use crate::history::PlaybackEvent;
 use crate::history;
 use crate::playback;
-use crate::{Lufs, MetaIndex, TrackId};
+use crate::{AlbumId, Lufs, MetaIndex, TrackId};
 
 type FlacReader = claxon::FlacReader<fs::File>;
 
@@ -143,6 +143,9 @@ pub struct QueuedTrack {
     /// Track id of the track to be played.
     track_id: TrackId,
 
+    /// Album id of the track to be played.
+    album_id: AlbumId,
+
     /// Perceived track loudness in Loudness Units Full Scale.
     track_loudness: Lufs,
 
@@ -171,12 +174,14 @@ impl QueuedTrack {
     pub fn new(
         queue_id: QueueId,
         track_id: TrackId,
+        album_id: AlbumId,
         track_loudness: Lufs,
         album_loudness: Lufs,
     ) -> QueuedTrack {
         QueuedTrack {
             queue_id: queue_id,
             track_id: track_id,
+            album_id: album_id,
             track_loudness: track_loudness,
             album_loudness: album_loudness,
             blocks: Vec::new(),
@@ -414,6 +419,13 @@ pub struct PlayerState {
     /// of the player.
     target_loudness: Lufs,
 
+    /// Loudness of the currently playing track, either album or track loudness.
+    ///
+    /// When we start playing a track, we decide whether to use the album
+    /// loudness or track loudness, and then we keep using that loudness for the
+    /// entire duration of the track.
+    current_track_loudness: Option<Lufs>,
+
     /// The tracks pending playback. Element 0 is being played currently.
     ///
     /// Invariant: If the queued track at index i has no decoded blocks, then
@@ -443,6 +455,7 @@ impl PlayerState {
             next_unused_id: QueueId(0),
             volume: Millibel(-1500),
             target_loudness: Lufs::new(-2300),
+            current_track_loudness: None,
             queue: Vec::new(),
             current_decode: None,
             events: events,
@@ -472,6 +485,10 @@ impl PlayerState {
             })
             .count();
         assert!(n_running <= 1, "At most one decode should be in progress.");
+
+        let has_current_track_loudness = self.current_track_loudness.is_some();
+        let has_track = self.queue.len() > 0;
+        assert_eq!(has_current_track_loudness, has_track);
     }
 
     /// Return the next block to play from, if any.
@@ -492,14 +509,49 @@ impl PlayerState {
     /// This applies loudness normalization on top of the player target volume,
     /// to get the absolute playback volume.
     pub fn target_volume_full_scale(&self) -> Option<Millibel> {
-        if self.queue.is_empty() { return None; }
-        let queued_track = &self.queue[0];
+        let track_loudness = self.current_track_loudness?;
 
-        // TODO: Take either album or track loudness depending on how the queue looks.
-        let loudness_adjustment_mb = self.target_loudness.0.get() - queued_track.album_loudness.0.get();
-        let volume_mbfs = self.volume.0 + loudness_adjustment_mb;
+        let loudness_adjustment_millibel = self.target_loudness.0.get() - track_loudness.0.get();
+        let volume_mbfs = self.volume.0 + loudness_adjustment_millibel;
 
         Some(Millibel(volume_mbfs))
+    }
+
+    /// Update `current_track_loudness` based on the previous album and current queue.
+    ///
+    /// If there are tracks from the same album following or preceding in the
+    /// queue, then we want to use the album loudness. If not, then we will use
+    /// the track loudness.
+    fn update_current_track_loudness(&mut self, previous_album: AlbumId) {
+        let current_track = match self.queue.get(0) {
+            Some(t) => t,
+            None => {
+                self.current_track_loudness = None;
+                return;
+            }
+        };
+
+        let loudness = match self.queue.get(1) {
+            Some(next_track) if current_track.album_id == next_track.album_id => current_track.album_loudness,
+            _ if current_track.album_id == previous_album => current_track.album_loudness,
+            _ => current_track.track_loudness,
+        };
+
+        self.current_track_loudness = Some(loudness);
+    }
+
+    pub fn enqueue(&mut self, track: QueuedTrack) {
+        // If this is the first track we add, opt for the album loudness instead
+        // of the track loudness: the user might enqueue more tracks from the
+        // same album shortly, and then we should play all of them at album
+        // loudness. If the user enqueues a track from a different album next,
+        // then too bad, we'll have used a less accurate loudness estimate for
+        // the initial track, but the difference shouldn't be *that* big.
+        if self.queue.is_empty() {
+            self.current_track_loudness = Some(track.album_loudness);
+        }
+
+        self.queue.push(track);
     }
 
     /// Consume n samples from the peeked block.
@@ -542,6 +594,9 @@ impl PlayerState {
 
             self.events.send(PlaybackEvent::Completed(track.queue_id, track.track_id))
                 .expect("Failed to send completion event to history thread.");
+
+            let previous_album = track.album_id;
+            self.update_current_track_loudness(previous_album);
         }
 
         #[cfg(debug)]
@@ -865,8 +920,8 @@ impl Player {
             let needs_wake = state.is_queue_empty();
             let id = state.next_unused_id;
             state.next_unused_id = QueueId(id.0 + 1);
-            let qt = QueuedTrack::new(id, track_id, track_loudness, album_loudness);
-            state.queue.push(qt);
+            let qt = QueuedTrack::new(id, track_id, track.album_id, track_loudness, album_loudness);
+            state.enqueue(qt);
             (id, needs_wake)
         };
 
