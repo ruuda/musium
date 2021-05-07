@@ -20,7 +20,7 @@ extern {
 /// Notifying the system daemon though libsystemd goes through a socket that
 /// systemd passes in the NOTIFY_SOCKET environment variable, so if that
 /// variable is not present, then we definitely can not notify systemd.
-fn can_notify() -> bool {
+pub fn can_notify() -> bool {
     std::env::var("NOTIFY_SOCKET").is_ok()
 }
 
@@ -31,7 +31,7 @@ fn can_notify() -> bool {
 ///
 /// * `READY=1` to signal startup completion.
 /// * `STATUS=message` to set a single-line status.
-fn notify(kv_pairs: String) -> Result<(), ()> {
+pub fn notify(kv_pairs: String) -> Result<(), ()> {
     let cstr = match CString::new(kv_pairs) {
         Ok(s) => s,
         Err(_) => return Err(()),

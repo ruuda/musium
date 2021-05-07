@@ -20,6 +20,9 @@ An example unit file:
     WorkingDirectory=/home/media/checkouts/musium
     ExecStart=/usr/local/bin/musium serve /etc/musium.conf
 
+    # Musium supports reporting startup progress to systemd, set this to enable.
+    Type=notify
+
     [Install]
     WantedBy=default.target
 

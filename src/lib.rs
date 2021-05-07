@@ -16,7 +16,6 @@ extern crate unicode_normalization;
 mod album_table;
 mod scan;
 mod search;
-mod systemd;
 mod word_index;
 
 pub mod config;
@@ -30,6 +29,7 @@ pub mod serialization;
 pub mod server;
 pub mod status;
 pub mod string_utils;
+pub mod systemd;
 pub mod thumb_cache;
 
 use std::collections::btree_map;
@@ -429,8 +429,7 @@ impl MemoryMetaIndex {
     /// Index the given files.
     ///
     /// Reports progress to `out`, which can be `std::io::stdout().lock()`.
-    pub fn from_paths<S>(paths: &[PathBuf], out: &mut S) -> Result<MemoryMetaIndex>
-    where S: StatusSink {
+    pub fn from_paths(paths: &[PathBuf], out: &mut dyn StatusSink) -> Result<MemoryMetaIndex> {
         let (tx_progress, rx_progress) = sync_channel(8);
 
         // When we are IO bound, we need enough threads to keep the IO scheduler
@@ -486,7 +485,7 @@ impl MemoryMetaIndex {
             out.report_issue(issue).unwrap();
         }
 
-        out.report_done_indexing();
+        out.report_done_indexing().unwrap();
 
         Ok(memory_index)
     }

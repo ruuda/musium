@@ -17,6 +17,7 @@ use crate::player::{Millibel, Player};
 use crate::prim::{ArtistId, AlbumId, TrackId};
 use crate::serialization;
 use crate::string_utils::normalize_words;
+use crate::systemd;
 use crate::thumb_cache::ThumbCache;
 use crate::{MetaIndex, MemoryMetaIndex};
 
@@ -406,6 +407,13 @@ pub fn serve(bind: &str, service: Arc<MetaServer>) {
             }
         }).unwrap();
         threads.push(join_handle);
+    }
+
+    // When running under systemd, the service is readly when the server is
+    // accepting connections, which is now.
+    if systemd::can_notify() {
+        systemd::notify("STATUS=Online\nREADY=1\n".into())
+            .expect("Failed signal ready to systemd.");
     }
 
     // Block until all threads have stopped, which only happens in case of an
