@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::thread;
 
 use tiny_http::{Header, Request, Response, ResponseBox, Server};
-use tiny_http::Method::{Get, Post, Put};
+use tiny_http::Method::{Get, Post, Put, self};
 
 use crate::player::{Millibel, Player};
 use crate::prim::{ArtistId, AlbumId, TrackId};
@@ -321,48 +321,62 @@ impl MetaServer {
             .boxed()
     }
 
+    /// Router function for all /api/«endpoint» calls.
+    fn handle_api_request(&self, method: &Method, endpoint: &str, arg: Option<&str>, query: &str) -> ResponseBox {
+        match (method, endpoint, arg) {
+            // API endpoints.
+            (&Get, "cover",  Some(t)) => self.handle_album_cover(t),
+            (&Get, "thumb",  Some(t)) => self.handle_thumb(t),
+            (&Get, "track",  Some(t)) => self.handle_track(t),
+            (&Get, "album",  Some(a)) => self.handle_album(a),
+            (&Get, "artist", Some(a)) => self.handle_artist(a),
+            (&Get, "albums", None)    => self.handle_albums(),
+            (&Get, "search", None)    => self.handle_search(query),
+            (&Get, "queue",  None)    => self.handle_queue(),
+            (&Put, "queue",  Some(t)) => self.handle_enqueue(t),
+
+            // Volume control, volume up/down change the volume by 1 dB.
+            (&Get,  "volume", None)         => self.handle_get_volume(),
+            (&Post, "volume", Some("up"))   => self.handle_change_volume(Millibel( 1_00)),
+            (&Post, "volume", Some("down")) => self.handle_change_volume(Millibel(-1_00)),
+
+            _ => self.handle_bad_request("No such (method, endpoint, argument) combination."),
+        }
+    }
+
     fn handle_request(&self, request: Request) {
         // Break url into the part before the ? and the part after. The part
         // before we split on slashes.
         let mut url_iter = request.url().splitn(2, '?');
 
+        // The individual parts in between the slashes.
         let mut p0 = None;
         let mut p1 = None;
+        let mut p2 = None;
 
         if let Some(base) = url_iter.next() {
-            let mut parts = base.splitn(3, '/').filter(|x| x.len() > 0);
+            let mut parts = base.splitn(4, '/').filter(|x| x.len() > 0);
 
             p0 = parts.next();
             p1 = parts.next();
+            p2 = parts.next();
         }
 
         let query = url_iter.next().unwrap_or("");
 
         // A very basic router. See also docs/api.md for an overview.
         let response = match (request.method(), p0, p1) {
-            // API endpoints.
-            (&Get, Some("cover"),  Some(t)) => self.handle_album_cover(t),
-            (&Get, Some("thumb"),  Some(t)) => self.handle_thumb(t),
-            (&Get, Some("track"),  Some(t)) => self.handle_track(t),
-            (&Get, Some("album"),  Some(a)) => self.handle_album(a),
-            (&Get, Some("artist"), Some(a)) => self.handle_artist(a),
-            (&Get, Some("albums"), None)    => self.handle_albums(),
-            (&Get, Some("search"), None)    => self.handle_search(query),
-            (&Get, Some("queue"),  None)    => self.handle_queue(),
-            (&Put, Some("queue"),  Some(t)) => self.handle_enqueue(t),
-
-            // Volume control, volume up/down change the volume by 1 dB.
-            (&Get,  Some("volume"), None)         => self.handle_get_volume(),
-            (&Post, Some("volume"), Some("up"))   => self.handle_change_volume(Millibel(100)),
-            (&Post, Some("volume"), Some("down")) => self.handle_change_volume(Millibel(-100)),
+            // API endpoints go through the API router, to keep this match arm
+            // a bit more concise.
+            (method, Some("api"), Some(endpoint)) => self.handle_api_request(method, endpoint, p2, query),
 
             // Web endpoints.
-            (&Get, None,                    None) => self.handle_static_file("app/index.html", "text/html"),
-            (&Get, Some("style.css"),       None) => self.handle_static_file("app/style.css", "text/css"),
-            (&Get, Some("dark.css"),        None) => self.handle_static_file("app/dark.css", "text/css"),
-            (&Get, Some("manifest.json"),   None) => self.handle_static_file("app/manifest.json", "text/javascript"),
-            (&Get, Some("app.js"),          None) => self.handle_static_file("app/output/app.js", "text/javascript"),
-            (&Get, Some(path),              None) if path.ends_with(".svg") => {
+            (&Get, None,                  None) => self.handle_static_file("app/index.html", "text/html"),
+            (&Get, Some("style.css"),     None) => self.handle_static_file("app/style.css", "text/css"),
+            (&Get, Some("dark.css"),      None) => self.handle_static_file("app/dark.css", "text/css"),
+            (&Get, Some("manifest.json"), None) => self.handle_static_file("app/manifest.json", "text/javascript"),
+            (&Get, Some("app.js"),        None) => self.handle_static_file("app/output/app.js", "text/javascript"),
+            (&Get, Some(path),            None) if path.ends_with(".svg") => {
                 let mut file_path = "app/".to_string();
                 file_path.push_str(path);
                 self.handle_static_file(&file_path, "image/svg+xml")

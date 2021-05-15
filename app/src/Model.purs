@@ -94,13 +94,13 @@ instance showQueueId :: Show QueueId where
   show (QueueId id) = id
 
 thumbUrl :: AlbumId -> String
-thumbUrl (AlbumId id) = "/thumb/" <> id
+thumbUrl (AlbumId id) = "/api/thumb/" <> id
 
 coverUrl :: AlbumId -> String
-coverUrl (AlbumId id) = "/cover/" <> id
+coverUrl (AlbumId id) = "/api/cover/" <> id
 
 trackUrl :: TrackId -> String
-trackUrl (TrackId id) = "/track/" <> id <> ".flac"
+trackUrl (TrackId id) = "/api/track/" <> id <> ".flac"
 
 newtype Album = Album
   { id :: AlbumId
@@ -124,7 +124,7 @@ instance decodeJsonAlbum :: DecodeJson Album where
 
 getAlbums :: Aff (Array Album)
 getAlbums = do
-  result <- Http.get Http.ResponseFormat.json "/albums"
+  result <- Http.get Http.ResponseFormat.json "/api/albums"
   case result of
     Left err -> fatal $ "Failed to retrieve albums: " <> Http.printError err
     Right response -> case Json.decodeJson response.body of
@@ -151,7 +151,7 @@ instance decodeJsonArtist :: DecodeJson ArtistJson where
 
 getArtist :: ArtistId -> Aff Artist
 getArtist (ArtistId artistId) = do
-  result <- Http.get Http.ResponseFormat.json $ "/artist/" <> artistId
+  result <- Http.get Http.ResponseFormat.json $ "/api/artist/" <> artistId
   case result of
     Left err -> fatal $ "Failed to retrieve artist: " <> Http.printError err
     Right response -> case Json.decodeJson response.body of
@@ -164,7 +164,7 @@ getArtist (ArtistId artistId) = do
 
 enqueueTrack :: TrackId -> Aff QueueId
 enqueueTrack (TrackId trackId) = do
-  result <- Http.put Http.ResponseFormat.json ("/queue/" <> trackId) Nothing
+  result <- Http.put Http.ResponseFormat.json ("/api/queue/" <> trackId) Nothing
   case result of
     Left err -> fatal $ "Enqueue failed: " <> Http.printError err
     Right response -> case Json.decodeJson response.body of
@@ -192,7 +192,7 @@ instance decodeJsonVolume :: DecodeJson Volume where
 
 getVolume :: Aff Volume
 getVolume = do
-  result <- Http.get Http.ResponseFormat.json "/volume"
+  result <- Http.get Http.ResponseFormat.json "/api/volume"
   case result of
     Left err -> fatal $ "Failed to get volume: " <> Http.printError err
     Right response -> case Json.decodeJson response.body of
@@ -206,7 +206,7 @@ changeVolume change =
       VolumeUp -> "up"
       VolumeDown -> "down"
   in do
-    result <- Http.post Http.ResponseFormat.json ("/volume/" <> dir) Nothing
+    result <- Http.post Http.ResponseFormat.json ("/api/volume/" <> dir) Nothing
     case result of
       Left err -> fatal $ "Failed to change volume: " <> Http.printError err
       Right response -> case Json.decodeJson response.body of
@@ -277,7 +277,7 @@ instance decodeJsonSearchResults :: DecodeJson SearchResults where
 
 search :: String -> Aff SearchResults
 search query = do
-  result <- Http.get Http.ResponseFormat.json ("/search?q=" <> query)
+  result <- Http.get Http.ResponseFormat.json ("/api/search?q=" <> query)
   case result of
     Left err -> fatal $ "Search failed: " <> Http.printError err
     Right response -> case Json.decodeJson response.body of
@@ -345,7 +345,7 @@ instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
 getQueue :: Aff (Array QueuedTrack)
 getQueue = do
   t0 <- liftEffect $ Time.getCurrentInstant
-  result <- Http.get Http.ResponseFormat.json "/queue"
+  result <- Http.get Http.ResponseFormat.json "/api/queue"
   t1 <- liftEffect $ Time.getCurrentInstant
 
   let
@@ -407,7 +407,7 @@ decodeAlbumTracks json = do
 
 getTracks :: AlbumId -> Aff (Array Track)
 getTracks (AlbumId aid) = do
-  result <- Http.get Http.ResponseFormat.json $ "/album/" <> aid
+  result <- Http.get Http.ResponseFormat.json $ "/api/album/" <> aid
   case result of
     Left err -> fatal $ "Failed to retrieve tracks: " <> Http.printError err
     Right response -> case decodeAlbumTracks response.body of
