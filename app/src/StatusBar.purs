@@ -124,12 +124,11 @@ addCurrentTrack track state = do
     newCurrentTrack track
 
   -- The new node gets created with "fade-in" class applied. We remove it
-  -- immediately to trigger the css transition to the normal state. We do need
-  -- a delay for this, if we remove the class synchronously, the transition does
-  -- not trigger.
-  launchAff_ $ do
-    Aff.delay $ Milliseconds 17.0
-    liftEffect $ Html.withElement currentTrack.container $ Html.removeClass "fade-in"
+  -- immediately to trigger the css transition to the normal state. Force layout
+  -- before removing it, so it is not a no-op add-remove.
+  Html.withElement currentTrack.container $ do
+    Html.forceLayout
+    Html.removeClass "fade-in"
 
   pure $ state { current = Just currentTrack }
 
@@ -206,16 +205,17 @@ updateProgressBar (QueuedTrack currentTrack) state = do
 
   case state.current of
     Nothing -> pure unit
-    Just t -> launchAff_ $ do
+    Just t -> do
       -- If we apply the transition and transform at the same time (even if we
       -- set the transition first), then the new transition will not be used to
       -- transition to the new transform, the old transition will be used. This
       -- means that the timing will be all wrong. In particular, for the initial
-      -- update it will be very bad, because there is no transition yet. We can
-      -- work around this by introducing a delay.
-      liftEffect $ Html.withElement t.progressBar $ Html.setTransition transition
-      Aff.delay $ Milliseconds 17.0
-      liftEffect $ Html.withElement t.progressBar $ Html.setTransform transform
+      -- update it will be very bad, because there is no transition yet.
+      -- Therefore, force layout in between.
+      Html.withElement t.progressBar $ do
+        Html.setTransition transition
+        Html.forceLayout
+        Html.setTransform transform
 
       -- Update the blocked status as well, to reveal or hide the spinner
       -- underneath the thumbnail.

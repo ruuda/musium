@@ -398,10 +398,8 @@ navigateTo newLocation historyMode state =
         Html.removeClass "inactive"
         Html.removeClass "out"
         Html.addClass "in"
-      -- The css transition does not trigger if we immediately remove the "in"
-      -- class, so wait a bit.
-      Aff.delay $ Milliseconds (5.0)
-      liftEffect $ Html.withElement paneAfter $ Html.removeClass "in"
+        Html.forceLayout
+        Html.removeClass "in"
       -- After the transition-out is complete, hide the old element entirely.
       Aff.delay $ Milliseconds (100.0)
       liftEffect $ Html.withElement paneBefore $ do

@@ -64,6 +64,12 @@ exports.getElementByIdImpl = function(id, just, nothing) {
   }
 }
 
+exports.getBoundingClientRect = function(element) {
+  return function() {
+    return element.getBoundingClientRect();
+  }
+}
+
 exports.assumeElementById = function(id) {
   return function() {
     var element = document.getElementById(id);

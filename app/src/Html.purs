@@ -11,6 +11,7 @@ module Html
   , button
   , clear
   , div
+  , forceLayout
   , h1
   , h2
   , h3
@@ -54,6 +55,18 @@ withElement container (ReaderT f) = f container
 
 clear :: Html Unit
 clear = ReaderT $ \container -> Dom.clearElement container
+
+-- This is a bit of a hack. A common pattern in this codebase is to add a css
+-- class to trigger an animation. However, if we add a new DOM node, and
+-- immediately add the class, or switch the visibility of the node and
+-- immediately change the class, then that will not trigger a css transition. In
+-- the past I fixed that by adding an Aff.delay in between the operations, but
+-- while that mostly works, in some cases Chrome skipped the operation. Forcing
+-- a style and layout recalc by calling a synchronous function that forces
+-- layout, should be a more consistent way to ensure the css transition gets
+-- applied.
+forceLayout :: Html Unit
+forceLayout = ReaderT $ \container -> void $ Dom.getBoundingClientRect container
 
 pureElement :: Element -> Html Unit
 pureElement element = ReaderT $ \container -> Dom.appendChild element container

@@ -6,7 +6,8 @@
 -- A copy of the License has been included in the root of the repository.
 
 module Dom
-  ( Element
+  ( DomRect
+  , Element
   , addClass
   , addEventListener
   , appendChild
@@ -16,6 +17,7 @@ module Dom
   , clearElement
   , createElement
   , focusElement
+  , getBoundingClientRect
   , getElementById
   , getOffsetHeight
   , getScrollTop
@@ -44,6 +46,7 @@ import Prelude
 import Data.Maybe (Maybe (..))
 
 foreign import data Element :: Type
+foreign import data DomRect :: Type
 
 instance eqElement :: Eq Element where
   eq = eqElementImpl
@@ -54,6 +57,7 @@ foreign import clearElement :: Element -> Effect Unit
 foreign import createElement :: String -> Effect Element
 foreign import eqElementImpl :: Element -> Element -> Boolean
 foreign import focusElement :: Element -> Effect Unit
+foreign import getBoundingClientRect :: Element -> Effect DomRect
 foreign import getOffsetHeight :: Element -> Effect Number
 foreign import getScrollTop :: Element -> Effect Number
 foreign import getValue :: Element -> Effect String
