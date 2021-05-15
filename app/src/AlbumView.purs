@@ -12,11 +12,15 @@ module AlbumView
 import Control.Monad.Reader.Class (ask)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
-import Data.Foldable (traverse_)
+import Data.Array.NonEmpty as NonEmptyArray
+import Data.Time.Duration (Milliseconds (..))
+import Data.Traversable (traverse, for_)
+import Effect.Aff as Aff
 import Effect.Aff (Aff, joinFiber, launchAff, launchAff_)
 import Effect.Class (liftEffect)
 import Prelude
 
+import Dom (Element)
 import Event (Event)
 import Event as Event
 import Html (Html)
@@ -34,7 +38,7 @@ renderAlbum postEvent (Album album) queuedTracks = do
   -- and we should't block the track list on that.
   tracksAsync <- liftEffect $ launchAff $ Model.getTracks album.id
 
-  Html.div $ do
+  albumActionsElement <- Html.div $ do
     Html.addClass "album-info"
     Html.div $ do
       Html.addClass "cover"
@@ -60,12 +64,7 @@ renderAlbum postEvent (Album album) queuedTracks = do
 
     Html.div $ do
       Html.addClass "album-actions"
-      Html.button $ do
-        Html.addClass "enqueue"
-        Html.text "Enqueue"
-      Html.button $ do
-        Html.addClass "play-next"
-        Html.text "Play Next"
+      ask
 
   trackList <- Html.ul $ do
     Html.addClass "track-list"
@@ -73,29 +72,113 @@ renderAlbum postEvent (Album album) queuedTracks = do
 
   liftEffect $ launchAff_ $ do
     tracks <- joinFiber tracksAsync
-    liftEffect $ Html.withElement trackList $ traverse_
+    -- Group the tracks by disk and render one <div> per disc, so we can leave
+    -- some space in between. Collects the track <li> elements as an array per
+    -- disc.
+    discStates <- liftEffect $ Html.withElement trackList $ traverse
       (renderDisc postEvent (Album album) queuedTracks)
       (Array.groupBy isSameDisc tracks)
 
+    liftEffect $ Html.withElement albumActionsElement $ do
+      Html.clear
+
+      -- For an album with a single disc, we just show an "enqueue" button,
+      -- but if we have multiple discs, show one per disc, and label them
+      -- appropriately.
+      let
+        label discState = case Array.length discStates of
+          1 -> "Enqueue"
+          _ -> "Enqueue Disc " <> (show discState.number)
+
+      for_ discStates $ \discState -> Html.button $ do
+        Html.addClass "enqueue"
+        Html.text $ label discState
+        -- When we enqueue the album, simply enqueue all tracks individually.
+        -- Because enqueueTrack returns an Aff, this will not enqueue a track
+        -- before the previous one is confirmed enqueued. However, we still add
+        -- a little sleep in between, to have a nice visual effect of the tracks
+        -- being enqueued one by one.
+        Html.onClick $ launchAff_ $
+          for_ discState.tracks $ \t -> do
+            enqueueTrack postEvent (Album album) t.track t.element
+            Aff.delay $ Milliseconds (25.0)
+
+      Html.button $ do
+        Html.addClass "play-next"
+        Html.text "Play Next"
+        -- TODO: Do we need a "play next" functionality at all?
+
 isSameDisc :: Track -> Track -> Boolean
 isSameDisc (Track t1) (Track t2) = t1.discNumber == t2.discNumber
+
+type DiscState =
+  { number :: Int
+  , tracks :: NonEmptyArray { track :: Track, element :: Element }
+  }
 
 renderDisc
   :: (Event -> Aff Unit)
   -> Album
   -> Array TrackId
   -> NonEmptyArray Track
-  -> Html Unit
+  -> Html DiscState
 renderDisc postEvent album queuedTracks tracks = Html.div $ do
   Html.addClass "disc"
-  traverse_ (renderTrack postEvent album queuedTracks) tracks
+  elements <- traverse (renderTrack postEvent album queuedTracks) tracks
+  let Track firstTrack = NonEmptyArray.head tracks
+  pure
+    { number: firstTrack.discNumber
+    , tracks: NonEmptyArray.zipWith (\t e -> { track: t, element: e }) tracks elements
+    }
 
+enqueueTrack
+  :: (Event -> Aff Unit)
+  -> Album
+  -> Track
+  -> Element
+  -> Aff Unit
+enqueueTrack postEvent (Album album) (Track track) trackElement = do
+  liftEffect $ Html.withElement trackElement $ Html.addClass "queueing"
+  queueId <- Model.enqueueTrack $ track.id
+  now <- liftEffect $ Time.getCurrentInstant
+  postEvent $ Event.EnqueueTrack $ QueuedTrack
+    { queueId: queueId
+    , trackId: track.id
+    , title: track.title
+    , artist: track.artist
+    , album: album.title
+    , albumId: album.id
+    , albumArtistId: album.artistId
+    , durationSeconds: track.durationSeconds
+    , positionSeconds: 0.0
+    , bufferedSeconds: 0.0
+      -- Assume not buffering when we add the track, to avoid showing the
+      -- spinner in the happy case where playback starts instantly. In the
+      -- unhappy case where buffering takes a long time, the thumbnail
+      -- will dim later to reveal the spinner.
+    , isBuffering: false
+    , startedAt: now
+      -- Add a small delay before we refresh. If the queue was empty and
+      -- the enqueue triggered the track, the server should focus on
+      -- playing and establishing a safe buffer first, before we bother it
+      -- with queue status requests. Also give it enough headroom that it
+      -- should not have an empty buffer by the time we poll again, to
+      -- prevent the spinner from showing up.
+    , refreshAt: Time.add (Time.fromSeconds 0.4) now
+    }
+  -- TODO: Remove class after track is no longer in queue.
+  liftEffect $ Html.withElement trackElement $ do
+    Html.addClass "queued"
+    Html.removeClass "queueing"
+
+-- Render a track <li>. Returns the element itself, so it its queueing indicator
+-- can be modified later.
 renderTrack
   :: (Event -> Aff Unit)
   -> Album
   -> Array TrackId
   -> Track
-  -> Html Unit
+  -> Html Element
 renderTrack postEvent (Album album) queuedTracks (Track track) =
   Html.li $ do
     Html.addClass "track"
@@ -113,41 +196,9 @@ renderTrack postEvent (Album album) queuedTracks (Track track) =
       Html.addClass "artist"
       Html.text track.artist
 
-    trackElement <- ask
-
     when (track.id `Array.elem` queuedTracks) $ Html.addClass "queued"
 
-    Html.onClick $ do
-      Html.withElement trackElement $ Html.addClass "queueing"
-      launchAff_ $ do
-        queueId <- Model.enqueueTrack $ track.id
-        now <- liftEffect $ Time.getCurrentInstant
-        postEvent $ Event.EnqueueTrack $ QueuedTrack
-          { queueId: queueId
-          , trackId: track.id
-          , title: track.title
-          , artist: track.artist
-          , album: album.title
-          , albumId: album.id
-          , albumArtistId: album.artistId
-          , durationSeconds: track.durationSeconds
-          , positionSeconds: 0.0
-          , bufferedSeconds: 0.0
-            -- Assume not buffering when we add the track, to avoid showing the
-            -- spinner in the happy case where playback starts instantly. In the
-            -- unhappy case where buffering takes a long time, the thumbnail
-            -- will dim later to reveal the spinner.
-          , isBuffering: false
-          , startedAt: now
-            -- Add a small delay before we refresh. If the queue was empty and
-            -- the enqueue triggered the track, the server should focus on
-            -- playing and establishing a safe buffer first, before we bother it
-            -- with queue status requests. Also give it enough headroom that it
-            -- should not have an empty buffer by the time we poll again, to
-            -- prevent the spinner from showing up.
-          , refreshAt: Time.add (Time.fromSeconds 0.4) now
-          }
-        -- TODO: Remove class after track is no longer in queue.
-        liftEffect $ Html.withElement trackElement $ do
-          Html.addClass "queued"
-          Html.removeClass "queueing"
+    trackElement <- ask
+    Html.onClick $ launchAff_ $ enqueueTrack postEvent (Album album) (Track track) trackElement
+
+    pure trackElement
