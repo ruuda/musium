@@ -6,7 +6,11 @@
 -- A copy of the License has been included in the root of the repository.
 
 module AlbumView
-  ( renderAlbum
+  ( AlbumViewState
+  , AlbumViewElements
+  , AlbumViewRenderState
+  , renderAlbumInit
+  , renderAlbumAdvance
   ) where
 
 import Control.Monad.Reader.Class (ask)
@@ -15,11 +19,13 @@ import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NonEmptyArray
 import Data.Time.Duration (Milliseconds (..))
 import Data.Traversable (traverse, for_)
+import Effect (Effect)
 import Effect.Aff as Aff
-import Effect.Aff (Aff, joinFiber, launchAff, launchAff_)
+import Effect.Aff (Aff, Fiber, launchAff, launchAff_)
 import Effect.Class (liftEffect)
 import Prelude
 
+import Dom as Dom
 import Dom (Element)
 import Event (Event)
 import Event as Event
@@ -30,17 +36,67 @@ import Model as Model
 import Navigation as Navigation
 import Time as Time
 
-renderAlbum :: (Event -> Aff Unit) -> Album -> Array TrackId -> Html Unit
-renderAlbum postEvent (Album album) queuedTracks = do
+-- Rendering the album view is somewhat complex because of a few reasons:
+--
+-- * We need to load the track list before we can render it, which is a fast
+--   network request (the data can be served from memory), but still takes on
+--   the order of ~15 ms over wifi.
+-- * We need to load the full-resolution cover art, which is a potentially very
+--   slow network request (might require the disk to spin up), plus potentially
+--   a very CPU-intensive operation to decode and paint for large cover art.
+-- * While all of this is happening, we want a smooth transition to the album
+--   view pane, and if there is a layout change, or worse, an image decode and
+--   repaint, during this transition, it will stutter. We should therefore avoid
+--   modifying the album view while it is transitioning.
+--
+-- To accomodate this, we split loading into three phases:
+--
+-- 1. Kick off the two requests, and render everything we can at this point.
+-- 2. Wait very briefly and render anything that came in during that time, then
+--    start the transition. If things are still loading, start the transition
+--    without the track list and cover art. (A low-res cover art should be
+--    present, so this should not be very noticeable.)
+-- 3. Render the remaining things as soon as they are available.
+
+type AlbumViewElements =
+  { trackList :: Element
+  , albumActions :: Element
+  , cover :: Element
+  }
+
+data AlbumViewRenderState
+  -- Both the track list and full-res cover <img> are loading.
+  = AllPending (Fiber (Array Track)) Element
+  -- The track list has been rendered, but the cover is still loading.
+  | CoverPending Element
+  -- Both the track list and cover have been rendered.
+  | Done
+
+type AlbumViewState =
+  { postEvent :: Event -> Aff Unit
+  , album :: Album
+  , elements :: AlbumViewElements
+  , renderState :: AlbumViewRenderState
+  }
+
+-- Render as much of the album view as possible already, and kick off external
+-- requests that may take some time to load.
+renderAlbumInit
+  :: (Event -> Aff Unit)
+  -> Album
+  -> Html AlbumViewState
+renderAlbumInit postEvent (Album album) = do
   -- Begin loading the tracks before we add the images. The album list can be
   -- served from memory, but the cover art needs disk access. When the disks
   -- need to spin up, it can easily take a few seconds to serve the cover art,
   -- and we should't block the track list on that.
   tracksAsync <- liftEffect $ launchAff $ Model.getTracks album.id
 
-  albumActionsElement <- Html.div $ do
+  -- Continue building the basic structure of the album view.
+  { coverElement, albumActionsElement, imgFullRes } <- Html.div $ do
     Html.addClass "album-info"
-    Html.div $ do
+
+    { coverElement, imgFullRes } <- Html.div $ do
       Html.addClass "cover"
       let alt = album.title <> " by " <> album.artist
       -- Add 3 images: a blurred backdrop, the low-resolution thumbnail that
@@ -48,7 +104,18 @@ renderAlbum postEvent (Album album) queuedTracks = do
       -- cover art on top of that.
       Html.img (Model.thumbUrl album.id) alt $ Html.addClass "backdrop"
       Html.img (Model.thumbUrl album.id) alt $ Html.addClass "lowres"
-      Html.img (Model.coverUrl album.id) alt $ pure unit
+
+      -- The full-res image we don't add as a child node directly though,
+      -- because that leaves us no control of when it gets painted. It might
+      -- get painted during the transition for opening the album view, and in
+      -- Chrome that makes the animation stutter. So we create the node, but
+      -- only add it later at a controlled time.
+      imgFullRes <- liftEffect $ Dom.createImg (Model.coverUrl album.id) alt
+      liftEffect $ Html.withElement imgFullRes $ Html.addClass "fullres"
+
+      coverElement <- ask
+      pure { coverElement, imgFullRes }
+
     Html.hgroup $ do
       Html.h1 $ Html.text album.title
       Html.h2 $ do
@@ -64,24 +131,68 @@ renderAlbum postEvent (Album album) queuedTracks = do
 
     Html.div $ do
       Html.addClass "album-actions"
-      ask
+      albumActionsElement <- ask
+      -- This will be filled later once the track list is available.
+      pure { coverElement, albumActionsElement, imgFullRes }
 
-  trackList <- Html.ul $ do
+  trackListElement <- Html.ul $ do
     Html.addClass "track-list"
     ask
+    -- This will be filled once the track list is available.
 
-  liftEffect $ launchAff_ $ do
-    tracks <- joinFiber tracksAsync
+  pure $
+    { postEvent: postEvent
+    , album: Album album
+    , elements:
+      { trackList: trackListElement
+      , albumActions: albumActionsElement
+      , cover: coverElement
+      }
+    , renderState: AllPending tracksAsync imgFullRes
+    }
+
+renderAlbumAdvance
+  :: AlbumViewState
+  -> Array TrackId
+  -> Aff AlbumViewState
+renderAlbumAdvance state queuedTracks = case state.renderState of
+  AllPending tracksAsync img -> do
+    tracks <- Aff.joinFiber tracksAsync
+    liftEffect $ renderTrackList state queuedTracks tracks
+
+    -- If at this point the cover is loaded, include it immediately.
+    isCoverLoaded <- liftEffect $ Dom.getComplete img
+    if isCoverLoaded
+      then liftEffect $ insertFullResCover state img
+      else pure $ state { renderState = CoverPending img }
+
+  CoverPending img -> do
+    Dom.waitComplete img
+    liftEffect $ insertFullResCover state img
+
+  Done ->
+    pure state
+
+insertFullResCover :: AlbumViewState -> Element -> Effect AlbumViewState
+insertFullResCover state img =
+  Html.withElement state.elements.cover $
+    Html.element img $
+      pure $ state { renderState = Done }
+
+renderTrackList
+  :: AlbumViewState
+  -> Array TrackId
+  -> Array Track
+  -> Effect Unit
+renderTrackList state queuedTracks tracks = do
     -- Group the tracks by disk and render one <div> per disc, so we can leave
     -- some space in between. Collects the track <li> elements as an array per
     -- disc.
-    discStates <- liftEffect $ Html.withElement trackList $ traverse
-      (renderDisc postEvent (Album album) queuedTracks)
+    discStates <- Html.withElement state.elements.trackList $ traverse
+      (renderDisc state.postEvent state.album queuedTracks)
       (Array.groupBy isSameDisc tracks)
 
-    liftEffect $ Html.withElement albumActionsElement $ do
-      Html.clear
-
+    Html.withElement state.elements.albumActions $ do
       -- For an album with a single disc, we just show an "enqueue" button,
       -- but if we have multiple discs, show one per disc, and label them
       -- appropriately.
@@ -100,7 +211,7 @@ renderAlbum postEvent (Album album) queuedTracks = do
         -- being enqueued one by one.
         Html.onClick $ launchAff_ $
           for_ discState.tracks $ \t -> do
-            enqueueTrack postEvent (Album album) t.track t.element
+            enqueueTrack state.postEvent state.album t.track t.element
             Aff.delay $ Milliseconds (25.0)
 
       Html.button $ do

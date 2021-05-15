@@ -16,8 +16,10 @@ module Dom
   , body
   , clearElement
   , createElement
+  , createImg
   , focusElement
   , getBoundingClientRect
+  , getComplete
   , getElementById
   , getOffsetHeight
   , getScrollTop
@@ -38,12 +40,15 @@ module Dom
   , setTransition
   , setValue
   , setWidth
+  , waitComplete
   ) where
 
 import Data.Function.Uncurried (Fn2, runFn2, Fn3, runFn3)
 import Effect (Effect)
 import Prelude
 import Data.Maybe (Maybe (..))
+import Effect.Aff (Aff)
+import Effect.Aff.Compat (EffectFnAff, fromEffectFnAff)
 
 foreign import data Element :: Type
 foreign import data DomRect :: Type
@@ -58,15 +63,20 @@ foreign import createElement :: String -> Effect Element
 foreign import eqElementImpl :: Element -> Element -> Boolean
 foreign import focusElement :: Element -> Effect Unit
 foreign import getBoundingClientRect :: Element -> Effect DomRect
+
 foreign import getOffsetHeight :: Element -> Effect Number
 foreign import getScrollTop :: Element -> Effect Number
 foreign import getValue :: Element -> Effect String
 foreign import getWindowHeight :: Effect Number
 foreign import onResizeWindow :: (Effect Unit) -> (Effect Unit)
 foreign import scrollIntoView :: Element -> Effect Unit
+
 -- This actually returns a DocumentFragment at runtime, but it can be used in
 -- the same way that an Element can.
 foreign import renderHtml :: String -> Effect Element
+
+-- Is the <img> element loaded yet?
+foreign import getComplete :: Element -> Effect Boolean
 
 foreign import addClassImpl :: Fn2 String Element (Effect Unit)
 foreign import addEventListenerImpl :: Fn3 String (Effect Unit) Element (Effect Unit)
@@ -85,6 +95,7 @@ foreign import setTransformImpl :: Fn2 String Element (Effect Unit)
 foreign import setTransitionImpl :: Fn2 String Element (Effect Unit)
 foreign import setWidthImpl :: Fn2 String Element (Effect Unit)
 foreign import setValueImpl :: Fn2 String Element (Effect Unit)
+foreign import waitCompleteImpl :: Fn2 Unit Element (EffectFnAff Unit)
 
 appendChild :: Element -> Element -> Effect Unit
 appendChild child container = runFn2 appendChildImpl child container
@@ -136,3 +147,13 @@ addEventListener eventName callback element = runFn3 addEventListenerImpl eventN
 
 onScroll :: Effect Unit -> Element -> Effect Unit
 onScroll callback element = runFn2 onScrollImpl callback element
+
+-- Wait for an <img> element to finish decoding.
+waitComplete :: Element -> Aff Unit
+waitComplete element = fromEffectFnAff $ runFn2 waitCompleteImpl unit element
+
+createImg :: String -> String -> Effect Element
+createImg src alt = do
+  self <- createElement "img"
+  setImage src alt self
+  pure self

@@ -11,6 +11,7 @@ module Html
   , button
   , clear
   , div
+  , element
   , forceLayout
   , h1
   , h2
@@ -25,7 +26,6 @@ module Html
   , onInput
   , onScroll
   , p
-  , pureElement
   , removeClass
   , scrollIntoView
   , setHeight
@@ -68,8 +68,13 @@ clear = ReaderT $ \container -> Dom.clearElement container
 forceLayout :: Html Unit
 forceLayout = ReaderT $ \container -> void $ Dom.getBoundingClientRect container
 
-pureElement :: Element -> Html Unit
-pureElement element = ReaderT $ \container -> Dom.appendChild element container
+-- Add a pre-existing node to the DOM, instead of creating a new one.
+element :: forall a. Element -> Html a -> Html a
+element elem (ReaderT children) =
+  ReaderT $ \container -> do
+    result <- children elem
+    Dom.appendChild elem container
+    pure result
 
 node :: forall a. String -> Html a -> Html a
 node tagName (ReaderT children) =

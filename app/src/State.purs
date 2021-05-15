@@ -33,6 +33,7 @@ import Prelude
 
 import AlbumListView (AlbumListView)
 import AlbumListView as AlbumListView
+import AlbumView (AlbumViewState)
 import AlbumView as AlbumView
 import Dom (Element)
 import Dom as Dom
@@ -85,6 +86,7 @@ type AppState =
   , location :: Location
   , lastArtist :: Maybe ArtistId
   , lastAlbum :: Maybe AlbumId
+  , albumView :: Maybe AlbumViewState
   , elements :: Elements
   , postEvent :: Event -> Aff Unit
   }
@@ -177,6 +179,7 @@ new bus = do
     , location: Navigation.Library
     , lastArtist: Nothing
     , lastAlbum: Nothing
+    , albumView: Nothing
     , elements: elements
     , postEvent: postEvent
     }
@@ -290,21 +293,25 @@ handleEvent event state = case event of
       }
 
   Event.NavigateTo location@(Navigation.Album albumId) mode -> do
-    Album album <- case getAlbum albumId state of
+    { album, albumViewState } <- case getAlbum albumId state of
       Nothing -> fatal $ "Album " <> (show albumId) <> " does not exist."
-      Just album ->
+      Just album -> do
         liftEffect $ Html.withElement state.elements.albumView $ do
           Html.clear
-          AlbumView.renderAlbum
-            state.postEvent
-            album
-            (getQueuedTracksForAlbum albumId state)
+          albumViewState <- AlbumView.renderAlbumInit state.postEvent album
           -- Reset the scroll position, as we recycle the container.
           Html.setScrollTop 0.0
-          pure album
+          pure { album, albumViewState }
+
+          -- TODO: Now we need to wait a bit and update the album view.
+          -- TODO (getQueuedTracksForAlbum albumId state)
+    let
+      Album albumDetails = album
+
     navigateTo location mode $ state
       { lastAlbum = Just albumId
-      , lastArtist = Just album.artistId
+      , lastArtist = Just albumDetails.artistId
+      , albumView = Just albumViewState
       }
 
   Event.NavigateToArtist -> case state.location of
@@ -397,11 +404,16 @@ navigateTo newLocation historyMode state =
       liftEffect $ Html.withElement paneAfter $ do
         Html.removeClass "inactive"
         Html.removeClass "out"
+        -- Add the class to make the pane be in the "in" state, then remove it
+        -- to trigger a transition, but force layout in between so the
+        -- add-remove does not become a no-op.
         Html.addClass "in"
         Html.forceLayout
         Html.removeClass "in"
       -- After the transition-out is complete, hide the old element entirely.
-      Aff.delay $ Milliseconds (100.0)
+      -- Add 5ms to the duration to ensure that it happens *after* the
+      -- transition is complete.
+      Aff.delay $ Milliseconds (105.0)
       liftEffect $ Html.withElement paneBefore $ do
         Html.addClass "inactive"
         Html.removeClass "out"

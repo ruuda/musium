@@ -400,6 +400,10 @@ img.thumb
   margin-right: auto;
   /* Ensure the container is square even when the image is missing. */
   aspect-ratio: 1/1;
+
+  /* Limit the size of the element to avoid Chrome for allocating a larger-than-
+   * necessary compositing layer for it. */
+  overflow: hidden;
 }
 
 .album-info .cover img {

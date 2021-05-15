@@ -145,6 +145,29 @@ exports.setImageImpl = function(src, alt, element) {
   }
 }
 
+exports.getComplete = function(element) {
+  return function() {
+    return element.complete;
+  }
+}
+
+exports.waitCompleteImpl = function(unit, imgElement) {
+  return function (onError, onSuccess) {
+    let decodePromise = imgElement.decode();
+
+    decodePromise.onerror = function(event) {
+      onError(event);
+    };
+    decodePromise.onsuccess = function(event) {
+      onSuccess(unit);
+    };
+
+    return function (cancelError, onCancelError, onCancelSuccess) {
+      onCancelSuccess();
+    };
+  };
+}
+
 exports.addClassImpl = function(className, element) {
   return function() {
     element.classList.add(className);
