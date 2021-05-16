@@ -441,7 +441,7 @@ img.thumb
 .album-info h1 {
   font-weight: 600;
   font-size: 1.5em;
-  line-height: 1.1em;
+  line-height: 1.2em;
   margin-top:  5rem;
   margin-left: 0.75rem;
   text-overflow: ellipsis;
@@ -466,6 +466,11 @@ img.thumb
   margin-top: 0.3em;
   word-spacing: 0;
   color: black;
+}
+
+/* Put the entire date on the next line, instead of breaking it at a dash. */
+.album-info .date {
+  white-space: nowrap;
 }
 
 #album-view .album-actions {
