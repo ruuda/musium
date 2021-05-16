@@ -304,7 +304,6 @@ handleEvent event state = case event of
           pure { album, albumViewState }
 
           -- TODO: Now we need to wait a bit and update the album view.
-          -- TODO (getQueuedTracksForAlbum albumId state)
     let
       Album albumDetails = album
 
@@ -368,6 +367,40 @@ handleEvent event state = case event of
       (Event.UpdateQueue $ Array.snoc state.queue queuedTrack)
       state
 
+beforeSwitchPane :: AppState -> Aff AppState
+beforeSwitchPane state =
+  case state.location of
+    -- When transitioning towards the album view, before we start the animation,
+    -- wait a brief time for the album details to load, so we can show them
+    -- immediately and animate the final page, so they don't pop in later.
+    Navigation.Album albumId ->
+      case state.albumView of
+        Nothing -> fatal "Switching to album view without having an album view."
+        Just v -> do
+          let queue = getQueuedTracksForAlbum albumId state
+          newAlbumViewState <- AlbumView.renderAlbumTryAdvance v queue (Milliseconds 25.0)
+          pure $ state { albumView = Just newAlbumViewState }
+
+    _notAlbum -> pure state
+
+afterSwitchPane :: AppState -> Aff AppState
+afterSwitchPane state =
+  case state.location of
+    -- When transitioning towards the album view, we don't allow it to load
+    -- anything during the transition, because that can cause the animation to
+    -- stutter. But after the transition is done, we do need to continue. We do
+    -- this in a forkAff, because it should not block navigating away from the
+    -- album view again.
+    Navigation.Album albumId ->
+      case state.albumView of
+        Nothing -> fatal "Switching to album view without having an album view."
+        Just v -> do
+          let queue = getQueuedTracksForAlbum albumId state
+          void $ Aff.forkAff $ AlbumView.renderAlbumFinalize v queue
+          pure $ state { albumView = Nothing }
+
+    _notAlbum -> pure state
+
 navigateTo :: Navigation.Location -> HistoryMode -> AppState -> Aff AppState
 navigateTo newLocation historyMode state =
   let
@@ -398,27 +431,38 @@ navigateTo newLocation historyMode state =
 
     liftEffect $ NavBar.selectTab newLocation state.navBar
 
-    -- Switch the pane if we have to.
-    unless (paneBefore == paneAfter) $ do
-      liftEffect $ Html.withElement paneBefore $ Html.addClass "out"
-      liftEffect $ Html.withElement paneAfter $ do
-        Html.removeClass "inactive"
-        Html.removeClass "out"
-        -- Add the class to make the pane be in the "in" state, then remove it
-        -- to trigger a transition, but force layout in between so the
-        -- add-remove does not become a no-op.
-        Html.addClass "in"
-        Html.forceLayout
-        Html.removeClass "in"
-      -- After the transition-out is complete, hide the old element entirely.
-      -- Add 5ms to the duration to ensure that it happens *after* the
-      -- transition is complete.
-      Aff.delay $ Milliseconds (105.0)
-      liftEffect $ Html.withElement paneBefore $ do
-        Html.addClass "inactive"
-        Html.removeClass "out"
+    let state' = state { location = newLocation }
 
-    pure $ state { location = newLocation }
+    -- Switch the pane if we have to. This might change the state if we do.
+    if (paneBefore == paneAfter)
+      then
+        pure state'
+      else do
+        liftEffect $ Html.withElement paneBefore $ Html.addClass "out"
+        liftEffect $ Html.withElement paneAfter $ do
+          Html.removeClass "inactive"
+          Html.removeClass "out"
+          -- Add the class to make the pane be in the "in" state, then remove it
+          -- later to trigger a transition, but force layout in between so the
+          -- add-remove does not become a no-op.
+          Html.addClass "in"
+          Html.forceLayout
+
+        state'' <- beforeSwitchPane state'
+
+        liftEffect $ Html.withElement paneAfter $ do
+          Html.removeClass "in"
+
+        -- After the transition-out is complete, hide the old element entirely.
+        -- Add 5ms to the duration to ensure that it happens *after* the
+        -- transition is complete.
+        Aff.delay $ Milliseconds (105.0)
+
+        liftEffect $ Html.withElement paneBefore $ do
+          Html.addClass "inactive"
+          Html.removeClass "out"
+
+        afterSwitchPane state''
 
 -- Schedule a new queue update at the given instant. Typically we would schedule
 -- it just after we expect the current track to end.

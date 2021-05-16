@@ -10,13 +10,16 @@ module AlbumView
   , AlbumViewElements
   , AlbumViewRenderState
   , renderAlbumInit
-  , renderAlbumAdvance
+  , renderAlbumTryAdvance
+  , renderAlbumFinalize
   ) where
 
+import Control.Parallel.Class (parallel, sequential)
 import Control.Monad.Reader.Class (ask)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NonEmptyArray
+import Data.Foldable (oneOf)
 import Data.Time.Duration (Milliseconds (..))
 import Data.Traversable (traverse, for_)
 import Effect (Effect)
@@ -132,7 +135,16 @@ renderAlbumInit postEvent (Album album) = do
     Html.div $ do
       Html.addClass "album-actions"
       albumActionsElement <- ask
-      -- This will be filled later once the track list is available.
+
+      -- Add two dummy buttons; those will be replaced once the track list
+      -- loads, but we add the dummies for a smoother visual transition.
+      Html.button $ do
+        Html.addClass "enqueue"
+        Html.text "Enqueue"
+      Html.button $ do
+        Html.addClass "play-next"
+        Html.text "Play Next"
+
       pure { coverElement, albumActionsElement, imgFullRes }
 
   trackListElement <- Html.ul $ do
@@ -150,6 +162,32 @@ renderAlbumInit postEvent (Album album) = do
       }
     , renderState: AllPending tracksAsync imgFullRes
     }
+
+-- Wait up to the given deadline, and if something loads in that time frame,
+-- advance, otherwise do nothing.
+renderAlbumTryAdvance
+  :: AlbumViewState
+  -> Array TrackId
+  -> Milliseconds
+  -> Aff AlbumViewState
+renderAlbumTryAdvance state queuedTracks deadline = do
+  sequential $ oneOf
+    [ parallel $ renderAlbumAdvance state queuedTracks
+    , parallel $ do
+        Aff.delay deadline
+        pure state
+    ]
+
+-- Drive rendering of the album view until it is complete.
+renderAlbumFinalize
+  :: AlbumViewState
+  -> Array TrackId
+  -> Aff AlbumViewState
+renderAlbumFinalize state queuedTracks = do
+  newState <- renderAlbumAdvance state queuedTracks
+  case newState.renderState of
+    Done -> pure newState
+    _ -> renderAlbumFinalize newState queuedTracks
 
 renderAlbumAdvance
   :: AlbumViewState
@@ -193,6 +231,9 @@ renderTrackList state queuedTracks tracks = do
       (Array.groupBy isSameDisc tracks)
 
     Html.withElement state.elements.albumActions $ do
+      -- Remove the dummy buttons, now that we are going to add the real ones.
+      Html.clear
+
       -- For an album with a single disc, we just show an "enqueue" button,
       -- but if we have multiple discs, show one per disc, and label them
       -- appropriately.

@@ -155,12 +155,11 @@ exports.waitCompleteImpl = function(unit, imgElement) {
   return function (onError, onSuccess) {
     let decodePromise = imgElement.decode();
 
-    decodePromise.onerror = function(event) {
-      onError(event);
-    };
-    decodePromise.onsuccess = function(event) {
+    decodePromise.then(function() {
       onSuccess(unit);
-    };
+    }, function() {
+      onError(unit);
+    });
 
     return function (cancelError, onCancelError, onCancelSuccess) {
       onCancelSuccess();
