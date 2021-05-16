@@ -444,7 +444,6 @@ img.thumb
   line-height: 1.1em;
   margin-top:  5rem;
   margin-left: 0.75rem;
-  overflow: hidden;
   text-overflow: ellipsis;
 }
 
