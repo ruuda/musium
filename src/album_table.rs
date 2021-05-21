@@ -208,7 +208,6 @@ mod tests {
                 // In this test the keys fall into two equivalence classes
                 // modulo 8, so keys collide, but not all on the same base
                 // bucket.
-                // capacity of the table), so every insert is a collision.
                 t.insert(AlbumId(k * 4), k);
             }
             for i in 1..6 {
