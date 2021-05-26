@@ -9,6 +9,7 @@ module NavBar
   ( NavBarState
   , new
   , selectTab
+  , selectInitialTab
   ) where
 
 import Control.Monad.Reader.Class (ask)
@@ -57,8 +58,8 @@ new postEvent = Html.nav $ do
   tabNowPlaying <- navTab "Current" $ navEvent Navigation.NowPlaying
   tabSearch     <- navTab "Search"  $ navEvent Navigation.Search
 
-  -- The library is active at startup.
-  liftEffect $ Html.withElement tabLibrary $ Html.addClass "active"
+  -- We don't make any tab active initially, selectTabInitial needs to be called
+  -- still.
 
   navBar <- ask
   pure
@@ -81,6 +82,14 @@ tabs state =
   , state.tabSearch
   ]
 
+getTab :: Location -> NavBarState -> Element
+getTab location state = case location of
+  Navigation.Library    -> state.tabLibrary
+  Navigation.Artist _   -> state.tabArtist
+  Navigation.Album _    -> state.tabAlbum
+  Navigation.NowPlaying -> state.tabNowPlaying
+  Navigation.Search     -> state.tabSearch
+
 selectTab :: Location -> NavBarState -> Effect Unit
 selectTab location state =
   let
@@ -88,9 +97,8 @@ selectTab location state =
     activate element   = Html.withElement element $ Html.addClass "active"
   in do
     traverse_ deactivate $ tabs state
-    activate $ case location of
-      Navigation.Library    -> state.tabLibrary
-      Navigation.Artist _   -> state.tabArtist
-      Navigation.Album _    -> state.tabAlbum
-      Navigation.NowPlaying -> state.tabNowPlaying
-      Navigation.Search     -> state.tabSearch
+    activate $ getTab location state
+
+selectInitialTab :: Location -> NavBarState -> Effect Unit
+selectInitialTab location state =
+  liftEffect $ Html.withElement (getTab location state) $ Html.addClass "active"

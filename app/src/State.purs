@@ -229,15 +229,40 @@ handleEvent event state = case event of
         { albums = albums
         , albumsById = albumsById
         , elements = state.elements { libraryBrowser = libraryBrowser }
+          -- See also below.
+        , location = if Array.length queue > 0
+            then Navigation.NowPlaying
+            else Navigation.Library
         }
 
     state'' <- handleEvent (Event.UpdateQueue queue) state'
 
+
     -- If nothing is playing, then remain on the lirary page. But if something
-    -- is playing, then we open the "now playing" pane initially.
-    if Array.null queue
-      then pure state''
-      else handleEvent (Event.NavigateTo Navigation.NowPlaying Event.NoRecordHistory) state''
+    -- is playing, then we open the "now playing" pane initially. We don't use
+    -- the regular NavigateTo event for this, to side-step the transition
+    -- animation that would briefly show the library pane.
+    initialPane <- if Array.length queue > 0
+      then liftEffect $ do
+        Html.withElement state''.elements.paneLibrary $ Html.addClass "inactive"
+        Html.withElement state''.elements.paneCurrent $ Html.removeClass "inactive"
+        pure state''.elements.paneCurrent
+      else
+        pure state''.elements.paneLibrary
+
+    -- Apply the transition animation initially, because the page doesn't load
+    -- instantly, and this is a bit nicer than having things pop in. TODO: It
+    -- does not have any effect for the library pane though, that needs better
+    -- timing.
+    liftEffect $ Html.withElement initialPane $ do
+      Html.addClass "in"
+      Html.forceLayout
+      Html.removeClass "in"
+
+    -- Ensure the right tab is selected initially.
+    liftEffect $ NavBar.selectInitialTab state''.location state''.navBar
+
+    pure state''
 
   Event.UpdateQueue queue -> do
     statusBar' <- liftEffect $ StatusBar.updateStatusBar (Array.head queue) state.statusBar
