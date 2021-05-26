@@ -31,10 +31,9 @@ main = launchAff_ $ do
   -- minimal initial UI, to ensure that we load something quickly.
   Tuple busOut busIn <- Bus.split <$> Bus.make
 
-  -- Begin loading the albums asynchronously.
-  fiberAlbums <- forkAff $ do
-    albums <- Model.getAlbums
-    pure albums
+  -- Begin loading the albums and queue asynchronously.
+  fiberAlbums <- forkAff Model.getAlbums
+  fiberQueue <- forkAff Model.getQueue
 
   -- Now we are ready to start building the UI. Remove the spinner to make room.
   liftEffect $ do
@@ -52,12 +51,13 @@ main = launchAff_ $ do
     Nothing -> initialState.postEvent $ Event.NavigateTo Navigation.Library NoRecordHistory
     Just location -> initialState.postEvent $ Event.NavigateTo location NoRecordHistory
 
-  -- After building the initial state, wait for the albums, and then send the
-  -- initialize event. We don't post the event from the load handler, because
-  -- in some cases it never gets handled then. Maybe a Bus.write silently drops
-  -- the value when there is nothing reading from it yet?
+  -- After building the initial state, wait for the queue and albums, and then
+  -- send the initialize event. We don't post the event from the load handler,
+  -- because in some cases it never gets handled then. Maybe a Bus.write
+  -- silently drops the value when there is nothing reading from it yet?
   albums <- joinFiber fiberAlbums
-  stateInitialized <- State.handleEvent (Event.Initialize albums) initialState
+  queue <- joinFiber fiberQueue
+  stateInitialized <- State.handleEvent (Event.Initialize albums queue) initialState
 
   -- The main loop handles events in a loop.
   let

@@ -18,7 +18,7 @@ data HistoryMode
   | NoRecordHistory
 
 data Event
-  = Initialize (Array Album)
+  = Initialize (Array Album) (Array QueuedTrack)
   | UpdateQueue (Array QueuedTrack)
   | NavigateTo Location HistoryMode
   | NavigateToArtist

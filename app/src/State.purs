@@ -217,24 +217,27 @@ updateProgressBar state = do
 
 handleEvent :: Event -> AppState -> Aff AppState
 handleEvent event state = case event of
-  Event.Initialize albums -> do
-    -- Now that we have the album list, immediately start fetching the current
-    -- queue, so that can happen in the background while we render the album
-    -- list.
-    state' <- fetchQueue state
-
+  Event.Initialize albums queue -> do
     -- Build a hash map from album id to album, so we can look them up by id.
     let
       withId album@(Album a) = let (AlbumId id) = a.id in Tuple id album
       albumsById = Object.fromFoldable $ map withId albums
 
-    liftEffect $ do
-      libraryBrowser <- AlbumListView.setAlbums albums state.elements.libraryBrowser
-      pure state'
+    libraryBrowser <- liftEffect $ AlbumListView.setAlbums albums state.elements.libraryBrowser
+    let
+      state' = state
         { albums = albums
         , albumsById = albumsById
-        , elements = state'.elements { libraryBrowser = libraryBrowser }
+        , elements = state.elements { libraryBrowser = libraryBrowser }
         }
+
+    state'' <- handleEvent (Event.UpdateQueue queue) state'
+
+    -- If nothing is playing, then remain on the lirary page. But if something
+    -- is playing, then we open the "now playing" pane initially.
+    if Array.null queue
+      then pure state''
+      else handleEvent (Event.NavigateTo Navigation.NowPlaying Event.NoRecordHistory) state''
 
   Event.UpdateQueue queue -> do
     statusBar' <- liftEffect $ StatusBar.updateStatusBar (Array.head queue) state.statusBar
