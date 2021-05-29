@@ -9,7 +9,7 @@
   -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Building — Musium</title>
+  <title>Webinterface — Musium</title>
   <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
@@ -381,35 +381,30 @@
     <div id="main">
       <nav id="breadcrumbs">
         <a href="..">Musium</a>
-         › <a href="./">User Guide</a> 
-         › <a href="./">Building</a> 
+         › <a href="../building/">User Guide</a> 
+         › <a href="./">Webinterface</a> 
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="building">Building</h1>
-<p>Musium is written in <a href="https://rust-lang.org">Rust</a> and <a href="http://www.purescript.org/">Purescript</a>, so you need to
-have the build tools for these available. An easy way to get them is through
-<a href="https://nixos.org/">the Nix package manager</a>. The following command enters a shell in which
-all of the required build tools are available:</p>
-<pre><code>nix run --command $SHELL
-</code></pre>
-<p>This environment is also tested on <abbr>CI</abbr>. Nix is a convenience, not
-a requirement. You are free to source the build tools elsewhere, for example
-from your system package repositories.</p>
-<p>The webinterface is written in <a href="http://www.purescript.org/">Purescript</a>. There is a basic
-makefile that calls <code>purs</code> and <code>psc-package</code>:</p>
-<pre><code>make -C app
-stat app/output/app.js
-</code></pre>
-<p>The server will serve <code>app.js</code> and other static files alongside the API. The
-server itself is written in <a href="https://rust-lang.org">Rust</a> and builds with Cargo:</p>
-<pre><code>cargo build --release
-</code></pre>
-<p>The binary can then be found in <code>target/release/musium</code>.</p>
+        <h1 id="webinterface">Webinterface</h1>
+<p>The webinterface is the primary client for Musium. It is served from the
+<code>listen</code> location <a href="../configuration/">configured in the config file</a>. The client
+controls the Musium daemon through a <abbr>REST</abbr> <abbr>API</abbr>,
+see also the <a href="../api/"><abbr>API</abbr> reference</a>.</p>
+<p>The user interface should be straightforward to use. Browse the library, and
+click or tap a track to enqueue it.</p>
+<h2 id="keyboard-shortcuts">Keyboard shortcuts</h2>
+<p>On desktop, the following keyboard shortcuts are supported:</p>
+<ul>
+<li><strong>/</strong> or <strong>?</strong> — Open the search panel.</li>
+</ul>
+<h2 id="use-as-mobile-app">Use as mobile app</h2>
+<p>For an app-like experience, open the webinterface in a browser, and then use the
+“add to home screen” feature to add Musium as an app.</p>
       </article>
       <nav id="nav-prev-next">
-        <a id="nav-prev" href=".." title="Overview">Previous</a>
-        <a id="nav-next" href="../configuration/" title="Configuration">Next</a>
+        <a id="nav-prev" href="../running/" title="Running">Previous</a>
+        <a id="nav-next" href="../tagging/" title="Tagging">Next</a>
         </nav>
       </div>
     <aside>
@@ -417,10 +412,10 @@ server itself is written in <a href="https://rust-lang.org">Rust</a> and builds 
         <ul>
         <li class="toc-section"><a href="..">Overview</a></li>
           <li class="toc-section
-            "><a href="./">User Guide</a></li>
+            "><a href="../building/">User Guide</a></li>
           
             <li class="toc-chapter
-               current"><a href="./">Building</a></li>
+              "><a href="../building/">Building</a></li>
             
             <li class="toc-chapter
               "><a href="../configuration/">Configuration</a></li>
@@ -429,8 +424,12 @@ server itself is written in <a href="https://rust-lang.org">Rust</a> and builds 
               "><a href="../running/">Running</a></li>
             
             <li class="toc-chapter
-              "><a href="../webinterface/">Webinterface</a></li>
-            
+               current"><a href="./">Webinterface</a></li>
+            <li><ul>
+                <li class="toc-heading"><a href="#keyboard-shortcuts">Keyboard shortcuts</a></li>
+                <li class="toc-heading"><a href="#use-as-mobile-app">Use as mobile app</a></li>
+                </ul></li>
+               
             <li class="toc-chapter
               "><a href="../tagging/">Tagging</a></li>
             
