@@ -121,6 +121,9 @@ A copy of the License has been included in the root of the repository.
   h1 {
     font-size: 2rem;
     margin-bottom: 2.1rem;
+    line-height: 2.42rem;
+    margin-top: -0.35rem;
+    margin-bottom: 1.75rem;
   }
   h2 {
     font-size: 1.42rem;
@@ -156,7 +159,8 @@ A copy of the License has been included in the root of the repository.
   h3 > code,
   li > code,
   td > code,
-  dt > code {
+  dt > code,
+  dd > code {
     background-color: #f0f0f0;
     padding: 0.13rem;
     padding-left: 0.3rem;
@@ -287,6 +291,10 @@ A copy of the License has been included in the root of the repository.
   aside ul {
     margin-bottom: 0;
   }
+  aside li {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   aside li ul {
     padding-top: 0.6rem;
     padding-bottom: 1.1rem;
@@ -332,6 +340,7 @@ A copy of the License has been included in the root of the repository.
     aside {
       border-top: 1px solid #eee;
       border-right: 0px none;
+      padding-top: 1.7em;
     }
     aside nav {
       margin-left: 4em;
