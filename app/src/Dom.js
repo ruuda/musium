@@ -219,6 +219,14 @@ exports.addEventListenerImpl = function(eventName, callback, element) {
   }
 }
 
+exports.onWindowKeyDown = function(callback) {
+  return function() {
+    window.addEventListener('keydown', function (evt) {
+      callback(evt.key)();
+    });
+  }
+}
+
 exports.onScrollImpl = function(callback, element) {
   return function() {
     // For some reason, addEventListener('scroll') does not work,

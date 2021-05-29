@@ -25,8 +25,9 @@ module Dom
   , getScrollTop
   , getValue
   , getWindowHeight
-  , onScroll
   , onResizeWindow
+  , onScroll
+  , onWindowKeyDown
   , removeChild
   , removeClass
   , renderHtml
@@ -68,7 +69,8 @@ foreign import getOffsetHeight :: Element -> Effect Number
 foreign import getScrollTop :: Element -> Effect Number
 foreign import getValue :: Element -> Effect String
 foreign import getWindowHeight :: Effect Number
-foreign import onResizeWindow :: (Effect Unit) -> (Effect Unit)
+foreign import onResizeWindow :: Effect Unit -> Effect Unit
+foreign import onWindowKeyDown :: (String -> Effect Unit) -> Effect Unit
 foreign import scrollIntoView :: Element -> Effect Unit
 
 -- This actually returns a DocumentFragment at runtime, but it can be used in

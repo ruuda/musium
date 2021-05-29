@@ -167,6 +167,13 @@ new bus = do
   elements <- setupElements postEvent
   statusBar <- Html.withElement Dom.body $ StatusBar.new postEvent
   never <- Aff.launchSuspendedAff Aff.never
+
+  -- Install a handler for intercepting keyboard shortcuts.
+  Dom.onWindowKeyDown $ \key ->
+    if key == "/" || key == "?"
+      then Aff.launchAff_ $ postEvent Event.SearchKeyPressed
+      else pure unit
+
   pure
     { albums: []
     , albumsById: Object.empty
@@ -394,6 +401,15 @@ handleEvent event state = case event of
     handleEvent
       (Event.UpdateQueue $ Array.snoc state.queue queuedTrack)
       state
+
+  Event.SearchKeyPressed ->
+    -- If we receive the search hotkey, navigate to the search pane if we aren't
+    -- already there. If we are there, it could be input for the search field
+    -- instead, so we need to ignore this.
+    case state.location of
+      Navigation.Search -> pure state
+      _notSearch ->
+        handleEvent (Event.NavigateTo Navigation.Search Event.RecordHistory) state
 
 beforeSwitchPane :: AppState -> Aff AppState
 beforeSwitchPane state =

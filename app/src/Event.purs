@@ -31,3 +31,5 @@ data Event
     -- Generated periodically when a track is playing to signal that we need to
     -- update the progress bar.
   | UpdateProgress
+    -- The user typed the keyboard shortcut for 'search'.
+  | SearchKeyPressed
