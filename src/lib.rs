@@ -395,6 +395,13 @@ impl MemoryMetaIndex {
         }
     }
 
+    /// Read the files from `paths` and add their metadata to the builder.
+    ///
+    /// `from_paths` spawns multiple threads, and each thread runs `process`.
+    ///
+    /// This function increments `counter`, processes `paths[counter]`, and
+    /// loops until all paths have been indexed. Multiple threads can do this
+    /// in parallel because the counter is atomic.
     fn process(paths: &[PathBuf], counter: &AtomicUsize, builder: &mut BuildMetaIndex) {
         let mut progress_unreported = 0;
         loop {
