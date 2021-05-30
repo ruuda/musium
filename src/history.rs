@@ -14,115 +14,12 @@ use sqlite3_sys;
 
 use crate::{MetaIndex, TrackId};
 use crate::player::QueueId;
+use crate::database::{Database, Result, initialize_db};
 
 /// Changes in the playback state to be recorded.
 pub enum PlaybackEvent {
     Started(QueueId, TrackId),
     Completed(QueueId, TrackId),
-}
-
-type Result<T> = sqlite::Result<T>;
-
-/// Wraps the SQLite connection with some things to manipulate the DB.
-struct Database<'conn> {
-    connection: &'conn sqlite::Connection,
-    insert_started: sqlite::Statement<'conn>,
-    update_completed: sqlite::Statement<'conn>,
-    last_insert_id: Option<i64>,
-}
-
-/// Ensure that the "listens" table exists, prepare statements.
-fn initialize_db(connection: &sqlite::Connection) -> Result<Database> {
-    connection.execute(
-        "
-        create table if not exists listens
-        ( id               integer primary key
-
-        -- ISO-8601 time with UTC offset at which we started playing.
-        , started_at       string  not null unique
-
-        -- ISO-8601 time with UTC offset at which we finished playing.
-        -- NULL if the track is still playing.
-        , completed_at     string  null     check (started_at < completed_at)
-
-        -- Musium ids.
-        , queue_id         integer null
-        , track_id         integer not null
-        , album_id         integer not null
-        , album_artist_id  integer not null
-
-        -- General track metadata.
-        , track_title      string  not null
-        , album_title      string  not null
-        , track_artist     string  not null
-        , album_artist     string  not null
-        , duration_seconds integer not null
-        , track_number     integer null
-        , disc_number      integer null
-
-        -- Source of the listen. Should be either 'musium' if we produced the
-        -- listen, or 'listenbrainz' if we backfilled it from Listenbrainz.
-        , source           string  not null
-
-        -- ISO-8601 time with UTC offset at which we scrobbled the track to Last.fm.
-        -- NULL if the track has not been scrobbled by us.
-        , scrobbled_at     string  null     check (started_at < scrobbled_at)
-        );
-        "
-    )?;
-
-    // We can record timestamps in sub-second granularity, but external systems
-    // do not always support this. Last.fm only has second granularity. So if we
-    // produce a listen, submit it to Last.fm, and later import it back, then we
-    // should not get a duplicate. Therefore, create a unique index on the the
-    // time truncated to seconds (%s formats seconds since epoch).
-    connection.execute(
-        "
-        create unique index if not exists ix_listens_unique_second
-        on listens (cast(strftime('%s', started_at) as integer));
-        "
-    )?;
-
-    let insert_started = connection.prepare(
-        "
-        insert into listens
-        ( started_at
-        , queue_id
-        , track_id
-        , album_id
-        , album_artist_id
-        , track_title
-        , album_title
-        , track_artist
-        , album_artist
-        , duration_seconds
-        , track_number
-        , disc_number
-        , source
-        )
-        values
-        ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'musium');
-        "
-    )?;
-
-    let update_completed = connection.prepare(
-        "
-        update listens
-          set completed_at = ?
-        where
-          id = ?
-          and queue_id = ?
-          and track_id = ?;
-        "
-    )?;
-
-    let result = Database {
-        connection: connection,
-        insert_started: insert_started,
-        update_completed: update_completed,
-        last_insert_id: None,
-    };
-    Ok(result)
 }
 
 /// Insert a new row into the "listens" table.
