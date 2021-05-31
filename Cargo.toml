@@ -27,9 +27,6 @@ rev = "1f868774a250f5937ae70c868d77d1b1479f1831"
 version = "0.12.0"
 default-features = false
 
-[dev-dependencies]
-criterion = "0.2"
-
 [profile.dev]
 panic = "abort"
 
@@ -38,7 +35,3 @@ panic = "abort"
 # If we use parallel codegen, Claxon does not get optimized properly, and the
 # result will be slow, so disable parallel codegen.
 codegen-units = 1
-
-[[bench]]
-name = "main"
-harness = false
