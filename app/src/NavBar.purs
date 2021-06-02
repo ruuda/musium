@@ -10,6 +10,7 @@ module NavBar
   , new
   , selectTab
   , selectInitialTab
+  , setQueueSize
   ) where
 
 import Control.Monad.Reader.Class (ask)
@@ -35,6 +36,8 @@ type NavBarState =
   , tabQueue :: Element
   , tabNowPlaying :: Element
   , tabSearch :: Element
+    -- Little number to show the size of the queue.
+  , queueIndicator :: Element
   }
 
 new :: (Event -> Aff Unit) -> Html NavBarState
@@ -58,6 +61,12 @@ new postEvent = Html.nav $ do
   tabNowPlaying <- navTab "Current" $ navEvent Navigation.NowPlaying
   tabSearch     <- navTab "Search"  $ navEvent Navigation.Search
 
+  queueIndicator <- liftEffect $ Html.withElement tabQueue $
+    Html.span $ do
+      Html.setId "queue-size"
+      Html.addClass "queue-empty"
+      ask
+
   -- We don't make any tab active initially, selectTabInitial needs to be called
   -- still.
 
@@ -70,6 +79,7 @@ new postEvent = Html.nav $ do
     , tabQueue
     , tabNowPlaying
     , tabSearch
+    , queueIndicator
     }
 
 tabs :: NavBarState -> Array Element
@@ -102,3 +112,12 @@ selectTab location state =
 selectInitialTab :: Location -> NavBarState -> Effect Unit
 selectInitialTab location state =
   liftEffect $ Html.withElement (getTab location state) $ Html.addClass "active"
+
+-- Update the queue size bubble on the queue tab.
+setQueueSize :: NavBarState -> Int -> Effect Unit
+setQueueSize state n = Html.withElement state.queueIndicator $ case n of
+  0 -> Html.addClass "queue-empty"
+  _ -> do
+    Html.removeClass "queue-empty"
+    Html.clear
+    Html.text $ show n

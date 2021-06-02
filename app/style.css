@@ -86,6 +86,20 @@ body {
   border-bottom: 0.2rem solid #ccc;
 }
 
+#queue-size {
+  background-color: #ddd;
+  color: white;
+  border-radius: 1rem;
+  padding-left: 0.3rem;
+  padding-right: 0.3rem;
+  margin-left: 0.8rem;
+  font-weight: 600;
+}
+
+#queue-size.queue-empty {
+  display: none;
+}
+
 .pane {
   grid-area: content;
   width: 100%;

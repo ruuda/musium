@@ -275,6 +275,11 @@ handleEvent event state = case event of
     statusBar' <- liftEffect $ StatusBar.updateStatusBar (Array.head queue) state.statusBar
     -- TODO: Possibly update the queue, if it is in view.
 
+    -- Update the number in the bubble on the queue tab. The number is one less
+    -- than the length, because the queue here includes the currently playing
+    -- track.
+    liftEffect $ NavBar.setQueueSize state.navBar $ max 0 ((Array.length queue) - 1)
+
     -- TODO: Only update when the track did not change.
     liftEffect $ Html.withElement state.elements.currentView $ do
       Html.clear
