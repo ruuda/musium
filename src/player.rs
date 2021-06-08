@@ -766,7 +766,6 @@ fn decode_burst(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>) {
         println!("  Duration: {:.3} seconds", pending_duration_ms as f32 / 1000.0);
         println!("  Memory:   {:.3} / {:.3} MB", bytes_used as f32 * 1e-6, stop_after_bytes as f32 * 1e-6);
         println!("  Budget:   {:.3} MB", bytes_left as f32 * 1e-6);
-
         // Decode at most 10 MB at a time. This ensures that we produce the data
         // in blocks of at most 10 MB, which in turn ensures that we can free
         // the memory early when we are done playing. Without this, when the
@@ -774,19 +773,7 @@ fn decode_burst(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>) {
         // to decode as much, because most of the memory is taken up by
         // already-played samples in a large block where the playhead is at the
         // end of the block.
-        let mut stop_after_bytes = bytes_left.min(10_000_000);
-
-        // On the other hand, although we want to be quick and start playback
-        // soon, if we produce too few samples per block, then the playback
-        // thread will play those few samples and halt again, and then we get a
-        // stuttering / plopping sound until the decoder has caught up. So also
-        // put a lower bound on how little we can decode. Assuming 44.1 kHz
-        // here, 50ms of audio is 2200 samples, which is 8800 bytes at 16 bit
-        // stereo. For high bit rate or high sample rate this means there is a
-        // bit more risk of stutter.
-        stop_after_bytes = stop_after_bytes.max(8800);
-
-        let result = task.run(index, stop_after_bytes);
+        let result = task.run(index, bytes_left.min(10_000_000));
         println!("Decoded {:.3} MB.", result.block.size_bytes() as f32 * 1e-6);
         previous_result = Some(result);
     }
