@@ -23,7 +23,7 @@ pub struct Database<'conn> {
     pub connection: &'conn sqlite::Connection,
     pub insert_started: sqlite::Statement<'conn>,
     pub update_completed: sqlite::Statement<'conn>,
-    pub insert_file: sqlite::Statement<'conn>,
+    pub insert_file_metadata: sqlite::Statement<'conn>,
     pub get_file_mtime: sqlite::Statement<'conn>,
 }
 
@@ -85,35 +85,37 @@ pub fn ensure_schema_exists(connection: &sqlite::Connection) -> Result<()> {
     // of tens of thousands of files what makes indexing slow.
     connection.execute(
         "
-        create table if not exists files
+        create table if not exists file_metadata
         -- First an id, and properties about the file, but not its contents.
         -- We can use this to see if a file needs to be re-scanned. The mtime
         -- is the raw time_t value returned by 'stat'.
         ( id                             integer primary key
         , filename                       string  not null unique
         , mtime                          integer not null
+        -- ISO-8601 timestamp at which we added the file.
+        , imported_at                    string not null
 
         -- The next columns come from the streaminfo block.
         , streaminfo_channels            integer not null
         , streaminfo_bits_per_sample     integer not null
-        , streaminfo_samples             integer null
+        , streaminfo_num_samples         integer null
         , streaminfo_sample_rate         integer not null
 
         -- The remaining columns are all tags. They are all nullable,
         -- because no tag is guaranteed to be present.
-        , tag_album                      string
-        , tag_albumartist                string
-        , tag_albumartistsort            string
-        , tag_musicbrainz_albumartistid  string
-        , tag_musicbrainz_albumid        string
-        , tag_musicbrainz_trackid        string
-        , tag_discnumber                 integer
-        , tag_tracknumber                integer
-        , tag_originaldate               string
-        , tag_date                       string
-        , tag_title                      string
-        , tag_bs17704_track_loudness     string
-        , tag_bs17704_album_loudness     string
+        , tag_album                      string null
+        , tag_albumartist                string null
+        , tag_albumartistsort            string null
+        , tag_musicbrainz_albumartistid  string null
+        , tag_musicbrainz_albumid        string null
+        , tag_musicbrainz_trackid        string null
+        , tag_discnumber                 string null
+        , tag_tracknumber                string null
+        , tag_originaldate               string null
+        , tag_date                       string null
+        , tag_title                      string null
+        , tag_bs17704_track_loudness     string null
+        , tag_bs17704_album_loudness     string null
         );
         ",
     )?;
@@ -122,19 +124,43 @@ pub fn ensure_schema_exists(connection: &sqlite::Connection) -> Result<()> {
 }
 
 /// Container for a row when inserting a new listen.
-struct Listen<'a> {
-    started_at: &'a str,
-    queue_id: QueueId,
-    track_id: TrackId,
-    album_id: AlbumId,
-    album_artist_id: ArtistId,
-    track_title: &'a str,
-    track_artist: &'a str,
-    album_title: &'a str,
-    album_artist: &'a str,
-    duration_seconds: u16,
-    track_number: u8,
-    disc_number: u8,
+pub struct Listen<'a> {
+    pub started_at: &'a str,
+    pub queue_id: QueueId,
+    pub track_id: TrackId,
+    pub album_id: AlbumId,
+    pub album_artist_id: ArtistId,
+    pub track_title: &'a str,
+    pub track_artist: &'a str,
+    pub album_title: &'a str,
+    pub album_artist: &'a str,
+    pub duration_seconds: u16,
+    pub track_number: u8,
+    pub disc_number: u8,
+}
+
+/// Container for a row when inserting a new file.
+pub struct FileMetadata<'a> {
+    pub filename: &'a str,
+    pub mtime: i64,
+    pub imported_at: &'a str,
+    pub streaminfo_channels: u32,
+    pub streaminfo_bits_per_sample: u32,
+    pub streaminfo_num_samples: Option<u64>,
+    pub streaminfo_sample_rate: u32,
+    pub tag_album: Option<&'a str>,
+    pub tag_albumartist: Option<&'a str>,
+    pub tag_albumartistsort: Option<&'a str>,
+    pub tag_musicbrainz_albumartistid: Option<&'a str>,
+    pub tag_musicbrainz_albumid: Option<&'a str>,
+    pub tag_musicbrainz_trackid: Option<&'a str>,
+    pub tag_discnumber: Option<&'a str>,
+    pub tag_tracknumber: Option<&'a str>,
+    pub tag_originaldate: Option<&'a str>,
+    pub tag_date: Option<&'a str>,
+    pub tag_title: Option<&'a str>,
+    pub tag_bs17704_track_loudness: Option<&'a str>,
+    pub tag_bs17704_album_loudness: Option<&'a str>,
 }
 
 impl<'conn> Database<'conn> {
@@ -175,14 +201,15 @@ impl<'conn> Database<'conn> {
             ",
         )?;
 
-        let insert_file = connection.prepare(
+        let insert_file_metadata = connection.prepare(
             "
-            insert into files
+            insert into file_metadata
             ( filename
             , mtime
+            , imported_at
             , streaminfo_channels
             , streaminfo_bits_per_sample
-            , streaminfo_samples
+            , streaminfo_num_samples
             , streaminfo_sample_rate
             , tag_album
             , tag_albumartist
@@ -197,23 +224,10 @@ impl<'conn> Database<'conn> {
             , tag_title
             , tag_bs17704_track_loudness
             , tag_bs17704_album_loudness
-            , queue_id
-            , track_id
-            , album_id
-            , album_artist_id
-            , track_title
-            , album_title
-            , track_artist
-            , album_artist
-            , duration_seconds
-            , track_number
-            , disc_number
-            , source
             )
             values
-            ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-            , ?, ?, ?, ?, ?, ?, ?, ?
-            );
+            -- These are 20 columns.
+            ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             ",
         )?;
 
@@ -227,7 +241,7 @@ impl<'conn> Database<'conn> {
             connection: connection,
             insert_started: insert_started,
             update_completed: update_completed,
-            insert_file: insert_file,
+            insert_file_metadata: insert_file_metadata,
             get_file_mtime: get_file_mtime,
         };
 
@@ -282,6 +296,38 @@ impl<'conn> Database<'conn> {
         self.update_completed.bind(4, track_id.0 as i64)?;
 
         let result = self.update_completed.next()?;
+        // This query returns no rows, it should be done immediately.
+        assert_eq!(result, sqlite::State::Done);
+
+        Ok(())
+    }
+
+    /// Insert a listen into the "listens" table, return its row id.
+    pub fn insert_file_metadata(&mut self, file: FileMetadata) -> Result<()> {
+        self.insert_started.reset()?;
+
+        self.insert_file_metadata.bind(1, file.filename)?;
+        self.insert_file_metadata.bind(2, file.mtime)?;
+        self.insert_file_metadata.bind(3, file.imported_at)?;
+        self.insert_file_metadata.bind(4, file.streaminfo_channels as i64)?;
+        self.insert_file_metadata.bind(5, file.streaminfo_bits_per_sample as i64)?;
+        self.insert_file_metadata.bind(6, file.streaminfo_num_samples.map(|x| x as i64))?;
+        self.insert_file_metadata.bind(7, file.streaminfo_sample_rate as i64)?;
+        self.insert_file_metadata.bind(8, file.tag_album)?;
+        self.insert_file_metadata.bind(9, file.tag_albumartist)?;
+        self.insert_file_metadata.bind(10, file.tag_albumartistsort)?;
+        self.insert_file_metadata.bind(11, file.tag_musicbrainz_albumartistid)?;
+        self.insert_file_metadata.bind(12, file.tag_musicbrainz_albumid)?;
+        self.insert_file_metadata.bind(13, file.tag_musicbrainz_trackid)?;
+        self.insert_file_metadata.bind(14, file.tag_discnumber)?;
+        self.insert_file_metadata.bind(15, file.tag_tracknumber)?;
+        self.insert_file_metadata.bind(16, file.tag_originaldate)?;
+        self.insert_file_metadata.bind(17, file.tag_date)?;
+        self.insert_file_metadata.bind(18, file.tag_title)?;
+        self.insert_file_metadata.bind(19, file.tag_bs17704_track_loudness)?;
+        self.insert_file_metadata.bind(20, file.tag_bs17704_album_loudness)?;
+
+        let result = self.insert_file_metadata.next()?;
         // This query returns no rows, it should be done immediately.
         assert_eq!(result, sqlite::State::Done);
 
