@@ -121,6 +121,22 @@ pub fn ensure_schema_exists(connection: &sqlite::Connection) -> Result<()> {
     Ok(())
 }
 
+/// Container for a row when inserting a new listen.
+struct Listen<'a> {
+    started_at: &'a str,
+    queue_id: QueueId,
+    track_id: TrackId,
+    album_id: AlbumId,
+    album_artist_id: ArtistId,
+    track_title: &'a str,
+    track_artist: &'a str,
+    album_title: &'a str,
+    album_artist: &'a str,
+    duration_seconds: u16,
+    track_number: u8,
+    disc_number: u8,
+}
+
 impl<'conn> Database<'conn> {
     /// Prepare statements.
     ///
@@ -221,32 +237,21 @@ impl<'conn> Database<'conn> {
     /// Insert a listen into the "listens" table, return its row id.
     pub fn insert_listen_started(
         &mut self,
-        started_at: &str,
-        queue_id: QueueId,
-        track_id: TrackId,
-        album_id: AlbumId,
-        album_artist_id: ArtistId,
-        track_title: &str,
-        track_artist: &str,
-        album_title: &str,
-        album_artist: &str,
-        duration_seconds: u16,
-        track_number: u8,
-        disc_number: u8,
+        listen: Listen,
     ) -> Result<ListenId> {
         self.insert_started.reset()?;
-        self.insert_started.bind(1, started_at)?;
-        self.insert_started.bind(2, queue_id.0 as i64)?;
-        self.insert_started.bind(3, track_id.0 as i64)?;
-        self.insert_started.bind(4, album_id.0 as i64)?;
-        self.insert_started.bind(5, album_artist_id.0 as i64)?;
-        self.insert_started.bind(6, track_title)?;
-        self.insert_started.bind(7, track_artist)?;
-        self.insert_started.bind(8, album_title)?;
-        self.insert_started.bind(9, album_artist)?;
-        self.insert_started.bind(10, duration_seconds as i64)?;
-        self.insert_started.bind(11, track_number as i64)?;
-        self.insert_started.bind(12, disc_number as i64)?;
+        self.insert_started.bind(1, listen.started_at)?;
+        self.insert_started.bind(2, listen.queue_id.0 as i64)?;
+        self.insert_started.bind(3, listen.track_id.0 as i64)?;
+        self.insert_started.bind(4, listen.album_id.0 as i64)?;
+        self.insert_started.bind(5, listen.album_artist_id.0 as i64)?;
+        self.insert_started.bind(6, listen.track_title)?;
+        self.insert_started.bind(7, listen.album_title)?;
+        self.insert_started.bind(8, listen.track_artist)?;
+        self.insert_started.bind(9, listen.album_artist)?;
+        self.insert_started.bind(10, listen.duration_seconds as i64)?;
+        self.insert_started.bind(11, listen.track_number as i64)?;
+        self.insert_started.bind(12, listen.disc_number as i64)?;
 
         let result = self.insert_started.next()?;
         // This query returns no rows, it should be done immediately.

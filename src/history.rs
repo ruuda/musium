@@ -13,7 +13,7 @@ use sqlite;
 
 use crate::{MetaIndex, TrackId};
 use crate::player::QueueId;
-use crate::database::{Database, ensure_schema_exists};
+use crate::database::{Database, Listen, ensure_schema_exists};
 
 /// Changes in the playback state to be recorded.
 pub enum PlaybackEvent {
@@ -43,20 +43,21 @@ pub fn main(
                 let track = index.get_track(track_id).unwrap();
                 let album = index.get_album(track.album_id).unwrap();
                 let artist = index.get_artist(album.artist_id).unwrap();
-                let result = db.insert_listen_started(
-                    &now_str[..],
-                    queue_id,
-                    track_id,
-                    track.album_id,
-                    album.artist_id,
-                    index.get_string(track.title),
-                    index.get_string(album.title),
-                    index.get_string(track.artist),
-                    index.get_string(artist.name),
-                    track.duration_seconds,
-                    track.track_number,
-                    track.disc_number,
-                );
+                let listen = Listen {
+                    started_at: &now_str[..],
+                    queue_id: queue_id,
+                    track_id: track_id,
+                    album_id: track.album_id,
+                    album_artist_id: album.artist_id,
+                    track_title: index.get_string(track.title),
+                    album_title: index.get_string(album.title),
+                    track_artist: index.get_string(track.artist),
+                    album_artist: index.get_string(artist.name),
+                    duration_seconds: track.duration_seconds,
+                    track_number: track.track_number,
+                    disc_number: track.disc_number,
+                };
+                let result = db.insert_listen_started(listen);
                 last_listen_id = Some(result.expect("Failed to insert listen started event into SQLite database."));
             }
             PlaybackEvent::Completed(queue_id, track_id) => {
