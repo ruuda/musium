@@ -43,7 +43,8 @@ Start the server:
 
     target/release/musium serve musium.conf
 
-You can now open the library browser at http://localhost:8233.
+You can now open the library browser at http://localhost:8233. See the
+[webinterface chapter](webinterface.md) for how to use it.
 
 Musium expects files to be tagged in a particular way, see the
-[tagging](tagging.md) chapter for more information.
+[tagging chapter](tagging.md) for more information.
