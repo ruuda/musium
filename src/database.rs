@@ -7,6 +7,8 @@
 
 //! Interaction with Musium's SQLite database.
 
+use std::path::Path;
+
 use sqlite;
 
 use crate::player::QueueId;

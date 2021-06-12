@@ -7,13 +7,13 @@
 
 //! Logging of historical playback events.
 
-use std::path::{PathBuf};
+use std::path::Path;
 use std::sync::mpsc::Receiver;
-use sqlite;
 
 use crate::{MetaIndex, TrackId};
 use crate::player::QueueId;
-use crate::database::{Database, Listen, ensure_schema_exists};
+use crate::database;
+use crate::database::{Database, Listen};
 
 /// Changes in the playback state to be recorded.
 pub enum PlaybackEvent {
@@ -23,12 +23,12 @@ pub enum PlaybackEvent {
 
 /// Main for the thread that logs historical playback events.
 pub fn main(
-    db_path: PathBuf,
+    db_path: &Path,
     index: &dyn MetaIndex,
     events: Receiver<PlaybackEvent>,
 ) {
     let connection = sqlite::open(db_path).expect("Failed to open SQLite database.");
-    ensure_schema_exists(&connection).expect("Failed to create schema in SQLite database.");
+    database::ensure_schema_exists(&connection).expect("Failed to create schema in SQLite database.");
     let mut db = Database::new(&connection).expect("Failed to prepare SQLite statements.");
 
     let mut last_listen_id = None;

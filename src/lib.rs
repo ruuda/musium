@@ -16,7 +16,6 @@ extern crate unicode_normalization;
 mod album_table;
 mod build;
 mod database;
-mod scan;
 mod search;
 mod word_index;
 
@@ -27,6 +26,7 @@ pub mod net;
 pub mod playback;
 pub mod player;
 pub mod prim;
+pub mod scan;
 pub mod serialization;
 pub mod server;
 pub mod status;

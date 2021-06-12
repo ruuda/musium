@@ -24,6 +24,7 @@ use std::sync::Arc;
 use musium::config::Config;
 use musium::error;
 use musium::prim::AlbumId;
+use musium::scan;
 use musium::server::{MetaServer, serve};
 use musium::string_utils::normalize_words;
 use musium::thumb_cache::ThumbCache;
@@ -456,6 +457,11 @@ fn match_listens(
     Ok(())
 }
 
+fn run_scan(db_path: &Path, library_path: &Path) {
+    let status = scan::ScanStatus::new();
+    scan::scan(db_path, library_path, &status);
+}
+
 fn print_usage() {
     println!("Usage:\n");
     println!("  musium serve musium.conf");
@@ -484,6 +490,9 @@ fn main() {
     let config_path = env::args().nth(2).unwrap();
     let config = load_config(&config_path).unwrap();
     println!("Configuration:\n{}\n", config);
+
+    let mut db_path = config.data_path.clone();
+    db_path.push("musium.sqlite3");
 
     match &cmd[..] {
         "serve" => {
@@ -514,6 +523,9 @@ fn main() {
         "cache" => {
             let index = make_index(&config.library_path);
             generate_thumbnails(&index, &config.covers_path);
+        }
+        "scan" => {
+            run_scan(&db_path, &config.library_path);
         }
         "match" => {
             let in_path = env::args().nth(3).unwrap();

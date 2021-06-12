@@ -14,6 +14,7 @@ use std::os::unix::fs::MetadataExt;
 
 use walkdir;
 
+use crate::database;
 use crate::database::{Database, Mtime};
 
 pub enum ScanStage {
@@ -45,16 +46,34 @@ pub struct ScanStatus {
     pub stage: AtomicU8,
 }
 
+impl ScanStatus {
+    pub fn new() -> ScanStatus {
+        ScanStatus {
+            files_discovered: AtomicU64::new(0),
+            files_to_process: AtomicU64::new(0),
+            files_processed: AtomicU64::new(0),
+            stage: AtomicU8::new(0),
+        }
+    }
+}
+
 pub fn scan(
-    database: &Database,
-    path: &Path,
+    db_path: &Path,
+    library_path: &Path,
     status: &ScanStatus,
 ) {
+    let connection = sqlite::open(db_path).expect("Failed to open SQLite database.");
+    database::ensure_schema_exists(&connection).expect("Failed to create schema in SQLite database.");
+    let _db = Database::new(&connection).expect("Failed to prepare SQLite statements.");
+
     status.stage.store(ScanStage::Discovering as u8, Ordering::SeqCst);
-    let mut files_current = enumerate_flac_files(path, status);
+    let mut files_current = enumerate_flac_files(library_path, status);
 
     status.stage.store(ScanStage::PreProcessing as u8, Ordering::SeqCst);
     files_current.sort();
+
+    status.stage.store(ScanStage::Processing as u8, Ordering::SeqCst);
+    status.stage.store(ScanStage::Done as u8, Ordering::SeqCst);
 }
 
 /// Enumerate all flac files and their mtimes.
@@ -77,20 +96,20 @@ pub fn enumerate_flac_files(
         .follow_links(true)
         .max_open(128)
         .into_iter()
-        .filter_entry(|e|
-            true
-            && e.file_type().is_file()
-            && e.path().extension() == Some(flac_ext)
-        )
         .filter_map(|e| match e {
             Ok(entry) => {
+                let is_flac = true
+                    && entry.file_type().is_file()
+                    && entry.path().extension() == Some(flac_ext);
+
                 match entry.metadata() {
-                    Ok(m) => {
+                    Ok(m) if is_flac => {
                         // Increment the counter in the status, so we can follow
                         // progress live.
                         status.files_discovered.fetch_add(1, Ordering::SeqCst);
                         Some((entry.into_path(), Mtime(m.mtime())))
                     },
+                    Ok(_not_flac) => None,
                     // TODO: Add a nicer way to report errors.
                     Err(err) => { eprintln!("{}", err); None }
                 }

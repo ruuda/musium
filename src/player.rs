@@ -883,7 +883,7 @@ impl Player {
             .name("history".into())
             .spawn(move || {
                 history::main(
-                    db_path,
+                    &db_path,
                     &*index_for_history,
                     receiver,
                 );
