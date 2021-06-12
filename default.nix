@@ -7,7 +7,7 @@
 # with build tools available by running `nix run` in the root of the repository.
 
 let
-  pkgs = import (import ./nixpkgs-pinned.nix) {};
+  pkgs = (import ./nixpkgs-pinned.nix) {};
 in
   pkgs.buildEnv {
     name = "musium-devenv";
