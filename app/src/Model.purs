@@ -46,6 +46,7 @@ import Control.Monad.Error.Class (class MonadThrow, throwError)
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (decodeJson, getField) as Json
 import Data.Argonaut.Decode.Class (class DecodeJson)
+import Data.Argonaut.Decode.Error (JsonDecodeError, printJsonDecodeError)
 import Data.Array (reverse, sortWith)
 import Data.Either (Either (..))
 import Data.Int (rem)
@@ -128,7 +129,7 @@ getAlbums = do
   case result of
     Left err -> fatal $ "Failed to retrieve albums: " <> Http.printError err
     Right response -> case Json.decodeJson response.body of
-      Left err -> fatal $ "Failed to parse albums: " <> err
+      Left err -> fatal $ "Failed to parse albums: " <> printJsonDecodeError err
       Right albums -> pure $ reverse $ sortWith (\(Album a) -> a.date) albums
 
 newtype ArtistJson = ArtistJson
@@ -155,7 +156,7 @@ getArtist (ArtistId artistId) = do
   case result of
     Left err -> fatal $ "Failed to retrieve artist: " <> Http.printError err
     Right response -> case Json.decodeJson response.body of
-      Left err -> fatal $ "Failed to parse artist: " <> err
+      Left err -> fatal $ "Failed to parse artist: " <> printJsonDecodeError err
       Right (ArtistJson artist) -> pure $
         { id: ArtistId artistId
         , name: artist.name
@@ -168,7 +169,7 @@ enqueueTrack (TrackId trackId) = do
   case result of
     Left err -> fatal $ "Enqueue failed: " <> Http.printError err
     Right response -> case Json.decodeJson response.body of
-      Left err -> fatal $ "Failed to enqueue track: " <> err
+      Left err -> fatal $ "Failed to enqueue track: " <> printJsonDecodeError err
       Right queueId -> do
         Console.log $ "Enqueued track " <> trackId <> ", got queue id " <> queueId
         pure $ QueueId queueId
@@ -196,7 +197,7 @@ getVolume = do
   case result of
     Left err -> fatal $ "Failed to get volume: " <> Http.printError err
     Right response -> case Json.decodeJson response.body of
-      Left err -> fatal $ "Failed to get volume: " <> err
+      Left err -> fatal $ "Failed to get volume: " <> printJsonDecodeError err
       Right volume -> pure volume
 
 changeVolume :: VolumeChange -> Aff Volume
@@ -210,7 +211,7 @@ changeVolume change =
     case result of
       Left err -> fatal $ "Failed to change volume: " <> Http.printError err
       Right response -> case Json.decodeJson response.body of
-        Left err -> fatal $ "Failed to change volume: " <> err
+        Left err -> fatal $ "Failed to change volume: " <> printJsonDecodeError err
         Right newVolume -> pure newVolume
 
 newtype SearchArtist = SearchArtist
@@ -281,7 +282,7 @@ search query = do
   case result of
     Left err -> fatal $ "Search failed: " <> Http.printError err
     Right response -> case Json.decodeJson response.body of
-      Left err -> fatal $ "Failed to parse search results: " <> err
+      Left err -> fatal $ "Failed to parse search results: " <> printJsonDecodeError err
       Right results -> pure results
 
 newtype QueuedTrackRaw = QueuedTrackRaw
@@ -377,7 +378,7 @@ getQueue = do
   case result of
     Left err -> fatal $ "Failed to retrieve queue: " <> Http.printError err
     Right response -> case Json.decodeJson response.body of
-      Left err -> fatal $ "Failed to parse queue: " <> err
+      Left err -> fatal $ "Failed to parse queue: " <> printJsonDecodeError err
       Right results -> pure $ map makeTimeAbsolute results
 
 newtype Track = Track
@@ -400,7 +401,7 @@ instance decodeJsonTrack :: DecodeJson Track where
     durationSeconds <- Json.getField obj "duration_seconds"
     pure $ Track { id, discNumber, trackNumber, title, artist, durationSeconds }
 
-decodeAlbumTracks :: Json -> Either String (Array Track)
+decodeAlbumTracks :: Json -> Either JsonDecodeError (Array Track)
 decodeAlbumTracks json = do
   obj <- Json.decodeJson json
   Json.getField obj "tracks"
@@ -411,7 +412,7 @@ getTracks (AlbumId aid) = do
   case result of
     Left err -> fatal $ "Failed to retrieve tracks: " <> Http.printError err
     Right response -> case decodeAlbumTracks response.body of
-      Left err -> fatal $ "Failed to parse tracks: " <> err
+      Left err -> fatal $ "Failed to parse tracks: " <> printJsonDecodeError err
       Right tracks -> pure tracks
 
 -- Format a duration of a track in HH:MM:SS format.
