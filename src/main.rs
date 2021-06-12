@@ -21,9 +21,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
-use std::thread;
-use std::time::Duration;
 
 use musium::config::Config;
 use musium::error;
@@ -462,41 +459,53 @@ fn match_listens(
 }
 
 fn run_scan(config: Config) {
-    let status = scan::ScanStatus::new();
+    // Status updates should print much faster than they are produced, so use
+    // a small buffer for them.
+    let (mut tx, rx) = std::sync::mpsc::sync_channel(15);
 
-    crossbeam::scope(|s| {
-        let status_ref = &status;
-        let scan_thread = s.spawn(move || {
-            scan::scan(
-                &config.db_path(),
-                &config.library_path,
-                status_ref
-            );
-        });
+    let scan_thread = std::thread::spawn(move || {
+        scan::scan(
+            &config.db_path(),
+            &config.library_path,
+            &mut tx,
+        );
+    });
+
+    {
         let stdout = std::io::stdout();
         let mut lock = stdout.lock();
-        let mut prev_stage = 0;
-        loop {
-            let stage = status.stage.load(Ordering::SeqCst);
+        let mut prev_status = scan::Status::new();
 
-            if stage == scan::ScanStage::Done as u8 {
-                break
+        for status in rx {
+            match (prev_status.stage, status.stage) {
+                (scan::ScanStage::Discovering, scan::ScanStage::PreProcessing) => writeln!(lock).unwrap(),
+                (_, scan::ScanStage::Done) => writeln!(lock).unwrap(),
+                _ => {}
             }
-
-            if stage > prev_stage {
-                write!(lock, "\n{}", status).unwrap();
-            } else {
-                write!(lock, "\r{}", status).unwrap();
+            match status.stage {
+                scan::ScanStage::Done => break,
+                scan::ScanStage::Discovering => {
+                    write!(
+                        lock,
+                        "\rScanning: {} files discovered",
+                        status.files_discovered,
+                    ).unwrap();
+                }
+                scan::ScanStage::PreProcessing | scan::ScanStage::Processing => {
+                    write!(
+                        lock,
+                        "\rProcessing: {} of {}",
+                        status.files_to_process,
+                        status.files_processed,
+                    ).unwrap();
+                }
             }
             lock.flush().unwrap();
-
-            prev_stage = stage;
-
-            thread::sleep(Duration::from_millis(100));
+            prev_status = status;
         }
-        scan_thread.join();
-        write!(lock, "\n").unwrap();
-    });
+    }
+
+    scan_thread.join().unwrap();
 }
 
 fn print_usage() {
