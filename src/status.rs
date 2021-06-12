@@ -9,7 +9,7 @@
 
 use std::io;
 
-use crate::scan::Issue;
+use crate::build::Issue;
 use crate::systemd;
 
 /// A trait for status reporting during indexing.

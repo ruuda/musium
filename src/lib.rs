@@ -15,7 +15,7 @@ extern crate unicode_normalization;
 
 mod album_table;
 mod database;
-mod scan;
+mod build;
 mod search;
 mod word_index;
 
@@ -46,7 +46,7 @@ use std::u64;
 use crate::prim::{ArtistId, Artist, AlbumId, Album, TrackId, Track, Lufs, StringRef, FilenameRef, get_track_id};
 use crate::word_index::{MemoryWordIndex};
 use crate::string_utils::StringDeduper;
-use crate::scan::{BuildMetaIndex, Issue, Progress, artists_different, albums_different};
+use crate::build::{BuildMetaIndex, Issue, Progress, artists_different, albums_different};
 use crate::status::StatusSink;
 
 pub trait MetaIndex {
