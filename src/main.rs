@@ -6,6 +6,7 @@
 // A copy of the License has been included in the root of the repository.
 
 extern crate claxon;
+extern crate crossbeam;
 extern crate musium;
 extern crate serde_json;
 extern crate tiny_http;
@@ -20,6 +21,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
+use std::thread;
+use std::time::Duration;
 
 use musium::config::Config;
 use musium::error;
@@ -457,9 +461,42 @@ fn match_listens(
     Ok(())
 }
 
-fn run_scan(db_path: &Path, library_path: &Path) {
+fn run_scan(config: Config) {
     let status = scan::ScanStatus::new();
-    scan::scan(db_path, library_path, &status);
+
+    crossbeam::scope(|s| {
+        let status_ref = &status;
+        let scan_thread = s.spawn(move || {
+            scan::scan(
+                &config.db_path(),
+                &config.library_path,
+                status_ref
+            );
+        });
+        let stdout = std::io::stdout();
+        let mut lock = stdout.lock();
+        let mut prev_stage = 0;
+        loop {
+            let stage = status.stage.load(Ordering::SeqCst);
+
+            if stage == scan::ScanStage::Done as u8 {
+                break
+            }
+
+            if stage > prev_stage {
+                write!(lock, "\n{}", status).unwrap();
+            } else {
+                write!(lock, "\r{}", status).unwrap();
+            }
+            lock.flush().unwrap();
+
+            prev_stage = stage;
+
+            thread::sleep(Duration::from_millis(100));
+        }
+        scan_thread.join();
+        write!(lock, "\n").unwrap();
+    });
 }
 
 fn print_usage() {
@@ -491,9 +528,6 @@ fn main() {
     let config = load_config(&config_path).unwrap();
     println!("Configuration:\n{}\n", config);
 
-    let mut db_path = config.data_path.clone();
-    db_path.push("musium.sqlite3");
-
     match &cmd[..] {
         "serve" => {
             let index = make_index(&config.library_path);
@@ -508,9 +542,7 @@ fn main() {
             println!("Thumb cache size: {}", thumb_cache.size());
 
             println!("Starting server on {}.", config.listen);
-
-            let mut db_path = config.data_path.clone();
-            db_path.push("musium.sqlite3");
+            let db_path = config.db_path();
             let player = musium::player::Player::new(
                 arc_index.clone(),
                 config.audio_device,
@@ -525,7 +557,7 @@ fn main() {
             generate_thumbnails(&index, &config.covers_path);
         }
         "scan" => {
-            run_scan(&db_path, &config.library_path);
+            run_scan(config);
         }
         "match" => {
             let in_path = env::args().nth(3).unwrap();

@@ -128,6 +128,12 @@ impl Config {
 
         Ok(config)
     }
+
+    pub fn db_path(&self) -> PathBuf {
+        let mut db_path = self.data_path.clone();
+        db_path.push("musium.sqlite3");
+        db_path
+    }
 }
 
 #[cfg(test)]

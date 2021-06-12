@@ -11,6 +11,7 @@ use std::ffi::OsStr;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::path::{Path, PathBuf};
 use std::os::unix::fs::MetadataExt;
+use std::fmt;
 
 use walkdir;
 
@@ -53,6 +54,29 @@ impl ScanStatus {
             files_to_process: AtomicU64::new(0),
             files_processed: AtomicU64::new(0),
             stage: AtomicU8::new(0),
+        }
+    }
+}
+
+impl fmt::Display for ScanStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Load in reverse increment order, to ensure that the number of
+        // processed files never exceeds the number of discovered files.
+        let stage = self.stage.load(Ordering::SeqCst);
+        let processed = self.files_processed.load(Ordering::SeqCst);
+        let to_process = self.files_to_process.load(Ordering::SeqCst);
+        let discovered = self.files_discovered.load(Ordering::SeqCst);
+        match stage {
+            x if x == ScanStage::Discovering as u8 => {
+                write!(f, "Discovering files: {}", discovered)
+            }
+            x if x == ScanStage::PreProcessing as u8 => {
+                write!(f, "Processing files: 0 of {}", to_process)
+            }
+            x if x == ScanStage::Processing as u8 => {
+                write!(f, "Processing files: {} of {}", processed, to_process)
+            }
+            _ => write!(f, "Done."),
         }
     }
 }
