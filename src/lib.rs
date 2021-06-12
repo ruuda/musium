@@ -14,8 +14,9 @@ extern crate serde_json;
 extern crate unicode_normalization;
 
 mod album_table;
-mod database;
 mod build;
+mod database;
+mod scan;
 mod search;
 mod word_index;
 

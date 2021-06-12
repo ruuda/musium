@@ -139,10 +139,18 @@ pub struct Listen<'a> {
     pub disc_number: u8,
 }
 
+/// Last modified time of a file, as reported by the file system.
+///
+/// This is only used to determine whether a file changed since we last read it,
+/// the meaning of the inner value is not relevant, only that it implements
+/// `Ord`.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct Mtime(pub i64);
+
 /// Container for a row when inserting a new file.
 pub struct FileMetadata<'a> {
     pub filename: &'a str,
-    pub mtime: i64,
+    pub mtime: Mtime,
     pub imported_at: &'a str,
     pub streaminfo_channels: u32,
     pub streaminfo_bits_per_sample: u32,
@@ -307,7 +315,7 @@ impl<'conn> Database<'conn> {
         self.insert_started.reset()?;
 
         self.insert_file_metadata.bind(1, file.filename)?;
-        self.insert_file_metadata.bind(2, file.mtime)?;
+        self.insert_file_metadata.bind(2, file.mtime.0)?;
         self.insert_file_metadata.bind(3, file.imported_at)?;
         self.insert_file_metadata.bind(4, file.streaminfo_channels as i64)?;
         self.insert_file_metadata.bind(5, file.streaminfo_bits_per_sample as i64)?;
