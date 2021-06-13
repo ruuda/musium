@@ -413,4 +413,50 @@ mod test {
         assert_eq!(&rows_to_delete[..], &[FileMetaId(1)]);
         assert_eq!(&paths_to_scan[..], &[PathBuf::from("/file.flac")]);
     }
+
+    #[test]
+    fn get_updates_sort_order() {
+        // The difference should be empty, but the sort order is not trivial
+        // because it's not only ASCII.
+        let connection = sqlite::open(":memory:").unwrap();
+        database::ensure_schema_exists(&connection).unwrap();
+        connection.execute(
+            "
+            insert into
+              file_metadata
+                ( id
+                , filename
+                , mtime
+                , imported_at
+                , streaminfo_channels
+                , streaminfo_bits_per_sample
+                , streaminfo_sample_rate
+                )
+            values
+              (1, '/Étienne de Crécy/1.flac', 1, 'N/A', 0, 0, 0),
+              (2, '/Eidola/1.flac', 1, 'N/A', 0, 0, 0);
+            "
+        ).unwrap();
+
+        let mut db = Database::new(&connection).unwrap();
+
+        // Same path, but mtime is one more.
+        let mut current_sorted = vec![
+            (PathBuf::from("/Étienne de Crécy/1.flac"), Mtime(1)),
+            (PathBuf::from("/Eidola/1.flac"), Mtime(1)),
+        ];
+        current_sorted.sort();
+        let mut rows_to_delete = Vec::new();
+        let mut paths_to_scan = Vec::new();
+
+        get_updates(
+            current_sorted,
+            &mut db,
+            &mut rows_to_delete,
+            &mut paths_to_scan,
+        ).unwrap();
+
+        assert_eq!(&paths_to_scan, &Vec::<PathBuf>::new());
+        assert_eq!(&rows_to_delete, &Vec::<FileMetaId>::new());
+    }
 }
