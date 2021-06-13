@@ -349,7 +349,9 @@ mod test {
                 )
             values
               (1, '/unchanged.flac', 1, 'N/A', 0, 0, 0),
-              (2, '/deleted.flac', 2, 'N/A', 0, 0, 0);
+              (2, '/deleted.flac', 2, 'N/A', 0, 0, 0),
+              (3, '/also_deleted.flac', 3, 'N/A', 0, 0, 0),
+              (4, '/z.flac', 4, 'N/A', 0, 0, 0);
             "
         ).unwrap();
 
@@ -370,7 +372,7 @@ mod test {
         ).unwrap();
 
         assert_eq!(&paths_to_scan[..], &[PathBuf::from("/added.flac")]);
-        assert_eq!(&rows_to_delete[..], &[FileMetaId(2)]);
+        assert_eq!(&rows_to_delete[..], &[FileMetaId(3), FileMetaId(2), FileMetaId(4)]);
     }
 
     #[test]
