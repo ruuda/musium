@@ -7,7 +7,10 @@
 
 //! Interaction with Musium's SQLite database.
 
+use std::path::PathBuf;
+
 use sqlite;
+use sqlite::Value;
 
 use crate::player::QueueId;
 use crate::prim::{AlbumId, ArtistId, TrackId};
@@ -18,13 +21,16 @@ pub type Result<T> = sqlite::Result<T>;
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct ListenId(i64);
 
+/// Row id of a row in the `file_metadata` table.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct FileMetaId(i64);
+
 /// Wraps the SQLite connection with some things to manipulate the DB.
 pub struct Database<'conn> {
     pub connection: &'conn sqlite::Connection,
-    pub insert_started: sqlite::Statement<'conn>,
-    pub update_completed: sqlite::Statement<'conn>,
-    pub insert_file_metadata: sqlite::Statement<'conn>,
-    pub get_file_mtime: sqlite::Statement<'conn>,
+    insert_started: sqlite::Statement<'conn>,
+    update_completed: sqlite::Statement<'conn>,
+    insert_file_metadata: sqlite::Statement<'conn>,
 }
 
 pub fn ensure_schema_exists(connection: &sqlite::Connection) -> Result<()> {
@@ -239,18 +245,12 @@ impl<'conn> Database<'conn> {
             ",
         )?;
 
-        let get_file_mtime = connection.prepare(
-            "
-            select mtime from files where filename = ?;
-            ",
-        )?;
 
         let result = Database {
             connection: connection,
             insert_started: insert_started,
             update_completed: update_completed,
             insert_file_metadata: insert_file_metadata,
-            get_file_mtime: get_file_mtime,
         };
 
         Ok(result)
@@ -340,5 +340,45 @@ impl<'conn> Database<'conn> {
         assert_eq!(result, sqlite::State::Done);
 
         Ok(())
+    }
+
+    /// Iterate the `file_metadata` table, sorted by filename.
+    pub fn iter_file_metadata<'db>(&'db mut self) -> Result<FileMetaIter<'db>> {
+        let cursor = self.connection.prepare(
+            "
+            select
+              id, filename, mtime
+            from
+              file_metadata
+            order by
+              filename asc;
+            ",
+        )?
+        .into_cursor();
+        Ok(FileMetaIter {
+            cursor: cursor
+        })
+    }
+}
+
+pub struct FileMetaIter<'db> {
+    cursor: sqlite::Cursor<'db>
+}
+
+impl<'db> Iterator for FileMetaIter<'db> {
+    type Item = Result<(FileMetaId, PathBuf, Mtime)>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.cursor.next().transpose().map(|row: Result<_>|
+            match row {
+                Ok([Value::Integer(id), Value::String(path), Value::Integer(mtime)]) => Ok((
+                    FileMetaId(*id),
+                    path.into(),
+                    Mtime(*mtime),
+                )),
+                Ok(..) => panic!("Invalid row returned from iter_file_metas query."),
+                Err(err) => Err(err),
+            }
+        )
     }
 }

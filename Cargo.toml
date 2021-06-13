@@ -15,7 +15,7 @@ tiny_http             = "0.7.0"
 unicode-normalization = "0.1.13"
 url                   = "2.1"
 walkdir               = "2.3"
-sqlite                = "0.25.3"
+sqlite                = "0.26.0"
 
 [dependencies.claxon]
 git = "https://github.com/ruuda/claxon"
@@ -24,7 +24,7 @@ rev = "1f868774a250f5937ae70c868d77d1b1479f1831"
 [dependencies.sqlite3-sys]
 # By default, the sqlite-sys crate vendors SQLite through sqlite3-src.
 # I want to use the system SQLite instead, so turn off the default feature.
-version = "0.12.0"
+version = "0.13.0"
 default-features = false
 
 [profile.dev]

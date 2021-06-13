@@ -6,6 +6,24 @@
 // A copy of the License has been included in the root of the repository.
 
 //! Scanning the library directory, putting metadata into SQLite.
+//!
+//! Musium implements a two-stage process to indexing:
+//!
+//! 1. Find all flac files in the library path, and put their tags in SQLite.
+//! 2. Read the tags from SQLite and build a contistent index from them.
+//!
+//! This module implements step 1. Using an intermediate step has a few
+//! advantages:
+//!
+//! * Scanning is decoupled from running the server, we can update whenever we
+//!   want, not just at server startup.
+//! * Conversely, starting the server does not have to wait for scanning all
+//!   files. Reading rows from SQLite is much faster than opening every file
+//!   individually and reading the first few kilobytes, because it performs
+//!   mostly sequential IO in a single file, instead of very random IO over many
+//!   many different files all over the place.
+//! * We can do incremental updates. We don't have to read the tags from files
+//!   that haven't changed.
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -15,7 +33,7 @@ use std::sync::mpsc::SyncSender;
 use walkdir;
 
 use crate::database;
-use crate::database::{Database, Mtime};
+use crate::database::{Database, FileMetaId, Mtime};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum ScanStage {
@@ -79,14 +97,27 @@ pub fn scan(
 ) {
     let connection = sqlite::open(db_path).expect("Failed to open SQLite database.");
     database::ensure_schema_exists(&connection).expect("Failed to create schema in SQLite database.");
-    let _db = Database::new(&connection).expect("Failed to prepare SQLite statements.");
+    let mut db = Database::new(&connection).expect("Failed to prepare SQLite statements.");
 
     let mut status = Status::new();
     let mut files_current = enumerate_flac_files(library_path, status_sender, &mut status);
 
     status.stage = ScanStage::PreProcessing;
-    files_current.sort();
     status_sender.send(status).unwrap();
+
+    files_current.sort();
+
+    let mut rows_to_delete = Vec::new();
+    let mut paths_to_scan = Vec::new();
+    get_updates(
+        files_current,
+        &mut db,
+        &mut rows_to_delete,
+        &mut paths_to_scan,
+    ).expect("Failed to query SQLite database for file_metadata.");
+
+    eprintln!("{} rows to delete, {} paths to scan", rows_to_delete.len(), paths_to_scan.len());
+
 
     status.stage = ScanStage::Processing;
     status_sender.send(status).unwrap();
@@ -154,4 +185,65 @@ pub fn enumerate_flac_files(
     status_sender.send(*status).unwrap();
 
     result
+}
+
+/// Given the current files, and the database, figure out their difference.
+///
+/// Any files present in the database, but not present currently, should be
+/// removed and end up in `rows_to_delete`. Any files present currently, but
+/// not in the database, should be added and end up in `paths_to_scan`. Files
+/// that are present in both, but with a different mtime, end up in both.
+pub fn get_updates(
+    current_sorted: Vec<(PathBuf, Mtime)>,
+    db: &mut Database,
+    rows_to_delete: &mut Vec<FileMetaId>,
+    paths_to_scan: &mut Vec<PathBuf>,
+) -> database::Result<()> {
+    let mut iter_curr = current_sorted.into_iter();
+    let mut iter_db = db.iter_file_metadata()?;
+
+    let mut val_curr = iter_curr.next();
+    let mut val_db = iter_db.next();
+
+    // Iterate in merge-join style over the two iterators, which we can do
+    // because they are sorted. TODO: Confirm that their sort order matches.
+    loop {
+        match (val_curr.take(), val_db.take()) {
+            (Some((p0, m0)), Some(Ok((id, p1, m1)))) => {
+                if p0 > p1 {
+                    // P1 is in the database, but not the filesystem.
+                    rows_to_delete.push(id);
+                    val_curr = Some((p0, m0));
+                    val_db = iter_db.next();
+                } else if p0 < p1 {
+                    // P0 is in the filesystem, but not in the database.
+                    paths_to_scan.push(p0);
+                    val_curr = iter_curr.next();
+                    val_db = Some(Ok((id, p1, m1)));
+                } else if m0 != m1 {
+                    // The path matches, but the mtimes differ.
+                    rows_to_delete.push(id);
+                    paths_to_scan.push(p0);
+                    val_curr = iter_curr.next();
+                    val_db = iter_db.next();
+                } else {
+                    // The path and mtimes match, we can skip this file.
+                    val_curr = iter_curr.next();
+                    val_db = iter_db.next();
+                }
+            }
+            (None, Some(Ok((id, _, _, )))) => {
+                rows_to_delete.push(id);
+                val_db = iter_db.next();
+            }
+            (Some((p0, _)), None) => {
+                paths_to_scan.push(p0);
+                val_curr = iter_curr.next();
+            }
+            (None, None) => break,
+            (_, Some(Err(err))) => return Err(err),
+        }
+    }
+
+    Ok(())
 }
