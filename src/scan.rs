@@ -247,3 +247,40 @@ pub fn get_updates(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod test {
+    use crate::database;
+    use crate::database::{Database, Mtime};
+    use super::get_updates;
+    use std::path::PathBuf;
+
+    #[test]
+    fn get_updates_empty_db() {
+        let connection = sqlite::open(":memory:").unwrap();
+        database::ensure_schema_exists(&connection).unwrap();
+        let mut db = Database::new(&connection).unwrap();
+
+        let current_sorted = vec![
+            (PathBuf::from("/foo/bar.flac"), Mtime(1)),
+            (PathBuf::from("/foo/baz.flac"), Mtime(1)),
+        ];
+        let mut rows_to_delete = Vec::new();
+        let mut paths_to_scan = Vec::new();
+
+        get_updates(
+            current_sorted,
+            &mut db,
+            &mut rows_to_delete,
+            &mut paths_to_scan,
+        );
+
+        assert_eq!(
+            &paths_to_scan[..],
+            &[
+                PathBuf::from("/foo/bar.flac"),
+                PathBuf::from("/foo/baz.flac"),
+            ],
+        );
+    }
+}
