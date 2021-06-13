@@ -251,12 +251,14 @@ pub fn get_updates(
 #[cfg(test)]
 mod test {
     use crate::database;
-    use crate::database::{Database, Mtime};
+    use crate::database::{Database, FileMetaId, Mtime};
     use super::get_updates;
     use std::path::PathBuf;
 
     #[test]
     fn get_updates_empty_db() {
+        // In this case we have an empty database but a non-empty file system,
+        // so we expect all files to be scanned.
         let connection = sqlite::open(":memory:").unwrap();
         database::ensure_schema_exists(&connection).unwrap();
         let mut db = Database::new(&connection).unwrap();
@@ -273,7 +275,7 @@ mod test {
             &mut db,
             &mut rows_to_delete,
             &mut paths_to_scan,
-        );
+        ).unwrap();
 
         assert_eq!(
             &paths_to_scan[..],
@@ -282,5 +284,133 @@ mod test {
                 PathBuf::from("/foo/baz.flac"),
             ],
         );
+        assert_eq!(&rows_to_delete, &Vec::<FileMetaId>::new());
+    }
+
+    #[test]
+    fn get_updates_nothing_changed() {
+        // In this case nothing changed on the file system with respect to the
+        // database, so we expect no files to be scanned and no rows deleted.
+        let connection = sqlite::open(":memory:").unwrap();
+        database::ensure_schema_exists(&connection).unwrap();
+        connection.execute(
+            "
+            insert into
+              file_metadata
+                ( filename
+                , mtime
+                , imported_at
+                , streaminfo_channels
+                , streaminfo_bits_per_sample
+                , streaminfo_sample_rate
+                )
+            values
+              ('/foo/baz.flac', 1, 'N/A', 0, 0, 0),
+              ('/foo/bar.flac', 2, 'N/A', 0, 0, 0);
+            "
+        ).unwrap();
+
+        let mut db = Database::new(&connection).unwrap();
+
+        let current_sorted = vec![
+            (PathBuf::from("/foo/bar.flac"), Mtime(2)),
+            (PathBuf::from("/foo/baz.flac"), Mtime(1)),
+        ];
+        let mut rows_to_delete = Vec::new();
+        let mut paths_to_scan = Vec::new();
+
+        get_updates(
+            current_sorted,
+            &mut db,
+            &mut rows_to_delete,
+            &mut paths_to_scan,
+        ).unwrap();
+
+        assert_eq!(&paths_to_scan, &Vec::<PathBuf>::new());
+        assert_eq!(&rows_to_delete, &Vec::<FileMetaId>::new());
+    }
+
+    #[test]
+    fn get_updates_add_remove() {
+        // One file was added on the file system, one was deleted.
+        let connection = sqlite::open(":memory:").unwrap();
+        database::ensure_schema_exists(&connection).unwrap();
+        connection.execute(
+            "
+            insert into
+              file_metadata
+                ( id
+                , filename
+                , mtime
+                , imported_at
+                , streaminfo_channels
+                , streaminfo_bits_per_sample
+                , streaminfo_sample_rate
+                )
+            values
+              (1, '/unchanged.flac', 1, 'N/A', 0, 0, 0),
+              (2, '/deleted.flac', 2, 'N/A', 0, 0, 0);
+            "
+        ).unwrap();
+
+        let mut db = Database::new(&connection).unwrap();
+
+        let current_sorted = vec![
+            (PathBuf::from("/added.flac"), Mtime(3)),
+            (PathBuf::from("/unchanged.flac"), Mtime(1)),
+        ];
+        let mut rows_to_delete = Vec::new();
+        let mut paths_to_scan = Vec::new();
+
+        get_updates(
+            current_sorted,
+            &mut db,
+            &mut rows_to_delete,
+            &mut paths_to_scan,
+        ).unwrap();
+
+        assert_eq!(&paths_to_scan[..], &[PathBuf::from("/added.flac")]);
+        assert_eq!(&rows_to_delete[..], &[FileMetaId(2)]);
+    }
+
+    #[test]
+    fn get_updates_different_mtime() {
+        // A file is present in both the file system and database, but the mtime
+        // differs.
+        let connection = sqlite::open(":memory:").unwrap();
+        database::ensure_schema_exists(&connection).unwrap();
+        connection.execute(
+            "
+            insert into
+              file_metadata
+                ( id
+                , filename
+                , mtime
+                , imported_at
+                , streaminfo_channels
+                , streaminfo_bits_per_sample
+                , streaminfo_sample_rate
+                )
+            values
+              (1, '/file.flac', 100, 'N/A', 0, 0, 0);
+            "
+        ).unwrap();
+
+        let mut db = Database::new(&connection).unwrap();
+
+        // Same path, but mtime is one more.
+        let current_sorted = vec![(PathBuf::from("/file.flac"), Mtime(101))];
+        let mut rows_to_delete = Vec::new();
+        let mut paths_to_scan = Vec::new();
+
+        get_updates(
+            current_sorted,
+            &mut db,
+            &mut rows_to_delete,
+            &mut paths_to_scan,
+        ).unwrap();
+
+        assert_eq!(&rows_to_delete[..], &[FileMetaId(1)]);
+        assert_eq!(&paths_to_scan[..], &[PathBuf::from("/file.flac")]);
     }
 }

@@ -23,7 +23,7 @@ pub struct ListenId(i64);
 
 /// Row id of a row in the `file_metadata` table.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct FileMetaId(i64);
+pub struct FileMetaId(pub i64);
 
 /// Wraps the SQLite connection with some things to manipulate the DB.
 pub struct Database<'conn> {
