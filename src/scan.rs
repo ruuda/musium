@@ -142,7 +142,7 @@ pub fn scan(
         &now_str,
         status_sender,
         &mut status,
-    ).expect("Failed to insert file metadata into SQLite database.");
+    );
 
     status.stage = ScanStage::Done;
     status_sender.send(status).unwrap();
@@ -276,7 +276,7 @@ pub fn insert_file_metadata_for_paths(
     now_str: &str,
     status_sender: &mut SyncSender<Status>,
     status: &mut Status,
-) -> database::Result<()> {
+) {
     use std::sync::mpsc::sync_channel;
     // When we are IO bound, we need enough threads to keep the IO scheduler
     // queues fed, so it can schedule optimally and minimize seeks. Therefore,
@@ -292,12 +292,18 @@ pub fn insert_file_metadata_for_paths(
     // the database and files to read live on the same disk, it could take some
     // time to insert, so ensure that we have enough of a buffer to not make the
     // reader threads idle.
-    let (tx_file, rx_file) = sync_channel(num_threads * 2);
+    let (tx_file, rx_file) = sync_channel(num_threads * 4);
 
     // Threads will take the next path to scan, and this is the index to take it
     // from.
     let counter = std::sync::atomic::AtomicUsize::new(0);
 
+    // A note about error handling below: we `.expect` any SQLite failure
+    // immediately; there is no way to exit early from this function except for
+    // panicking. This is because exiting the scope will join any threads that
+    // are still running, and those threads will block trying to send their
+    // files into the tx end of the channel, but nothing is consuming the rx end
+    // of the channel.
     crossbeam::scope(|scope| {
         for i in 0..num_threads {
             let tx = tx_file.clone();
@@ -315,11 +321,12 @@ pub fn insert_file_metadata_for_paths(
         std::mem::drop(tx_file);
 
         // Do all inserts inside a transaction for better insert performance.
-        db.connection.execute("BEGIN")?;
+        db.connection.execute("BEGIN").expect("Failed to begin SQLite transaction.");
 
         for (i, flac_reader) in rx_file.iter() {
             let (ref path, mtime) = paths_to_scan[i];
-            insert_file_metadata(db, now_str, &path, mtime, flac_reader)?;
+            insert_file_metadata(db, now_str, &path, mtime, flac_reader)
+                .expect("Failed to insert file metadata in SQLite database.");
 
             // Keep the status up to date, and send it once in a while. We send
             // it more often here than when enumerating files, because reading
@@ -337,19 +344,22 @@ pub fn insert_file_metadata_for_paths(
             // and tolerance for wasted work if we stop early.
             // TODO: Tweak this number.
             if status.files_processed % 128 == 0 {
-                db.connection.execute("COMMIT")?;
-                db.connection.execute("BEGIN")?;
+                db.connection.execute("COMMIT").expect("Failed to commit SQLite transaction.");
+                db.connection.execute("BEGIN").expect("Failed to begin SQLite transaction.");
             }
         }
 
-        db.connection.execute("COMMIT")?;
+        // Sanity check: did we get everything? Every thread should have
+        // incremented once without sending, and we have one increment per
+        // processed file for files that did get processed.
+        assert_eq!(counter.load(Ordering::SeqCst), paths_to_scan.len() + num_threads);
+
+        db.connection.execute("COMMIT").expect("Failed to commit SQLite transaction.");
 
         // Send the final discovery status, we may have processed some files
         // since the last update.
         status_sender.send(*status).unwrap();
-
-        Ok(())
-    })
+    });
 }
 
 /// Read files from `paths` as long as `counter` is less than `paths.len()`,
