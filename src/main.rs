@@ -495,8 +495,8 @@ fn run_scan(config: Config) {
                     write!(
                         lock,
                         "\rProcessing: {} of {}",
-                        status.files_to_process,
                         status.files_processed,
+                        status.files_to_process,
                     ).unwrap();
                 }
             }

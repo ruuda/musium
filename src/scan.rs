@@ -26,14 +26,18 @@
 //!   that haven't changed.
 
 use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
+use std::fs;
 use std::os::unix::fs::MetadataExt;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::SyncSender;
 
 use walkdir;
 
 use crate::database;
 use crate::database::{Database, FileMetaId, Mtime};
+
+type FlacReader = claxon::FlacReader<fs::File>;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum ScanStage {
@@ -114,13 +118,20 @@ pub fn scan(
         &mut db,
         &mut rows_to_delete,
         &mut paths_to_scan,
-    ).expect("Failed to query SQLite database for file_metadata.");
-
-    eprintln!("{} rows to delete, {} paths to scan", rows_to_delete.len(), paths_to_scan.len());
-
+    ).expect("Failed to query SQLite database for file metadata.");
 
     status.stage = ScanStage::Processing;
+    status.files_to_process = paths_to_scan.len() as u64;
     status_sender.send(status).unwrap();
+
+    // TODO: Delete rows that need to be deleted.
+
+    insert_file_metadata_for_paths(
+        &mut db,
+        &paths_to_scan[..],
+        status_sender,
+        &mut status,
+    ).expect("Failed to insert file metadata into SQLite database.");
 
     status.stage = ScanStage::Done;
     status_sender.send(status).unwrap();
@@ -197,7 +208,7 @@ pub fn get_updates(
     current_sorted: Vec<(PathBuf, Mtime)>,
     db: &mut Database,
     rows_to_delete: &mut Vec<FileMetaId>,
-    paths_to_scan: &mut Vec<PathBuf>,
+    paths_to_scan: &mut Vec<(PathBuf, Mtime)>,
 ) -> database::Result<()> {
     let mut iter_curr = current_sorted.into_iter();
     let mut iter_db = db.iter_file_metadata()?;
@@ -217,13 +228,13 @@ pub fn get_updates(
                     val_db = iter_db.next();
                 } else if p0 < p1 {
                     // P0 is in the filesystem, but not in the database.
-                    paths_to_scan.push(p0);
+                    paths_to_scan.push((p0, m0));
                     val_curr = iter_curr.next();
                     val_db = Some(Ok((id, p1, m1)));
                 } else if m0 != m1 {
                     // The path matches, but the mtimes differ.
                     rows_to_delete.push(id);
-                    paths_to_scan.push(p0);
+                    paths_to_scan.push((p0, m0));
                     val_curr = iter_curr.next();
                     val_db = iter_db.next();
                 } else {
@@ -236,8 +247,8 @@ pub fn get_updates(
                 rows_to_delete.push(id);
                 val_db = iter_db.next();
             }
-            (Some((p0, _)), None) => {
-                paths_to_scan.push(p0);
+            (Some(path_mtime), None) => {
+                paths_to_scan.push(path_mtime);
                 val_curr = iter_curr.next();
             }
             (None, None) => break,
@@ -245,6 +256,125 @@ pub fn get_updates(
         }
     }
 
+    Ok(())
+}
+
+pub fn insert_file_metadata_for_paths(
+    db: &mut Database,
+    paths_to_scan: &[(PathBuf, Mtime)],
+    status_sender: &mut SyncSender<Status>,
+    status: &mut Status,
+) -> database::Result<()> {
+    use std::sync::mpsc::sync_channel;
+    // When we are IO bound, we need enough threads to keep the IO scheduler
+    // queues fed, so it can schedule optimally and minimize seeks. Therefore,
+    // pick a fairly high amount of threads. When we are CPU bound, there is
+    // some overheads to more threads, but 8 threads vs 64 threads is a
+    // difference of maybe 0.05 seconds for 16k tracks, while for the IO-bound
+    // case, it can bring down the time from ~140 seconds to ~70 seconds, which
+    // is totally worth it.
+    let num_threads = 64;
+
+    // We are going to have many threads read files, but only this thread will
+    // insert them into the database (because the database is not `Send`). If
+    // the database and files to read live on the same disk, it could take some
+    // time to insert, so ensure that we have enough of a buffer to not make the
+    // reader threads idle.
+    let (tx_file, rx_file) = sync_channel(num_threads * 2);
+
+    // Threads will take the next path to scan, and this is the index to take it
+    // from.
+    let counter = std::sync::atomic::AtomicUsize::new(0);
+
+    crossbeam::scope(|scope| {
+        for _ in 0..num_threads {
+            let tx = tx_file.clone();
+            let counter_ref = &counter;
+            scope.spawn(move || read_files(paths_to_scan, counter_ref, tx));
+        }
+
+        // After spawning all threads, close the original sender. This way, we
+        // will know that all threads are done, if we get an error on the
+        // receiving side.
+        std::mem::drop(tx_file);
+
+        // Do all inserts inside a transaction for better insert performance.
+        db.connection.execute("BEGIN")?;
+
+        for (i, flac_reader) in rx_file.into_iter() {
+            let (ref path, mtime) = paths_to_scan[i];
+            insert_file_metadata(db, &path, mtime, flac_reader)?;
+
+            // Keep the status up to date, and send it once in a while. We send
+            // it more often here than when enumerating files, because reading
+            // the files is more IO-intensive than enumerating them, so this
+            // is slower, so the overhead of updating more often is relatively
+            // small.
+            status.files_processed += 1;
+            if status.files_processed % 8 == 0 {
+                status_sender.send(*status).unwrap();
+            }
+
+            // Break the inserts down into multiple transactions. This way we
+            // can kill scanning, and we will not lose most of the files scanned
+            // so far. The number here is a trade off between insert performance
+            // and tolerance for wasted work if we stop early.
+            // TODO: Tweak this number.
+            if status.files_processed % 128 == 0 {
+                db.connection.execute("COMMIT")?;
+                db.connection.execute("BEGIN")?;
+                eprintln!("Commit");
+            }
+        }
+
+        db.connection.execute("COMMIT")?;
+
+        // Send the final discovery status, we may have processed some files
+        // since the last update.
+        status_sender.send(*status).unwrap();
+
+        Ok(())
+    })
+}
+
+/// Read files from `paths` as long as `counter` is less than `paths.len()`,
+/// send them through the sender.
+fn read_files(
+    paths: &[(PathBuf, Mtime)],
+    counter: &AtomicUsize,
+    sender: SyncSender<(usize, FlacReader)>,
+) {
+    loop {
+        let i = counter.fetch_add(1, Ordering::SeqCst);
+        if i >= paths.len() {
+            break;
+        }
+        let (path, _mtime) = &paths[i];
+        let opts = claxon::FlacReaderOptions {
+            metadata_only: true,
+            read_picture: claxon::ReadPicture::Skip,
+            read_vorbis_comment: true,
+        };
+        let reader = match claxon::FlacReader::open_ext(path, opts) {
+            Ok(r) => r,
+            Err(err) => {
+                // TODO: Add a nicer way to report such errors.
+                eprintln!("Failure while reading {:?}: {}", path, err);
+                continue;
+            }
+        };
+        sender.send((i, reader)).unwrap();
+    }
+}
+
+/// Insert a row in the `file_metadata` table for the given flac file.
+fn insert_file_metadata(
+    db: &mut Database,
+    path: &Path,
+    mtime: Mtime,
+    flac_reader: FlacReader,
+) -> database::Result<()> {
+    // TODO
     Ok(())
 }
 
@@ -280,8 +410,8 @@ mod test {
         assert_eq!(
             &paths_to_scan[..],
             &[
-                PathBuf::from("/foo/bar.flac"),
-                PathBuf::from("/foo/baz.flac"),
+                (PathBuf::from("/foo/bar.flac"), Mtime(1)),
+                (PathBuf::from("/foo/baz.flac"), Mtime(1)),
             ],
         );
         assert_eq!(&rows_to_delete, &Vec::<FileMetaId>::new());
@@ -371,7 +501,7 @@ mod test {
             &mut paths_to_scan,
         ).unwrap();
 
-        assert_eq!(&paths_to_scan[..], &[PathBuf::from("/added.flac")]);
+        assert_eq!(&paths_to_scan[..], &[(PathBuf::from("/added.flac"), Mtime(3))]);
         assert_eq!(&rows_to_delete[..], &[FileMetaId(3), FileMetaId(2), FileMetaId(4)]);
     }
 
@@ -413,7 +543,7 @@ mod test {
         ).unwrap();
 
         assert_eq!(&rows_to_delete[..], &[FileMetaId(1)]);
-        assert_eq!(&paths_to_scan[..], &[PathBuf::from("/file.flac")]);
+        assert_eq!(&paths_to_scan[..], &[(PathBuf::from("/file.flac"), Mtime(101))]);
     }
 
     #[test]
