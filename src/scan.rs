@@ -228,16 +228,21 @@ pub fn get_updates(
     let mut val_db = iter_db.next();
 
     // Iterate in merge-join style over the two iterators, which we can do
-    // because they are sorted. TODO: Confirm that their sort order matches.
+    // because they are sorted. The SQLite "order by" uses the default "binary"
+    // collation, which is memcmp order on the UTF-8 bytes. The same is true for
+    // our `Path` sorting here, because we sorted it with `.as_os_str()`, which
+    // then has memcmp order as well. Note that we need to be careful to use
+    // `.as_os_str()` here too: if we use Path's Ord instance, then it orders by
+    // path segment, which does not match memcmp order!
     loop {
         match (val_curr.take(), val_db.take()) {
             (Some((p0, m0)), Some(Ok((id, p1, m1)))) => {
-                if p0 > p1 {
+                if p0.as_os_str() > p1.as_os_str() {
                     // P1 is in the database, but not the filesystem.
                     rows_to_delete.push(id);
                     val_curr = Some((p0, m0));
                     val_db = iter_db.next();
-                } else if p0 < p1 {
+                } else if p0.as_os_str() < p1.as_os_str() {
                     // P0 is in the filesystem, but not in the database.
                     paths_to_scan.push((p0, m0));
                     val_curr = iter_curr.next();
@@ -540,7 +545,7 @@ mod test {
             &mut paths_to_scan,
         ).unwrap();
 
-        assert_eq!(&paths_to_scan, &Vec::<PathBuf>::new());
+        assert_eq!(&paths_to_scan, &Vec::<(PathBuf, Mtime)>::new());
         assert_eq!(&rows_to_delete, &Vec::<FileMetaId>::new());
     }
 
@@ -657,11 +662,10 @@ mod test {
         let mut db = Database::new(&connection).unwrap();
 
         // Same path, but mtime is one more.
-        let mut current_sorted = vec![
-            (PathBuf::from("/Étienne de Crécy/1.flac"), Mtime(1)),
+        let current_sorted = vec![
             (PathBuf::from("/Eidola/1.flac"), Mtime(1)),
+            (PathBuf::from("/Étienne de Crécy/1.flac"), Mtime(1)),
         ];
-        current_sorted.sort();
         let mut rows_to_delete = Vec::new();
         let mut paths_to_scan = Vec::new();
 
@@ -672,7 +676,52 @@ mod test {
             &mut paths_to_scan,
         ).unwrap();
 
-        assert_eq!(&paths_to_scan, &Vec::<PathBuf>::new());
+        assert_eq!(&paths_to_scan, &Vec::<(PathBuf, Mtime)>::new());
         assert_eq!(&rows_to_delete, &Vec::<FileMetaId>::new());
+    }
+
+    #[test]
+    fn get_updates_memcmp_order() {
+        // This test confirms that we order paths in memcmp order, not in path
+        // component order. When we compare path order, a slash comes before a
+        // space, and getting the updates reaches a wrong conclusion.
+        let connection = sqlite::open(":memory:").unwrap();
+        database::ensure_schema_exists(&connection).unwrap();
+        connection.execute(
+            "
+            insert into
+              file_metadata
+                ( filename
+                , mtime
+                , imported_at
+                , streaminfo_channels
+                , streaminfo_bits_per_sample
+                , streaminfo_sample_rate
+                )
+            values
+              ('/foo/1/foo.flac', 1, 'N/A', 0, 0, 0);
+            "
+        ).unwrap();
+
+        let mut db = Database::new(&connection).unwrap();
+
+        let current_sorted = vec![
+            (PathBuf::from("/foo/1 take 2/bar.flac"), Mtime(2)),
+            (PathBuf::from("/foo/1/foo.flac"), Mtime(1)),
+        ];
+        let mut rows_to_delete = Vec::new();
+        let mut paths_to_scan = Vec::new();
+
+        get_updates(
+            current_sorted,
+            &mut db,
+            &mut rows_to_delete,
+            &mut paths_to_scan,
+        ).unwrap();
+
+        assert_eq!(&paths_to_scan[..], &[
+            (PathBuf::from("/foo/1 take 2/bar.flac"), Mtime(2))
+        ]);
+        assert_eq!(&rows_to_delete[..], &[]);
     }
 }
