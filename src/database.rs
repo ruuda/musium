@@ -112,6 +112,7 @@ pub fn ensure_schema_exists(connection: &sqlite::Connection) -> Result<()> {
         , tag_album                      string null
         , tag_albumartist                string null
         , tag_albumartistsort            string null
+        , tag_artist                     string null
         , tag_musicbrainz_albumartistid  string null
         , tag_musicbrainz_albumid        string null
         , tag_musicbrainz_trackid        string null
@@ -165,6 +166,7 @@ pub struct FileMetadata<'a> {
     pub tag_album: Option<&'a str>,
     pub tag_albumartist: Option<&'a str>,
     pub tag_albumartistsort: Option<&'a str>,
+    pub tag_artist: Option<&'a str>,
     pub tag_musicbrainz_albumartistid: Option<&'a str>,
     pub tag_musicbrainz_albumid: Option<&'a str>,
     pub tag_musicbrainz_trackid: Option<&'a str>,
@@ -228,6 +230,7 @@ impl<'conn> Database<'conn> {
             , tag_album
             , tag_albumartist
             , tag_albumartistsort
+            , tag_artist
             , tag_musicbrainz_albumartistid
             , tag_musicbrainz_albumid
             , tag_musicbrainz_trackid
@@ -240,8 +243,8 @@ impl<'conn> Database<'conn> {
             , tag_bs17704_album_loudness
             )
             values
-            -- These are 20 columns.
-            ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            -- These are 21 columns.
+            ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             ",
         )?;
 
@@ -312,7 +315,7 @@ impl<'conn> Database<'conn> {
 
     /// Insert a listen into the "listens" table, return its row id.
     pub fn insert_file_metadata(&mut self, file: FileMetadata) -> Result<()> {
-        self.insert_started.reset()?;
+        self.insert_file_metadata.reset()?;
 
         self.insert_file_metadata.bind(1, file.filename)?;
         self.insert_file_metadata.bind(2, file.mtime.0)?;
@@ -324,16 +327,17 @@ impl<'conn> Database<'conn> {
         self.insert_file_metadata.bind(8, file.tag_album)?;
         self.insert_file_metadata.bind(9, file.tag_albumartist)?;
         self.insert_file_metadata.bind(10, file.tag_albumartistsort)?;
-        self.insert_file_metadata.bind(11, file.tag_musicbrainz_albumartistid)?;
-        self.insert_file_metadata.bind(12, file.tag_musicbrainz_albumid)?;
-        self.insert_file_metadata.bind(13, file.tag_musicbrainz_trackid)?;
-        self.insert_file_metadata.bind(14, file.tag_discnumber)?;
-        self.insert_file_metadata.bind(15, file.tag_tracknumber)?;
-        self.insert_file_metadata.bind(16, file.tag_originaldate)?;
-        self.insert_file_metadata.bind(17, file.tag_date)?;
-        self.insert_file_metadata.bind(18, file.tag_title)?;
-        self.insert_file_metadata.bind(19, file.tag_bs17704_track_loudness)?;
-        self.insert_file_metadata.bind(20, file.tag_bs17704_album_loudness)?;
+        self.insert_file_metadata.bind(11, file.tag_artist)?;
+        self.insert_file_metadata.bind(12, file.tag_musicbrainz_albumartistid)?;
+        self.insert_file_metadata.bind(13, file.tag_musicbrainz_albumid)?;
+        self.insert_file_metadata.bind(14, file.tag_musicbrainz_trackid)?;
+        self.insert_file_metadata.bind(15, file.tag_discnumber)?;
+        self.insert_file_metadata.bind(16, file.tag_tracknumber)?;
+        self.insert_file_metadata.bind(17, file.tag_originaldate)?;
+        self.insert_file_metadata.bind(18, file.tag_date)?;
+        self.insert_file_metadata.bind(19, file.tag_title)?;
+        self.insert_file_metadata.bind(20, file.tag_bs17704_track_loudness)?;
+        self.insert_file_metadata.bind(21, file.tag_bs17704_album_loudness)?;
 
         let result = self.insert_file_metadata.next()?;
         // This query returns no rows, it should be done immediately.

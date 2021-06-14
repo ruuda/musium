@@ -35,7 +35,7 @@ use std::sync::mpsc::SyncSender;
 use walkdir;
 
 use crate::database;
-use crate::database::{Database, FileMetaId, Mtime};
+use crate::database::{Database, FileMetadata, FileMetaId, Mtime};
 
 type FlacReader = claxon::FlacReader<fs::File>;
 
@@ -126,9 +126,14 @@ pub fn scan(
 
     // TODO: Delete rows that need to be deleted.
 
+    let now = chrono::Utc::now();
+    let use_zulu_suffix = true;
+    let now_str = now.to_rfc3339_opts(chrono::SecondsFormat::Millis, use_zulu_suffix);
+
     insert_file_metadata_for_paths(
         &mut db,
         &paths_to_scan[..],
+        &now_str,
         status_sender,
         &mut status,
     ).expect("Failed to insert file metadata into SQLite database.");
@@ -262,6 +267,7 @@ pub fn get_updates(
 pub fn insert_file_metadata_for_paths(
     db: &mut Database,
     paths_to_scan: &[(PathBuf, Mtime)],
+    now_str: &str,
     status_sender: &mut SyncSender<Status>,
     status: &mut Status,
 ) -> database::Result<()> {
@@ -287,10 +293,14 @@ pub fn insert_file_metadata_for_paths(
     let counter = std::sync::atomic::AtomicUsize::new(0);
 
     crossbeam::scope(|scope| {
-        for _ in 0..num_threads {
+        for i in 0..num_threads {
             let tx = tx_file.clone();
             let counter_ref = &counter;
-            scope.spawn(move || read_files(paths_to_scan, counter_ref, tx));
+            scope
+                .builder()
+                .name(format!("File reading thread {}", i))
+                .spawn(move || read_files(paths_to_scan, counter_ref, tx))
+                .expect("Failed to spawn OS thread.");
         }
 
         // After spawning all threads, close the original sender. This way, we
@@ -301,9 +311,9 @@ pub fn insert_file_metadata_for_paths(
         // Do all inserts inside a transaction for better insert performance.
         db.connection.execute("BEGIN")?;
 
-        for (i, flac_reader) in rx_file.into_iter() {
+        for (i, flac_reader) in rx_file.iter() {
             let (ref path, mtime) = paths_to_scan[i];
-            insert_file_metadata(db, &path, mtime, flac_reader)?;
+            insert_file_metadata(db, now_str, &path, mtime, flac_reader)?;
 
             // Keep the status up to date, and send it once in a while. We send
             // it more often here than when enumerating files, because reading
@@ -323,7 +333,6 @@ pub fn insert_file_metadata_for_paths(
             if status.files_processed % 128 == 0 {
                 db.connection.execute("COMMIT")?;
                 db.connection.execute("BEGIN")?;
-                eprintln!("Commit");
             }
         }
 
@@ -370,12 +379,71 @@ fn read_files(
 /// Insert a row in the `file_metadata` table for the given flac file.
 fn insert_file_metadata(
     db: &mut Database,
+    now_str: &str,
     path: &Path,
     mtime: Mtime,
     flac_reader: FlacReader,
 ) -> database::Result<()> {
-    // TODO
-    Ok(())
+    let path_utf8 = match path.to_str() {
+        Some(s) => s,
+        None => {
+            // TODO: Add a nicer way to report this error.
+            eprintln!("Warning: Path {:?} is not valid UTF-8.", path);
+            return Ok(())
+        }
+    };
+
+    // Start with all fields that are known from the streaminfo, with tags
+    // unfilled.
+    let streaminfo = flac_reader.streaminfo();
+    let mut m = FileMetadata {
+        filename: path_utf8,
+        mtime: mtime,
+        imported_at: now_str,
+
+        streaminfo_channels: streaminfo.channels,
+        streaminfo_bits_per_sample: streaminfo.bits_per_sample,
+        streaminfo_num_samples: streaminfo.samples,
+        streaminfo_sample_rate: streaminfo.sample_rate,
+
+        tag_album: None,
+        tag_albumartist: None,
+        tag_albumartistsort: None,
+        tag_artist: None,
+        tag_musicbrainz_albumartistid: None,
+        tag_musicbrainz_albumid: None,
+        tag_musicbrainz_trackid: None,
+        tag_discnumber: None,
+        tag_tracknumber: None,
+        tag_originaldate: None,
+        tag_date: None,
+        tag_title: None,
+        tag_bs17704_track_loudness: None,
+        tag_bs17704_album_loudness: None
+    };
+
+    // Then walk all tags, and set the corresponding column if we find a known one.
+    for (tag, value) in flac_reader.tags() {
+        match &tag.to_ascii_lowercase()[..] {
+            "album"                     => m.tag_album = Some(value),
+            "albumartist"               => m.tag_albumartist = Some(value),
+            "albumartistsort"           => m.tag_albumartistsort = Some(value),
+            "artist"                    => m.tag_artist = Some(value),
+            "discnumber"                => m.tag_discnumber = Some(value),
+            "musicbrainz_albumartistid" => m.tag_musicbrainz_albumartistid = Some(value),
+            "musicbrainz_albumid"       => m.tag_musicbrainz_albumid = Some(value),
+            "musicbrainz_trackid"       => m.tag_musicbrainz_trackid = Some(value),
+            "originaldate"              => m.tag_originaldate = Some(value),
+            "date"                      => m.tag_date = Some(value),
+            "title"                     => m.tag_title = Some(value),
+            "tracknumber"               => m.tag_tracknumber = Some(value),
+            "bs17704_track_loudness"    => m.tag_bs17704_track_loudness = Some(value),
+            "bs17704_album_loudness"    => m.tag_bs17704_album_loudness = Some(value),
+            _ => {}
+        }
+    }
+
+    db.insert_file_metadata(m)
 }
 
 #[cfg(test)]
