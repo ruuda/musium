@@ -109,7 +109,11 @@ pub fn scan(
     status.stage = ScanStage::PreProcessing;
     status_sender.send(status).unwrap();
 
-    files_current.sort();
+    // Sort the files in memcpm order. The default Ord instance of PathBuf is
+    // not what we want, it orders / before space (presumably because it does
+    // tuple ordering on the path segments?). Memcmp order matches SQLite's
+    // default string ordering.
+    files_current.sort_by(|a, b| a.0.as_os_str().cmp(b.0.as_os_str()));
 
     let mut rows_to_delete = Vec::new();
     let mut paths_to_scan = Vec::new();
@@ -126,6 +130,8 @@ pub fn scan(
 
     // TODO: Delete rows that need to be deleted.
 
+    // Format the current time, we store this in the `imported_at` column in the
+    // `file_metadata` table.
     let now = chrono::Utc::now();
     let use_zulu_suffix = true;
     let now_str = now.to_rfc3339_opts(chrono::SecondsFormat::Millis, use_zulu_suffix);
