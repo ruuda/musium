@@ -1,0 +1,52 @@
+name: "Build"
+
+on: "push"
+
+jobs:
+  build:
+    # We deliberate use a somewhat older version here to ensure compatibility
+    # with it. But also not too old that we have to use ancient software.
+    runs-on: "ubuntu-18.04"
+    steps:
+      - uses: "actions/checkout@v2"
+
+      - name: "Cache PureScript"
+        uses: "actions/cache@v2.0.0"
+        with:
+          path: "app/.psc-package"
+          key: "psc-package-${{ hashFiles('app/psc-package.json', 'nixpkgs-pinned.nix') }}"
+          restore-keys: "psc-package-"
+
+      - name: "Cache Rust"
+        uses: "actions/cache@v2.0.0"
+        with:
+          path: |
+            target
+            ~/.cargo
+          key: "cargo-${{ hashFiles('Cargo.lock', 'rust-toolchain') }}"
+          restore-keys: "cargo-"
+
+      - uses: "cachix/install-nix-action@v13"
+        with:
+          nix_path: "nixpkgs=channel:nixos-unstable"
+
+      - name: "Install system dependencies"
+        run: |
+          # Install libsystemd, because we want to link against the system one,
+          # not the one from Nixpkgs.
+          sudo apt install libasound2-dev libsystemd-dev
+
+          # Trigger Rustup to download and install the Rust toolchain.
+          nix run -c cargo --version
+
+      - name: "Build server"
+        run: "nix run -c cargo build"
+
+      - name: "Test server"
+        run: "nix run -c cargo test"
+
+      - name: "Build app"
+        run: "nix run -c make -C app"
+
+      - name: "Build docs"
+        run: "nix run -c mkdocs build"
