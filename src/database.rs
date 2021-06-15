@@ -77,6 +77,9 @@ pub fn ensure_schema_exists(connection: &sqlite::Connection) -> Result<()> {
     // produce a listen, submit it to Last.fm, and later import it back, then we
     // should not get a duplicate. Therefore, create a unique index on the the
     // time truncated to seconds (%s formats seconds since epoch).
+    // NOTE: For this index, we need at least SQLite 3.20 (released 2017-08-01).
+    // Earlier versions prohibit "strftime" because it can be non-deterministic
+    // in some cases.
     connection.execute(
         "
         create unique index if not exists ix_listens_unique_second
