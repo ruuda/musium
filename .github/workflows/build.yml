@@ -13,20 +13,21 @@ jobs:
           submodules: true
 
       - name: "Cache PureScript"
-        uses: "actions/cache@v2.0.0"
+        uses: "actions/cache@v2.1.6"
         with:
           path: "app/.psc-package"
           key: "psc-package-${{ hashFiles('app/psc-package.json', 'nixpkgs-pinned.nix') }}"
           restore-keys: "psc-package-"
 
       - name: "Cache Rust"
-        uses: "actions/cache@v2.0.0"
+        uses: "actions/cache@v2.1.6"
         with:
           path: |
             target
             ~/.cargo
-          key: "cargo-${{ hashFiles('Cargo.lock', 'rust-toolchain') }}"
-          restore-keys: "cargo-"
+            ~/.rustup
+          key: "rust-${{ hashFiles('Cargo.lock', 'rust-toolchain') }}"
+          restore-keys: "rust-"
 
       - uses: "cachix/install-nix-action@v13"
         with:
