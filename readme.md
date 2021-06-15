@@ -2,8 +2,6 @@
   <img src="app/logo.svg" alt="Musium" width="400">
 </a></h1>
 
-[![Build Status][ci-img]][ci]
-
 Musium is an album-centered music player. It is designed to run as a daemon on
 an always-on device connected to speakers. Playback can be controlled from
 anywhere on the local network through a webinterface.
@@ -37,7 +35,5 @@ use Musium in your GPLv2-licensed software, you can add an [exception][except]
 to your copyright notice. Please do not open an issue if you disagree with the
 choice of license.
 
-[ci-img]:     https://travis-ci.org/ruuda/musium.svg?branch=master
-[ci]:         https://travis-ci.org/ruuda/musium
 [apache2]:    https://www.apache.org/licenses/LICENSE-2.0
 [except]:     https://www.gnu.org/licenses/gpl-faq.html#GPLIncompatibleLibs
