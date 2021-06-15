@@ -9,6 +9,8 @@ jobs:
     runs-on: "ubuntu-18.04"
     steps:
       - uses: "actions/checkout@v2"
+        with:
+          submodules: true
 
       - name: "Cache PureScript"
         uses: "actions/cache@v2.0.0"
