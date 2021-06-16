@@ -35,7 +35,7 @@ use std::sync::mpsc::SyncSender;
 use walkdir;
 
 use crate::database;
-use crate::database::{Database, FileMetadata, FileMetaId, Mtime};
+use crate::database::{Database, FileMetadataInsert, FileMetaId, Mtime};
 
 type FlacReader = claxon::FlacReader<fs::File>;
 
@@ -157,6 +157,10 @@ pub fn scan(
 
     status.stage = ScanStage::Done;
     status_sender.send(status).unwrap();
+
+    for row in db.iter_file_metadata().expect("TODO") {
+        println!("{:?}", row);
+    }
 }
 
 /// Enumerate all flac files and their mtimes.
@@ -233,7 +237,7 @@ pub fn get_updates(
     paths_to_scan: &mut Vec<(PathBuf, Mtime)>,
 ) -> database::Result<()> {
     let mut iter_curr = current_sorted.into_iter();
-    let mut iter_db = db.iter_file_metadata()?;
+    let mut iter_db = db.iter_file_metadata_filename_mtime()?;
 
     let mut val_curr = iter_curr.next();
     let mut val_db = iter_db.next();
@@ -452,7 +456,7 @@ fn insert_file_metadata(
     // Start with all fields that are known from the streaminfo, with tags
     // unfilled.
     let streaminfo = flac_reader.streaminfo();
-    let mut m = FileMetadata {
+    let mut m = FileMetadataInsert {
         filename: path_utf8,
         mtime: mtime,
         imported_at: now_str,
