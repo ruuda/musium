@@ -329,7 +329,7 @@ pub fn insert_file_metadata_for_paths(
     // the database and files to read live on the same disk, it could take some
     // time to insert, so ensure that we have enough of a buffer to not make the
     // reader threads idle.
-    let (tx_file, rx_file) = sync_channel(num_threads * 4);
+    let (tx_file, rx_file) = sync_channel(num_threads * 10);
 
     // Threads will take the next path to scan, and this is the index to take it
     // from.
@@ -358,6 +358,19 @@ pub fn insert_file_metadata_for_paths(
         std::mem::drop(tx_file);
 
         // Do all inserts inside a transaction for better insert performance.
+        // Previously I also did COMMIT and BEGIN periodically inside the loop,
+        // to ensure that less work is wasted if you kill scanning half-way.
+        // However, the commit triggers IO that goes in the queue with dozens of
+        // reads, so it can take a long time to finish (multiple seconds on a
+        // spinning disk). This then makes progress reporting very choppy: it is
+        // stuck at the last number reported before commit, then after this
+        // thread unblocks, it races through all data that has been buffered
+        // since the last commit, and it blocks again. I don't like this choppy
+        // progress while scanning proceeds smoothly in the background, so don't
+        // do intermediate commits, just put everything in a single transaction.
+        // Scanning does not take *that* long anyway, for me it takes a few
+        // minutes for 17k files on a spinning disk, so if you kill it early,
+        // just restart from scratch, the loss is not that big.
         db.connection.execute("BEGIN").expect("Failed to begin SQLite transaction.");
 
         for (i, flac_reader) in rx_file.iter() {
@@ -373,16 +386,6 @@ pub fn insert_file_metadata_for_paths(
             status.files_processed += 1;
             if status.files_processed % 8 == 0 {
                 status_sender.send(*status).unwrap();
-            }
-
-            // Break the inserts down into multiple transactions. This way we
-            // can kill scanning, and we will not lose most of the files scanned
-            // so far. The number here is a trade off between insert performance
-            // and tolerance for wasted work if we stop early.
-            // TODO: Tweak this number.
-            if status.files_processed % 128 == 0 {
-                db.connection.execute("COMMIT").expect("Failed to commit SQLite transaction.");
-                db.connection.execute("BEGIN").expect("Failed to begin SQLite transaction.");
             }
         }
 
