@@ -128,7 +128,8 @@ pub fn scan(
     status.files_to_process = paths_to_scan.len() as u64;
     status_sender.send(status).unwrap();
 
-    // TODO: Delete rows that need to be deleted.
+    // Delete rows for outdated files, we will insert new rows below.
+    delete_outdated_file_metadata(&mut db, &rows_to_delete);
 
     // Format the current time, we store this in the `imported_at` column in the
     // `file_metadata` table.
@@ -273,6 +274,27 @@ pub fn get_updates(
     }
 
     Ok(())
+}
+
+pub fn delete_outdated_file_metadata(
+    db: &mut Database,
+    rows_to_delete: &[FileMetaId],
+) {
+    db
+        .connection
+        .execute("BEGIN")
+        .expect("Failed to begin SQLite transaction.");
+
+    for row in rows_to_delete {
+        db
+            .delete_file_metadata(*row)
+            .expect("Failed to delete file_metadata row.");
+    }
+
+    db
+        .connection
+        .execute("COMMIT")
+        .expect("Failed to commit SQLite transaction.");
 }
 
 pub fn insert_file_metadata_for_paths(

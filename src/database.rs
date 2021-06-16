@@ -31,6 +31,7 @@ pub struct Database<'conn> {
     insert_started: sqlite::Statement<'conn>,
     update_completed: sqlite::Statement<'conn>,
     insert_file_metadata: sqlite::Statement<'conn>,
+    delete_file_metadata: sqlite::Statement<'conn>,
 }
 
 pub fn ensure_schema_exists(connection: &sqlite::Connection) -> Result<()> {
@@ -251,12 +252,18 @@ impl<'conn> Database<'conn> {
             ",
         )?;
 
+        let delete_file_metadata = connection.prepare(
+            "
+            delete from file_metadata where id = ?;
+            "
+        )?;
 
         let result = Database {
             connection: connection,
             insert_started: insert_started,
             update_completed: update_completed,
             insert_file_metadata: insert_file_metadata,
+            delete_file_metadata: delete_file_metadata,
         };
 
         Ok(result)
@@ -346,6 +353,16 @@ impl<'conn> Database<'conn> {
         // This query returns no rows, it should be done immediately.
         assert_eq!(result, sqlite::State::Done);
 
+        Ok(())
+    }
+
+    /// Delete a row from the `file_metadata` table.
+    pub fn delete_file_metadata(&mut self, id: FileMetaId) -> Result<()> {
+        self.delete_file_metadata.reset()?;
+        self.delete_file_metadata.bind(1, id.0)?;
+        let result = self.delete_file_metadata.next()?;
+        // This query returns no rows, it should be done immediately.
+        assert_eq!(result, sqlite::State::Done);
         Ok(())
     }
 
