@@ -145,6 +145,16 @@ pub fn scan(
         &mut status,
     );
 
+    // If we deleted anything vacuum the database to ensure it's packed tightly
+    // again. Deletes are expected to be infrequent and the database is expected
+    // to be small (a few megabytes), so the additional IO is not an issue.
+    if rows_to_delete.len() > 0 {
+        db
+            .connection
+            .execute("VACUUM")
+            .expect("Failed to vacuum SQLite database.");
+    }
+
     status.stage = ScanStage::Done;
     status_sender.send(status).unwrap();
 }
