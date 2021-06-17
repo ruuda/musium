@@ -525,8 +525,8 @@ fn insert_file_metadata(
 #[cfg(test)]
 mod test {
     use crate::database;
-    use crate::database::{Database, FileMetaId, Mtime};
-    use super::get_updates;
+    use crate::database::{Database, FileMetaId};
+    use super::{Mtime, get_updates};
     use std::path::PathBuf;
 
     #[test]
