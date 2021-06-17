@@ -25,6 +25,107 @@ pub struct ListenId(i64);
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct FileMetaId(pub i64);
 
+/// Generate a struct with `Bindable` implemented.
+///
+/// Also generates the field names as a comma-separated string literal, for
+/// splicing into queries.
+macro_rules! sql_bind {
+    {
+        pub struct $Name:ident < $lt:lifetime >  {
+            $( pub $field:ident: $type:ty, )*
+        }
+
+        query {
+            INSERT INTO $table_name:ident
+            ( * $( , $extra_column:ident )* )
+            VALUES
+            ( ? $( , $extra_value:tt )* )
+            ;
+        }
+    } => {
+        pub struct $Name<$lt> {
+            $( pub $field: $type, )*
+        }
+
+        impl<$lt> $Name<$lt> {
+            pub fn prepare_query(connection: &sqlite::Connection) -> Result<Statement> {
+                let mut statement = "INSERT INTO ".to_string();
+                statement.push_str(stringify!($table_name));
+                let mut is_first = true;
+                $(
+                    statement.push(if is_first { '(' } else { ',' });
+                    statement.push_str(stringify!($field));
+                    is_first = false;
+                    let _ = is_first;  // Silence dead code warning.
+                )*
+                $(
+                    statement.push(',');
+                    statement.push_str(stringify!($extra_column));
+                )*
+                statement.push_str(") VALUES ");
+                is_first = true;
+                $(
+                    statement.push(if is_first { '(' } else { ',' });
+                    statement.push(':');
+                    statement.push_str(stringify!($field));
+                    is_first = false;
+                    let _ = is_first;  // Silence dead code warning.
+                )*
+                $(
+                    statement.push(',');
+                    statement.push_str(stringify!($extra_value));
+                )*
+                statement.push(')');
+                eprintln!("Statement: {}", statement);
+                connection.prepare(&statement)
+            }
+        }
+
+        impl<'a> sqlite::Bindable for &'a $Name<$lt> {
+            fn bind(self, statement: &mut Statement, i: usize) -> Result<()> {
+                let mut offset = i;
+                $(
+                    statement.bind(i, self.$field)?;
+                    offset += 1;
+                )*
+                let _ = offset; // Silence unused variable warning.
+                Ok(())
+            }
+        }
+    };
+}
+
+/// Generate a struct with `Readable` implemented.
+///
+/// Also generates the field names as a comma-separated string literal, for
+/// splicing into queries.
+macro_rules! sql_read {
+    {
+        pub struct $Name:ident {
+            $( pub $field:ident: $type:ty, )*
+        }
+    } => {
+        pub struct $Name {
+            $( pub $field: $type, )*
+        }
+
+        impl sqlite::Readable for $Name {
+            fn read(statement: &Statement, i: usize) -> Result<Self> {
+                let mut offset = i;
+                $(
+                    let $field: $type = statement.read(i)?;
+                    offset += 1;
+                )*
+                let _ = offset; // Silence unused variable warning.
+                let result = Self {
+                    $( $field, )*
+                };
+                Ok(result)
+            }
+        }
+    };
+}
+
 /// Wraps the SQLite connection with some things to manipulate the DB.
 pub struct Database<'conn> {
     pub connection: &'conn sqlite::Connection,
@@ -148,6 +249,27 @@ pub struct Listen<'a> {
     pub duration_seconds: u16,
     pub track_number: u8,
     pub disc_number: u8,
+}
+
+sql_bind! {
+    pub struct Listenz<'a> {
+        pub started_at: &'a str,
+        pub queue_id: i64,
+        pub track_id: i64,
+        pub album_id: i64,
+        pub album_artist_id: i64,
+        pub track_title: &'a str,
+        pub track_artist: &'a str,
+        pub album_title: &'a str,
+        pub album_artist: &'a str,
+        pub duration_seconds: i64,
+        pub track_number: i64,
+        pub disc_number: i64,
+    }
+
+    query {
+        INSERT INTO listens (*, source) VALUES (?, "musium");
+    }
 }
 
 /// Last modified time of a file, as reported by the file system.
