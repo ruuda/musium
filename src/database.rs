@@ -54,6 +54,13 @@ macro_rules! sql_bind {
             pub fn prepare_query(connection: &sqlite::Connection) -> Result<Statement> {
                 // We build the SQL statement in memory first. This is more
                 // tractable than trying to build a huge literal with concat!.
+                // It looks scary, but it builds a statement of this form:
+                //
+                //   INSERT INTO table_name
+                //   (field0, field1, ..., extra_column0, extra_column1, ...)
+                //   VALUES
+                //   (:field0, :field1, ..., extra_value0, extra_value1, ...);
+
                 let mut statement = "INSERT INTO ".to_string();
                 statement.push_str(stringify!($table_name));
                 let mut is_first = true;
