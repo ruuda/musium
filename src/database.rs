@@ -7,10 +7,8 @@
 
 //! Interaction with Musium's SQLite database.
 
-use std::path::PathBuf;
-
 use sqlite;
-use sqlite::{Value, Statement};
+use sqlite::Statement;
 
 use crate::player::QueueId;
 use crate::prim::{TrackId};
@@ -101,25 +99,53 @@ macro_rules! sql_bind {
     };
 }
 
-/// Generate a struct with `Readable` implemented.
+/// Generate a struct with `sqlite::Readable` implemented.
 ///
-/// Also generates the field names as a comma-separated string literal, for
-/// splicing into queries.
+/// Also generates a function to prepare a SELECT query.
 macro_rules! sql_read {
     {
+        // This "meta" captures doc comments, if applicable.
+        $( #[$struct_attrs:meta] )*
         pub struct $Name:ident {
             $( pub $field:ident: $type:ty, )*
         }
+
+        query {
+            SELECT * FROM $table_name:ident $( $extra_token:tt )*
+        }
     } => {
+        $( #[$struct_attrs] )*
         pub struct $Name {
             $( pub $field: $type, )*
+        }
+
+        impl $Name {
+            pub fn prepare_query(connection: &sqlite::Connection) -> Result<Statement> {
+                // We build the SQL statement in memory first. This is more
+                // tractable than trying to build a huge literal with concat!.
+                let mut statement = "SELECT ".to_string();
+                let mut is_first = true;
+                $(
+                    if !is_first { statement.push(','); }
+                    statement.push_str(stringify!($field));
+                    is_first = false;
+                    let _ = is_first;  // Silence dead code warning.
+                )*
+                statement.push_str(" FROM ");
+                statement.push_str(stringify!($table_name));
+                $(
+                    statement.push(' ');
+                    statement.push_str(stringify!($extra_token));
+                )*
+                connection.prepare(&statement)
+            }
         }
 
         impl sqlite::Readable for $Name {
             fn read(statement: &Statement, i: usize) -> Result<Self> {
                 let mut offset = i;
                 $(
-                    let $field: $type = statement.read(i)?;
+                    let $field: $type = statement.read(offset)?;
                     offset += 1;
                 )*
                 let _ = offset; // Silence unused variable warning.
@@ -130,6 +156,40 @@ macro_rules! sql_read {
             }
         }
     };
+}
+
+/// Generate an iterator that executes queries the given type.
+///
+/// If the type was generated with `sql_read!`, then this macro will generate an
+/// iterator that runs the query associated with the type, and iterates the
+/// result, yielding instances of the type.
+macro_rules! sql_iter {
+    ($Name:ident => $Iter:ident) => {
+        pub struct $Iter<'conn> {
+            statement: Statement<'conn>,
+        }
+
+        impl<'conn> $Iter<'conn> {
+            fn new(connection: &'conn sqlite::Connection) -> Result<Self> {
+                let result = $Iter {
+                    statement: $Name::prepare_query(connection)?
+                };
+                Ok(result)
+            }
+        }
+
+        impl<'conn> Iterator for $Iter<'conn> {
+            type Item = Result<$Name>;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                match self.statement.next() {
+                    Err(err) => Some(Err(err)),
+                    Ok(sqlite::State::Done) => None,
+                    Ok(sqlite::State::Row) => Some(self.statement.read(0)),
+                }
+            }
+        }
+    }
 }
 
 /// Wraps the SQLite connection with some things to manipulate the DB.
@@ -294,13 +354,52 @@ sql_bind! {
     }
 }
 
-/// Last modified time of a file, as reported by the file system.
-///
-/// This is only used to determine whether a file changed since we last read it,
-/// the meaning of the inner value is not relevant, only that it implements
-/// `Ord`.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub struct Mtime(pub i64);
+sql_read! {
+    /// Holds the columns from `file_metadata` needed to see if files need updating.
+    #[derive(Debug)]
+    pub struct FileMetadataSimple {
+        pub id: i64,
+        pub filename: String,
+        pub mtime: i64,
+    }
+
+    query {
+        SELECT * FROM file_metadata ORDER BY filename ASC;
+    }
+}
+
+sql_iter!(FileMetadataSimple => FileMetadataSimpleIter);
+
+sql_read! {
+    /// Container for a row when iterating `file_metadata`.
+    #[derive(Debug)]
+    pub struct FileMetadata {
+        pub filename: String,
+        pub streaminfo_channels: i64,
+        pub streaminfo_bits_per_sample: i64,
+        pub streaminfo_num_samples: Option<i64>,
+        pub streaminfo_sample_rate: i64,
+        pub tag_album: Option<String>,
+        pub tag_albumartist: Option<String>,
+        pub tag_albumartistsort: Option<String>,
+        pub tag_artist: Option<String>,
+        pub tag_musicbrainz_albumartistid: Option<String>,
+        pub tag_musicbrainz_albumid: Option<String>,
+        pub tag_discnumber: Option<String>,
+        pub tag_tracknumber: Option<String>,
+        pub tag_originaldate: Option<String>,
+        pub tag_date: Option<String>,
+        pub tag_title: Option<String>,
+        pub tag_bs17704_track_loudness: Option<String>,
+        pub tag_bs17704_album_loudness: Option<String>,
+    }
+
+    query {
+        SELECT * FROM file_metadata ORDER BY filename ASC;
+    }
+}
+
+sql_iter!(FileMetadata => FileMetadataIter);
 
 impl<'conn> Database<'conn> {
     /// Prepare statements.
@@ -408,157 +507,14 @@ impl<'conn> Database<'conn> {
     /// Returns only the id, filename, and mtime.
     pub fn iter_file_metadata_filename_mtime<'db>(
         &'db mut self,
-    ) -> Result<FileMetaSmallIter<'db>> {
-        FileMetaSmallIter::new(self)
+    ) -> Result<FileMetadataSimpleIter<'db>> {
+        FileMetadataSimpleIter::new(&self.connection)
     }
 
     /// Iterate the `file_metadata` table, sorted by filename.
     ///
     /// Returns the columns needed to build the `MetaIndex`.
-    pub fn iter_file_metadata<'db>(
-        &'db mut self,
-    ) -> Result<FileMetaFullIter<'db>> {
-        FileMetaFullIter::new(self)
-    }
-}
-
-pub struct FileMetaSmallIter<'db> {
-    cursor: sqlite::Cursor<'db>
-}
-
-impl<'db> FileMetaSmallIter<'db> {
-    fn new(db: &'db Database) -> Result<Self> {
-        let cursor = db.connection.prepare(
-            "
-            select
-              id, filename, mtime
-            from
-              file_metadata
-            order by
-              filename asc;
-            ",
-        )?
-        .into_cursor();
-        Ok(Self { cursor: cursor })
-    }
-}
-
-impl<'db> Iterator for FileMetaSmallIter<'db> {
-    type Item = Result<(FileMetaId, PathBuf, Mtime)>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.cursor.next().transpose().map(|row: Result<_>|
-            match row {
-                Ok([
-                    Value::Integer(id),
-                    Value::String(path),
-                    Value::Integer(mtime),
-                ]) => Ok((
-                    FileMetaId(*id),
-                    path.into(),
-                    Mtime(*mtime),
-                )),
-                Ok(..) => panic!("Invalid row returned from iter_file_metas query."),
-                Err(err) => Err(err),
-            }
-        )
-    }
-}
-
-/// Container for a row when iterating `file_metadata`.
-#[derive(Debug)]
-pub struct FileMetadata {
-    pub filename: String,
-    pub streaminfo_channels: u32,
-    pub streaminfo_bits_per_sample: u32,
-    pub streaminfo_num_samples: Option<u64>,
-    pub streaminfo_sample_rate: u32,
-    pub tag_album: Option<String>,
-    pub tag_albumartist: Option<String>,
-    pub tag_albumartistsort: Option<String>,
-    pub tag_artist: Option<String>,
-    pub tag_musicbrainz_albumartistid: Option<String>,
-    pub tag_musicbrainz_albumid: Option<String>,
-    pub tag_discnumber: Option<String>,
-    pub tag_tracknumber: Option<String>,
-    pub tag_originaldate: Option<String>,
-    pub tag_date: Option<String>,
-    pub tag_title: Option<String>,
-    pub tag_bs17704_track_loudness: Option<String>,
-    pub tag_bs17704_album_loudness: Option<String>,
-}
-
-impl sqlite::Readable for FileMetadata {
-    fn read(stmt: &Statement, i: usize) -> Result<FileMetadata> {
-        let result = FileMetadata {
-            filename: stmt.read(i + 0)?,
-            streaminfo_channels: stmt.read::<i64>(i + 1)? as u32,
-            streaminfo_bits_per_sample: stmt.read::<i64>(i + 2)? as u32,
-            streaminfo_num_samples: stmt.read::<Option<i64>>(i + 3)?.map(|x| x as u64),
-            streaminfo_sample_rate: stmt.read::<i64>(i + 4)? as u32,
-            tag_album: stmt.read(i + 5)?,
-            tag_albumartist: stmt.read(i + 6)?,
-            tag_albumartistsort: stmt.read(i + 7)?,
-            tag_artist: stmt.read(i + 8)?,
-            tag_musicbrainz_albumartistid: stmt.read(i + 9)?,
-            tag_musicbrainz_albumid: stmt.read(i + 10)?,
-            tag_discnumber: stmt.read(i + 11)?,
-            tag_tracknumber: stmt.read(i + 12)?,
-            tag_originaldate: stmt.read(i + 13)?,
-            tag_date: stmt.read(i + 14)?,
-            tag_title: stmt.read(i + 15)?,
-            tag_bs17704_track_loudness: stmt.read(i + 16)?,
-            tag_bs17704_album_loudness: stmt.read(i + 17)?,
-        };
-        Ok(result)
-    }
-}
-
-pub struct FileMetaFullIter<'db> {
-    statement: Statement<'db>
-}
-
-impl<'db> FileMetaFullIter<'db> {
-    fn new(db: &'db Database) -> Result<Self> {
-        let statement = db.connection.prepare(
-            "
-            select
-              filename,
-              streaminfo_channels,
-              streaminfo_bits_per_sample,
-              streaminfo_num_samples,
-              streaminfo_sample_rate,
-              tag_album,
-              tag_albumartist,
-              tag_albumartistsort,
-              tag_artist,
-              tag_musicbrainz_albumartistid,
-              tag_musicbrainz_albumid,
-              tag_discnumber,
-              tag_tracknumber,
-              tag_originaldate,
-              tag_date,
-              tag_title,
-              tag_bs17704_track_loudness,
-              tag_bs17704_album_loudness
-            from
-              file_metadata
-            order by
-              filename asc;
-            ",
-        )?;
-        Ok(Self { statement: statement })
-    }
-}
-
-impl<'db> Iterator for FileMetaFullIter<'db> {
-    type Item = Result<FileMetadata>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.statement.next() {
-            Err(err) => Some(Err(err)),
-            Ok(sqlite::State::Done) => None,
-            Ok(sqlite::State::Row) => Some(self.statement.read(0)),
-        }
+    pub fn iter_file_metadata(&mut self) -> Result<FileMetadataIter> {
+        FileMetadataIter::new(&self.connection)
     }
 }

@@ -35,7 +35,7 @@ use std::sync::mpsc::SyncSender;
 use walkdir;
 
 use crate::database;
-use crate::database::{Database, FileMetadataInsert, FileMetaId, Mtime};
+use crate::database::{Database, FileMetadataInsert, FileMetaId};
 
 type FlacReader = claxon::FlacReader<fs::File>;
 
@@ -93,6 +93,14 @@ impl Status {
         }
     }
 }
+
+/// Last modified time of a file, as reported by the file system.
+///
+/// This is only used to determine whether a file changed since we last read it,
+/// the meaning of the inner value is not relevant, only that it implements
+/// `Ord`.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct Mtime(pub i64);
 
 pub fn scan(
     db_path: &Path,
@@ -237,7 +245,15 @@ pub fn get_updates(
     paths_to_scan: &mut Vec<(PathBuf, Mtime)>,
 ) -> database::Result<()> {
     let mut iter_curr = current_sorted.into_iter();
-    let mut iter_db = db.iter_file_metadata_filename_mtime()?;
+    let mut iter_db = db
+        .iter_file_metadata_filename_mtime()?
+        .map(|result|
+            result.map(|row| (
+                FileMetaId(row.id),
+                PathBuf::from(row.filename),
+                Mtime(row.mtime)
+            ))
+        );
 
     let mut val_curr = iter_curr.next();
     let mut val_db = iter_db.next();
