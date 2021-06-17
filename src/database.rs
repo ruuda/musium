@@ -13,7 +13,7 @@ use sqlite;
 use sqlite::{Value, Statement};
 
 use crate::player::QueueId;
-use crate::prim::{AlbumId, ArtistId, TrackId};
+use crate::prim::{TrackId};
 
 pub type Result<T> = sqlite::Result<T>;
 
@@ -25,12 +25,13 @@ pub struct ListenId(i64);
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct FileMetaId(pub i64);
 
-/// Generate a struct with `Bindable` implemented.
+/// Generate a struct that implements `sqlite::Bindable`.
 ///
-/// Also generates the field names as a comma-separated string literal, for
-/// splicing into queries.
+/// Also generates a function that can prepare an insert query.
 macro_rules! sql_bind {
     {
+        // This "meta" captures doc comments, if applicable.
+        $( #[$struct_attrs:meta] )*
         pub struct $Name:ident < $lt:lifetime >  {
             $( pub $field:ident: $type:ty, )*
         }
@@ -43,6 +44,7 @@ macro_rules! sql_bind {
             ;
         }
     } => {
+        $( #[$struct_attrs] )*
         pub struct $Name<$lt> {
             $( pub $field: $type, )*
         }
@@ -75,8 +77,7 @@ macro_rules! sql_bind {
                     statement.push(',');
                     statement.push_str(stringify!($extra_value));
                 )*
-                statement.push(')');
-                eprintln!("Statement: {}", statement);
+                statement.push_str(");");
                 connection.prepare(&statement)
             }
         }
@@ -85,7 +86,7 @@ macro_rules! sql_bind {
             fn bind(self, statement: &mut Statement, i: usize) -> Result<()> {
                 let mut offset = i;
                 $(
-                    statement.bind(i, self.$field)?;
+                    statement.bind(offset, self.$field)?;
                     offset += 1;
                 )*
                 let _ = offset; // Silence unused variable warning.
@@ -235,24 +236,9 @@ pub fn ensure_schema_exists(connection: &sqlite::Connection) -> Result<()> {
     Ok(())
 }
 
-/// Container for a row when inserting a new listen.
-pub struct Listen<'a> {
-    pub started_at: &'a str,
-    pub queue_id: QueueId,
-    pub track_id: TrackId,
-    pub album_id: AlbumId,
-    pub album_artist_id: ArtistId,
-    pub track_title: &'a str,
-    pub track_artist: &'a str,
-    pub album_title: &'a str,
-    pub album_artist: &'a str,
-    pub duration_seconds: u16,
-    pub track_number: u8,
-    pub disc_number: u8,
-}
-
 sql_bind! {
-    pub struct Listenz<'a> {
+    /// Container for a row when inserting a new listen.
+    pub struct Listen<'a> {
         pub started_at: &'a str,
         pub queue_id: i64,
         pub track_id: i64,
@@ -310,27 +296,7 @@ impl<'conn> Database<'conn> {
     ///
     /// Does not ensure that all tables exist, use [`create_schema`] for that.
     pub fn new(connection: &sqlite::Connection) -> Result<Database> {
-        let insert_started = connection.prepare(
-            "
-            insert into listens
-            ( started_at
-            , queue_id
-            , track_id
-            , album_id
-            , album_artist_id
-            , track_title
-            , album_title
-            , track_artist
-            , album_artist
-            , duration_seconds
-            , track_number
-            , disc_number
-            , source
-            )
-            values
-            ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'musium');
-            ",
-        )?;
+        let insert_started = Listen::prepare_query(connection)?;
 
         let update_completed = connection.prepare(
             "
@@ -397,18 +363,7 @@ impl<'conn> Database<'conn> {
         listen: Listen,
     ) -> Result<ListenId> {
         self.insert_started.reset()?;
-        self.insert_started.bind(1, listen.started_at)?;
-        self.insert_started.bind(2, listen.queue_id.0 as i64)?;
-        self.insert_started.bind(3, listen.track_id.0 as i64)?;
-        self.insert_started.bind(4, listen.album_id.0 as i64)?;
-        self.insert_started.bind(5, listen.album_artist_id.0 as i64)?;
-        self.insert_started.bind(6, listen.track_title)?;
-        self.insert_started.bind(7, listen.album_title)?;
-        self.insert_started.bind(8, listen.track_artist)?;
-        self.insert_started.bind(9, listen.album_artist)?;
-        self.insert_started.bind(10, listen.duration_seconds as i64)?;
-        self.insert_started.bind(11, listen.track_number as i64)?;
-        self.insert_started.bind(12, listen.disc_number as i64)?;
+        self.insert_started.bind(1, &listen)?;
 
         let result = self.insert_started.next()?;
         // This query returns no rows, it should be done immediately.

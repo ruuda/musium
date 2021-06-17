@@ -45,17 +45,17 @@ pub fn main(
                 let artist = index.get_artist(album.artist_id).unwrap();
                 let listen = Listen {
                     started_at: &now_str[..],
-                    queue_id: queue_id,
-                    track_id: track_id,
-                    album_id: track.album_id,
-                    album_artist_id: album.artist_id,
+                    queue_id: queue_id.0 as i64,
+                    track_id: track_id.0 as i64,
+                    album_id: track.album_id.0 as i64,
+                    album_artist_id: album.artist_id.0 as i64,
                     track_title: index.get_string(track.title),
                     album_title: index.get_string(album.title),
                     track_artist: index.get_string(track.artist),
                     album_artist: index.get_string(artist.name),
-                    duration_seconds: track.duration_seconds,
-                    track_number: track.track_number,
-                    disc_number: track.disc_number,
+                    duration_seconds: track.duration_seconds as i64,
+                    track_number: track.track_number as i64,
+                    disc_number: track.disc_number as i64,
                 };
                 let result = db.insert_listen_started(listen);
                 last_listen_id = Some(result.expect("Failed to insert listen started event into SQLite database."));

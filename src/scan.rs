@@ -101,11 +101,7 @@ pub fn scan(
 ) {
     let connection = sqlite::open(db_path).expect("Failed to open SQLite database.");
     database::ensure_schema_exists(&connection).expect("Failed to create schema in SQLite database.");
-
-    let q = database::Listenz::prepare_query(&connection).expect("Failed to prepare query");
-
     let mut db = Database::new(&connection).expect("Failed to prepare SQLite statements.");
-
 
     let mut status = Status::new();
     let mut files_current = enumerate_flac_files(library_path, status_sender, &mut status);
