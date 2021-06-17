@@ -35,6 +35,10 @@ jobs:
 
       - name: "Install system dependencies"
         run: |
+          # Updating man-db after installing a package takes a long time, and we
+          # don't need man-db anyway on CI, remove it.
+          sudo apt purge man-db
+
           # Install libsystemd, because we want to link against the system one,
           # not the one from Nixpkgs.
           sudo apt update
