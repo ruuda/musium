@@ -458,13 +458,13 @@ fn insert_file_metadata(
     let streaminfo = flac_reader.streaminfo();
     let mut m = FileMetadataInsert {
         filename: path_utf8,
-        mtime: mtime,
+        mtime: mtime.0,
         imported_at: now_str,
 
-        streaminfo_channels: streaminfo.channels,
-        streaminfo_bits_per_sample: streaminfo.bits_per_sample,
-        streaminfo_num_samples: streaminfo.samples,
-        streaminfo_sample_rate: streaminfo.sample_rate,
+        streaminfo_channels: streaminfo.channels as i64,
+        streaminfo_bits_per_sample: streaminfo.bits_per_sample as i64,
+        streaminfo_num_samples: streaminfo.samples.map(|x| x as i64),
+        streaminfo_sample_rate: streaminfo.sample_rate as i64,
 
         tag_album: None,
         tag_albumartist: None,
