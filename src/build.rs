@@ -303,7 +303,10 @@ impl BuildMetaIndex {
         }
     }
 
-    fn issue(&mut self, detail: IssueDetail) {
+    /// Send an issue, then return none.
+    ///
+    /// Returning none is useful for chaining with ?.
+    fn issue<T>(&mut self, detail: IssueDetail) -> Option<T> {
         let filename = self
             .current_filename
             .as_ref()
@@ -311,36 +314,82 @@ impl BuildMetaIndex {
             .clone();
         let issue = detail.for_file(filename);
         self.progress.as_mut().unwrap().send(Progress::Issue(issue)).unwrap();
+        None
     }
 
-    fn error_missing_field(&mut self, field: &'static str) {
-        self.issue(IssueDetail::FieldMissingError(field));
+    fn error_missing_field<T>(&mut self, field: &'static str) -> Option<T> {
+        self.issue(IssueDetail::FieldMissingError(field))
     }
 
     fn warning_missing_field(&mut self, field: &'static str) {
-        self.issue(IssueDetail::FieldMissingWarning(field));
+        self.issue::<()>(IssueDetail::FieldMissingWarning(field));
     }
 
     fn warning_track_title_contains_feat(&mut self) {
-        self.issue(IssueDetail::TrackTitleContainsFeat);
+        self.issue::<()>(IssueDetail::TrackTitleContainsFeat);
     }
 
-    fn error_parse_failed(&mut self, field: &'static str) {
-        self.issue(IssueDetail::FieldParseFailedError(field));
+    fn error_parse_failed<T>(&mut self, field: &'static str) -> Option<T> {
+        self.issue(IssueDetail::FieldParseFailedError(field))
     }
 
-    fn error_not_stereo(&mut self) {
-        self.issue(IssueDetail::NotStereo);
+    fn error_not_stereo<T>(&mut self) -> Option<T> {
+        self.issue(IssueDetail::NotStereo)
     }
 
-    fn error_unsupported_bit_depth(&mut self, bits: u32) {
-        self.issue(IssueDetail::UnsupportedBitDepth(bits));
+    fn error_unsupported_bit_depth<T>(&mut self, bits: u32) -> Option<T> {
+        self.issue(IssueDetail::UnsupportedBitDepth(bits))
+    }
+
+    /// Parse the value, report an issue if parse failed.
+    ///
+    /// When the outer option is none, there was a fatal parse error. When the
+    /// inner option is none, the value was absent.
+    fn parse<T, F: FnOnce(String) -> Option<T>>(
+        &mut self,
+        field: &'static str,
+        value: Option<String>,
+        parse: F,
+    ) -> Option<Option<T>> {
+        match value {
+            Some(v) => match parse(v) {
+                Some(result) => Some(Some(result)),
+                None => self.error_parse_failed(field)
+            }
+            None => Some(None)
+        }
+    }
+
+    /// Parse the value, report an issue if it is absent, or parse failed.
+    fn require_and_parse<T, F: FnOnce(String) -> Option<T>>(
+        &mut self,
+        field: &'static str,
+        value: Option<String>,
+        parse: F,
+    ) -> Option<T> {
+        self
+            .parse(field, value, parse)?
+            .or_else(|| self.error_missing_field(field))
+    }
+
+    /// Deduplicate the string and get a string ref, if the value is present.
+    fn require_and_insert_string(
+        &mut self,
+        field: &'static str,
+        value: Option<String>,
+    ) -> Option<u32> {
+        match value {
+            // TODO: We could potentially make `strings` take the `String`
+            // rather than the ref, now that we have this owned data.
+            Some(v) => Some(self.strings.insert(&v)),
+            None => self.error_missing_field(field)
+        }
     }
 
     pub fn insert(
         &mut self,
         file: FileMetadata,
-    ) {
+    ) -> Option<()> {
         let filename_id = self.filenames.len() as u32;
         self.current_filename = Some(file.filename);
 
@@ -358,101 +407,54 @@ impl BuildMetaIndex {
             n => return self.error_unsupported_bit_depth(n as u32),
         }
 
-        // TODO: Potentially we could move ownership, now that the `file` has
-        // `String` rather than `&str`.
-        let title = file.tag_title.map(|v| self.strings.insert(&v));
-        let artist = file.tag_artist.map(|v| self.strings.insert(&v));
-        let album = file.tag_album.map(|v| self.strings.insert(&v));
-        let album_artist = file.tag_albumartist.map(|v| self.strings.insert(&v));
-        let album_artist_for_sort = file.tag_albumartistsort.map(|v| self.strings.insert(&v));
+        let track_number = self.require_and_parse(
+            "tracknumber",
+            file.tag_tracknumber,
+            |v| u8::from_str(&v).ok(),
+        )?;
+        let disc_number = self.parse(
+            "discnumber",
+            file.tag_discnumber,
+            |v| u8::from_str(&v).ok(),
+        )?;
+        // If the disc number is not set, assume disc 1.
+        let disc_number = disc_number.unwrap_or(1);
 
-        let disc_number = match file.tag_discnumber {
-            Some(v) => match u8::from_str(&v) {
-                Ok(n) => n,
-                Err(..) => return self.error_parse_failed("discnumber"),
-            }
-            // If the disc number is not set, assume disc 1.
-            None => 1,
-        };
+        let mbid_artist = self.require_and_parse(
+            "musicbrainz_albumartistid",
+            file.tag_musicbrainz_albumartistid,
+            |v| parse_uuid(&v)
+        )?;
+        let mbid_album = self.require_and_parse(
+            "musicbrainz_albumid",
+            file.tag_musicbrainz_albumid,
+            |v| parse_uuid(&v)
+        )?;
 
-        let track_number = match file.tag_tracknumber {
-            Some(v) => match u8::from_str(&v) {
-                Ok(n) => n,
-                Err(..) => return self.error_parse_failed("tracknumber"),
-            }
-            None => return self.error_missing_field("tracknumber"),
-        };
-
-        let mbid_artist = match file.tag_musicbrainz_albumartistid {
-            Some(v) => match parse_uuid(&v) {
-                Some(id) => id,
-                None => return self.error_parse_failed("musicbrainz_albumartistid"),
-            }
-            None => return self.error_missing_field("musicbrainz_albumartistid"),
-        };
-        let mbid_album = match file.tag_musicbrainz_albumid {
-            Some(v) => match parse_uuid(&v) {
-                Some(id) => id,
-                None => return self.error_parse_failed("musicbrainz_albumid"),
-            }
-            None => return self.error_missing_field("musicbrainz_albumid"),
-        };
-
-        let original_date = match file.tag_originaldate {
-            Some(v) => match parse_date(&v) {
-                Some(date) => Some(date),
-                None => return self.error_parse_failed("originaldate"),
-            }
-            None => None
-        };
-        let date = match file.tag_date {
-            Some(v) => match parse_date(&v) {
-                Some(date) => Some(date),
-                None => return self.error_parse_failed("date"),
-            }
-            None => None
-        };
-
-        let track_loudness = match file.tag_bs17704_track_loudness {
-            Some(v) => match Lufs::from_str(&v) {
-                Ok(lufs) => Some(lufs),
-                // Unfortunately we have no way to include more details
-                // about the parse failure with the error message at this
-                // point.
-                Err(_) => return self.error_parse_failed("bs17704_track_loudness"),
-            }
-            None => None,
-        };
-        let album_loudness = match file.tag_bs17704_album_loudness {
-            Some(v) => match Lufs::from_str(&v) {
-                Ok(lufs) => Some(lufs),
-                Err(_) => return self.error_parse_failed("bs17704_track_loudness"),
-            }
-            None => None,
-        };
-
-        let f_title = match title {
-            Some(t) => t,
-            None => return self.error_missing_field("title"),
-        };
-        let f_track_artist = match artist {
-            Some(a) => a,
-            None => return self.error_missing_field("artist"),
-        };
-        let f_album = match album {
-            Some(a) => a,
-            None => return self.error_missing_field("album"),
-        };
-        let f_album_artist = match album_artist {
-            Some(a) => a,
-            None => return self.error_missing_field("albumartist"),
-        };
+        let original_date = self.parse("originaldate", file.tag_originaldate, |v| parse_date(&v))?;
+        let date = self.parse("date", file.tag_date, |v| parse_date(&v))?;
 
         // Use the 'originaldate' field, fall back to 'date' if it is not set.
-        let f_date = match original_date.or(date) {
+        let date = match original_date.or(date) {
             Some(d) => d,
             None => return self.error_missing_field("originaldate"),
         };
+
+        let track_loudness = self.parse(
+            "bs17704_track_loudness",
+            file.tag_bs17704_track_loudness,
+            |v| Lufs::from_str(&v).ok(),
+        )?;
+        let album_loudness = self.parse(
+            "bs17704_album_loudness",
+            file.tag_bs17704_album_loudness,
+            |v| Lufs::from_str(&v).ok(),
+        )?;
+
+        let title = self.require_and_insert_string("title", file.tag_title)?;
+        let track_artist = self.require_and_insert_string("artist", file.tag_artist)?;
+        let album = self.require_and_insert_string("album", file.tag_album)?;
+        let album_artist = self.require_and_insert_string("albumartist", file.tag_albumartist)?;
 
         // Emit a warning when loudness is not present. Emit only one of the two
         // warnings, because it is likely that both are absent, and then you get
@@ -467,7 +469,7 @@ impl BuildMetaIndex {
         // Warn about track titles containing "(feat. ", these should probably
         // be in the artist metadata instead.
         {
-            let track_title = &self.strings.get(f_title);
+            let track_title = &self.strings.get(title);
             if track_title.contains("(feat. ") {
                 self.warning_track_title_contains_feat();
             }
@@ -483,10 +485,10 @@ impl BuildMetaIndex {
         let mut words_album_artist = Vec::new();
 
         {
-            let track_title = &self.strings.get(f_title);
-            let album_title = &self.strings.get(f_album);
-            let album_artist = &self.strings.get(f_album_artist);
-            let track_artist = &self.strings.get(f_track_artist);
+            let track_title = &self.strings.get(title);
+            let album_title = &self.strings.get(album);
+            let album_artist = &self.strings.get(album_artist);
+            let track_artist = &self.strings.get(track_artist);
 
             // Fill the indexes with the words that occur in the titles. The artist
             // is also present in the album and track indexes, but with rank 0, such
@@ -535,12 +537,16 @@ impl BuildMetaIndex {
         // ordering depends on locale. I am going to ignore all of that and turn
         // characters into the lowercase ascii character that looks most like
         // it, then sort by that.
-        // TODO: Avoid inserting non-normalized sort artist in the string
-        // deduplicator above; the non-normalized string is never referenced
-        // except here temporarily.
-        normalize_words(&self.strings.get(album_artist_for_sort.unwrap_or(f_album_artist)), &mut words);
+        normalize_words(
+            file
+                .tag_albumartistsort
+                .as_ref()
+                .map(|s| &s[..])
+                .unwrap_or(self.strings.get(album_artist)),
+            &mut words,
+        );
         let sort_artist = words.join(" ");
-        let f_album_artist_for_sort = self.strings.insert(&sort_artist);
+        let album_artist_for_sort = self.strings.insert(&sort_artist);
         words.clear();
 
         // TODO: Check for u16 overflow.
@@ -555,21 +561,21 @@ impl BuildMetaIndex {
             album_id: album_id,
             disc_number: disc_number,
             track_number: track_number,
-            title: StringRef(f_title),
-            artist: StringRef(f_track_artist),
+            title: StringRef(title),
+            artist: StringRef(track_artist),
             duration_seconds: seconds as u16,
             filename: FilenameRef(filename_id),
             loudness: track_loudness,
         };
         let album = Album {
             artist_id: artist_id,
-            title: StringRef(f_album),
-            original_release_date: f_date,
+            title: StringRef(album),
+            original_release_date: date,
             loudness: album_loudness,
         };
         let artist = Artist {
-            name: StringRef(f_album_artist),
-            name_for_sort: StringRef(f_album_artist_for_sort),
+            name: StringRef(album_artist),
+            name_for_sort: StringRef(album_artist_for_sort),
         };
 
         let mut add_album = true;
@@ -617,6 +623,8 @@ impl BuildMetaIndex {
             self.artists.insert(artist_id, artist);
             self.artist_sources.insert(artist_id, FilenameRef(filename_id));
         }
+
+        Some(())
     }
 }
 
