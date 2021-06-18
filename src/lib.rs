@@ -416,7 +416,30 @@ impl MemoryMetaIndex {
                 read_vorbis_comment: true,
             };
             let reader = claxon::FlacReader::open_ext(path, opts).unwrap();
-            builder.insert(path.to_str().expect("TODO"), &reader.streaminfo(), &mut reader.tags());
+            // For now, while we migrate to the intermediate SQLite stage, map
+            // the data to a row live here.
+            let si = reader.streaminfo();
+            let file_meta = database::FileMetadata {
+                filename: path.to_string_lossy().into_owned(),
+                streaminfo_channels: si.channels as i64,
+                streaminfo_bits_per_sample: si.bits_per_sample as i64,
+                streaminfo_num_samples: si.samples.map(|x| x as i64),
+                streaminfo_sample_rate: si.sample_rate as i64,
+                tag_album: reader.get_tag("album").next().map(|x| x.to_string()),
+                tag_albumartist: reader.get_tag("albumartist").next().map(|x| x.to_string()),
+                tag_albumartistsort: reader.get_tag("albumartistsort").next().map(|x| x.to_string()),
+                tag_artist: reader.get_tag("artist").next().map(|x| x.to_string()),
+                tag_musicbrainz_albumartistid: reader.get_tag("musicbrainz_albumartistid").next().map(|x| x.to_string()),
+                tag_musicbrainz_albumid: reader.get_tag("musicbrainz_albumid").next().map(|x| x.to_string()),
+                tag_discnumber: reader.get_tag("discnumber").next().map(|x| x.to_string()),
+                tag_tracknumber: reader.get_tag("tracknumber").next().map(|x| x.to_string()),
+                tag_originaldate: reader.get_tag("originaldate").next().map(|x| x.to_string()),
+                tag_date: reader.get_tag("date").next().map(|x| x.to_string()),
+                tag_title: reader.get_tag("title").next().map(|x| x.to_string()),
+                tag_bs17704_track_loudness: reader.get_tag("bs17704_track_loudness").next().map(|x| x.to_string()),
+                tag_bs17704_album_loudness: reader.get_tag("bs17704_album_loudness").next().map(|x| x.to_string()),
+            };
+            builder.insert(file_meta);
             progress_unreported += 1;
 
             // Don't report every track individually, to avoid synchronisation

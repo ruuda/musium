@@ -13,6 +13,7 @@ use std::sync::mpsc::SyncSender;
 use crate::prim::{AlbumId, Album, ArtistId, Artist, TrackId, Track, Date, Lufs, FilenameRef, StringRef, get_track_id};
 use crate::string_utils::{StringDeduper, normalize_words};
 use crate::word_index::{WordMeta};
+use crate::database::FileMetadata;
 
 #[derive(Clone, Debug)]
 pub enum IssueDetail {
@@ -326,90 +327,98 @@ impl BuildMetaIndex {
 
     pub fn insert(
         &mut self,
-        filename: &str,
-        streaminfo: &claxon::metadata::StreamInfo,
-        tags: &mut claxon::metadata::Tags
+        file: FileMetadata,
     ) {
-        let mut disc_number = None;
-        let mut track_number = None;
-        let mut title = None;
-        let mut album = None;
-        let mut artist = None;
-        let mut album_artist = None;
-        let mut album_artist_for_sort = None;
-        let mut date = None;
-        let mut original_date = None;
-        let mut track_loudness = None;
-        let mut album_loudness = None;
-
-        let mut mbid_album = 0;
-        let mut mbid_artist = 0;
-
         let filename_id = self.filenames.len() as u32;
-        let filename_string = filename.to_string();
+        let filename_string = file.filename;
 
         // It simplifies many things for playback if I can assume that all files
         // are stereo, so reject any non-stereo files. At the time of writing,
         // all 16k tracks in my library are stereo. The same holds for bit
         // depths, in practice 16 or 24 bits per sample are used, so for
         // playback I only support these.
-        if streaminfo.channels != 2 {
+        if file.streaminfo_channels != 2 {
             return self.error_not_stereo(filename_string);
         }
-        match streaminfo.bits_per_sample {
+        match file.streaminfo_bits_per_sample {
             16 => { /* Ok, supported. */ }
             24 => { /* Ok, supported. */ }
-            n => return self.error_unsupported_bit_depth(filename_string, n),
+            n => return self.error_unsupported_bit_depth(filename_string, n as u32),
         }
 
-        for (tag, value) in tags {
-            match &tag.to_ascii_lowercase()[..] {
-                // TODO: Replace unwraps here with proper parse error reporting.
-                "album"                     => album = Some(self.strings.insert(value)),
-                "albumartist"               => album_artist = Some(self.strings.insert(value)),
-                "albumartistsort"           => album_artist_for_sort = Some(self.strings.insert(value)),
-                "artist"                    => artist = Some(self.strings.insert(value)),
-                "discnumber"                => disc_number = Some(u8::from_str(value).unwrap()),
-                "musicbrainz_albumartistid" => mbid_artist = match parse_uuid(value) {
-                    Some(id) => id,
-                    None => return self.error_parse_failed(filename_string, "musicbrainz_albumartistid"),
-                },
-                "musicbrainz_albumid"       => mbid_album = match parse_uuid(value) {
-                    Some(id) => id,
-                    None => return self.error_parse_failed(filename_string, "musicbrainz_albumid"),
-                },
-                "originaldate"              => original_date = parse_date(value),
-                "date"                      => date = parse_date(value),
-                "title"                     => title = Some(self.strings.insert(value)),
-                "tracknumber"               => track_number = Some(u8::from_str(value).unwrap()),
-                "bs17704_track_loudness"    => track_loudness = match Lufs::from_str(value) {
-                    Ok(v) => Some(v),
-                    // Unfortunately we have no way to include more details
-                    // about the parse failure with the error message at this
-                    // point.
-                    Err(_) => return self.error_parse_failed(filename_string, "bs17704_track_loudness"),
-                },
-                "bs17704_album_loudness"    => album_loudness = match Lufs::from_str(value) {
-                    Ok(v) => Some(v),
-                    Err(_) => return self.error_parse_failed(filename_string, "bs17704_album_loudness"),
-                },
-                _ => {}
+        // TODO: Potentially we could move ownership, now that the `file` has
+        // `String` rather than `&str`.
+        let title = file.tag_title.map(|v| self.strings.insert(&v));
+        let artist = file.tag_artist.map(|v| self.strings.insert(&v));
+        let album = file.tag_album.map(|v| self.strings.insert(&v));
+        let album_artist = file.tag_albumartist.map(|v| self.strings.insert(&v));
+        let album_artist_for_sort = file.tag_albumartistsort.map(|v| self.strings.insert(&v));
+
+        let disc_number = match file.tag_discnumber {
+            Some(v) => match u8::from_str(&v) {
+                Ok(n) => n,
+                Err(..) => return self.error_parse_failed(filename_string, "discnumber"),
             }
-        }
+            // If the disc number is not set, assume disc 1.
+            None => 1,
+        };
 
-        if mbid_album == 0 {
-            return self.error_missing_field(filename_string, "musicbrainz_albumid")
-        }
-        if mbid_artist == 0 {
-            return self.error_missing_field(filename_string, "musicbrainz_albumartistid")
-        }
-
-        // TODO: Make a macro for this, this is terrible.
-        let f_disc_number = disc_number.unwrap_or(1);
-        let f_track_number = match track_number {
-            Some(t) => t,
+        let track_number = match file.tag_tracknumber {
+            Some(v) => match u8::from_str(&v) {
+                Ok(n) => n,
+                Err(..) => return self.error_parse_failed(filename_string, "tracknumber"),
+            }
             None => return self.error_missing_field(filename_string, "tracknumber"),
         };
+
+        let mbid_artist = match file.tag_musicbrainz_albumartistid {
+            Some(v) => match parse_uuid(&v) {
+                Some(id) => id,
+                None => return self.error_parse_failed(filename_string, "musicbrainz_albumartistid"),
+            }
+            None => return self.error_missing_field(filename_string, "musicbrainz_albumartistid"),
+        };
+        let mbid_album = match file.tag_musicbrainz_albumid {
+            Some(v) => match parse_uuid(&v) {
+                Some(id) => id,
+                None => return self.error_parse_failed(filename_string, "musicbrainz_albumid"),
+            }
+            None => return self.error_missing_field(filename_string, "musicbrainz_albumid"),
+        };
+
+        let original_date = match file.tag_originaldate {
+            Some(v) => match parse_date(&v) {
+                Some(date) => Some(date),
+                None => return self.error_parse_failed(filename_string, "originaldate"),
+            }
+            None => None
+        };
+        let date = match file.tag_date {
+            Some(v) => match parse_date(&v) {
+                Some(date) => Some(date),
+                None => return self.error_parse_failed(filename_string, "date"),
+            }
+            None => None
+        };
+
+        let track_loudness = match file.tag_bs17704_track_loudness {
+            Some(v) => match Lufs::from_str(&v) {
+                Ok(lufs) => Some(lufs),
+                // Unfortunately we have no way to include more details
+                // about the parse failure with the error message at this
+                // point.
+                Err(_) => return self.error_parse_failed(filename_string, "bs17704_track_loudness"),
+            }
+            None => None,
+        };
+        let album_loudness = match file.tag_bs17704_album_loudness {
+            Some(v) => match Lufs::from_str(&v) {
+                Ok(lufs) => Some(lufs),
+                Err(_) => return self.error_parse_failed(filename_string, "bs17704_track_loudness"),
+            }
+            None => None,
+        };
+
         let f_title = match title {
             Some(t) => t,
             None => return self.error_missing_field(filename_string, "title"),
@@ -454,7 +463,7 @@ impl BuildMetaIndex {
 
         let artist_id = ArtistId(mbid_artist);
         let album_id = AlbumId(mbid_album);
-        let track_id = get_track_id(album_id, f_disc_number, f_track_number);
+        let track_id = get_track_id(album_id, disc_number, track_number);
 
         // Split the title, album, and album artist, on words, and add those to
         // the indexes, to allow finding the track/album/artist later by word.
@@ -524,13 +533,16 @@ impl BuildMetaIndex {
 
         // TODO: Check for u16 overflow.
         // TODO: Warn if `streaminfo.samples` is None.
-        let samples = streaminfo.samples.unwrap_or(0);
-        let seconds = (samples + streaminfo.sample_rate as u64 / 2) / streaminfo.sample_rate as u64;
+        let samples = file.streaminfo_num_samples.unwrap_or(0) as u64;
+        let samples_per_sec = file.streaminfo_sample_rate as u64;
+        // Compute the duration in seconds. Add half the denominator in order to
+        // round properly.
+        let seconds = (samples + samples_per_sec / 2) / samples_per_sec;
 
         let track = Track {
             album_id: album_id,
-            disc_number: f_disc_number,
-            track_number: f_track_number,
+            disc_number: disc_number,
+            track_number: track_number,
             title: StringRef(f_title),
             artist: StringRef(f_track_artist),
             duration_seconds: seconds as u16,
@@ -554,7 +566,7 @@ impl BuildMetaIndex {
         // Check for consistency if duplicates occur.
         if self.tracks.get(&track_id).is_some() {
             // TODO: This should report an `Issue`, not panic.
-            panic!("Duplicate track {}, file {}.", track_id, filename);
+            panic!("Duplicate track {}, file {}.", track_id, filename_string);
         }
 
         if let Some(existing_album) = self.albums.get(&album_id) {
