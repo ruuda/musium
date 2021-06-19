@@ -539,7 +539,13 @@ fn main() {
 
     match &cmd[..] {
         "serve" => {
-            let index = make_index(&config.library_path);
+            let db_path = config.db_path();
+            let index = {
+                let stdout = std::io::stdout();
+                let lock = stdout.lock();
+                let mut sink: Box<dyn StatusSink> = Box::new(WriteStatusSink::new(lock));
+                MemoryMetaIndex::from_database(&db_path, &mut *sink).expect("Failed to build index.")
+            };
             let arc_index = std::sync::Arc::new(index);
             println!("Indexing complete.");
             println!("Loading cover art thumbnails ...");
