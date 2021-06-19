@@ -108,8 +108,7 @@ pub fn scan(
     status_sender: &mut SyncSender<Status>,
 ) {
     let connection = sqlite::open(db_path).expect("Failed to open SQLite database.");
-    database::ensure_schema_exists(&connection).expect("Failed to create schema in SQLite database.");
-    let mut db = Database::new(&connection).expect("Failed to prepare SQLite statements.");
+    let mut db = Database::new(&connection).expect("Failed to initialize SQLite database.");
 
     let mut status = Status::new();
     let mut files_current = enumerate_flac_files(library_path, status_sender, &mut status);
@@ -534,7 +533,6 @@ mod test {
         // In this case we have an empty database but a non-empty file system,
         // so we expect all files to be scanned.
         let connection = sqlite::open(":memory:").unwrap();
-        database::ensure_schema_exists(&connection).unwrap();
         let mut db = Database::new(&connection).unwrap();
 
         let current_sorted = vec![
@@ -566,7 +564,6 @@ mod test {
         // In this case nothing changed on the file system with respect to the
         // database, so we expect no files to be scanned and no rows deleted.
         let connection = sqlite::open(":memory:").unwrap();
-        database::ensure_schema_exists(&connection).unwrap();
         connection.execute(
             "
             insert into
@@ -608,7 +605,6 @@ mod test {
     fn get_updates_add_remove() {
         // One file was added on the file system, one was deleted.
         let connection = sqlite::open(":memory:").unwrap();
-        database::ensure_schema_exists(&connection).unwrap();
         connection.execute(
             "
             insert into
@@ -654,7 +650,6 @@ mod test {
         // A file is present in both the file system and database, but the mtime
         // differs.
         let connection = sqlite::open(":memory:").unwrap();
-        database::ensure_schema_exists(&connection).unwrap();
         connection.execute(
             "
             insert into
@@ -695,7 +690,6 @@ mod test {
         // The difference should be empty, but the sort order is not trivial
         // because it's not only ASCII.
         let connection = sqlite::open(":memory:").unwrap();
-        database::ensure_schema_exists(&connection).unwrap();
         connection.execute(
             "
             insert into
@@ -741,7 +735,6 @@ mod test {
         // component order. When we compare path order, a slash comes before a
         // space, and getting the updates reaches a wrong conclusion.
         let connection = sqlite::open(":memory:").unwrap();
-        database::ensure_schema_exists(&connection).unwrap();
         connection.execute(
             "
             insert into

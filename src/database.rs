@@ -208,6 +208,7 @@ pub struct Database<'conn> {
     delete_file_metadata: Statement<'conn>,
 }
 
+/// Create the necessary tables with `IF NOT EXISTS` queries.
 pub fn ensure_schema_exists(connection: &sqlite::Connection) -> Result<()> {
     connection.execute(
         "
@@ -409,10 +410,9 @@ sql_read! {
 sql_iter!(FileMetadata => FileMetadataIter);
 
 impl<'conn> Database<'conn> {
-    /// Prepare statements.
-    ///
-    /// Does not ensure that all tables exist, use [`create_schema`] for that.
+    /// Ensure that the schema exists, then prepare statements.
     pub fn new(connection: &sqlite::Connection) -> Result<Database> {
+        ensure_schema_exists(connection)?;
         let insert_started = Listen::prepare_query(connection)?;
         let insert_file_metadata = FileMetadataInsert::prepare_query(connection)?;
 

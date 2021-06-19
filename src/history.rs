@@ -12,7 +12,6 @@ use std::sync::mpsc::Receiver;
 
 use crate::{MetaIndex, TrackId};
 use crate::player::QueueId;
-use crate::database;
 use crate::database::{Database, Listen};
 
 /// Changes in the playback state to be recorded.
@@ -28,8 +27,7 @@ pub fn main(
     events: Receiver<PlaybackEvent>,
 ) {
     let connection = sqlite::open(db_path).expect("Failed to open SQLite database.");
-    database::ensure_schema_exists(&connection).expect("Failed to create schema in SQLite database.");
-    let mut db = Database::new(&connection).expect("Failed to prepare SQLite statements.");
+    let mut db = Database::new(&connection).expect("Failed to initialize SQLite database.");
 
     let mut last_listen_id = None;
 
