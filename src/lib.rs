@@ -37,8 +37,7 @@ use std::collections::btree_map;
 use std::collections::BTreeSet;
 use std::io;
 use std::mem;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::path::{Path};
 use std::sync::mpsc::sync_channel;
 use std::u32;
 use std::u64;
@@ -396,132 +395,6 @@ impl MemoryMetaIndex {
         }
     }
 
-    /// Read the files from `paths` and add their metadata to the builder.
-    ///
-    /// `from_paths` spawns multiple threads, and each thread runs `process`.
-    ///
-    /// This function increments `counter`, processes `paths[counter]`, and
-    /// loops until all paths have been indexed. Multiple threads can do this
-    /// in parallel because the counter is atomic.
-    fn process(paths: &[PathBuf], counter: &AtomicUsize, builder: &mut BuildMetaIndex) {
-        let mut progress_unreported = 0;
-        loop {
-            let i = counter.fetch_add(1, Ordering::SeqCst);
-            if i >= paths.len() {
-                break;
-            }
-            let path = &paths[i];
-            let opts = claxon::FlacReaderOptions {
-                metadata_only: true,
-                read_picture: claxon::ReadPicture::Skip,
-                read_vorbis_comment: true,
-            };
-            let reader = claxon::FlacReader::open_ext(path, opts).unwrap();
-            // For now, while we migrate to the intermediate SQLite stage, map
-            // the data to a row live here.
-            let si = reader.streaminfo();
-            let file_meta = database::FileMetadata {
-                filename: path.to_string_lossy().into_owned(),
-                streaminfo_channels: si.channels as i64,
-                streaminfo_bits_per_sample: si.bits_per_sample as i64,
-                streaminfo_num_samples: si.samples.map(|x| x as i64),
-                streaminfo_sample_rate: si.sample_rate as i64,
-                tag_album: reader.get_tag("album").next().map(|x| x.to_string()),
-                tag_albumartist: reader.get_tag("albumartist").next().map(|x| x.to_string()),
-                tag_albumartistsort: reader.get_tag("albumartistsort").next().map(|x| x.to_string()),
-                tag_artist: reader.get_tag("artist").next().map(|x| x.to_string()),
-                tag_musicbrainz_albumartistid: reader.get_tag("musicbrainz_albumartistid").next().map(|x| x.to_string()),
-                tag_musicbrainz_albumid: reader.get_tag("musicbrainz_albumid").next().map(|x| x.to_string()),
-                tag_discnumber: reader.get_tag("discnumber").next().map(|x| x.to_string()),
-                tag_tracknumber: reader.get_tag("tracknumber").next().map(|x| x.to_string()),
-                tag_originaldate: reader.get_tag("originaldate").next().map(|x| x.to_string()),
-                tag_date: reader.get_tag("date").next().map(|x| x.to_string()),
-                tag_title: reader.get_tag("title").next().map(|x| x.to_string()),
-                tag_bs17704_track_loudness: reader.get_tag("bs17704_track_loudness").next().map(|x| x.to_string()),
-                tag_bs17704_album_loudness: reader.get_tag("bs17704_album_loudness").next().map(|x| x.to_string()),
-            };
-            builder.insert(file_meta);
-            progress_unreported += 1;
-
-            // Don't report every track individually, to avoid synchronisation
-            // overhead.
-            if progress_unreported == 17 {
-                builder.progress.as_mut().unwrap().send(Progress::Indexed(progress_unreported)).unwrap();
-                progress_unreported = 0;
-            }
-        }
-
-        if progress_unreported != 0 {
-            builder.progress.as_mut().unwrap().send(Progress::Indexed(progress_unreported)).unwrap();
-        }
-
-        builder.progress = None;
-    }
-
-    /// Index the given files.
-    ///
-    /// Reports progress to `out`, which can be `std::io::stdout().lock()`.
-    pub fn from_paths(paths: &[PathBuf], out: &mut dyn StatusSink) -> Result<MemoryMetaIndex> {
-        let (tx_progress, rx_progress) = sync_channel(8);
-
-        // When we are IO bound, we need enough threads to keep the IO scheduler
-        // queues fed, so it can schedule optimally and minimize seeks.
-        // Therefore, pick a fairly high amount of threads. When we are CPU
-        // bound, there is some overheads to more threads, but 8 threads vs 64
-        // threads is a difference of maybe 0.05 seconds for 16k tracks, while
-        // for the IO-bound case, it can bring down the time from ~140 seconds
-        // to ~70 seconds, which is totally worth it.
-        let num_threads = 64;
-        let mut builders: Vec<_> = (0..num_threads)
-            .map(|_| BuildMetaIndex::new(tx_progress.clone()))
-            .collect();
-
-        // Drop the original sender to ensure the channel is closed when all
-        // threads are done.
-        mem::drop(tx_progress);
-
-        let counter = std::sync::atomic::AtomicUsize::new(0);
-
-        crossbeam::scope(|scope| {
-            for builder in builders.iter_mut() {
-                let counter = &counter;
-                scope.spawn(move || MemoryMetaIndex::process(paths, counter, builder));
-            }
-
-            // Print issues live as indexing happens.
-            let mut count = 0;
-            for progress in rx_progress {
-                match progress {
-                    Progress::Issue(issue) => out.report_issue(&issue)?,
-                    Progress::Indexed(n) => {
-                        count += n;
-                        out.report_index_progress(count, paths.len() as u32)?;
-                    }
-                }
-            }
-
-            // We return `Ok` here so the return type of the scope closure is
-            // `io::Result`, which allows using `?` above; that's a bit nicer
-            // than unwrapping everywhere. We do unwrap the result below though,
-            // because `out` is likely stdout, so printing a nice error would
-            // fail anyway.
-            let result: io::Result<()> = Ok(());
-            result
-        }).unwrap();
-
-        let mut issues = Vec::new();
-        let memory_index = MemoryMetaIndex::new(&builders, &mut issues);
-
-        // Report issues that resulted from merging.
-        for issue in &issues {
-            out.report_issue(issue).unwrap();
-        }
-
-        out.report_done_indexing().unwrap();
-
-        Ok(memory_index)
-    }
-
     /// Index the given files.
     ///
     /// Reports progress to `out`, which can be `std::io::stdout().lock()`.
@@ -553,7 +426,6 @@ impl MemoryMetaIndex {
         for progress in rx_progress {
             match progress {
                 Progress::Issue(issue) => out.report_issue(&issue)?,
-                Progress::Indexed(_) => { }
             }
         }
 

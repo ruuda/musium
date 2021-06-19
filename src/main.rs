@@ -14,7 +14,6 @@ extern crate url;
 extern crate walkdir;
 
 use std::env;
-use std::ffi::OsStr;
 use std::fs;
 use std::io::{BufRead, Write};
 use std::io;
@@ -30,62 +29,16 @@ use musium::server::{MetaServer, serve};
 use musium::string_utils::normalize_words;
 use musium::thumb_cache::ThumbCache;
 use musium::{MetaIndex, MemoryMetaIndex};
-use musium::status::{StatusSink, SystemdStatusSink, WriteStatusSink};
+use musium::status::{StatusSink, WriteStatusSink};
 
-fn make_index(dir: &Path) -> MemoryMetaIndex {
-    let wd = walkdir::WalkDir::new(dir)
-        .follow_links(true)
-        .max_open(128);
-
-    let flac_ext = OsStr::new("flac");
-
-    let index;
-    {
+fn make_index(db_path: &Path) -> MemoryMetaIndex {
+    let index = {
         let stdout = std::io::stdout();
         let lock = stdout.lock();
-
-        // If we are running as a systemd service, report progress to systemd,
-        // otherwise report progress on stdout.
-        let mut reporter: Box<dyn StatusSink> = if musium::systemd::can_notify() {
-            Box::new(SystemdStatusSink::new(lock))
-        } else {
-            Box::new(WriteStatusSink::new(lock))
-        };
-
-        // First enumerate all flac files, before indexing them. It turns out
-        // that this is faster than indexing them on the go (and not first
-        // collecting into a vector). See also performance.md in the root of the
-        // repository.
-        let mut k = 0;
-        let mut paths = Vec::new();
-        let paths_iter = wd
-            .into_iter()
-            .filter_map(|e| match e {
-                Ok(entry) => Some(entry),
-                // TODO: Add a nicer way to report errors.
-                Err(err) => { eprintln!("{}", err); None }
-            })
-            .filter(|e| e.file_type().is_file())
-            .map(|e| e.into_path())
-            .filter(|p| p.extension() == Some(flac_ext));
-
-        for p in paths_iter {
-            // Print progress updates on the number of files discovered.
-            // Enumerating the filesystem can take a long time when the OS
-            // caches are cold. When the caches are warm it is pretty much
-            // instant, but indexing tends to happen with cold caches.
-            k += 1;
-            if k % 64 == 0 {
-                reporter.report_discover_progress(k).unwrap();
-            }
-            paths.push(p);
-        }
-        reporter.report_discover_progress(k).unwrap();
-
-        index = musium::MemoryMetaIndex::from_paths(&paths[..], &mut *reporter);
+        let mut sink: Box<dyn StatusSink> = Box::new(WriteStatusSink::new(lock));
+        MemoryMetaIndex::from_database(&db_path, &mut *sink).expect("Failed to build index.")
     };
 
-    let index = index.expect("Failed to build index.");
     println!(
         "Index has {} artists, {} albums, and {} tracks.",
         index.get_artists().len(),
@@ -539,13 +492,7 @@ fn main() {
 
     match &cmd[..] {
         "serve" => {
-            let db_path = config.db_path();
-            let index = {
-                let stdout = std::io::stdout();
-                let lock = stdout.lock();
-                let mut sink: Box<dyn StatusSink> = Box::new(WriteStatusSink::new(lock));
-                MemoryMetaIndex::from_database(&db_path, &mut *sink).expect("Failed to build index.")
-            };
+            let index = make_index(&config.db_path());
             let arc_index = std::sync::Arc::new(index);
             println!("Indexing complete.");
             println!("Loading cover art thumbnails ...");
@@ -568,7 +515,7 @@ fn main() {
             serve(&config.listen, Arc::new(service));
         }
         "cache" => {
-            let index = make_index(&config.library_path);
+            let index = make_index(&config.db_path());
             generate_thumbnails(&index, &config.covers_path);
         }
         "scan" => {

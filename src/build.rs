@@ -116,8 +116,6 @@ impl fmt::Display for Issue {
 
 #[derive(Debug)]
 pub enum Progress {
-    /// A number of files have been indexed.
-    Indexed(u32),
     /// An issue with a file was encountered.
     Issue(Issue),
 }
