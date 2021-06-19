@@ -343,6 +343,7 @@ impl BuildMetaIndex {
     ///
     /// When the outer option is none, there was a fatal parse error. When the
     /// inner option is none, the value was absent.
+    #[inline(always)]
     fn parse<T, F: FnOnce(String) -> Option<T>>(
         &mut self,
         field: &'static str,
@@ -359,6 +360,7 @@ impl BuildMetaIndex {
     }
 
     /// Parse the value, report an issue if it is absent, or parse failed.
+    #[inline(always)]
     fn require_and_parse<T, F: FnOnce(String) -> Option<T>>(
         &mut self,
         field: &'static str,
@@ -371,6 +373,7 @@ impl BuildMetaIndex {
     }
 
     /// Deduplicate the string and get a string ref, if the value is present.
+    #[inline(always)]
     fn require_and_insert_string(
         &mut self,
         field: &'static str,
