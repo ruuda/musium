@@ -32,10 +32,7 @@ pub mod string_utils;
 pub mod systemd;
 pub mod thumb_cache;
 
-use std::collections::btree_map;
-use std::collections::BTreeSet;
 use std::io;
-use std::mem;
 use std::path::{Path};
 use std::u32;
 use std::u64;
@@ -43,7 +40,7 @@ use std::u64;
 use crate::prim::{ArtistId, Artist, AlbumId, Album, TrackId, Track, Lufs, StringRef, FilenameRef, get_track_id};
 use crate::word_index::{MemoryWordIndex};
 use crate::string_utils::StringDeduper;
-use crate::build::{BuildMetaIndex, Issue, artists_different, albums_different};
+use crate::build::{BuildMetaIndex, Issue};
 use crate::database::Database;
 
 pub trait MetaIndex {
@@ -134,8 +131,6 @@ impl From<claxon::Error> for Error {
         }
     }
 }
-
-type Result<T> = std::result::Result<T, Error>;
 
 /// Indices into a sorted array based on the most significant byte of an id.
 ///
@@ -237,134 +232,52 @@ fn build_albums_by_artist_index(albums: &[(AlbumId, Album)]) -> Vec<(ArtistId, A
     entries
 }
 
-/// Invokes `process` for all elements in the builder, in sorted order.
-///
-/// The arguments passed to process are `(i, id, value)`, where `i` is the
-/// index of the builder. The collection iterated over is determined by
-/// `project`. If the collections contain duplicates, all of them are passed to
-/// `process`.
-fn for_each_sorted<'a, P, I, T, F>(
-    builders: &'a [BuildMetaIndex],
-    project: P,
-    mut process: F,
-) where
-  P: Fn(&'a BuildMetaIndex) -> btree_map::Iter<'a, I, T>,
-  I: Clone + Eq + Ord + 'a,
-  T: Clone + Eq + 'a,
-  F: FnMut(usize, I, T),
-{
-    let mut iters: Vec<_> = builders
-        .iter()
-        .map(project)
-        .collect();
-    let mut candidates: Vec<_> = iters
-        .iter_mut()
-        .map(|i| i.next())
-        .collect();
-
-    // Apply the processing function to all elements from the builders in order.
-    while let Some((i, _)) = candidates
-            .iter()
-            .enumerate()
-            .filter_map(|(i, id_val)| id_val.map(|(id, _val)| (i, id)))
-            .min_by_key(|&(_, id)| id)
-    {
-        let mut next = iters[i].next();
-        mem::swap(&mut candidates[i], &mut next);
-
-        // Current now contains the value of `candidates[i]` before the swap,
-        // which is not none, so the unwrap is safe.
-        let current = next.unwrap();
-        process(i, current.0.clone(), current.1.clone());
-    }
-
-    // Nothing should be left.
-    for candidate in candidates {
-        debug_assert!(candidate.is_none());
-    }
-}
-
-
 impl MemoryMetaIndex {
-    /// Combine builders into a memory-backed index.
-    fn new(builders: &[BuildMetaIndex], issues: &mut Vec<Issue>) -> MemoryMetaIndex {
-        assert!(builders.len() > 0);
+    /// Convert the builder into a memory-backed index.
+    fn new(builder: &BuildMetaIndex) -> MemoryMetaIndex {
         let mut artists: Vec<(ArtistId, Artist)> = Vec::new();
         let mut albums: Vec<(AlbumId, Album)> = Vec::new();
         let mut tracks: Vec<(TrackId, Track)> = Vec::new();
         let mut strings = StringDeduper::new();
         let mut filenames = Vec::new();
-        let mut words_artist = BTreeSet::new();
-        let mut words_album = BTreeSet::new();
-        let mut words_track = BTreeSet::new();
 
-        for_each_sorted(builders, |b| b.tracks.iter(), |i, id, mut track| {
+        for (id, track) in builder.tracks.iter() {
+            let (id, mut track) = (*id, track.clone());
+
             // Give the track the final stringrefs, into the merged arrays.
             track.title = StringRef(
-                strings.insert(builders[i].strings.get(track.title.0))
+                strings.insert(builder.strings.get(track.title.0))
             );
             track.artist = StringRef(
-                strings.insert(builders[i].strings.get(track.artist.0))
+                strings.insert(builder.strings.get(track.artist.0))
             );
-            filenames.push(builders[i].filenames[track.filename.0 as usize].clone());
+            filenames.push(builder.filenames[track.filename.0 as usize].clone());
             track.filename = FilenameRef(filenames.len() as u32 - 1);
 
-            if let Some(&(prev_id, ref _prev)) = tracks.last() {
-                assert!(prev_id != id, "Duplicate track should not occur.");
-            }
-
             tracks.push((id, track));
-        });
+        }
 
-        for_each_sorted(builders, |b| b.albums.iter(), |i, id, mut album| {
+        for (id, album) in builder.albums.iter() {
+            let (id, mut album) = (*id, album.clone());
+
             album.title = StringRef(
-                strings.insert(builders[i].strings.get(album.title.0))
+                strings.insert(builder.strings.get(album.title.0))
             );
-
-            if let Some(&(prev_id, ref prev)) = albums.last() {
-                if prev_id == id {
-                    if let Some(detail) = albums_different(&strings, id, prev, &album) {
-                        // Report the file where the conflicting data came from.
-                        let fname_index = builders[i].album_sources[&id];
-                        let filename = builders[i].filenames[fname_index.0 as usize].clone();
-                        let issue = detail.for_file(filename);
-                        issues.push(issue);
-                    }
-                    return // Like `continue`, returns from the closure.
-                }
-            }
 
             albums.push((id, album));
-        });
+        }
 
-        for_each_sorted(builders, |b| b.artists.iter(), |i, id, mut artist| {
+        for (id, artist) in builder.artists.iter() {
+            let (id, mut artist) = (*id, artist.clone());
+
             artist.name = StringRef(
-                strings.insert(builders[i].strings.get(artist.name.0))
+                strings.insert(builder.strings.get(artist.name.0))
             );
             artist.name_for_sort = StringRef(
-                strings.insert(builders[i].strings.get(artist.name_for_sort.0))
+                strings.insert(builder.strings.get(artist.name_for_sort.0))
             );
 
-            if let Some(&(prev_id, ref prev)) = artists.last() {
-                if prev_id == id {
-                    if let Some(detail) = artists_different(&strings, id, prev, &artist) {
-                        // Report the file where the conflicting data came from.
-                        let fname_index = builders[i].artist_sources[&id];
-                        let filename = builders[i].filenames[fname_index.0 as usize].clone();
-                        let issue = detail.for_file(filename);
-                        issues.push(issue);
-                    }
-                    return // Like `continue`, returns from the closure.
-                }
-            }
-
             artists.push((id, artist));
-        });
-
-        for builder in builders {
-            words_artist.extend(builder.words_artist.iter().cloned());
-            words_album.extend(builder.words_album.iter().cloned());
-            words_track.extend(builder.words_track.iter().cloned());
         }
 
         strings.upgrade_quotes();
@@ -386,16 +299,16 @@ impl MemoryMetaIndex {
             albums_by_artist: albums_by_artist,
             strings: strings.into_vec(),
             filenames: filenames,
-            words_artist: MemoryWordIndex::new(&words_artist),
-            words_album: MemoryWordIndex::new(&words_album),
-            words_track: MemoryWordIndex::new(&words_track),
+            words_artist: MemoryWordIndex::new(&builder.words_artist),
+            words_album: MemoryWordIndex::new(&builder.words_album),
+            words_track: MemoryWordIndex::new(&builder.words_track),
         }
     }
 
     /// Index the given files.
     ///
     /// Reports progress to `out`, which can be `std::io::stdout().lock()`.
-    pub fn from_database(db_path: &Path, issues: &mut Vec<Issue>) -> Result<MemoryMetaIndex> {
+    pub fn from_database(db_path: &Path) -> (MemoryMetaIndex, Vec<Issue>) {
         let conn = sqlite::Connection::open(db_path).expect("Failed to open SQLite database.");
         let mut db = Database::new(&conn).expect("Failed to initialize database.");
 
@@ -406,16 +319,9 @@ impl MemoryMetaIndex {
             builder.insert(file);
         }
 
-        issues.extend(builder.issues.drain(..));
+        let memory_index = MemoryMetaIndex::new(&builder);
 
-        // MemoryMetaIndex::new assumes at least two builders, add a dummy one.
-        let builder_dummy = BuildMetaIndex::new();
-
-        let builders = [builder, builder_dummy];
-
-        let memory_index = MemoryMetaIndex::new(&builders[..], issues);
-
-        Ok(memory_index)
+        (memory_index, builder.issues)
     }
 }
 

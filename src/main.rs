@@ -31,8 +31,7 @@ use musium::thumb_cache::ThumbCache;
 use musium::{MetaIndex, MemoryMetaIndex};
 
 fn make_index(db_path: &Path) -> MemoryMetaIndex {
-    let mut issues = Vec::new();
-    let index = MemoryMetaIndex::from_database(&db_path, &mut issues).expect("Failed to build index.");
+    let (index, issues) = MemoryMetaIndex::from_database(&db_path);
     for issue in &issues {
         println!("{}\n", issue);
     }
