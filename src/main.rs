@@ -29,15 +29,13 @@ use musium::server::{MetaServer, serve};
 use musium::string_utils::normalize_words;
 use musium::thumb_cache::ThumbCache;
 use musium::{MetaIndex, MemoryMetaIndex};
-use musium::status::{StatusSink, WriteStatusSink};
 
 fn make_index(db_path: &Path) -> MemoryMetaIndex {
-    let index = {
-        let stdout = std::io::stdout();
-        let lock = stdout.lock();
-        let mut sink: Box<dyn StatusSink> = Box::new(WriteStatusSink::new(lock));
-        MemoryMetaIndex::from_database(&db_path, &mut *sink).expect("Failed to build index.")
-    };
+    let mut issues = Vec::new();
+    let index = MemoryMetaIndex::from_database(&db_path, &mut issues).expect("Failed to build index.");
+    for issue in &issues {
+        println!("{}\n", issue);
+    }
 
     println!(
         "Index has {} artists, {} albums, and {} tracks.",

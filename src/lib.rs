@@ -28,7 +28,6 @@ pub mod prim;
 pub mod scan;
 pub mod serialization;
 pub mod server;
-pub mod status;
 pub mod string_utils;
 pub mod systemd;
 pub mod thumb_cache;
@@ -38,15 +37,13 @@ use std::collections::BTreeSet;
 use std::io;
 use std::mem;
 use std::path::{Path};
-use std::sync::mpsc::sync_channel;
 use std::u32;
 use std::u64;
 
 use crate::prim::{ArtistId, Artist, AlbumId, Album, TrackId, Track, Lufs, StringRef, FilenameRef, get_track_id};
 use crate::word_index::{MemoryWordIndex};
 use crate::string_utils::StringDeduper;
-use crate::build::{BuildMetaIndex, Issue, Progress, artists_different, albums_different};
-use crate::status::StatusSink;
+use crate::build::{BuildMetaIndex, Issue, artists_different, albums_different};
 use crate::database::Database;
 
 pub trait MetaIndex {
@@ -398,41 +395,25 @@ impl MemoryMetaIndex {
     /// Index the given files.
     ///
     /// Reports progress to `out`, which can be `std::io::stdout().lock()`.
-    pub fn from_database(db_path: &Path, out: &mut dyn StatusSink) -> Result<MemoryMetaIndex> {
+    pub fn from_database(db_path: &Path, issues: &mut Vec<Issue>) -> Result<MemoryMetaIndex> {
         let conn = sqlite::Connection::open(db_path).expect("Failed to open SQLite database.");
         let mut db = Database::new(&conn).expect("Failed to initialize database.");
-        let (tx_progress, rx_progress) = sync_channel(500);
-        let mut builder = BuildMetaIndex::new(tx_progress);
+
+        let mut builder = BuildMetaIndex::new();
 
         for row_result in db.iter_file_metadata().expect("TODO: Proper error handling.") {
             let file = row_result.expect("TODO: Proper error handling.");
             builder.insert(file);
         }
-        eprintln!("Finished builder.");
 
-        let mut issues = Vec::new();
-
+        issues.extend(builder.issues.drain(..));
 
         // MemoryMetaIndex::new assumes at least two builders, add a dummy one.
-        let (tx_progress, _) = sync_channel(500);
-        let builder_dummy = BuildMetaIndex::new(tx_progress);
+        let builder_dummy = BuildMetaIndex::new();
 
-        let mut builders = [builder, builder_dummy];
+        let builders = [builder, builder_dummy];
 
-        let memory_index = MemoryMetaIndex::new(&builders[..], &mut issues);
-        eprintln!("Built memorindex.");
-
-        builders[0].progress = None;
-        for progress in rx_progress {
-            match progress {
-                Progress::Issue(issue) => out.report_issue(&issue)?,
-            }
-        }
-
-        // Report issues that resulted from merging.
-        for issue in &issues {
-            out.report_issue(issue)?;
-        }
+        let memory_index = MemoryMetaIndex::new(&builders[..], issues);
 
         Ok(memory_index)
     }

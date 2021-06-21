@@ -8,7 +8,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::str::FromStr;
-use std::sync::mpsc::SyncSender;
 use std::u16;
 
 use crate::prim::{AlbumId, Album, ArtistId, Artist, TrackId, Track, Date, Lufs, FilenameRef, StringRef, get_track_id};
@@ -113,12 +112,6 @@ impl fmt::Display for Issue {
                 panic!("Not actually a loudness mismatch."),
         }
     }
-}
-
-#[derive(Debug)]
-pub enum Progress {
-    /// An issue with a file was encountered.
-    Issue(Issue),
 }
 
 fn parse_date(date_str: &str) -> Option<Date> {
@@ -279,13 +272,12 @@ pub struct BuildMetaIndex {
     /// that we don't have to pass the file name around everywhere.
     pub current_filename: Option<String>,
 
-    // TODO: This option, to drop it when processing is done, is a bit of a
-    // hack. It would be nice to not have it in the builder at all.
-    pub progress: Option<SyncSender<Progress>>,
+    /// Issues collected while inserting into the builder.
+    pub issues: Vec<Issue>,
 }
 
 impl BuildMetaIndex {
-    pub fn new(progress: SyncSender<Progress>) -> BuildMetaIndex {
+    pub fn new() -> BuildMetaIndex {
         BuildMetaIndex {
             artists: BTreeMap::new(),
             albums: BTreeMap::new(),
@@ -298,11 +290,11 @@ impl BuildMetaIndex {
             album_sources: HashMap::new(),
             artist_sources: HashMap::new(),
             current_filename: None,
-            progress: Some(progress),
+            issues: Vec::new(),
         }
     }
 
-    /// Send an issue, then return none.
+    /// Push an issue, then return none.
     ///
     /// Returning none is useful for chaining with ?.
     fn issue<T>(&mut self, detail: IssueDetail) -> Option<T> {
@@ -312,7 +304,7 @@ impl BuildMetaIndex {
             .expect("Must set current_filename before reporting issue.")
             .clone();
         let issue = detail.for_file(filename);
-        self.progress.as_mut().unwrap().send(Progress::Issue(issue)).unwrap();
+        self.issues.push(issue);
         None
     }
 
@@ -607,7 +599,7 @@ impl BuildMetaIndex {
         if let Some(existing_album) = self.albums.get(&album_id) {
             if let Some(detail) = albums_different(&self.strings, album_id, existing_album, &album) {
                 let issue = detail.for_file(filename.clone());
-                self.progress.as_mut().unwrap().send(Progress::Issue(issue)).unwrap();
+                self.issues.push(issue);
             }
             add_album = false;
         }
@@ -615,7 +607,7 @@ impl BuildMetaIndex {
         if let Some(existing_artist) = self.artists.get(&artist_id) {
             if let Some(detail) = artists_different(&self.strings, artist_id, existing_artist, &artist) {
                 let issue = detail.for_file(filename.clone());
-                self.progress.as_mut().unwrap().send(Progress::Issue(issue)).unwrap();
+                self.issues.push(issue);
             }
             add_artist = false;
         }

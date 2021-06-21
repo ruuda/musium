@@ -31,6 +31,7 @@ pub fn can_notify() -> bool {
 ///
 /// * `READY=1` to signal startup completion.
 /// * `STATUS=message` to set a single-line status.
+/// * `EXTEND_TIMEOUT_USEC={microseconds}` to request a longer time to start.
 pub fn notify(kv_pairs: String) -> Result<(), ()> {
     let cstr = match CString::new(kv_pairs) {
         Ok(s) => s,
