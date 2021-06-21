@@ -882,11 +882,15 @@ impl Player {
         let history_join_handle = builder
             .name("history".into())
             .spawn(move || {
-                history::main(
+                let result = history::main(
                     &db_path,
                     &*index_for_history,
                     receiver,
                 );
+                // The history thread should not exit. When it does, that's a
+                // problem.
+                eprintln!("History thread exited: {:?}", result);
+                std::process::exit(1);
             }).unwrap();
 
         Player {

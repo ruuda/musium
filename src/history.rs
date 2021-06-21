@@ -12,7 +12,7 @@ use std::sync::mpsc::Receiver;
 
 use crate::{MetaIndex, TrackId};
 use crate::player::QueueId;
-use crate::database::{Database, Listen};
+use crate::database::{Database, Listen, Result};
 
 /// Changes in the playback state to be recorded.
 pub enum PlaybackEvent {
@@ -25,9 +25,9 @@ pub fn main(
     db_path: &Path,
     index: &dyn MetaIndex,
     events: Receiver<PlaybackEvent>,
-) {
-    let connection = sqlite::open(db_path).expect("Failed to open SQLite database.");
-    let mut db = Database::new(&connection).expect("Failed to initialize SQLite database.");
+) -> Result<()> {
+    let connection = sqlite::open(db_path)?;
+    let mut db = Database::new(&connection)?;
 
     let mut last_listen_id = None;
 
@@ -56,7 +56,7 @@ pub fn main(
                     disc_number: track.disc_number as i64,
                 };
                 let result = db.insert_listen_started(listen);
-                last_listen_id = Some(result.expect("Failed to insert listen started event into SQLite database."));
+                last_listen_id = Some(result?);
             }
             PlaybackEvent::Completed(queue_id, track_id) => {
                 if let Some(listen_id) = last_listen_id {
@@ -65,9 +65,7 @@ pub fn main(
                         &now_str[..],
                         queue_id,
                         track_id,
-                    ).expect(
-                        "Failed to insert listen completed event into SQLite database."
-                    );
+                    )?;
                 } else {
                     panic!(
                         "Completed queue entry {}, track {}, before starting.",
@@ -77,4 +75,6 @@ pub fn main(
             }
         }
     }
+
+    Ok(())
 }
