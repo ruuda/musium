@@ -9,6 +9,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::str::FromStr;
 use std::sync::mpsc::SyncSender;
+use std::u16;
 
 use crate::prim::{AlbumId, Album, ArtistId, Artist, TrackId, Track, Date, Lufs, FilenameRef, StringRef, get_track_id};
 use crate::string_utils::{StringDeduper, normalize_words};
@@ -550,13 +551,20 @@ impl BuildMetaIndex {
         let album_artist_for_sort = self.strings.insert(&sort_artist);
         words.clear();
 
-        // TODO: Check for u16 overflow.
-        // TODO: Warn if `streaminfo.samples` is None.
-        let samples = file.streaminfo_num_samples.unwrap_or(0) as u64;
+        let samples = match file.streaminfo_num_samples {
+            Some(s) => s as u64,
+            // TODO: Add a proper error for this, if it occurs in practice.
+            None => panic!("Streaminfo does not contain duration."),
+        };
         let samples_per_sec = file.streaminfo_sample_rate as u64;
         // Compute the duration in seconds. Add half the denominator in order to
         // round properly.
         let seconds = (samples + samples_per_sec / 2) / samples_per_sec;
+
+        if seconds > u16::MAX as u64 {
+            // TODO: Add a proper error for this, if it occurs in practice.
+            panic!("Track is longer than {} seconds.", u16::MAX);
+        }
 
         let track = Track {
             album_id: album_id,
