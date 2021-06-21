@@ -509,7 +509,6 @@ fn insert_file_metadata(
 
 #[cfg(test)]
 mod test {
-    use crate::database;
     use crate::database::{Database, FileMetaId};
     use super::{Mtime, get_updates};
     use std::path::PathBuf;
@@ -550,7 +549,8 @@ mod test {
         // In this case nothing changed on the file system with respect to the
         // database, so we expect no files to be scanned and no rows deleted.
         let connection = sqlite::open(":memory:").unwrap();
-        connection.execute(
+        let mut db = Database::new(&connection).unwrap();
+        db.connection.execute(
             "
             insert into
               file_metadata
@@ -567,7 +567,6 @@ mod test {
             "
         ).unwrap();
 
-        let mut db = Database::new(&connection).unwrap();
 
         let current_sorted = vec![
             (PathBuf::from("/foo/bar.flac"), Mtime(2)),
@@ -591,7 +590,8 @@ mod test {
     fn get_updates_add_remove() {
         // One file was added on the file system, one was deleted.
         let connection = sqlite::open(":memory:").unwrap();
-        connection.execute(
+        let mut db = Database::new(&connection).unwrap();
+        db.connection.execute(
             "
             insert into
               file_metadata
@@ -610,8 +610,6 @@ mod test {
               (4, '/z.flac', 4, 'N/A', 0, 0, 0);
             "
         ).unwrap();
-
-        let mut db = Database::new(&connection).unwrap();
 
         let current_sorted = vec![
             (PathBuf::from("/added.flac"), Mtime(3)),
@@ -636,7 +634,8 @@ mod test {
         // A file is present in both the file system and database, but the mtime
         // differs.
         let connection = sqlite::open(":memory:").unwrap();
-        connection.execute(
+        let mut db = Database::new(&connection).unwrap();
+        db.connection.execute(
             "
             insert into
               file_metadata
@@ -652,8 +651,6 @@ mod test {
               (1, '/file.flac', 100, 'N/A', 0, 0, 0);
             "
         ).unwrap();
-
-        let mut db = Database::new(&connection).unwrap();
 
         // Same path, but mtime is one more.
         let current_sorted = vec![(PathBuf::from("/file.flac"), Mtime(101))];
@@ -676,7 +673,8 @@ mod test {
         // The difference should be empty, but the sort order is not trivial
         // because it's not only ASCII.
         let connection = sqlite::open(":memory:").unwrap();
-        connection.execute(
+        let mut db = Database::new(&connection).unwrap();
+        db.connection.execute(
             "
             insert into
               file_metadata
@@ -693,8 +691,6 @@ mod test {
               (2, '/Eidola/1.flac', 1, 'N/A', 0, 0, 0);
             "
         ).unwrap();
-
-        let mut db = Database::new(&connection).unwrap();
 
         // Same path, but mtime is one more.
         let current_sorted = vec![
@@ -721,7 +717,8 @@ mod test {
         // component order. When we compare path order, a slash comes before a
         // space, and getting the updates reaches a wrong conclusion.
         let connection = sqlite::open(":memory:").unwrap();
-        connection.execute(
+        let mut db = Database::new(&connection).unwrap();
+        db.connection.execute(
             "
             insert into
               file_metadata
@@ -736,8 +733,6 @@ mod test {
               ('/foo/1/foo.flac', 1, 'N/A', 0, 0, 0);
             "
         ).unwrap();
-
-        let mut db = Database::new(&connection).unwrap();
 
         let current_sorted = vec![
             (PathBuf::from("/foo/1 take 2/bar.flac"), Mtime(2)),
