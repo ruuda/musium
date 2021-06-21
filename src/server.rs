@@ -393,8 +393,15 @@ impl MetaServer {
     }
 }
 
-pub fn serve(bind: &str, service: Arc<MetaServer>) {
-    let server = Server::http(bind).expect("TODO: Failed to start server.");
+pub fn serve(bind: &str, service: Arc<MetaServer>) -> ! {
+    let server = match Server::http(bind) {
+        Ok(s) => s,
+        Err(..) => {
+            eprintln!("Failed to start server, could not bind to {}.", bind);
+            std::process::exit(1);
+        }
+    };
+
     let server = Arc::new(server);
 
     // Browsers do not make more than 8 requests in parallel, so having more
@@ -423,16 +430,13 @@ pub fn serve(bind: &str, service: Arc<MetaServer>) {
         threads.push(join_handle);
     }
 
-    // When running under systemd, the service is readly when the server is
+    // When running under systemd, the service is ready when the server is
     // accepting connections, which is now.
     if systemd::can_notify() {
-        systemd::notify("STATUS=Online\nREADY=1\n".into())
+        systemd::notify("READY=1\n".into())
             .expect("Failed signal ready to systemd.");
     }
 
-    // Block until all threads have stopped, which only happens in case of an
-    // error on all of them.
-    for thread in threads.drain(..) {
-        thread.join().unwrap();
-    }
+    // Now wait forever, until the application is killed.
+    loop {}
 }

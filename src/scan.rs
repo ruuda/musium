@@ -106,9 +106,9 @@ pub fn scan(
     db_path: &Path,
     library_path: &Path,
     status_sender: &mut SyncSender<Status>,
-) {
-    let connection = sqlite::open(db_path).expect("Failed to open SQLite database.");
-    let mut db = Database::new(&connection).expect("Failed to initialize SQLite database.");
+) -> database::Result<()> {
+    let connection = sqlite::open(db_path)?;
+    let mut db = Database::new(&connection)?;
 
     let mut status = Status::new();
     let mut files_current = enumerate_flac_files(library_path, status_sender, &mut status);
@@ -129,14 +129,14 @@ pub fn scan(
         &mut db,
         &mut rows_to_delete,
         &mut paths_to_scan,
-    ).expect("Failed to query SQLite database for file metadata.");
+    )?;
 
     status.stage = ScanStage::Processing;
     status.files_to_process = paths_to_scan.len() as u64;
     status_sender.send(status).unwrap();
 
     // Delete rows for outdated files, we will insert new rows below.
-    delete_outdated_file_metadata(&mut db, &rows_to_delete);
+    delete_outdated_file_metadata(&mut db, &rows_to_delete)?;
 
     // Format the current time, we store this in the `imported_at` column in the
     // `file_metadata` table.
@@ -150,24 +150,19 @@ pub fn scan(
         &now_str,
         status_sender,
         &mut status,
-    );
+    )?;
 
     // If we deleted anything vacuum the database to ensure it's packed tightly
     // again. Deletes are expected to be infrequent and the database is expected
     // to be small (a few megabytes), so the additional IO is not an issue.
     if rows_to_delete.len() > 0 {
-        db
-            .connection
-            .execute("VACUUM")
-            .expect("Failed to vacuum SQLite database.");
+        db.connection.execute("VACUUM")?;
     }
 
     status.stage = ScanStage::Done;
     status_sender.send(status).unwrap();
 
-    for row in db.iter_file_metadata().expect("TODO") {
-        println!("{:?}", row);
-    }
+    Ok(())
 }
 
 /// Enumerate all flac files and their mtimes.
@@ -308,22 +303,14 @@ pub fn get_updates(
 pub fn delete_outdated_file_metadata(
     db: &mut Database,
     rows_to_delete: &[FileMetaId],
-) {
-    db
-        .connection
-        .execute("BEGIN")
-        .expect("Failed to begin SQLite transaction.");
+) -> database::Result<()> {
+    db.connection.execute("BEGIN")?;
 
     for row in rows_to_delete {
-        db
-            .delete_file_metadata(*row)
-            .expect("Failed to delete file_metadata row.");
+        db.delete_file_metadata(*row)?;
     }
 
-    db
-        .connection
-        .execute("COMMIT")
-        .expect("Failed to commit SQLite transaction.");
+    db.connection.execute("COMMIT")
 }
 
 pub fn insert_file_metadata_for_paths(
@@ -332,7 +319,7 @@ pub fn insert_file_metadata_for_paths(
     now_str: &str,
     status_sender: &mut SyncSender<Status>,
     status: &mut Status,
-) {
+) -> database::Result<()> {
     use std::sync::mpsc::sync_channel;
     // When we are IO bound, we need enough threads to keep the IO scheduler
     // queues fed, so it can schedule optimally and minimize seeks. Therefore,
@@ -390,12 +377,11 @@ pub fn insert_file_metadata_for_paths(
         // Scanning does not take *that* long anyway, for me it takes a few
         // minutes for 17k files on a spinning disk, so if you kill it early,
         // just restart from scratch, the loss is not that big.
-        db.connection.execute("BEGIN").expect("Failed to begin SQLite transaction.");
+        db.connection.execute("BEGIN")?;
 
         for (i, flac_reader) in rx_file.iter() {
             let (ref path, mtime) = paths_to_scan[i];
-            insert_file_metadata(db, now_str, &path, mtime, flac_reader)
-                .expect("Failed to insert file metadata in SQLite database.");
+            insert_file_metadata(db, now_str, &path, mtime, flac_reader)?;
 
             // Keep the status up to date, and send it once in a while. We send
             // it more often here than when enumerating files, because reading
@@ -413,12 +399,14 @@ pub fn insert_file_metadata_for_paths(
         // processed file for files that did get processed.
         assert_eq!(counter.load(Ordering::SeqCst), paths_to_scan.len() + num_threads);
 
-        db.connection.execute("COMMIT").expect("Failed to commit SQLite transaction.");
+        db.connection.execute("COMMIT")?;
 
         // Send the final discovery status, we may have processed some files
         // since the last update.
         status_sender.send(*status).unwrap();
-    });
+
+        Ok(())
+    })
 }
 
 /// Read files from `paths` as long as `counter` is less than `paths.len()`,
@@ -442,7 +430,6 @@ fn read_files(
         let reader = match claxon::FlacReader::open_ext(path, opts) {
             Ok(r) => r,
             Err(err) => {
-                // TODO: Add a nicer way to report such errors.
                 eprintln!("Failure while reading {:?}: {}", path, err);
                 continue;
             }
@@ -462,8 +449,7 @@ fn insert_file_metadata(
     let path_utf8 = match path.to_str() {
         Some(s) => s,
         None => {
-            // TODO: Add a nicer way to report this error.
-            eprintln!("Warning: Path {:?} is not valid UTF-8.", path);
+            eprintln!("Warning: Path {:?} is not valid UTF-8. Skipping.", path);
             return Ok(())
         }
     };

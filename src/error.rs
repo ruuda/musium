@@ -6,6 +6,7 @@
 // A copy of the License has been included in the root of the repository.
 
 use std::io;
+use std::path::PathBuf;
 use std::result;
 
 #[derive(Debug)]
@@ -18,6 +19,12 @@ pub enum Error {
 
     /// IO error.
     IoError(io::Error),
+
+    /// An FLAC file at a given location could not be read.
+    FormatError(PathBuf, claxon::Error),
+
+    /// Interaction with the SQLite database failed.
+    DatabaseError(sqlite::Error),
 }
 
 // TODO: Implement Display to make these a bit more user-friendly.
@@ -25,6 +32,12 @@ pub enum Error {
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Error {
         Error::IoError(err)
+    }
+}
+
+impl From<sqlite::Error> for Error {
+    fn from(err: sqlite::Error) -> Error {
+        Error::DatabaseError(err)
     }
 }
 

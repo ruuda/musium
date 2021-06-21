@@ -22,7 +22,7 @@ use std::process;
 use std::sync::Arc;
 
 use musium::config::Config;
-use musium::error;
+use musium::error::Result;
 use musium::prim::AlbumId;
 use musium::scan;
 use musium::server::{MetaServer, serve};
@@ -30,8 +30,8 @@ use musium::string_utils::normalize_words;
 use musium::thumb_cache::ThumbCache;
 use musium::{MetaIndex, MemoryMetaIndex};
 
-fn make_index(db_path: &Path) -> MemoryMetaIndex {
-    let (index, issues) = MemoryMetaIndex::from_database(&db_path);
+fn make_index(db_path: &Path) -> Result<MemoryMetaIndex> {
+    let (index, issues) = MemoryMetaIndex::from_database(&db_path)?;
     for issue in &issues {
         println!("{}\n", issue);
     }
@@ -103,7 +103,7 @@ fn make_index(db_path: &Path) -> MemoryMetaIndex {
     println!("Album word index:  {}", index.words_album.size());
     println!("Track word index:  {}", index.words_track.size());
 
-    index
+    Ok(index)
 }
 
 enum GenThumb {
@@ -338,7 +338,7 @@ fn match_listens(
     index: &MemoryMetaIndex,
     in_path: String,
     out_path: String,
-) -> io::Result<()> {
+) -> Result<()> {
     let fi = fs::File::open(in_path)?;
     let r = io::BufReader::new(fi);
     let mut lines = r.lines();
@@ -408,7 +408,7 @@ fn match_listens(
     Ok(())
 }
 
-fn run_scan(config: Config) {
+fn run_scan(config: Config) -> Result<()> {
     // Status updates should print much faster than they are produced, so use
     // a small buffer for them.
     let (mut tx, rx) = std::sync::mpsc::sync_channel(15);
@@ -418,7 +418,7 @@ fn run_scan(config: Config) {
             &config.db_path(),
             &config.library_path,
             &mut tx,
-        );
+        )
     });
 
     {
@@ -455,7 +455,9 @@ fn run_scan(config: Config) {
         }
     }
 
-    scan_thread.join().unwrap();
+    // The unwrap unwraps the join, not the scan's result.
+    scan_thread.join().unwrap()?;
+    Ok(())
 }
 
 fn print_usage() {
@@ -469,14 +471,14 @@ cache -- Generate album art thumbnails.
 match -- Match listens (see process_listens.py) to tracks.");
 }
 
-fn load_config(config_fname: &str) -> error::Result<Config> {
+fn load_config(config_fname: &str) -> Result<Config> {
     let f = fs::File::open(config_fname)?;
     let buf_reader = io::BufReader::new(f);
     let lines: io::Result<Vec<String>> = buf_reader.lines().collect();
     Config::parse(lines?.iter())
 }
 
-fn main() {
+fn main() -> Result<()> {
     if env::args().len() < 3 {
         print_usage();
         process::exit(1);
@@ -484,12 +486,12 @@ fn main() {
 
     let cmd = env::args().nth(1).unwrap();
     let config_path = env::args().nth(2).unwrap();
-    let config = load_config(&config_path).unwrap();
+    let config = load_config(&config_path)?;
     println!("Configuration:\n{}\n", config);
 
     match &cmd[..] {
         "serve" => {
-            let index = make_index(&config.db_path());
+            let index = make_index(&config.db_path())?;
             let arc_index = std::sync::Arc::new(index);
             println!("Indexing complete.");
             println!("Loading cover art thumbnails ...");
@@ -512,17 +514,18 @@ fn main() {
             serve(&config.listen, Arc::new(service));
         }
         "cache" => {
-            let index = make_index(&config.db_path());
+            let index = make_index(&config.db_path())?;
             generate_thumbnails(&index, &config.covers_path);
+            Ok(())
         }
         "scan" => {
-            run_scan(config);
+            run_scan(config)
         }
         "match" => {
             let in_path = env::args().nth(3).unwrap();
             let out_path = env::args().nth(4).unwrap();
-            let index = make_index(&config.library_path);
-            match_listens(&index, in_path, out_path).unwrap();
+            let index = make_index(&config.library_path)?;
+            match_listens(&index, in_path, out_path)
         }
         _ => {
             print_usage();

@@ -32,16 +32,16 @@ pub mod string_utils;
 pub mod systemd;
 pub mod thumb_cache;
 
-use std::io;
-use std::path::{Path};
+use std::path::Path;
 use std::u32;
 use std::u64;
 
-use crate::prim::{ArtistId, Artist, AlbumId, Album, TrackId, Track, Lufs, StringRef, FilenameRef, get_track_id};
-use crate::word_index::{MemoryWordIndex};
-use crate::string_utils::StringDeduper;
 use crate::build::{BuildMetaIndex, Issue};
 use crate::database::Database;
+use crate::error::Result;
+use crate::prim::{ArtistId, Artist, AlbumId, Album, TrackId, Track, Lufs, StringRef, FilenameRef, get_track_id};
+use crate::string_utils::StringDeduper;
+use crate::word_index::{MemoryWordIndex};
 
 pub trait MetaIndex {
     /// Return the number of tracks in the index.
@@ -106,30 +106,6 @@ pub trait MetaIndex {
     /// tracks by an artist, only those for which `search_album` would not
     /// already find the entire album.
     fn search_track(&self, words: &[String], into: &mut Vec<TrackId>);
-}
-
-#[derive(Debug)]
-pub enum Error {
-    /// An IO error during writing the index or reading the index or metadata.
-    IoError(io::Error),
-
-    /// An FLAC file to be indexed could not be read.
-    FormatError(claxon::Error),
-}
-
-impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Error {
-        Error::IoError(err)
-    }
-}
-
-impl From<claxon::Error> for Error {
-    fn from(err: claxon::Error) -> Error {
-        match err {
-            claxon::Error::IoError(io_err) => Error::IoError(io_err),
-            _ => Error::FormatError(err),
-        }
-    }
 }
 
 /// Indices into a sorted array based on the most significant byte of an id.
@@ -308,20 +284,19 @@ impl MemoryMetaIndex {
     /// Index the given files.
     ///
     /// Reports progress to `out`, which can be `std::io::stdout().lock()`.
-    pub fn from_database(db_path: &Path) -> (MemoryMetaIndex, Vec<Issue>) {
-        let conn = sqlite::Connection::open(db_path).expect("Failed to open SQLite database.");
-        let mut db = Database::new(&conn).expect("Failed to initialize database.");
+    pub fn from_database(db_path: &Path) -> Result<(MemoryMetaIndex, Vec<Issue>)> {
+        let conn = sqlite::Connection::open(db_path)?;
+        let mut db = Database::new(&conn)?;
 
         let mut builder = BuildMetaIndex::new();
 
-        for row_result in db.iter_file_metadata().expect("TODO: Proper error handling.") {
-            let file = row_result.expect("TODO: Proper error handling.");
-            builder.insert(file);
+        for file in db.iter_file_metadata()? {
+            builder.insert(file?);
         }
 
         let memory_index = MemoryMetaIndex::new(&builder);
 
-        (memory_index, builder.issues)
+        Ok((memory_index, builder.issues))
     }
 }
 
