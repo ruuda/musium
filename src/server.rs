@@ -432,10 +432,7 @@ pub fn serve(bind: &str, service: Arc<MetaServer>) -> ! {
 
     // When running under systemd, the service is ready when the server is
     // accepting connections, which is now.
-    if systemd::can_notify() {
-        systemd::notify("READY=1\n".into())
-            .expect("Failed signal ready to systemd.");
-    }
+    systemd::notify_ready_if_can_notify();
 
     // Now wait forever, until the application is killed.
     loop {}
