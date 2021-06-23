@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // A copy of the License has been included in the root of the repository.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::str::FromStr;
 use std::u16;
@@ -256,16 +256,6 @@ pub struct BuildMetaIndex {
     pub words_album: BTreeSet<(String, AlbumId, WordMeta)>,
     pub words_track: BTreeSet<(String, TrackId, WordMeta)>,
 
-    // For album and artist data, store the file from which the metadata was
-    // taken. This is later used for error reporting when the builders are
-    // merged. If there are inconsistencies at that point, we need to be able to
-    // attribute the album or artist metadata in this builder to a specific
-    // file. If all files agree then it's an arbitrary one, but if there was
-    // already inconsistent data in this builder's input, we need to remember
-    // which file we chose. Values are indices into the `filenames` vector.
-    pub album_sources: HashMap<AlbumId, FilenameRef>,
-    pub artist_sources: HashMap<ArtistId, FilenameRef>,
-
     /// File name of the file currently being inserted.
     ///
     /// This is used to simplify helper methods for error reporting, to ensure
@@ -287,8 +277,6 @@ impl BuildMetaIndex {
             words_artist: BTreeSet::new(),
             words_album: BTreeSet::new(),
             words_track: BTreeSet::new(),
-            album_sources: HashMap::new(),
-            artist_sources: HashMap::new(),
             current_filename: None,
             issues: Vec::new(),
         }
@@ -617,12 +605,10 @@ impl BuildMetaIndex {
 
         if add_album {
             self.albums.insert(album_id, album);
-            self.album_sources.insert(album_id, FilenameRef(filename_id));
         }
 
         if add_artist {
             self.artists.insert(artist_id, artist);
-            self.artist_sources.insert(artist_id, FilenameRef(filename_id));
         }
 
         Some(())
