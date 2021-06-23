@@ -27,6 +27,15 @@ pub enum Error {
     DatabaseError(sqlite::Error),
 }
 
+impl Error {
+    pub fn from_claxon(path: PathBuf, err: claxon::Error) -> Error {
+        match err {
+            claxon::Error::IoError(err) => Error::IoError(err),
+            _ => Error::FormatError(path, err),
+        }
+    }
+}
+
 // TODO: Implement Display to make these a bit more user-friendly.
 
 impl From<io::Error> for Error {

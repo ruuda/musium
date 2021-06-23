@@ -17,22 +17,22 @@ use std::env;
 use std::fs;
 use std::io::{BufRead, Write};
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process;
 use std::sync::Arc;
 
 use musium::config::Config;
 use musium::error::Result;
-use musium::prim::AlbumId;
-use musium::scan;
+use musium::scan::ScanStage;
 use musium::server::{MetaServer, serve};
 use musium::string_utils::normalize_words;
 use musium::thumb_cache::ThumbCache;
 use musium::{MetaIndex, MemoryMetaIndex};
 
 fn make_index(db_path: &Path) -> Result<MemoryMetaIndex> {
-    let (index, issues) = MemoryMetaIndex::from_database(&db_path)?;
-    for issue in &issues {
+    let (index, builder) = MemoryMetaIndex::from_database(&db_path)?;
+
+    for issue in &builder.issues {
         println!("{}\n", issue);
     }
 
@@ -104,224 +104,6 @@ fn make_index(db_path: &Path) -> Result<MemoryMetaIndex> {
     println!("Track word index:  {}", index.words_track.size());
 
     Ok(index)
-}
-
-enum GenThumb {
-    Resizing {
-        out_fname_png: PathBuf,
-        out_fname_jpg: PathBuf,
-        child: process::Child,
-    },
-    Compressing {
-        out_fname_png: PathBuf,
-        child: process::Child,
-    },
-}
-
-impl GenThumb {
-
-    /// Start an extract-and-resize operation.
-    pub fn new(cache_dir: &Path, album_id: AlbumId, filename: &str) -> claxon::Result<Option<GenThumb>> {
-        use crate::process::{Command, Stdio};
-
-        let mut out_fname_jpg: PathBuf = PathBuf::from(cache_dir);
-        out_fname_jpg.push(format!("{}.jpg", album_id));
-
-        let mut out_fname_png: PathBuf = PathBuf::from(cache_dir);
-        out_fname_png.push(format!("{}.png", album_id));
-
-        // Early-out on existing files. The user would need to clear the cache
-        // manually.
-        if out_fname_jpg.is_file() {
-            return Ok(None)
-        }
-
-        let opts = claxon::FlacReaderOptions {
-            metadata_only: true,
-            read_picture: claxon::ReadPicture::CoverAsVec,
-            read_vorbis_comment: false,
-        };
-        let reader = claxon::FlacReader::open_ext(filename, opts)?;
-
-        let cover = match reader.into_pictures().pop() {
-            Some(c) => c,
-            None => return Ok(None),
-        };
-
-        // TODO: Add a nicer way to report progress.
-        println!("{:?} <- {}", &out_fname_jpg, filename);
-
-        let mut convert = Command::new("convert")
-            // Read from stdin.
-            .arg("-")
-            // Some cover arts have an alpha channel, but we are going to encode
-            // to jpeg which does not support it. First blend the image with a
-            // black background, then drop the alpha channel. We also need a
-            // -flatten to ensure that the subsequent distort operation uses the
-            // "Edge" virtual pixel mode, rather than sampling the black
-            // background. If it samples the black background, the edges of the
-            // thumbnail become darker, which is especially noticeable for
-            // covers with white edges, and also shows up as a "pop" in the
-            // album view when the full-resolution image loads.
-            .args(&[
-                "-background", "black",
-                "-alpha", "remove",
-                "-alpha", "off",
-                "-flatten"
-            ])
-            // Resize in a linear color space, sRGB is not suitable for it
-            // because it is nonlinear. "RGB" in ImageMagick is linear.
-            .args(&["-colorspace", "RGB"])
-            // See also the note about -flatten above. I think Edge is the
-            // default, but let's be explicit about it.
-            .args(&["-virtual-pixel", "Edge"])
-            // Lanczos2 is a bit less sharp than Cosine, but less sharp edges
-            // means that the image compresses better, and less artifacts. But
-            // still, Lanczos was too blurry in my opinion.
-            .args(&["-filter", "Cosine"])
-            // Twice the size of the thumb in the webinterface, so they appear
-            // pixel-perfect on a high-DPI display, or on a mobile phone.
-            .args(&["-distort", "Resize", "140x140!"])
-            .args(&["-colorspace", "sRGB"])
-            // Remove EXIF metadata, including the colour profile if there was
-            // any -- we convert to sRGB anyway.
-            .args(&["-strip"])
-            // Write lossless, we will later compress to jpeg with Guetzli,
-            // which has a better compressor.
-            .arg(&out_fname_png)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::inherit())
-            .spawn()
-            // TODO: Handle errors properly.
-            .expect("Failed to spawn Imagemagick's 'convert'.");
-
-        {
-            let stdin = convert.stdin.as_mut().expect("Failed to open stdin.");
-            stdin.write_all(cover.data()).unwrap();
-        }
-
-        let result = GenThumb::Resizing {
-            out_fname_png: out_fname_png,
-            out_fname_jpg: out_fname_jpg,
-            child: convert
-        };
-        Ok(Some(result))
-    }
-
-    /// Wait for one step of the process, start and return the next one if any.
-    pub fn poll(self) -> Option<GenThumb> {
-        use crate::process::Command;
-        match self {
-            GenThumb::Resizing { out_fname_png, out_fname_jpg, mut child } => {
-                // TODO: Use a custom error type, remove all `expect()`s.
-                child.wait().expect("Failed to run Imagemagick's 'convert'.");
-                let guetzli = Command::new("guetzli")
-                    .args(&["--quality", "97"])
-                    .arg(&out_fname_png)
-                    .arg(&out_fname_jpg)
-                    // TODO: Handle errors properly.
-                    .spawn().expect("Failed to spawn Guetzli.");
-                let result = GenThumb::Compressing {
-                    out_fname_png: out_fname_png,
-                    child: guetzli,
-                };
-                Some(result)
-            }
-            GenThumb::Compressing { out_fname_png, mut child } => {
-                // TODO: Handle errors properly.
-                child.wait().expect("Failed to run Guetzli.");
-
-                // Delete the intermediate png file.
-                fs::remove_file(&out_fname_png).expect("Failed to delete intermediate file.");
-
-                None
-            }
-        }
-    }
-
-    fn is_done(&mut self) -> bool {
-        let child = match self {
-            GenThumb::Resizing { ref mut child, .. } => child,
-            GenThumb::Compressing { ref mut child, .. } => child,
-        };
-        match child.try_wait() {
-            Ok(Some(_)) => true,
-            _ => false,
-        }
-    }
-}
-
-struct GenThumbs<'a> {
-    cache_dir: &'a Path,
-    pending: Vec<GenThumb>,
-    max_len: usize,
-}
-
-impl<'a> GenThumbs<'a> {
-    pub fn new(cache_dir: &'a Path, max_parallelism: usize) -> GenThumbs<'a> {
-        GenThumbs {
-            cache_dir: cache_dir,
-            pending: Vec::new(),
-            max_len: max_parallelism,
-        }
-    }
-
-    fn wait_until_at_most_in_use(&mut self, max_used: usize) {
-        while self.pending.len() > max_used {
-            let mut found_one = false;
-
-            // Round 1: Try to find a process that is already finished, and make
-            // progress on that.
-            for i in 0..self.pending.len() {
-                if self.pending[i].is_done() {
-                    let gen = self.pending.remove(i);
-                    if let Some(next_gen) = gen.poll() {
-                        self.pending.push(next_gen);
-                    }
-                    found_one = true;
-                    break
-                }
-            }
-
-            if found_one {
-                continue
-            }
-
-            // Round 2: All processes are still running, wait for the oldest one.
-            let gen = self.pending.remove(0);
-            if let Some(next_gen) = gen.poll() {
-                self.pending.push(next_gen);
-            }
-        }
-    }
-
-    pub fn add(&mut self, album_id: AlbumId, filename: &str) -> claxon::Result<()> {
-        let max_used = self.max_len - 1;
-        self.wait_until_at_most_in_use(max_used);
-        if let Some(gen) = GenThumb::new(self.cache_dir, album_id, filename)? {
-            self.pending.push(gen);
-        }
-        Ok(())
-    }
-
-    pub fn drain(&mut self) {
-        self.wait_until_at_most_in_use(0);
-    }
-}
-
-
-fn generate_thumbnails(index: &MemoryMetaIndex, cache_dir: &Path) {
-    let max_parallelism = 32;
-    let mut gen_thumbs = GenThumbs::new(cache_dir, max_parallelism);
-    let mut prev_album_id = AlbumId(0);
-    for &(_tid, ref track) in index.get_tracks() {
-        if track.album_id != prev_album_id {
-            let fname = index.get_filename(track.filename);
-            gen_thumbs.add(track.album_id, fname).expect("Failed to start thumbnail generation.");
-            prev_album_id = track.album_id;
-        }
-    }
-    gen_thumbs.drain();
 }
 
 /// Return whether the two strings are equal after extracting normalized words.
@@ -408,40 +190,39 @@ fn match_listens(
     Ok(())
 }
 
-fn run_scan(config: Config) -> Result<()> {
+fn run_scan(config: &Config) -> Result<()> {
     // Status updates should print much faster than they are produced, so use
     // a small buffer for them.
     let (mut tx, rx) = std::sync::mpsc::sync_channel(15);
 
+    let db_path = config.db_path();
+    let library_path = config.library_path.clone();
+
     let scan_thread = std::thread::spawn(move || {
-        scan::scan(
-            &config.db_path(),
-            &config.library_path,
-            &mut tx,
-        )
+        musium::scan::scan(&db_path, &library_path, &mut tx)
     });
 
     {
         let stdout = std::io::stdout();
         let mut lock = stdout.lock();
-        let mut prev_status = scan::Status::new();
+        let mut prev_status = musium::scan::Status::new();
 
         for status in rx {
             match (prev_status.stage, status.stage) {
-                (scan::ScanStage::Discovering, scan::ScanStage::PreProcessing) => writeln!(lock).unwrap(),
-                (_, scan::ScanStage::Done) => writeln!(lock).unwrap(),
+                (ScanStage::Discovering, ScanStage::PreProcessing) => writeln!(lock).unwrap(),
+                (_, ScanStage::Done) => writeln!(lock).unwrap(),
                 _ => {}
             }
             match status.stage {
-                scan::ScanStage::Done => break,
-                scan::ScanStage::Discovering => {
+                ScanStage::Done => break,
+                ScanStage::Discovering => {
                     write!(
                         lock,
                         "\rScanning: {} files discovered",
                         status.files_discovered,
                     ).unwrap();
                 }
-                scan::ScanStage::PreProcessing | scan::ScanStage::Processing => {
+                ScanStage::PreProcessing | ScanStage::Processing => {
                     write!(
                         lock,
                         "\rProcessing: {} of {}",
@@ -461,14 +242,25 @@ fn run_scan(config: Config) -> Result<()> {
 }
 
 fn print_usage() {
-    println!("Usage:\n");
-    println!("  musium serve musium.conf");
-    println!("  musium cache musium.conf");
-    println!("  musium match musium.conf listenbrainz.tsv matched.tsv");
-    println!("
-serve -- Start the server.
-cache -- Generate album art thumbnails.
-match -- Match listens (see process_listens.py) to tracks.");
+    println!("\
+Usage:
+
+  musium scan musium.conf
+  musium serve musium.conf
+  musium match musium.conf listenbrainz.tsv matched.tsv
+
+SCAN
+
+  Update the file database, generate album art thumbnails.
+
+SERVE
+
+  Start the server. Requires running a scan first for serving an up-to-date
+  library.
+
+MATCH
+
+  Match listens (see process_listens.py) to tracks.");
 }
 
 fn load_config(config_fname: &str) -> Result<Config> {
@@ -513,13 +305,10 @@ fn main() -> Result<()> {
             let service = MetaServer::new(arc_index.clone(), thumb_cache, player);
             serve(&config.listen, Arc::new(service));
         }
-        "cache" => {
-            let index = make_index(&config.db_path())?;
-            generate_thumbnails(&index, &config.covers_path);
-            Ok(())
-        }
         "scan" => {
-            run_scan(config)
+            run_scan(&config)?;
+            musium::thumb_gen::generate_thumbnails(&config.db_path(), &config.covers_path)?;
+            Ok(())
         }
         "match" => {
             let in_path = env::args().nth(3).unwrap();

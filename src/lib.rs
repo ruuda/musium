@@ -31,17 +31,18 @@ pub mod server;
 pub mod string_utils;
 pub mod systemd;
 pub mod thumb_cache;
+pub mod thumb_gen;
 
 use std::path::Path;
 use std::u32;
 use std::u64;
 
-use crate::build::{BuildMetaIndex, Issue};
+use crate::build::BuildMetaIndex;
 use crate::database::Database;
 use crate::error::Result;
 use crate::prim::{ArtistId, Artist, AlbumId, Album, TrackId, Track, Lufs, StringRef, FilenameRef, get_track_id};
 use crate::string_utils::StringDeduper;
-use crate::word_index::{MemoryWordIndex};
+use crate::word_index::MemoryWordIndex;
 
 pub trait MetaIndex {
     /// Return the number of tracks in the index.
@@ -281,10 +282,12 @@ impl MemoryMetaIndex {
         }
     }
 
-    /// Index the given files.
+    /// Build an index from the data stored in the database.
     ///
-    /// Reports progress to `out`, which can be `std::io::stdout().lock()`.
-    pub fn from_database(db_path: &Path) -> Result<(MemoryMetaIndex, Vec<Issue>)> {
+    /// Also returns the intermediate builder. It contains any issues
+    /// discovered, and the mtimes per album, which can be used to check if any
+    /// thumbnails need updating.
+    pub fn from_database(db_path: &Path) -> Result<(MemoryMetaIndex, BuildMetaIndex)> {
         let conn = sqlite::Connection::open(db_path)?;
         let mut db = Database::new(&conn)?;
 
@@ -296,7 +299,7 @@ impl MemoryMetaIndex {
 
         let memory_index = MemoryMetaIndex::new(&builder);
 
-        Ok((memory_index, builder.issues))
+        Ok((memory_index, builder))
     }
 }
 
