@@ -36,6 +36,7 @@ use walkdir;
 
 use crate::database;
 use crate::database::{Database, FileMetadataInsert, FileMetaId};
+use crate::prim::Mtime;
 
 type FlacReader = claxon::FlacReader<fs::File>;
 
@@ -93,14 +94,6 @@ impl Status {
         }
     }
 }
-
-/// Last modified time of a file, as reported by the file system.
-///
-/// This is only used to determine whether a file changed since we last read it,
-/// the meaning of the inner value is not relevant, only that it implements
-/// `Ord`.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub struct Mtime(pub i64);
 
 pub fn scan(
     db_path: &Path,

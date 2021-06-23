@@ -5,12 +5,12 @@
 // you may not use this file except in compliance with the License.
 // A copy of the License has been included in the root of the repository.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::str::FromStr;
 use std::u16;
 
-use crate::prim::{AlbumId, Album, ArtistId, Artist, TrackId, Track, Date, Lufs, FilenameRef, StringRef, get_track_id};
+use crate::prim::{AlbumId, Album, ArtistId, Artist, Mtime, TrackId, Track, Date, Lufs, FilenameRef, StringRef, get_track_id};
 use crate::string_utils::{StringDeduper, normalize_words};
 use crate::word_index::{WordMeta};
 use crate::database::FileMetadata;
@@ -256,6 +256,12 @@ pub struct BuildMetaIndex {
     pub words_album: BTreeSet<(String, AlbumId, WordMeta)>,
     pub words_track: BTreeSet<(String, TrackId, WordMeta)>,
 
+    /// The highest mtime of all files in the album.
+    ///
+    /// This is used to invalidate any existing album art thumbnails, in case a
+    /// file in the album gets updated.
+    pub album_mtimes: HashMap<AlbumId, Mtime>,
+
     /// File name of the file currently being inserted.
     ///
     /// This is used to simplify helper methods for error reporting, to ensure
@@ -274,6 +280,7 @@ impl BuildMetaIndex {
             tracks: BTreeMap::new(),
             strings: StringDeduper::new(),
             filenames: Vec::new(),
+            album_mtimes: HashMap::new(),
             words_artist: BTreeSet::new(),
             words_album: BTreeSet::new(),
             words_track: BTreeSet::new(),
@@ -460,6 +467,13 @@ impl BuildMetaIndex {
         let artist_id = ArtistId(mbid_artist);
         let album_id = AlbumId(mbid_album);
         let track_id = get_track_id(album_id, disc_number, track_number);
+
+        // Record the most recently changed (highest mtime) per album.
+        let mtime = Mtime(file.mtime);
+        self.album_mtimes
+            .entry(album_id)
+            .and_modify(|m| *m = mtime.max(*m))
+            .or_insert(mtime);
 
         // Split the title, album, and album artist, on words, and add those to
         // the indexes, to allow finding the track/album/artist later by word.

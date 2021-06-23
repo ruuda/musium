@@ -142,6 +142,14 @@ impl FromStr for Lufs {
     }
 }
 
+/// Last modified time of a file, as reported by the file system.
+///
+/// This is only used to determine whether a file changed since we last read it,
+/// the meaning of the inner value is not relevant, only that it implements
+/// `Ord`.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct Mtime(pub i64);
+
 #[repr(C)]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Track {

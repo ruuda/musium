@@ -383,6 +383,7 @@ sql_read! {
     #[derive(Debug)]
     pub struct FileMetadata {
         pub filename: String,
+        pub mtime: i64,
         pub streaminfo_channels: i64,
         pub streaminfo_bits_per_sample: i64,
         pub streaminfo_num_samples: Option<i64>,
