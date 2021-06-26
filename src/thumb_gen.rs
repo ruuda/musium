@@ -45,6 +45,7 @@ impl GenThumb {
         // Early-out on existing files that are more recent than the album they
         // are based on.
         if let Ok(meta) = fs::metadata(&out_fname_jpg) {
+            return Ok(None);
             if meta.mtime() > album_mtime.0 {
                 // The file exists and is up to date, nothing to be done here.
                 return Ok(None);
