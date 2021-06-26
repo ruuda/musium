@@ -235,6 +235,12 @@ impl<'a> GenThumbs<'a> {
 pub fn generate_thumbnails(db_path: &Path, cache_dir: &Path) -> Result<()> {
     let (index, builder) = MemoryMetaIndex::from_database(db_path)?;
 
+    // TODO: Move issue reporting to a better place. Maybe take the builder and
+    // index as an argument to this method.
+    for issue in &builder.issues {
+        println!("{}", issue);
+    }
+
     let max_parallelism = 32;
     let mut gen_thumbs = GenThumbs::new(cache_dir, max_parallelism);
     let mut prev_album_id = AlbumId(0);
