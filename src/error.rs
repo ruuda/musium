@@ -17,6 +17,9 @@ pub enum Error {
     /// A key is missing in the config.
     IncompleteConfig(&'static str),
 
+    /// Running an external program ("command") failed.
+    CommandError(&'static str, io::Error),
+
     /// IO error.
     IoError(io::Error),
 

@@ -13,39 +13,62 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::process;
+use std::sync::Mutex;
 
 use crate::{MetaIndex, MemoryMetaIndex};
 use crate::error::{Error, Result};
 use crate::prim::{AlbumId, Mtime};
 
+/// Tracks the process of generating a thumbnail.
+struct GenThumb<'a> {
+    album_id: AlbumId,
+    state: GenThumbState<'a>,
+}
+
 /// The state of generating a single thumbnail.
-enum GenThumb {
+enum GenThumbState<'a> {
+    Pending {
+        flac_filename: &'a Path,
+    },
     Resizing {
-        out_fname_png: PathBuf,
-        out_fname_jpg: PathBuf,
         child: process::Child,
     },
     Compressing {
-        out_fname_png: PathBuf,
         child: process::Child,
     },
 }
 
-impl GenThumb {
-    /// Start an extract-and-resize operation.
+fn get_fname(thumb_dir: &Path, album_id: AlbumId, extension: &str) -> PathBuf {
+    let mut fname = PathBuf::from(thumb_dir);
+    fname.push(format!("{}{}", album_id, extension));
+    fname
+}
+
+impl<'a> GenThumb<'a> {
+    /// Create an extract-and-resize operation, if needed.
+    ///
+    /// If no thumbnail exists for the item yet, or if it does, but its mtime is
+    /// older than the `album_mtime`, then this returns the task for generating
+    /// the thumbnail, in the [`GenThumb::Pending`] state.
+    ///
+    /// If a thumnail exists, but it is outdated, this deletes the file before
+    /// returning the task to regenerate it.
     pub fn new(
-        cache_dir: &Path,
+        thumb_dir: &Path,
         album_id: AlbumId,
-        filename: &str,
+        flac_filename: &'a Path,
         album_mtime: Mtime,
-    ) -> Result<Option<GenThumb>> {
-        let mut out_fname_jpg: PathBuf = PathBuf::from(cache_dir);
-        out_fname_jpg.push(format!("{}.jpg", album_id));
+    ) -> Result<Option<GenThumb<'a>>> {
+        let task = GenThumb {
+            album_id: album_id,
+            state: GenThumbState::Pending { flac_filename },
+        };
+
+        let out_fname_jpg = get_fname(thumb_dir, task.album_id, ".jpg");
 
         // Early-out on existing files that are more recent than the album they
         // are based on.
         if let Ok(meta) = fs::metadata(&out_fname_jpg) {
-            return Ok(None);
             if meta.mtime() > album_mtime.0 {
                 // The file exists and is up to date, nothing to be done here.
                 return Ok(None);
@@ -55,24 +78,27 @@ impl GenThumb {
             }
         }
 
-        let mut out_fname_png: PathBuf = PathBuf::from(cache_dir);
-        out_fname_png.push(format!("{}.png", album_id));
+        Ok(Some(task))
+    }
+
+    /// From `Pending` state, read a picture, and start resizing it.
+    ///
+    /// Returns `None` if the input file does not contain any pictures.
+    fn start_resize(mut self, thumb_dir: &Path, flac_filename: &Path) -> Result<Option<GenThumb<'a>>> {
+        let out_fname_png = get_fname(thumb_dir, self.album_id, ".png");
 
         let opts = claxon::FlacReaderOptions {
             metadata_only: true,
             read_picture: claxon::ReadPicture::CoverAsVec,
             read_vorbis_comment: false,
         };
-        let reader = claxon::FlacReader::open_ext(filename, opts)
-            .map_err(|err| Error::from_claxon(PathBuf::from(filename), err))?;
+        let reader = claxon::FlacReader::open_ext(flac_filename, opts)
+            .map_err(|err| Error::from_claxon(PathBuf::from(flac_filename), err))?;
 
         let cover = match reader.into_pictures().pop() {
             Some(c) => c,
             None => return Ok(None),
         };
-
-        // TODO: Add a nicer way to report progress.
-        println!("{:?} <- {}", &out_fname_jpg, filename);
 
         let mut convert = Command::new("convert")
             // Read from stdin.
@@ -115,125 +141,73 @@ impl GenThumb {
             .stdin(Stdio::piped())
             .stdout(Stdio::inherit())
             .spawn()
-            // TODO: Handle errors properly.
-            .expect("Failed to spawn Imagemagick's 'convert'.");
+            .map_err(|e| Error::CommandError("Failed to spawn ImageMagick's 'convert'.", e))?;
 
         {
-            let stdin = convert.stdin.as_mut().expect("Failed to open stdin.");
+            let stdin = convert.stdin.as_mut().expect("Stdin should be there, we piped it.");
             stdin.write_all(cover.data()).unwrap();
         }
 
-        let result = GenThumb::Resizing {
-            out_fname_png: out_fname_png,
-            out_fname_jpg: out_fname_jpg,
-            child: convert
-        };
-        Ok(Some(result))
+        self.state = GenThumbState::Resizing { child: convert };
+
+        Ok(Some(self))
     }
 
-    /// Wait for one step of the process, start and return the next one if any.
-    pub fn poll(self) -> Option<GenThumb> {
+    /// When in `Resizing` state, wait for that to complete, and start compressing.
+    fn start_compress(mut self, thumb_dir: &Path) -> Result<GenThumb<'a>> {
+        let mut convert = match self.state {
+            GenThumbState::Resizing { child } => child,
+            _ => panic!("Can only call start_compress in Resizing state."),
+        };
+        let out_fname_png = get_fname(thumb_dir, self.album_id, ".png");
+        let out_fname_jpg = get_fname(thumb_dir, self.album_id, ".jpg");
 
-        match self {
-            GenThumb::Resizing { out_fname_png, out_fname_jpg, mut child } => {
-                // TODO: Use a custom error type, remove all `expect()`s.
-                child.wait().expect("Failed to run Imagemagick's 'convert'.");
-                let guetzli = Command::new("guetzli")
-                    .args(&["--quality", "97"])
-                    .arg(&out_fname_png)
-                    .arg(&out_fname_jpg)
-                    // TODO: Handle errors properly.
-                    .spawn().expect("Failed to spawn Guetzli.");
-                let result = GenThumb::Compressing {
-                    out_fname_png: out_fname_png,
-                    child: guetzli,
-                };
-                Some(result)
+        convert
+            .wait()
+            .map_err(|e| Error::CommandError("Imagemagick's 'convert' failed.", e))?;
+
+        let guetzli = Command::new("guetzli")
+            .args(&["--quality", "97"])
+            .arg(&out_fname_png)
+            .arg(&out_fname_jpg)
+            .spawn()
+            .map_err(|e| Error::CommandError("Failed to spawn 'guetzli'.", e))?;
+
+        self.state = GenThumbState::Compressing { child: guetzli };
+
+        Ok(self)
+    }
+
+    /// Take the next step that is needed to generate a thumbnail.
+    ///
+    /// When this returns `Some`, a process is running in the background, and we
+    /// need to advance once more in the future to conclude.
+    ///
+    /// When this returns `None`, thumbnail generation is complete.
+    fn advance(self, thumb_dir: &Path) -> Result<Option<GenThumb<'a>>> {
+        match self.state {
+            GenThumbState::Pending { flac_filename } => {
+                self.start_resize(thumb_dir, flac_filename)
             }
-            GenThumb::Compressing { out_fname_png, mut child } => {
-                // TODO: Handle errors properly.
-                child.wait().expect("Failed to run Guetzli.");
+            GenThumbState::Resizing { .. } => {
+                self.start_compress(thumb_dir).map(Some)
+            }
+            GenThumbState::Compressing { mut child } => {
+                child
+                    .wait()
+                    .map_err(|e| Error::CommandError("Guetzli failed.", e))?;
 
                 // Delete the intermediate png file.
-                fs::remove_file(&out_fname_png).expect("Failed to delete intermediate file.");
+                let intermediate_file = get_fname(thumb_dir, self.album_id, ".png");
+                fs::remove_file(&intermediate_file)?;
 
-                None
+                Ok(None)
             }
-        }
-    }
-
-    fn is_done(&mut self) -> bool {
-        let child = match self {
-            GenThumb::Resizing { ref mut child, .. } => child,
-            GenThumb::Compressing { ref mut child, .. } => child,
-        };
-        match child.try_wait() {
-            Ok(Some(_)) => true,
-            _ => false,
         }
     }
 }
 
-/// Controls parallelism when generating thumbnails.
-struct GenThumbs<'a> {
-    cache_dir: &'a Path,
-    pending: Vec<GenThumb>,
-    max_len: usize,
-}
-
-impl<'a> GenThumbs<'a> {
-    pub fn new(cache_dir: &'a Path, max_parallelism: usize) -> GenThumbs<'a> {
-        GenThumbs {
-            cache_dir: cache_dir,
-            pending: Vec::new(),
-            max_len: max_parallelism,
-        }
-    }
-
-    fn wait_until_at_most_in_use(&mut self, max_used: usize) {
-        while self.pending.len() > max_used {
-            let mut found_one = false;
-
-            // Round 1: Try to find a process that is already finished, and make
-            // progress on that.
-            for i in 0..self.pending.len() {
-                if self.pending[i].is_done() {
-                    let gen = self.pending.remove(i);
-                    if let Some(next_gen) = gen.poll() {
-                        self.pending.push(next_gen);
-                    }
-                    found_one = true;
-                    break
-                }
-            }
-
-            if found_one {
-                continue
-            }
-
-            // Round 2: All processes are still running, wait for the oldest one.
-            let gen = self.pending.remove(0);
-            if let Some(next_gen) = gen.poll() {
-                self.pending.push(next_gen);
-            }
-        }
-    }
-
-    pub fn add(&mut self, album_id: AlbumId, filename: &str, album_mtime: Mtime) -> Result<()> {
-        let max_used = self.max_len - 1;
-        self.wait_until_at_most_in_use(max_used);
-        if let Some(gen) = GenThumb::new(self.cache_dir, album_id, filename, album_mtime)? {
-            self.pending.push(gen);
-        }
-        Ok(())
-    }
-
-    pub fn drain(&mut self) {
-        self.wait_until_at_most_in_use(0);
-    }
-}
-
-pub fn generate_thumbnails(db_path: &Path, cache_dir: &Path) -> Result<()> {
+pub fn generate_thumbnails(db_path: &Path, thumb_dir: &Path) -> Result<()> {
     let (index, builder) = MemoryMetaIndex::from_database(db_path)?;
 
     // TODO: Move issue reporting to a better place. Maybe take the builder and
@@ -242,18 +216,60 @@ pub fn generate_thumbnails(db_path: &Path, cache_dir: &Path) -> Result<()> {
         println!("{}", issue);
     }
 
-    let max_parallelism = 32;
-    let mut gen_thumbs = GenThumbs::new(cache_dir, max_parallelism);
+    // Determine which albums need to have a new thumbnail extracted.
+    let mut pending_tasks = Vec::new();
     let mut prev_album_id = AlbumId(0);
     for &(_tid, ref track) in index.get_tracks() {
         if track.album_id != prev_album_id {
             let fname = index.get_filename(track.filename);
             let mtime = builder.album_mtimes[&track.album_id];
-            gen_thumbs.add(track.album_id, fname, mtime)?;
+            for task in GenThumb::new(thumb_dir, track.album_id, fname.as_ref(), mtime)? {
+                pending_tasks.push(task);
+            }
             prev_album_id = track.album_id;
         }
     }
-    gen_thumbs.drain();
+
+    println!("Have {} pending thumbnail extractions.", pending_tasks.len());
+
+    let tasks_mutex = Mutex::new(pending_tasks);
+    let tasks_mutex_ref = &tasks_mutex;
+
+    // Start 1 + `num_cpus` worker threads. All these threads will do is block
+    // and wait on IO or the external process, but both `convert` and `guetzli`
+    // are CPU-bound, so this should keep the CPU busy. When thumbnailing many
+    // albums with a cold page cache, IO to read the thumb from the file can be
+    // a factor too, so add one additional thread to ensure we can keep the CPU
+    // busy.
+    crossbeam::scope(|scope| {
+        for i in 0..num_cpus::get() + 1 {
+            let drain = move || {
+                println!("Before pop task from thread {}", i);
+                while let Some(task) = tasks_mutex_ref.lock().unwrap().pop() {
+                    println!("Advancing album {} on thread {}", task.album_id, i);
+                    let result = task
+                        .advance(thumb_dir)
+                        // There is no simple way with the current version of
+                        // Crossbeam to get a result out of the thread, so we
+                        // just panic on error, it's what we would do elsewhere
+                        // anyway if we could get the result out.
+                        .expect("Thumbnail generation failed.");
+                    match result {
+                        Some(next_task) => tasks_mutex_ref.lock().unwrap().push(next_task),
+                        None => {
+                            // TODO: Report that we completed one.
+                        }
+                    }
+                }
+            };
+
+            scope
+                .builder()
+                .name(format!("Thumbnail generation thread {}", i))
+                .spawn(drain)
+                .expect("Failed to spawn OS thread.");
+        }
+    });
 
     Ok(())
 }
