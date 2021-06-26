@@ -43,13 +43,13 @@ type FlacReader = claxon::FlacReader<fs::File>;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum ScanStage {
     /// Discovering flac files in the library path.
-    Discovering,
+    Discovering = 0,
     /// Determining which files to process. `status.files_discovered` is now final.
-    PreProcessing,
-    /// Processing files. `status.files_to_process` is now final.
-    Processing,
+    PreProcessing = 1,
+    /// Reading metadata from files. `status.files_to_process` is now final.
+    ExtractingMetadata = 2,
     /// Done processing. `status.files_processed` is now final.
-    Done,
+    Done = 3,
 }
 
 /// Counters to report progress during scanning.
@@ -124,7 +124,7 @@ pub fn scan(
         &mut paths_to_scan,
     )?;
 
-    status.stage = ScanStage::Processing;
+    status.stage = ScanStage::ExtractingMetadata;
     status.files_to_process = paths_to_scan.len() as u64;
     status_sender.send(status).unwrap();
 

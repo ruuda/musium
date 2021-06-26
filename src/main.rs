@@ -222,10 +222,10 @@ fn run_scan(config: &Config) -> Result<()> {
                         status.files_discovered,
                     ).unwrap();
                 }
-                ScanStage::PreProcessing | ScanStage::Processing => {
+                ScanStage::PreProcessing | ScanStage::ExtractingMetadata => {
                     write!(
                         lock,
-                        "\rProcessing: {} of {}",
+                        "\rExtracting metadata: {} of {}",
                         status.files_processed,
                         status.files_to_process,
                     ).unwrap();
