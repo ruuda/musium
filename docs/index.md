@@ -32,6 +32,7 @@ Follow the [building](building.md) chapter to build from source. Then write a
     listen = 0.0.0.0:8233
     library_path = /home/user/music
     covers_path = /home/user/.cache/musium/covers
+    data_path = /home/user/.local/share/musium
     audio_device = HDA Intel PCH
 
 Index the library and generate cover art thumbnails (requires Imagemagick and
@@ -39,6 +40,7 @@ Guetzli). Generating thumbnails can take a long time, but you can already
 continue and start the server when `musium scan` is still generating thumbnails.
 
     mkdir -p /home/user/.cache/musium/covers
+    mkdir -p /home/user/.local/share/musium
     target/release/musium scan musium.conf
 
 Start the server:
