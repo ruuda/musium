@@ -213,7 +213,7 @@ fn run_scan(config: &Config) -> Result<()> {
             &mut status,
             &mut tx,
         )?;
-        status.stage = musium::scan::ScanStage::Done;
+        status.stage = ScanStage::Done;
         tx.send(status).unwrap();
         Ok(())
     });
@@ -221,40 +221,17 @@ fn run_scan(config: &Config) -> Result<()> {
     {
         let stdout = std::io::stdout();
         let mut lock = stdout.lock();
-        let mut prev_status = musium::scan::Status::new();
+
+        write!(lock, "\n\n\n").unwrap();
 
         for status in rx {
-            if prev_status.stage != status.stage {
-                writeln!(lock).unwrap();
-            }
-            match status.stage {
-                ScanStage::Discovering => {
-                    write!(
-                        lock,
-                        "\rScanning: {} files discovered",
-                        status.files_discovered,
-                    ).unwrap();
-                }
-                ScanStage::PreProcessingMetadata | ScanStage::ExtractingMetadata => {
-                    write!(
-                        lock,
-                        "\rExtracting metadata: {} of {}",
-                        status.files_processed_metadata,
-                        status.files_to_process_metadata,
-                    ).unwrap();
-                }
-                ScanStage::PreProcessingThumbnails | ScanStage::GeneratingThumbnails => {
-                    write!(
-                        lock,
-                        "\rGenerating thumbnails: {} of {}",
-                        status.files_processed_thumbnails,
-                        status.files_to_process_thumbnails,
-                    ).unwrap();
-                }
-                ScanStage::Done => break,
-            }
+            // Move the cursor up a line, and clear that line. We need to clear
+            // it, because "convert" sometimes prints warnings. We could swallow
+            // its stderr, but this allows the warning to at least be visible
+            // very briefly.
+            let up_clear = "\x1b[F\x1b[K";
+            write!(lock, "{}{}{}{}", up_clear, up_clear, up_clear, status).unwrap();
             lock.flush().unwrap();
-            prev_status = status;
         }
     }
 

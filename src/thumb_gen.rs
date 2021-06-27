@@ -246,9 +246,11 @@ pub fn generate_thumbnails(
 
     // TODO: Move issue reporting to a better place. Maybe take the builder and
     // index as an argument to this method.
+    eprintln!();
     for issue in &builder.issues {
         eprintln!("{}", issue);
     }
+    eprintln!("\n\n\n");
 
     // Determine which albums need to have a new thumbnail extracted.
     let mut pending_tasks = Vec::new();

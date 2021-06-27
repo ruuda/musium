@@ -26,6 +26,7 @@
 //!   that haven't changed.
 
 use std::ffi::OsStr;
+use std::fmt;
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
@@ -91,6 +92,38 @@ impl Status {
             files_to_process_thumbnails: 0,
             files_processed_thumbnails: 0,
         }
+    }
+}
+
+impl fmt::Display for Status {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use std::cmp::Ordering;
+        let indicator = |target| match self.stage.cmp(&target) {
+            Ordering::Less => ' ',
+            Ordering::Equal => '>',
+            Ordering::Greater => '•',
+        };
+        writeln!(
+            f,
+            "{} Discovering files:     {}",
+            indicator(ScanStage::Discovering),
+            self.files_discovered,
+        )?;
+        writeln!(
+            f,
+            "{} Extracting metadata:   {} of {}",
+            indicator(ScanStage::ExtractingMetadata),
+            self.files_processed_metadata,
+            self.files_to_process_metadata,
+        )?;
+        writeln!(
+            f,
+            "{} Generating thumbnails: {} of {}",
+            indicator(ScanStage::GeneratingThumbnails),
+            self.files_processed_thumbnails,
+            self.files_to_process_thumbnails,
+        )?;
+        Ok(())
     }
 }
 
