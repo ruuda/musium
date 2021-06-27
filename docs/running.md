@@ -45,3 +45,9 @@ headless system, you may need to run
     loginctl enable-linger $USER
 
 to allow the deamon to linger after you log out.
+
+## Scanning the library
+
+`musium serve` will serve the library as it was when it was last scanned. When
+the library changes, you need to run `musium scan musium.conf` to pick up the
+changes, and then restart the server.
