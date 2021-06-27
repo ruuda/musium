@@ -434,6 +434,11 @@ pub fn serve(bind: &str, service: Arc<MetaServer>) -> ! {
     // accepting connections, which is now.
     systemd::notify_ready_if_can_notify();
 
-    // Now wait forever, until the application is killed.
+    // Block until the server threads exit, which will not happen.
+    for handle in threads {
+        handle.join().unwrap();
+    }
+
+    // This code is unreachable, but serves to satisfy the typechecker.
     loop {}
 }
