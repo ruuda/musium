@@ -34,10 +34,12 @@ configuration file to `musium.conf`:
     covers_path = /home/user/.cache/musium/covers
     audio_device = HDA Intel PCH
 
-Generate cover art thumbnails (requires Imagemagick and Guetzli):
+Index the library and generate cover art thumbnails (requires Imagemagick and
+Guetzli). Generating thumbnails can take a long time, but you can already
+continue and start the server when `musium scan` is still generating thumbnails.
 
     mkdir -p /home/user/.cache/musium/covers
-    target/release/musium cache musium.conf
+    target/release/musium scan musium.conf
 
 Start the server:
 
