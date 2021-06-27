@@ -420,16 +420,18 @@ such as the ability to pause playback.</em></p>
 </ul>
 <h2 id="getting-started">Getting started</h2>
 <p>Follow the <a href="building/">building</a> chapter to build from source. Then write a
-configuration file to <code>musium.conf</code>:</p>
+<a href="configuration/">configuration file</a> to <code>musium.conf</code>:</p>
 <pre><code>listen = 0.0.0.0:8233
 library_path = /home/user/music
 covers_path = /home/user/.cache/musium/covers
+data_path = /home/user/.local/share/musium
 audio_device = HDA Intel PCH
 </code></pre>
 <p>Index the library and generate cover art thumbnails (requires Imagemagick and
 Guetzli). Generating thumbnails can take a long time, but you can already
 continue and start the server when <code>musium scan</code> is still generating thumbnails.</p>
 <pre><code>mkdir -p /home/user/.cache/musium/covers
+mkdir -p /home/user/.local/share/musium
 target/release/musium scan musium.conf
 </code></pre>
 <p>Start the server:</p>
