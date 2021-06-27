@@ -197,9 +197,25 @@ fn run_scan(config: &Config) -> Result<()> {
 
     let db_path = config.db_path();
     let library_path = config.library_path.clone();
+    let covers_path = config.covers_path.clone();
 
     let scan_thread = std::thread::spawn(move || {
-        musium::scan::scan(&db_path, &library_path, &mut tx)
+        let mut status = musium::scan::Status::new();
+        musium::scan::scan(
+            &db_path,
+            &library_path,
+            &mut status,
+            &mut tx,
+        )?;
+        musium::thumb_gen::generate_thumbnails(
+            &db_path,
+            &covers_path,
+            &mut status,
+            &mut tx,
+        )?;
+        status.stage = musium::scan::ScanStage::Done;
+        tx.send(status).unwrap();
+        Ok(())
     });
 
     {
@@ -208,13 +224,10 @@ fn run_scan(config: &Config) -> Result<()> {
         let mut prev_status = musium::scan::Status::new();
 
         for status in rx {
-            match (prev_status.stage, status.stage) {
-                (ScanStage::Discovering, ScanStage::PreProcessing) => writeln!(lock).unwrap(),
-                (_, ScanStage::Done) => writeln!(lock).unwrap(),
-                _ => {}
+            if prev_status.stage != status.stage {
+                writeln!(lock).unwrap();
             }
             match status.stage {
-                ScanStage::Done => break,
                 ScanStage::Discovering => {
                     write!(
                         lock,
@@ -222,14 +235,23 @@ fn run_scan(config: &Config) -> Result<()> {
                         status.files_discovered,
                     ).unwrap();
                 }
-                ScanStage::PreProcessing | ScanStage::ExtractingMetadata => {
+                ScanStage::PreProcessingMetadata | ScanStage::ExtractingMetadata => {
                     write!(
                         lock,
                         "\rExtracting metadata: {} of {}",
-                        status.files_processed,
-                        status.files_to_process,
+                        status.files_processed_metadata,
+                        status.files_to_process_metadata,
                     ).unwrap();
                 }
+                ScanStage::PreProcessingThumbnails | ScanStage::GeneratingThumbnails => {
+                    write!(
+                        lock,
+                        "\rGenerating thumbnails: {} of {}",
+                        status.files_processed_thumbnails,
+                        status.files_to_process_thumbnails,
+                    ).unwrap();
+                }
+                ScanStage::Done => break,
             }
             lock.flush().unwrap();
             prev_status = status;
@@ -237,8 +259,7 @@ fn run_scan(config: &Config) -> Result<()> {
     }
 
     // The unwrap unwraps the join, not the scan's result.
-    scan_thread.join().unwrap()?;
-    Ok(())
+    scan_thread.join().unwrap()
 }
 
 fn print_usage() {
@@ -307,7 +328,6 @@ fn main() -> Result<()> {
         }
         "scan" => {
             run_scan(&config)?;
-            musium::thumb_gen::generate_thumbnails(&config.db_path(), &config.covers_path)?;
             Ok(())
         }
         "match" => {

@@ -14,10 +14,12 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::process;
 use std::sync::Mutex;
+use std::sync::mpsc::SyncSender;
 
 use crate::{MetaIndex, MemoryMetaIndex};
 use crate::error::{Error, Result};
 use crate::prim::{AlbumId, Mtime};
+use crate::scan::{ScanStage, Status};
 
 /// Tracks the process of generating a thumbnail.
 struct GenThumb<'a> {
@@ -207,13 +209,45 @@ impl<'a> GenThumb<'a> {
     }
 }
 
-pub fn generate_thumbnails(db_path: &Path, thumb_dir: &Path) -> Result<()> {
+struct GenThumbs<'a> {
+    tasks: Vec<GenThumb<'a>>,
+    status: &'a mut Status,
+    status_sender: &'a mut SyncSender<Status>,
+}
+
+impl<'a> GenThumbs<'a> {
+    /// Take a task out of the queue, to call [`GenThumb::advance`] on.
+    fn pop(&mut self) -> Option<GenThumb<'a>> {
+        self.tasks.pop()
+    }
+
+    /// Handle the result of [`GenThumb::advance`].
+    fn put(&mut self, result: Option<GenThumb<'a>>) {
+        match result {
+            Some(next_task) => self.tasks.push(next_task),
+            None => {
+                self.status.files_processed_thumbnails += 1;
+                self.status_sender.send(*self.status).unwrap();
+            }
+        }
+    }
+}
+
+pub fn generate_thumbnails(
+    db_path: &Path,
+    thumb_dir: &Path,
+    status: &mut Status,
+    status_sender: &mut SyncSender<Status>,
+) -> Result<()> {
+    status.stage = ScanStage::PreProcessingThumbnails;
+    status_sender.send(*status).unwrap();
+
     let (index, builder) = MemoryMetaIndex::from_database(db_path)?;
 
     // TODO: Move issue reporting to a better place. Maybe take the builder and
     // index as an argument to this method.
     for issue in &builder.issues {
-        println!("{}", issue);
+        eprintln!("{}", issue);
     }
 
     // Determine which albums need to have a new thumbnail extracted.
@@ -225,15 +259,26 @@ pub fn generate_thumbnails(db_path: &Path, thumb_dir: &Path) -> Result<()> {
             let mtime = builder.album_mtimes[&track.album_id];
             for task in GenThumb::new(thumb_dir, track.album_id, fname.as_ref(), mtime)? {
                 pending_tasks.push(task);
+                status.files_to_process_thumbnails += 1;
+
+                if pending_tasks.len() % 32 == 0 {
+                    status_sender.send(*status).unwrap();
+                }
             }
             prev_album_id = track.album_id;
         }
     }
 
-    println!("Have {} pending thumbnail extractions.", pending_tasks.len());
+    status.stage = ScanStage::GeneratingThumbnails;
+    status_sender.send(*status).unwrap();
 
-    let tasks_mutex = Mutex::new(pending_tasks);
-    let tasks_mutex_ref = &tasks_mutex;
+    let queue = GenThumbs {
+        tasks: pending_tasks,
+        status: status,
+        status_sender: status_sender,
+    };
+    let mutex = Mutex::new(queue);
+    let mutex_ref = &mutex;
 
     // Start 1 + `num_cpus` worker threads. All these threads will do is block
     // and wait on IO or the external process, but both `convert` and `guetzli`
@@ -242,11 +287,13 @@ pub fn generate_thumbnails(db_path: &Path, thumb_dir: &Path) -> Result<()> {
     // a factor too, so add one additional thread to ensure we can keep the CPU
     // busy.
     crossbeam::scope(|scope| {
-        for i in 0..num_cpus::get() + 1 {
+        for i in 0..num_cpus::get() + 0 {
             let drain = move || {
-                println!("Before pop task from thread {}", i);
-                while let Some(task) = tasks_mutex_ref.lock().unwrap().pop() {
-                    println!("Advancing album {} on thread {}", task.album_id, i);
+                while let Some(task) = {
+                    // This has to be in a scope, otherwise the program deadlocks.
+                    let mut tasks = mutex_ref.lock().unwrap();
+                    tasks.pop()
+                } {
                     let result = task
                         .advance(thumb_dir)
                         // There is no simple way with the current version of
@@ -254,12 +301,8 @@ pub fn generate_thumbnails(db_path: &Path, thumb_dir: &Path) -> Result<()> {
                         // just panic on error, it's what we would do elsewhere
                         // anyway if we could get the result out.
                         .expect("Thumbnail generation failed.");
-                    match result {
-                        Some(next_task) => tasks_mutex_ref.lock().unwrap().push(next_task),
-                        None => {
-                            // TODO: Report that we completed one.
-                        }
-                    }
+
+                    mutex_ref.lock().unwrap().put(result);
                 }
             };
 

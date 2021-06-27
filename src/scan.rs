@@ -45,11 +45,15 @@ pub enum ScanStage {
     /// Discovering flac files in the library path.
     Discovering = 0,
     /// Determining which files to process. `status.files_discovered` is now final.
-    PreProcessing = 1,
-    /// Reading metadata from files. `status.files_to_process` is now final.
+    PreProcessingMetadata = 1,
+    /// Reading metadata from files. `status.files_to_process_metadata` is now final.
     ExtractingMetadata = 2,
-    /// Done processing. `status.files_processed` is now final.
-    Done = 3,
+    /// Determining which thumbnails to generate. `status.files_processed_metadata` is now final.
+    PreProcessingThumbnails = 3,
+    /// Generating thumbnails. `status.files_to_process_thumbnails` is now final.
+    GeneratingThumbnails = 4,
+    /// Done. `status.files_to_process_thumbnails` is now final.
+    Done = 5,
 }
 
 /// Counters to report progress during scanning.
@@ -65,10 +69,16 @@ pub struct Status {
     pub files_discovered: u64,
 
     /// Of the `files_discovered`, the number of files that need to be processed.
-    pub files_to_process: u64,
+    pub files_to_process_metadata: u64,
 
-    /// Of the `files_to_process`, the number processed so far.
-    pub files_processed: u64,
+    /// Of the `files_to_process_metadata`, the number processed so far.
+    pub files_processed_metadata: u64,
+
+    /// The number of files for which we need to generate a thumbnail.
+    pub files_to_process_thumbnails: u64,
+
+    /// Of the `files_to_process_thumbnails`, the number processed so far.
+    pub files_processed_thumbnails: u64,
 }
 
 impl Status {
@@ -76,21 +86,10 @@ impl Status {
         Status {
             stage: ScanStage::Discovering,
             files_discovered: 0,
-            files_to_process: 0,
-            files_processed: 0,
-        }
-    }
-
-    /// Take the maximum of two statuses.
-    ///
-    /// `ScanStatus` forms a monoid / join lattice / CRDT, and this is its merge
-    /// operation.
-    pub fn merge(&self, other: &Status) -> Status {
-        Status {
-            stage: self.stage.max(other.stage),
-            files_discovered: self.files_discovered.max(other.files_discovered),
-            files_to_process: self.files_to_process.max(other.files_to_process),
-            files_processed: self.files_processed.max(other.files_processed),
+            files_to_process_metadata: 0,
+            files_processed_metadata: 0,
+            files_to_process_thumbnails: 0,
+            files_processed_thumbnails: 0,
         }
     }
 }
@@ -98,16 +97,16 @@ impl Status {
 pub fn scan(
     db_path: &Path,
     library_path: &Path,
+    status: &mut Status,
     status_sender: &mut SyncSender<Status>,
 ) -> database::Result<()> {
     let connection = sqlite::open(db_path)?;
     let mut db = Database::new(&connection)?;
 
-    let mut status = Status::new();
-    let mut files_current = enumerate_flac_files(library_path, status_sender, &mut status);
+    let mut files_current = enumerate_flac_files(library_path, status_sender, status);
 
-    status.stage = ScanStage::PreProcessing;
-    status_sender.send(status).unwrap();
+    status.stage = ScanStage::PreProcessingMetadata;
+    status_sender.send(*status).unwrap();
 
     // Sort the files in memcpm order. The default Ord instance of PathBuf is
     // not what we want, it orders / before space (presumably because it does
@@ -125,8 +124,8 @@ pub fn scan(
     )?;
 
     status.stage = ScanStage::ExtractingMetadata;
-    status.files_to_process = paths_to_scan.len() as u64;
-    status_sender.send(status).unwrap();
+    status.files_to_process_metadata = paths_to_scan.len() as u64;
+    status_sender.send(*status).unwrap();
 
     // Delete rows for outdated files, we will insert new rows below.
     delete_outdated_file_metadata(&mut db, &rows_to_delete)?;
@@ -142,7 +141,7 @@ pub fn scan(
         &paths_to_scan[..],
         &now_str,
         status_sender,
-        &mut status,
+        status,
     )?;
 
     // If we deleted anything vacuum the database to ensure it's packed tightly
@@ -151,9 +150,6 @@ pub fn scan(
     if rows_to_delete.len() > 0 {
         db.connection.execute("VACUUM")?;
     }
-
-    status.stage = ScanStage::Done;
-    status_sender.send(status).unwrap();
 
     Ok(())
 }
@@ -381,8 +377,8 @@ pub fn insert_file_metadata_for_paths(
             // the files is more IO-intensive than enumerating them, so this
             // is slower, so the overhead of updating more often is relatively
             // small.
-            status.files_processed += 1;
-            if status.files_processed % 8 == 0 {
+            status.files_processed_metadata += 1;
+            if status.files_processed_metadata % 8 == 0 {
                 status_sender.send(*status).unwrap();
             }
         }
