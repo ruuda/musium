@@ -1,4 +1,5 @@
 site_name: Musium
+site_url: https://ruuda.github.io/musium/
 repo_url: https://github.com/ruuda/musium
 strict: true
 theme:
