@@ -389,7 +389,7 @@
   <div id="content">
     <div id="main">
       <nav id="breadcrumbs">
-        <a href="..">Musium</a>
+        <a href="https://ruuda.github.io/musium/">Musium</a>
          › <a href="../building/">User Guide</a> 
          › <a href="./">Running</a> 
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
@@ -435,6 +435,10 @@ headless system, you may need to run</p>
 <pre><code>loginctl enable-linger $USER
 </code></pre>
 <p>to allow the deamon to linger after you log out.</p>
+<h2 id="scanning-the-library">Scanning the library</h2>
+<p><code>musium serve</code> will serve the library as it was when it was last scanned. When
+the library changes, you need to run <code>musium scan musium.conf</code> to pick up the
+changes, and then restart the server.</p>
       </article>
       <nav id="nav-prev-next">
         <a id="nav-prev" href="../configuration/" title="Configuration">Previous</a>
@@ -459,6 +463,7 @@ headless system, you may need to run</p>
             <li><ul>
                 <li class="toc-heading"><a href="#with-systemd">With systemd</a></li>
                 <li class="toc-heading"><a href="#with-systemd-user">With systemd-user</a></li>
+                <li class="toc-heading"><a href="#scanning-the-library">Scanning the library</a></li>
                 </ul></li>
                
             <li class="toc-chapter

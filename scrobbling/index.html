@@ -389,7 +389,7 @@
   <div id="content">
     <div id="main">
       <nav id="breadcrumbs">
-        <a href="..">Musium</a>
+        <a href="https://ruuda.github.io/musium/">Musium</a>
          › <a href="../building/">User Guide</a> 
          › <a href="./">Scrobbling to Last.fm</a> 
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
@@ -426,7 +426,7 @@ once.</p>
 <h2 id="with-systemd">With systemd</h2>
 <p>Systemd timers can be useful for scrobbling periodically. First create a
 one-shot service that runs the scrobble script:</p>
-<pre><code class="systemd">[Unit]
+<pre><code class="language-systemd">[Unit]
 Description=Musium Scrobbler
 
 [Service]
@@ -442,10 +442,9 @@ Environment=LAST_FM_SESSION_KEY=gE7P1f444dLu6NbZeMs4wb9V4roITlAF
 [Install]
 WantedBy=default.target
 </code></pre>
-
 <p>Write it to <code>/etc/systemd/system/musium-scrobble.service</code>. Then add a timer to
 start the script periodically:</p>
-<pre><code class="systemd">[Unit]
+<pre><code class="language-systemd">[Unit]
 Description=Musium Scrobbler
 
 [Timer]
@@ -459,7 +458,6 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 </code></pre>
-
 <p>Write it to <code>/etc/systemd/system/musium-scrobble.timer</code>, then start the timer:</p>
 <pre><code>systemctl daemon-reload
 systemctl enable musium-scrobble.timer

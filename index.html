@@ -9,7 +9,7 @@
   -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Overview — Musium</title>
+  <title>Kilsbergen — Musium</title>
   <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
@@ -389,58 +389,41 @@
   <div id="content">
     <div id="main">
       <nav id="breadcrumbs">
-        <a href=".">Musium</a>
+        <a href="https://ruuda.github.io/musium/">Musium</a>
         
-         › <a href=".">Overview</a> 
+         › <a href=".">Kilsbergen</a> 
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="musium">Musium</h1>
-<p>Musium is an album-centered music player. It is designed to run as a daemon on
-an always-on device connected to speakers. Playback can be controlled from
-anywhere on the local network through a webinterface.</p>
-<p><em>Vaporware warning: while Musium is usable, it is missing essential features,
-such as the ability to pause playback.</em></p>
+        <h1 id="kilsbergen">Kilsbergen</h1>
+<p>A clean <a href="https://www.mkdocs.org/">MkDocs</a> theme.</p>
+<p>This theme is designed for <a href="https://github.com/ruuda/tako">Tako</a>, <a href="https://github.com/ruuda/pris">Pris</a>, and <a href="https://github.com/ruuda/noblit">Noblit</a>.
+It is not flexible on purpose: it supports everything I need, and nothing more.</p>
+<h2 id="demos">Demos</h2>
+<ul>
+<li><a href="https://ruuda.github.io/musium">Musium documentation</a></li>
+<li><a href="https://ruuda.github.io/noblit">Noblit documentation</a></li>
+<li><a href="https://ruuda.github.io/pris">Pris documentation</a></li>
+<li><a href="https://ruuda.github.io/tako">Tako documentation</a></li>
+</ul>
 <h2 id="features">Features</h2>
 <ul>
-<li>Respects album artist and original release date metadata.</li>
-<li>Designed to scale to hundreds of thousands of tracks.</li>
-<li>User interface responds quickly, and indexing is fast.</li>
-<li>Optimized to run in resource-constrained environments, such as a Raspberry Pi.</li>
-<li>Responsive design, supports both mobile and desktop.</li>
-<li>Logarithmic volume control and loudness normalization.</li>
-<li>Last.fm and Listenbrainz scrobbling.</li>
+<li>Responsive design</li>
+<li>Zero javascript</li>
 </ul>
-<h2 id="limitations">Limitations</h2>
-<ul>
-<li>Musium is not a tagger, it expects your files to be tagged correctly already.</li>
-<li>Supports only flac, with no intention to support other audio formats.</li>
-<li>Requires Linux, with no intention to become cross-platform.</li>
-<li>Uses raw Alsa, with no intention to support PulseAudio.</li>
-</ul>
-<h2 id="getting-started">Getting started</h2>
-<p>Follow the <a href="building/">building</a> chapter to build from source. Then write a
-configuration file to <code>musium.conf</code>:</p>
-<pre><code>listen = 0.0.0.0:8233
-library_path = /home/user/music
-covers_path = /home/user/.cache/musium/covers
-audio_device = HDA Intel PCH
+<h2 id="usage">Usage</h2>
+<p>One easy way to use this theme, is to add it as a Git submodule to your <code>docs</code>
+directory, e.g. at <code>docs/theme</code>. Then add the following in your <code>mkdocs.yml</code>:</p>
+<pre><code class="language-yaml">theme:
+  name: null
+  custom_dir: docs/theme
 </code></pre>
-<p>Generate cover art thumbnails (requires Imagemagick and Guetzli):</p>
-<pre><code>mkdir -p /home/user/.cache/musium/covers
-target/release/musium cache musium.conf
-</code></pre>
-<p>Start the server:</p>
-<pre><code>target/release/musium serve musium.conf
-</code></pre>
-<p>You can now open the library browser at http://localhost:8233. See the
-<a href="webinterface/">webinterface chapter</a> for how to use it.</p>
-<p>Musium expects files to be tagged in a particular way, see the
-<a href="tagging/">tagging chapter</a> for more information.</p>
+<p>This theme requires MkDocs 1.1 or later. For earlier versions, delete this
+<code>README.md</code> to work around <a href="https://github.com/mkdocs/mkdocs/issues/1766">this bug</a>.</p>
+<h2 id="license">License</h2>
+<p>Kilsbergen is licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache 2.0</a> license. In the generated
+documentation, it is fine to just link to this readme from a comment.</p>
       </article>
-      <nav id="nav-prev-next">
-        <a id="nav-next" href="building/" title="Building">Next</a>
-        </nav>
       </div>
     <aside>
       <nav>
