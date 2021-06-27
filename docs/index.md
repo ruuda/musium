@@ -27,7 +27,7 @@ such as the ability to pause playback.*
 ## Getting started
 
 Follow the [building](building.md) chapter to build from source. Then write a
-configuration file to `musium.conf`:
+[configuration file](configuration.md) to `musium.conf`:
 
     listen = 0.0.0.0:8233
     library_path = /home/user/music
