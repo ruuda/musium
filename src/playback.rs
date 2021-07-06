@@ -158,8 +158,8 @@ fn set_format(pcm: &alsa::PCM, format: Format) -> Result<()> {
 }
 
 enum WriteResult {
-    /// There is more to be filled, call again.
-    NeedMore,
+    /// We performed a state transition, but did not write; try again.
+    Continue,
 
     /// We need to change the format before we can continue playback.
     ChangeFormat(Format),
@@ -167,9 +167,14 @@ enum WriteResult {
     /// The queue is empty, playback is done for now.
     QueueEmpty,
 
-    /// Buffers are full for now, but we should check back later.
+    /// Done for now, check back later.
+    ///
+    /// This can happen either when the playback buffer is full, or when the
+    /// decode buffer is empty. After a yield we release the stake lock, so if
+    /// the decode thread has new blocks for the decode buffer, we will pick
+    /// that up. And then we poll the file descriptor, until it is ready to
+    /// write to again.
     Yield,
-
 }
 
 fn write_samples(
@@ -231,43 +236,52 @@ fn write_samples(
     }
 
     match pcm.state() {
-        State::Running => return Ok(WriteResult::Yield),
+        State::Running => Ok(WriteResult::Yield),
         State::Draining => match next_format {
-            Some(_) => return Ok(WriteResult::Yield),
-            None if player.is_queue_empty() => return Ok(WriteResult::QueueEmpty),
+            Some(_) => Ok(WriteResult::Yield),
+            None if player.is_queue_empty() => Ok(WriteResult::QueueEmpty),
             None => panic!("PCM is unexpectedly in draining state."),
         }
         State::Setup => match next_format {
-            Some(format) => return Ok(WriteResult::ChangeFormat(format)),
-            None if player.is_queue_empty() => return Ok(WriteResult::QueueEmpty),
+            Some(format) => Ok(WriteResult::ChangeFormat(format)),
+            None if player.is_queue_empty() => Ok(WriteResult::QueueEmpty),
             // The queue is not empty, but we have no data nonetheless, which
             // means the decoder is behind ... yield and hope that next round it
             // caught up.
-            None => return Ok(WriteResult::Yield),
+            None => Ok(WriteResult::Yield),
         }
-        // If the PCM is ready for playback, and we topped up the buffer to the
-        // point where we can write no more, then start playback, and then
-        // yield, because there is nothing more to write anyway.
         State::Prepared if n_available == 0 => {
+            // If the PCM is ready for playback, and we topped up the buffer to
+            // the point where we can write no more, then start playback, and
+            // then yield, because there is nothing more to write anyway.
             pcm.start()?;
-            return Ok(WriteResult::Yield);
+            Ok(WriteResult::Yield)
         }
-        // If the buffer is not topped up, but we don't have anything else to
-        // put in the buffer, then we can also start, and immediately drain.
         State::Prepared if player.is_queue_empty() => {
+            // If the buffer is not topped up, but we don't have anything else
+            // to put in the buffer, then we can also start, and immediately
+            // drain.
             pcm.start()?;
             pcm.drain()?;
-            return Ok(WriteResult::QueueEmpty);
+            Ok(WriteResult::QueueEmpty)
         }
-        // If the PCM is ready for playback, but we are not in one of the above
-        // two cases, then we could fill the buffer a bit more before we start,
-        // which is a good idea to reduce the risk of buffer underrun.
-        State::Prepared => return Ok(WriteResult::Yield),
-        State::XRun => pcm.prepare()?,
-        State::Suspended => pcm.resume()?,
+        State::Prepared => {
+            // If the PCM is ready for playback, but we are not in one of the
+            // above two cases, then we could fill the buffer a bit more before
+            // we start, which is a good idea to reduce the risk of buffer
+            // underrun.
+            Ok(WriteResult::Yield)
+        }
+        State::XRun => {
+            pcm.prepare()?;
+            Ok(WriteResult::Continue)
+        }
+        State::Suspended => {
+            pcm.resume()?;
+            Ok(WriteResult::Continue)
+        }
         unexpected => panic!("Unexpected PCM state: {:?}", unexpected),
-    };
-    Ok(WriteResult::NeedMore)
+    }
 }
 
 enum FillResult {
@@ -294,7 +308,7 @@ fn ensure_buffers_full(
                 println!("Resuming ...");
                 continue
             }
-            Ok(WriteResult::NeedMore) => continue,
+            Ok(WriteResult::Continue) => continue,
             Ok(WriteResult::ChangeFormat(new_format)) => return FillResult::ChangeFormat(new_format),
             Ok(WriteResult::Yield) => return FillResult::Yield,
             Ok(WriteResult::QueueEmpty) => return FillResult::QueueEmpty,
