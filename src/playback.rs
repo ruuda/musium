@@ -158,10 +158,18 @@ fn set_format(pcm: &alsa::PCM, format: Format) -> Result<()> {
 }
 
 enum WriteResult {
-    ChangeFormat(Format),
-    QueueEmpty,
+    /// There is more to be filled, call again.
     NeedMore,
+
+    /// We need to change the format before we can continue playback.
+    ChangeFormat(Format),
+
+    /// The queue is empty, playback is done for now.
+    QueueEmpty,
+
+    /// Buffers are full for now, but we should check back later.
     Yield,
+
 }
 
 fn write_samples(
@@ -173,7 +181,6 @@ fn write_samples(
     use alsa::pcm::State;
 
     let mut next_format = None;
-    let mut n_consumed = 0;
 
     // Query how many frames are available for writing. If the device is in a
     // failed state, for example because of an underrun, then this fails, and
@@ -184,12 +191,13 @@ fn write_samples(
         Err(err) => {
             let silent = true;
             pcm.try_recover(err, silent)?;
+            println!("DEBUG: write_samples was in error, but recovered now.");
             pcm.avail_update()?
         }
     } as usize;
 
     if n_available > 0 {
-        n_consumed = match player.peek_mut() {
+        let n_consumed = match player.peek_mut() {
             Some(ref block) if current_format != block.format() => {
                 // Next block has a different sample rate or bit depth, finish
                 // what is still in the buffer, so we can switch afterwards.
@@ -223,7 +231,7 @@ fn write_samples(
     }
 
     match pcm.state() {
-        State::Running  => return Ok(WriteResult::Yield),
+        State::Running => return Ok(WriteResult::Yield),
         State::Draining => match next_format {
             Some(_) => return Ok(WriteResult::Yield),
             None if player.is_queue_empty() => return Ok(WriteResult::QueueEmpty),
@@ -237,7 +245,15 @@ fn write_samples(
             // caught up.
             None => return Ok(WriteResult::Yield),
         }
-        State::Prepared if n_consumed > 0 => pcm.start()?,
+        // If the PCM is ready for playback, and we topped up the buffer to the
+        // point where we can write no more, then start playback.
+        State::Prepared if n_available == 0 => pcm.start()?,
+        // If the buffer is not topped up, but we don't have anything else to
+        // put in the buffer, then we can also start.
+        State::Prepared if player.is_queue_empty() => pcm.start()?,
+        // If the PCM is ready for playback, but we are not in one of the above
+        // two cases, then we could fill the buffer a bit more before we start,
+        // which is a good idea to reduce the risk of buffer underrun.
         State::Prepared => return Ok(WriteResult::Yield),
         State::XRun => pcm.prepare()?,
         State::Suspended => pcm.resume()?,
@@ -247,8 +263,13 @@ fn write_samples(
 }
 
 enum FillResult {
+    /// We need to change the format before we can continue playback.
     ChangeFormat(Format),
+
+    /// The queue is empty, playback is done for now.
     QueueEmpty,
+
+    /// Buffers are full for now, but we should check back later.
     Yield,
 }
 
