@@ -246,11 +246,19 @@ fn write_samples(
             None => return Ok(WriteResult::Yield),
         }
         // If the PCM is ready for playback, and we topped up the buffer to the
-        // point where we can write no more, then start playback.
-        State::Prepared if n_available == 0 => pcm.start()?,
+        // point where we can write no more, then start playback, and then
+        // yield, because there is nothing more to write anyway.
+        State::Prepared if n_available == 0 => {
+            pcm.start()?;
+            return Ok(WriteResult::Yield);
+        }
         // If the buffer is not topped up, but we don't have anything else to
-        // put in the buffer, then we can also start.
-        State::Prepared if player.is_queue_empty() => pcm.start()?,
+        // put in the buffer, then we can also start, and immediately drain.
+        State::Prepared if player.is_queue_empty() => {
+            pcm.start()?;
+            pcm.drain()?;
+            return Ok(WriteResult::QueueEmpty);
+        }
         // If the PCM is ready for playback, but we are not in one of the above
         // two cases, then we could fill the buffer a bit more before we start,
         // which is a good idea to reduce the risk of buffer underrun.
