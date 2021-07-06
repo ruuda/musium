@@ -199,24 +199,27 @@ fn run_scan(config: &Config) -> Result<()> {
     let library_path = config.library_path.clone();
     let covers_path = config.covers_path.clone();
 
-    let scan_thread = std::thread::spawn(move || {
-        let mut status = musium::scan::Status::new();
-        musium::scan::scan(
-            &db_path,
-            &library_path,
-            &mut status,
-            &mut tx,
-        )?;
-        musium::thumb_gen::generate_thumbnails(
-            &db_path,
-            &covers_path,
-            &mut status,
-            &mut tx,
-        )?;
-        status.stage = ScanStage::Done;
-        tx.send(status).unwrap();
-        Ok(())
-    });
+    let scan_thread = std::thread::Builder::new()
+        .name("scan".to_string())
+        .spawn(move || {
+            let mut status = musium::scan::Status::new();
+            musium::scan::scan(
+                &db_path,
+                &library_path,
+                &mut status,
+                &mut tx,
+            )?;
+            musium::thumb_gen::generate_thumbnails(
+                &db_path,
+                &covers_path,
+                &mut status,
+                &mut tx,
+            )?;
+            status.stage = ScanStage::Done;
+            tx.send(status).unwrap();
+            Ok(())
+        })
+        .expect("Failed to spawn scan thread.");
 
     {
         let stdout = std::io::stdout();

@@ -375,7 +375,7 @@ pub fn insert_file_metadata_for_paths(
             let counter_ref = &counter;
             scope
                 .builder()
-                .name(format!("File reading thread {}", i))
+                .name(format!("read_files_{}", i))
                 .spawn(move || read_files(paths_to_scan, counter_ref, tx))
                 .expect("Failed to spawn OS thread.");
         }
