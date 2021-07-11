@@ -114,13 +114,22 @@ impl StateVariableFilter {
 
     /// Feed one sample, return the high-pass result, clipped if needed.
     ///
-    /// This scales down the output by 0.023% and then clips, to prevent
+    /// This scales down the output by 6 dB and then clips, to prevent
     /// wrapping that might occasionally result from the filter producing higher
     /// peaks than were present in the original signal.
     #[inline]
     pub fn tick_highpass_clip(&mut self, x0: i32, bits_per_sample: u32) -> i32 {
         self.tick(x0);
-        let y0 = self.highpass.saturating_mul(250) / 256;
+        // A factor 0.5 in amplitude is about -6 dB in volume. We lose one bit
+        // of precision because of this, but we need to, because the filter can
+        // produce values that are out of range. (One way to see this: imagine
+        // sampling a sine at an interval where the sample points are close to
+        // the zero crossings of the sine ... the magnitudes of these samples
+        // will be low. Now shift the sine by pi/2, so we sample the peaks.
+        // Suddenly we need more range to represent the same wave!)
+        let y0 = self.highpass / 2;
+
+        // If the signal is still too large, clip it.
         let max = (1_i32 << bits_per_sample) - 1;
         let min = -max - 1;
         y0.max(min).min(max)
