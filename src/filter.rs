@@ -32,23 +32,26 @@ fn fixmul(x: i32, fix_y: i64) -> i32 {
 /// Modelled after <https://www.earlevel.com/main/2003/03/02/the-digital-state-variable-filter/>.
 #[derive(Clone)]
 pub struct StateVariableFilter {
+    /// Fixed-point encoding of the `f` parameter.
     f: i64,
+
+    /// Fixed-point encoding of the `q` parameter.
     q: i64,
 
     /// Band-pass output, delayed by one tick.
     ///
     /// This is a state variable, `tick` reads from it.
-    bandpass: i32,
+    pub bandpass: i32,
 
     /// Low-pass output, delayed by two ticks.
     ///
     /// This is a state variable, `tick` reads from it.
-    lowpass: i32,
+    pub lowpass: i32,
 
     /// High-pass output, delayed by zero ticks.
     ///
     /// This is not a state variable, `tick` only writes it.
-    highpass: i32,
+    pub highpass: i32,
 }
 
 impl StateVariableFilter {
@@ -78,6 +81,13 @@ impl StateVariableFilter {
         self.f = fix(2.0 * (f64::consts::PI * cutoff_hz / sample_rate_hz).sin());
     }
 
+    /// Set all state variables to 0.
+    pub fn reset(&mut self) {
+        self.lowpass = 0;
+        self.highpass = 0;
+        self.bandpass = 0;
+    }
+
     /// Feed one sample into the filter.
     ///
     /// After this, the filtered signal is available in `self.lowpass` and
@@ -100,5 +110,19 @@ impl StateVariableFilter {
         self.lowpass = lowpass;
         self.bandpass = bandpass;
         self.highpass = highpass;
+    }
+
+    /// Feed one sample, return the high-pass result, clipped if needed.
+    ///
+    /// This scales down the output by 0.023% and then clips, to prevent
+    /// wrapping that might occasionally result from the filter producing higher
+    /// peaks than were present in the original signal.
+    #[inline]
+    pub fn tick_highpass_clip(&mut self, x0: i32, bits_per_sample: u32) -> i32 {
+        self.tick(x0);
+        let y0 = self.highpass.saturating_mul(250) / 256;
+        let max = (1_i32 << bits_per_sample) - 1;
+        let min = -max - 1;
+        y0.max(min).min(max)
     }
 }

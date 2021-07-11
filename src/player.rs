@@ -20,6 +20,7 @@ use std::thread;
 use claxon;
 use claxon::metadata::StreamInfo;
 
+use crate::filter::StateVariableFilter;
 use crate::history::PlaybackEvent;
 use crate::history;
 use crate::playback;
@@ -124,6 +125,73 @@ impl Block {
     }
 }
 
+/// Holds high-pass filters, one for each channel.
+struct Filters {
+    /// One filter per channel.
+    filters: [StateVariableFilter; 2],
+
+    /// The current sample format.
+    format: Format,
+}
+
+impl Filters {
+    pub fn new() -> Self {
+        // A q of sqrt(2) leads to the flattest possible pass-band.
+        let q = 2.0_f64.sqrt();
+
+        // The sample rate and cutoff will be adjusted later, these are just
+        // dummy values for now.
+        let sample_rate_hz = 44_100.0;
+        let cutoff_hz = 40.0;
+        let filter = StateVariableFilter::new(
+            sample_rate_hz,
+            cutoff_hz,
+            q,
+        );
+        Self {
+            filters: [filter.clone(), filter.clone()],
+            format: Format {
+                sample_rate_hz: 44_100,
+                bits_per_sample: 16,
+            },
+        }
+    }
+
+    /// Update the filter parameters to work for a new format, if the format changed.
+    ///
+    /// Also clear the state if the format changed.
+    pub fn set_format(&mut self, format: &Format) {
+        // If the bit depth changes, we should reset the filter state, otherwise
+        // we get incorrect past feeding into our output. We could instead
+        // scale the state variables to keep the output continuous, but as a
+        // format change should only happen at album boundaries, I think it is
+        // better to start over clean.
+        if format.bits_per_sample != self.format.bits_per_sample {
+            for f in self.filters.iter_mut() {
+                f.reset();
+            }
+        }
+
+        if format.sample_rate_hz == self.format.sample_rate_hz {
+            for f in self.filters.iter_mut() {
+                let cutoff_hz = 40.0;
+                f.set_cutoff(format.sample_rate_hz as f64, cutoff_hz);
+            }
+        }
+
+        self.format = *format;
+    }
+
+    /// Feed one sample for both channels, return high-passed result.
+    #[inline]
+    pub fn tick(&mut self, left: i32, right: i32) -> (i32, i32) {
+        (
+            self.filters[0].tick_highpass_clip(left, self.format.bits_per_sample),
+            self.filters[1].tick_highpass_clip(right, self.format.bits_per_sample),
+        )
+    }
+}
+
 /// The decoding state of a queued track.
 pub enum Decode {
     /// No decode started yet.
@@ -219,7 +287,7 @@ impl QueuedTrack {
 }
 
 /// A task to be executed by the decoder thread.
-pub enum DecodeTask {
+enum DecodeTask {
     /// Continue decoding with the given reader.
     Continue(FlacReader),
 
@@ -238,14 +306,19 @@ pub struct DecodeResult {
 
 impl DecodeTask {
     /// Decode until the end of the file, or until we produced more than `stop_after_bytes`.
-    pub fn run(self, index: &dyn MetaIndex, stop_after_bytes: usize) -> DecodeResult {
+    pub fn run(
+        self,
+        index: &dyn MetaIndex,
+        filters: &mut Filters,
+        stop_after_bytes: usize,
+    ) -> DecodeResult {
         match self {
-            DecodeTask::Continue(reader) => DecodeTask::decode(reader, stop_after_bytes),
-            DecodeTask::Start(track_id) => DecodeTask::start(index, track_id, stop_after_bytes),
+            DecodeTask::Continue(reader) => DecodeTask::decode(reader, filters, stop_after_bytes),
+            DecodeTask::Start(track_id) => DecodeTask::start(index, track_id, filters, stop_after_bytes),
         }
     }
 
-    fn start(index: &dyn MetaIndex, track_id: TrackId, stop_after_bytes: usize) -> DecodeResult {
+    fn start(index: &dyn MetaIndex, track_id: TrackId, filters: &mut Filters, stop_after_bytes: usize) -> DecodeResult {
         let track = match index.get_track(track_id) {
             Some(t) => t,
             None => panic!("Track {} does not exist, how did it end up queued?"),
@@ -258,14 +331,14 @@ impl DecodeTask {
             // TODO: Don't crash the full daemon on decode errors.
             Err(err) => panic!("Failed to open {:?} for reading: {:?}", fname, err),
         };
-        DecodeTask::decode(reader, stop_after_bytes)
+        DecodeTask::decode(reader, filters, stop_after_bytes)
     }
 
-    fn decode(reader: FlacReader, stop_after_bytes: usize) -> DecodeResult {
+    fn decode(reader: FlacReader, filters: &mut Filters, stop_after_bytes: usize) -> DecodeResult {
         let streaminfo = reader.streaminfo();
         match streaminfo.bits_per_sample {
-            16 => DecodeTask::decode_i16(reader, streaminfo, stop_after_bytes),
-            24 => DecodeTask::decode_i24(reader, streaminfo, stop_after_bytes),
+            16 => DecodeTask::decode_i16(reader, streaminfo, filters, stop_after_bytes),
+            24 => DecodeTask::decode_i24(reader, streaminfo, filters, stop_after_bytes),
             n  => panic!("Unsupported bit depth: {}", n),
         }
     }
@@ -273,10 +346,17 @@ impl DecodeTask {
     fn decode_i16(
         mut reader: FlacReader,
         streaminfo: StreamInfo,
+        filters: &mut Filters,
         stop_after_bytes: usize,
     ) -> DecodeResult {
         assert_eq!(streaminfo.bits_per_sample, 16);
         assert_eq!(streaminfo.channels, 2);
+
+        let format = Format {
+            sample_rate_hz: streaminfo.sample_rate,
+            bits_per_sample: 16,
+        };
+        filters.set_format(&format);
 
         // The block size counts inter-channel samples, and we assume that all
         // files are stereo, so multiply by two.
@@ -302,6 +382,8 @@ impl DecodeTask {
                 };
 
                 for (l, r) in frame.stereo_samples() {
+                    let (l, r) = filters.tick(l, r);
+
                     // Encode the samples in little endian.
                     let bytes: [u8; 4] = [
                         ((l >> 0) & 0xff) as u8,
@@ -318,10 +400,6 @@ impl DecodeTask {
 
         out.shrink_to_fit();
 
-        let format = Format {
-            sample_rate_hz: streaminfo.sample_rate,
-            bits_per_sample: 16,
-        };
         let block = Block::new(format, out);
         DecodeResult {
             block: block,
@@ -332,10 +410,17 @@ impl DecodeTask {
     fn decode_i24(
         mut reader: FlacReader,
         streaminfo: StreamInfo,
+        filters: &mut Filters,
         stop_after_bytes: usize,
     ) -> DecodeResult {
         assert_eq!(streaminfo.bits_per_sample, 24);
         assert_eq!(streaminfo.channels, 2);
+
+        let format = Format {
+            sample_rate_hz: streaminfo.sample_rate,
+            bits_per_sample: 24,
+        };
+        filters.set_format(&format);
 
         // The block size counts inter-channel samples, and we assume that all
         // files are stereo, so multiply by two.
@@ -361,6 +446,8 @@ impl DecodeTask {
                 };
 
                 for (l, r) in frame.stereo_samples() {
+                    let (l, r) = filters.tick(l, r);
+
                     // Encode the samples in little endian.
                     let bytes: [u8; 6] = [
                         ((l >>  0) & 0xff) as u8,
@@ -377,10 +464,6 @@ impl DecodeTask {
             }
         }
 
-        let format = Format {
-            sample_rate_hz: streaminfo.sample_rate,
-            bits_per_sample: 24,
-        };
         let block = Block::new(format, out);
         DecodeResult {
             block: block,
@@ -646,7 +729,7 @@ impl PlayerState {
     }
 
     /// Return a decode task, if there is something to decode.
-    pub fn take_decode_task(&mut self) -> Option<DecodeTask> {
+    fn take_decode_task(&mut self) -> Option<DecodeTask> {
         assert!(
             self.current_decode.is_none(),
             "Can only take decode task when none is already in progress.",
@@ -711,7 +794,7 @@ impl PlayerState {
 }
 
 /// Decode the queue until we reach a set memory limit.
-fn decode_burst(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>) {
+fn decode_burst(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>, filters: &mut Filters) {
     // The decode thread is a trade-off between power consumption and memory
     // usage: decoding a lot in one go and then sleeping for a long time is more
     // efficient than decoding a bit all the time, because the CPU can be
@@ -773,7 +856,7 @@ fn decode_burst(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>) {
         // to decode as much, because most of the memory is taken up by
         // already-played samples in a large block where the playhead is at the
         // end of the block.
-        let result = task.run(index, bytes_left.min(10_000_000));
+        let result = task.run(index, filters, bytes_left.min(10_000_000));
         println!("Decoded {:.3} MB.", result.block.size_bytes() as f32 * 1e-6);
         previous_result = Some(result);
     }
@@ -785,14 +868,17 @@ fn decode_burst(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>) {
 /// unparked, if the buffer is running low, it starts a new burst of decode and
 /// then parks itself again, etc.
 fn decode_main(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>) {
+    let mut filters = Filters::new();
+
     loop {
         let should_decode = {
             let state = state_mutex.lock().unwrap();
             state.needs_decode()
         };
 
+
         if should_decode {
-            decode_burst(index, state_mutex);
+            decode_burst(index, state_mutex, &mut filters);
         }
 
         println!("Decoder going to sleep.");
