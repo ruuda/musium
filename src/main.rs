@@ -302,6 +302,7 @@ fn main() -> Result<()> {
                 config.audio_device,
                 config.audio_volume_control,
                 db_path,
+                config.high_pass_cutoff,
             );
             let service = MetaServer::new(arc_index.clone(), thumb_cache, player);
             serve(&config.listen, Arc::new(service));

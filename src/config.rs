@@ -11,10 +11,12 @@
 
 //! Configuration file parser.
 
-use std::path::PathBuf;
 use std::fmt;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 use crate::error::{Error, Result};
+use crate::prim::Hertz;
 
 #[derive(Debug)]
 pub struct Config {
@@ -25,6 +27,7 @@ pub struct Config {
     // TODO: Make this optional; pick the first one by default.
     pub audio_device: String,
     pub audio_volume_control: String,
+    pub high_pass_cutoff: Hertz,
 }
 
 impl fmt::Display for Config {
@@ -34,7 +37,8 @@ impl fmt::Display for Config {
         write!(f, "  covers_path = {}\n", self.covers_path.to_string_lossy())?;
         write!(f, "  data_path = {}\n", self.data_path.to_string_lossy())?;
         write!(f, "  audio_device = {}\n", self.audio_device)?;
-        write!(f, "  audio_volume_control = {}", self.audio_volume_control)?;
+        write!(f, "  audio_volume_control = {}\n", self.audio_volume_control)?;
+        write!(f, "  high_pass_cutoff = {}", self.high_pass_cutoff)?;
         Ok(())
     }
 }
@@ -51,6 +55,7 @@ impl Config {
         let mut data_path = None;
         let mut audio_device = None;
         let mut audio_volume_control = None;
+        let mut high_pass_cutoff = None;
 
         for (lineno, line_raw) in lines.into_iter().enumerate() {
             let line = line_raw.as_ref();
@@ -75,6 +80,10 @@ impl Config {
                     "data_path" => data_path = Some(PathBuf::from(value)),
                     "audio_device" => audio_device = Some(String::from(value)),
                     "audio_volume_control" => audio_volume_control = Some(String::from(value)),
+                    "high_pass_cutoff" => match Hertz::from_str(value) {
+                        Ok(hz) => high_pass_cutoff = Some(hz),
+                        Err(msg) => return Err(Error::InvalidConfig(lineno, msg)),
+                    }
                     _ => {
                         let msg = "Unknown key. Expected one of \
                             'listen', 'library_path', 'covers_path', \
@@ -124,6 +133,10 @@ impl Config {
                     "Audio volume control not set. Expected 'audio_volume_control ='-line."
                 )),
             },
+            high_pass_cutoff: match high_pass_cutoff {
+                Some(hz) => hz,
+                None => Hertz(0),
+            },
         };
 
         Ok(config)
@@ -139,7 +152,7 @@ impl Config {
 #[cfg(test)]
 mod test {
     use std::path::Path;
-    use super::Config;
+    use super::{Config, Hertz};
 
     #[test]
     pub fn config_can_be_parsed() {
@@ -152,6 +165,7 @@ mod test {
             "",
             "audio_device = UCM404HD 192k",
             "audio_volume_control = UMC404HD 192k Output",
+            "high_pass_cutoff = 50 Hz",
         ];
         let config = Config::parse(&config_lines).unwrap();
         assert_eq!(&config.listen[..], "localhost:8000");
@@ -160,5 +174,6 @@ mod test {
         assert_eq!(config.data_path.as_path(), Path::new("/home/user/.local/share/musium"));
         assert_eq!(&config.audio_device[..], "UCM404HD 192k");
         assert_eq!(&config.audio_volume_control[..], "UMC404HD 192k Output");
+        assert_eq!(config.high_pass_cutoff, Hertz(50));
     }
 }

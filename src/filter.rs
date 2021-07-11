@@ -9,6 +9,8 @@
 
 use std::f64;
 
+use crate::prim::Hertz;
+
 /// Convert to fixed point with 24 bits behind the decimal point.
 fn fix(x: f64) -> i64 {
     (x * (1_i64 << 24) as f64) as i64
@@ -57,13 +59,11 @@ pub struct StateVariableFilter {
 impl StateVariableFilter {
     /// Initialize a new state variable filter.
     ///
-    /// The sample rate and cutoff frequency are measured in Hertz.
-    ///
     /// `q` normally ranges from 2, down to 0.0, where the filter oscillates.
     /// A value of `sqrt(2)` yields a flat pass-band response, higher values
     /// produce a softer “knee”, lower values introduce resonance.
-    pub fn new(sample_rate_hz: f64, cutoff_hz: f64, q: f64) -> Self {
-        let f = 2.0 * (f64::consts::PI * cutoff_hz / sample_rate_hz).sin();
+    pub fn new(sample_rate: Hertz, cutoff: Hertz, q: f64) -> Self {
+        let f = 2.0 * (f64::consts::PI * cutoff.0 as f64 / sample_rate.0 as f64).sin();
 
         Self {
             f: fix(f),
@@ -74,11 +74,9 @@ impl StateVariableFilter {
         }
     }
 
-    /// Change the cutoff frequency.
-    ///
-    /// The sample rate and cutoff frequency are measured in Hertz.
-    pub fn set_cutoff(&mut self, sample_rate_hz: f64, cutoff_hz: f64) {
-        self.f = fix(2.0 * (f64::consts::PI * cutoff_hz / sample_rate_hz).sin());
+    /// Change the sample rate and/or cutoff frequency.
+    pub fn set_cutoff(&mut self, sample_rate: Hertz, cutoff: Hertz) {
+        self.f = fix(2.0 * (f64::consts::PI * cutoff.0 as f64 / sample_rate.0 as f64).sin());
     }
 
     /// Set all state variables to 0.

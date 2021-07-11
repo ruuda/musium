@@ -19,6 +19,7 @@ use alsa::PollDescriptors;
 use nix::errno::Errno;
 
 use crate::player::{Format, Millibel, PlayerState};
+use crate::prim::Hertz;
 
 type Result<T> = result::Result<T, alsa::Error>;
 
@@ -131,7 +132,7 @@ fn set_format(pcm: &alsa::PCM, format: Format) -> Result<()> {
         // ensure that the plugin is only responsible for channel count
         // conversion). Alternatively, do the channel conversion manually.
         hwp.set_channels(2)?;
-        hwp.set_rate(format.sample_rate_hz, alsa::ValueOr::Nearest)?;
+        hwp.set_rate(format.sample_rate.0, alsa::ValueOr::Nearest)?;
         hwp.set_format(sample_format)?;
         hwp.set_access(alsa::pcm::Access::MMapInterleaved)?;
         // TODO: Pick a good buffer size.
@@ -150,7 +151,7 @@ fn set_format(pcm: &alsa::PCM, format: Format) -> Result<()> {
         pcm.sw_params(&swp)?;
 
         assert_eq!(hwp.get_channels()?, 2);
-        assert_eq!(hwp.get_rate()?, format.sample_rate_hz);
+        assert_eq!(hwp.get_rate()?, format.sample_rate.0);
         assert_eq!(hwp.get_format()?, sample_format);
     }
 
@@ -333,7 +334,7 @@ fn play_queue(
 
     let mut volume = None;
     let mut format = Format {
-        sample_rate_hz: 44_100,
+        sample_rate: Hertz(44_100),
         bits_per_sample: 16,
     };
     set_format(&device, format).expect("TODO: Failed to set format.");

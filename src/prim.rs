@@ -142,6 +142,29 @@ impl FromStr for Lufs {
     }
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub struct Hertz(pub u32);
+
+impl FromStr for Hertz {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> std::result::Result<Hertz, &'static str> {
+        match s.strip_suffix(" Hz") {
+            None => Err("Expected integer frequency value of the form '999 Hz', but the Hz suffix is missing."),
+            Some(num) => match u32::from_str(num) {
+                Err(_) => Err("Expected integer frequency value of the form '999 Hz', but the number is invalid."),
+                Ok(x) => Ok(Hertz(x)),
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for Hertz {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} Hz", self.0)
+    }
+}
+
 /// Last modified time of a file, as reported by the file system.
 ///
 /// This is only used to determine whether a file changed since we last read it,

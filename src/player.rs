@@ -24,6 +24,7 @@ use crate::filter::StateVariableFilter;
 use crate::history::PlaybackEvent;
 use crate::history;
 use crate::playback;
+use crate::prim::Hertz;
 use crate::{AlbumId, Lufs, MetaIndex, TrackId};
 
 type FlacReader = claxon::FlacReader<fs::File>;
@@ -59,7 +60,7 @@ impl fmt::Display for Millibel {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Format {
-    pub sample_rate_hz: u32,
+    pub sample_rate: Hertz,
     pub bits_per_sample: u32,
 }
 
@@ -116,7 +117,7 @@ impl Block {
         // overflows a u32 (and usize can be 32 bits). We can't move the 500
         // into the denominator, because the common sample rate of 44.1 kHz is
         // not a multiple of 500.
-        self.len() as u64 * 500 / self.format.sample_rate_hz as u64
+        self.len() as u64 * 500 / self.format.sample_rate.0 as u64
     }
 
     /// Return the size of the block (including consumed samples) in bytes.
@@ -132,28 +133,31 @@ struct Filters {
 
     /// The current sample format.
     format: Format,
+
+    /// The cutoff frequency.
+    cutoff: Hertz,
 }
 
 impl Filters {
-    pub fn new() -> Self {
+    pub fn new(cutoff: Hertz) -> Self {
         // A q of sqrt(2) leads to the flattest possible pass-band.
         let q = 2.0_f64.sqrt();
 
         // The sample rate and cutoff will be adjusted later, these are just
         // dummy values for now.
-        let sample_rate_hz = 44_100.0;
-        let cutoff_hz = 50.0;
+        let sample_rate = Hertz(44_100);
         let filter = StateVariableFilter::new(
-            sample_rate_hz,
-            cutoff_hz,
+            sample_rate,
+            cutoff,
             q,
         );
         Self {
             filters: [filter.clone(), filter.clone()],
             format: Format {
-                sample_rate_hz: 44_100,
+                sample_rate: Hertz(44_100),
                 bits_per_sample: 16,
             },
+            cutoff,
         }
     }
 
@@ -172,10 +176,9 @@ impl Filters {
             }
         }
 
-        if format.sample_rate_hz == self.format.sample_rate_hz {
+        if format.sample_rate == self.format.sample_rate {
             for f in self.filters.iter_mut() {
-                let cutoff_hz = 40.0;
-                f.set_cutoff(format.sample_rate_hz as f64, cutoff_hz);
+                f.set_cutoff(format.sample_rate, self.cutoff);
             }
         }
 
@@ -232,7 +235,7 @@ pub struct QueuedTrack {
     /// The sample rate of the track in Hz.
     ///
     /// Only known after decoding has started; until then it is None.
-    sample_rate_hz: Option<u32>,
+    sample_rate: Option<Hertz>,
 
     /// Decoder for this track.
     decode: Decode,
@@ -254,7 +257,7 @@ impl QueuedTrack {
             album_loudness: album_loudness,
             blocks: Vec::new(),
             samples_played: 0,
-            sample_rate_hz: None,
+            sample_rate: None,
             decode: Decode::NotStarted,
         }
     }
@@ -266,14 +269,14 @@ impl QueuedTrack {
 
     /// Return the duration of the consumed samples in milliseconds.
     pub fn position_ms(&self) -> u64 {
-        match self.sample_rate_hz {
+        match self.sample_rate {
             // Multiply by 1000 to go from seconds to milliseconds, divide by 2
             // because there are 2 channels. We need to work with u64 here, because
             // around 100s of stereo 44.1 kHz audio, the sample count times 500
             // overflows a u32 (and usize can be 32 bits). We can't move the 500
             // into the denominator, because the common sample rate of 44.1 kHz
             // is not a multiple of 500.
-            Some(hz) => self.samples_played * 500 / (hz as u64),
+            Some(Hertz(hz)) => self.samples_played * 500 / (hz as u64),
             // When the sample rate is not known, we definitely have not started
             // playback.
             None => 0
@@ -353,7 +356,7 @@ impl DecodeTask {
         assert_eq!(streaminfo.channels, 2);
 
         let format = Format {
-            sample_rate_hz: streaminfo.sample_rate,
+            sample_rate: Hertz(streaminfo.sample_rate),
             bits_per_sample: 16,
         };
         filters.set_format(&format);
@@ -417,7 +420,7 @@ impl DecodeTask {
         assert_eq!(streaminfo.channels, 2);
 
         let format = Format {
-            sample_rate_hz: streaminfo.sample_rate,
+            sample_rate: Hertz(streaminfo.sample_rate),
             bits_per_sample: 24,
         };
         filters.set_format(&format);
@@ -783,7 +786,7 @@ impl PlayerState {
         // Store the sample rate in the queued track as well as in the block, so
         // we can compute the playback position in seconds even in case of a
         // buffer underrun, when there are no blocks.
-        queued_track.sample_rate_hz = Some(result.block.format.sample_rate_hz);
+        queued_track.sample_rate = Some(result.block.format.sample_rate);
         queued_track.blocks.push(result.block);
         queued_track.decode = match result.reader {
             Some(r) => Decode::Partial(r),
@@ -867,8 +870,12 @@ fn decode_burst(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>, filters
 /// Decodes until the in-memory buffer is full, then parks itself. When
 /// unparked, if the buffer is running low, it starts a new burst of decode and
 /// then parks itself again, etc.
-fn decode_main(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>) {
-    let mut filters = Filters::new();
+fn decode_main(
+    index: &dyn MetaIndex,
+    state_mutex: &Mutex<PlayerState>,
+    high_pass_cutoff: Hertz,
+) {
+    let mut filters = Filters::new(high_pass_cutoff);
 
     loop {
         let should_decode = {
@@ -928,6 +935,7 @@ impl Player {
         card_name: String,
         volume_name: String,
         db_path: PathBuf,
+        high_pass_cutoff: Hertz,
     ) -> Player {
         // Build the channel to send playback events to the history thread. That
         // thread is expected to process them immediately and be idle most of
@@ -944,7 +952,11 @@ impl Player {
         let decode_join_handle = builder
             .name("decoder".into())
             .spawn(move || {
-                decode_main(&*index_for_decode, &*state_mutex_for_decode);
+                decode_main(
+                    &*index_for_decode,
+                    &*state_mutex_for_decode,
+                    high_pass_cutoff,
+                );
             }).unwrap();
 
         let state_mutex_for_playback = state.clone();
