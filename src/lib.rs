@@ -16,6 +16,7 @@ extern crate unicode_normalization;
 mod album_table;
 mod build;
 mod database;
+mod filter;
 mod search;
 mod word_index;
 
