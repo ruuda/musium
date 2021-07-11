@@ -142,7 +142,7 @@ impl Filters {
         // The sample rate and cutoff will be adjusted later, these are just
         // dummy values for now.
         let sample_rate_hz = 44_100.0;
-        let cutoff_hz = 40.0;
+        let cutoff_hz = 50.0;
         let filter = StateVariableFilter::new(
             sample_rate_hz,
             cutoff_hz,
