@@ -17,6 +17,8 @@ pairs with `=` separator, and support `#` for comments.
     audio_device = UMC404HD 192k
     audio_volume_control = UMC404HD 192k Output
 
+    high_pass_cutoff = 30 Hz
+
 ## Settings
 
 The following settings are available. Unless noted otherwise, all options must
@@ -66,3 +68,20 @@ Musium assumes exclusive control over this mixer control, so you should not
 manipulate it manually with tools like Alsamixer after starting Musium. In
 particular, Musium adjusts the volume to perform loudness normalization, so even
 for a constant target playback volume, Musium will manipulate the mixer control.
+
+### high_pass_cutoff
+
+Apply a high-pass filter to the output, with the given cutoff frequency. The
+value must be an integer and include the _Hz_ unit as suffix. This setting is
+optional and defaults to 0&nbsp;Hz (so no frequencies are filtered).
+
+A high-pass filter is useful in situations where your speakers reproduce low
+frequencies — perhaps even louder than intended due to suboptimal room
+acoustics — that are unpleasant or unwanted. Especially 2020s albums can be
+bass-heavy, and taking off the low end can help to allow greater playback volume
+without making the room sound saturated. Values around 50&nbsp;Hz are suitable
+for this use case.
+
+The high pass filter is not perfect. It has a gain of -3&nbsp;dB at the cutoff
+frequency, and a rolloff of -12&nbsp;dB per octave. For example, at a cutoff
+frequency of 50&nbsp;Hz, a 25&nbsp;Hz tone would be diminished by 15&nbsp;dB.
