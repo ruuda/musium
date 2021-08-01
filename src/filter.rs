@@ -8,52 +8,35 @@
 //! Signal processing functions for high-pass filtering.
 
 use std::f64;
+use std::f32;
 
 use crate::prim::Hertz;
-
-/// Convert to fixed point with 24 bits behind the decimal point.
-fn fix(x: f64) -> i64 {
-    (x * (1_i64 << 24) as f64) as i64
-}
-
-/// Inverse of `|x: i32| fix(x as f64)`.
-fn unfix(x: i64) -> i32 {
-    let z = x >> 24;
-    debug_assert!(z < 1 << 24);
-    debug_assert!(z > -1 << 24);
-    z as i32
-}
-
-/// Given `fix_y = fix(y)`, return `x * y`.
-fn fixmul(x: i32, fix_y: i64) -> i32 {
-    unfix(x as i64 * fix_y)
-}
 
 /// A digital state variable filter.
 ///
 /// Modelled after <https://www.earlevel.com/main/2003/03/02/the-digital-state-variable-filter/>.
 #[derive(Clone)]
 pub struct StateVariableFilter {
-    /// Fixed-point encoding of the `f` parameter.
-    f: i64,
+    /// The `f` parameter.
+    f: f32,
 
-    /// Fixed-point encoding of the `q` parameter.
-    q: i64,
+    /// The `q` parameter.
+    q: f32,
 
     /// Band-pass output, delayed by one tick.
     ///
     /// This is a state variable, `tick` reads from it.
-    pub bandpass: i32,
+    pub bandpass: f32,
 
     /// Low-pass output, delayed by two ticks.
     ///
     /// This is a state variable, `tick` reads from it.
-    pub lowpass: i32,
+    pub lowpass: f32,
 
     /// High-pass output, delayed by zero ticks.
     ///
     /// This is not a state variable, `tick` only writes it.
-    pub highpass: i32,
+    pub highpass: f32,
 }
 
 impl StateVariableFilter {
@@ -66,24 +49,24 @@ impl StateVariableFilter {
         let f = 2.0 * (f64::consts::PI * cutoff.0 as f64 / sample_rate.0 as f64).sin();
 
         Self {
-            f: fix(f),
-            q: fix(q),
-            bandpass: 0,
-            lowpass: 0,
-            highpass: 0,
+            f: f as f32,
+            q: q as f32,
+            bandpass: 0.0,
+            lowpass: 0.0,
+            highpass: 0.0,
         }
     }
 
     /// Change the sample rate and/or cutoff frequency.
     pub fn set_cutoff(&mut self, sample_rate: Hertz, cutoff: Hertz) {
-        self.f = fix(2.0 * (f64::consts::PI * cutoff.0 as f64 / sample_rate.0 as f64).sin());
+        self.f = (2.0 * (f64::consts::PI * cutoff.0 as f64 / sample_rate.0 as f64).sin()) as f32;
     }
 
     /// Set all state variables to 0.
     pub fn reset(&mut self) {
-        self.lowpass = 0;
-        self.highpass = 0;
-        self.bandpass = 0;
+        self.lowpass = 0.0;
+        self.highpass = 0.0;
+        self.bandpass = 0.0;
     }
 
     /// Feed one sample into the filter.
@@ -96,14 +79,14 @@ impl StateVariableFilter {
     /// input range slightly; the output may need to be scaled down slightly to
     /// avoid clipping.
     #[inline(always)]
-    pub fn tick(&mut self, x0: i32) {
+    pub fn tick(&mut self, x0: f32) {
         // See the image at https://www.earlevel.com/main/2003/03/02/the-digital-state-variable-filter/.
         // TODO: Embed the diagram as ascii art, in case the page goes offline.
-        let bandpass_f = fixmul(self.bandpass, self.f);
+        let bandpass_f = self.bandpass * self.f;
         let lowpass = bandpass_f + self.lowpass;
-        let bandpass_q = fixmul(self.bandpass, self.q);
+        let bandpass_q = self.bandpass * self.q;
         let highpass = x0 - lowpass - bandpass_q;
-        let highpass_f = fixmul(highpass, self.f);
+        let highpass_f = highpass * self.f;
         let bandpass = highpass_f + self.bandpass;
         self.lowpass = lowpass;
         self.bandpass = bandpass;
@@ -117,7 +100,7 @@ impl StateVariableFilter {
     /// peaks than were present in the original signal.
     #[inline]
     pub fn tick_highpass_clip(&mut self, x0: i32, bits_per_sample: u32) -> i32 {
-        self.tick(x0);
+        self.tick(x0 as f32);
         // A factor 0.5 in amplitude is about -6 dB in volume. We lose one bit
         // of precision because of this, but we need to, because the filter can
         // produce values that are out of range. (One way to see this: imagine
@@ -125,11 +108,11 @@ impl StateVariableFilter {
         // the zero crossings of the sine ... the magnitudes of these samples
         // will be low. Now shift the sine by pi/2, so we sample the peaks.
         // Suddenly we need more range to represent the same wave!)
-        let y0 = self.highpass / 2;
+        let y0 = self.highpass * 0.5;
 
         // If the signal is still too large, clip it.
         let max = (1_i32 << bits_per_sample) - 1;
         let min = -max - 1;
-        y0.max(min).min(max)
+        (y0 as i32).max(min).min(max)
     }
 }
