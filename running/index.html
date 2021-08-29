@@ -398,9 +398,17 @@
         <h1 id="running">Running</h1>
 <p>Musium logs to stdout and runs until it is killed, which makes it easy to run in
 a terminal for development, and it works well with systemd to run as a daemon.
-To run locally after <a href="../building/">building</a>:</p>
+Before we can start the server, we need to scan the library. After
+<a href="../building/">building</a>:</p>
+<pre><code>target/release/musium scan musium.conf
+</code></pre>
+<p>The first scan might take a few minutes, depending on the size of the library
+and the speed of your disks. Generating thumbnails will take a long time, but we
+do not need to wait for it, we can already start the server:</p>
 <pre><code>target/release/musium serve musium.conf
 </code></pre>
+<p>We do need to restart the server after thumbnail generation is complete to make
+the thumbnails show up.</p>
 <h2 id="with-systemd">With systemd</h2>
 <p>An example unit file:</p>
 <pre><code>[Unit]
