@@ -202,11 +202,6 @@ new bus = do
     , postEvent: postEvent
     }
 
-currentTrackId :: AppState -> Maybe TrackId
-currentTrackId state = case Array.head state.queue of
-  Just (QueuedTrack t) -> Just t.trackId
-  Nothing              -> Nothing
-
 getAlbum :: AlbumId -> AppState -> Maybe Album
 getAlbum (AlbumId id) state = Object.lookup id state.albumsById
 
@@ -544,21 +539,6 @@ scheduleFetchQueue fetchAt state = do
     Aff.delay $ Time.toNonNegativeMilliseconds $ Time.subtract fetchAt now
 
     -- Then fetch, and send an event with the new queue.
-    queue <- Model.getQueue
-    Console.log "Loaded queue"
-    state.postEvent $ Event.UpdateQueue queue
-
-  pure $ state { nextQueueFetch = fiber }
-
--- Schedule a fetch queue right now.
-fetchQueue :: AppState -> Aff AppState
-fetchQueue state = do
-  -- Cancel the previous fetch. If it was no longer running, this should be a
-  -- no-op. If it was waiting, then now we replace it with a newer waiting
-  -- fetch.
-  Aff.killFiber (Exception.error "Fetch cancelled in favor of new fetch.") state.nextQueueFetch
-
-  fiber <- Aff.forkAff $ do
     queue <- Model.getQueue
     Console.log "Loaded queue"
     state.postEvent $ Event.UpdateQueue queue
