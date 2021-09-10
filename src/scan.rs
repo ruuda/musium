@@ -571,7 +571,7 @@ pub fn run_scan_in_thread(config: &Config) -> (
 }
 
 /// A scan that is happening in a background thread.
-pub struct BackgroundScan {
+struct BackgroundScan {
     /// The most recent scan status.
     ///
     /// The mutex should be held only briefly, either to write a new status, or
@@ -624,6 +624,46 @@ impl BackgroundScan {
     /// Return a copy of the current status.
     pub fn get_status(&self) -> Status {
         *self.status.lock().unwrap()
+    }
+}
+
+pub struct BackgroundScanner {
+    background_scan: Mutex<Option<BackgroundScan>>,
+}
+
+impl BackgroundScanner {
+    pub fn new() -> Self {
+        Self {
+            background_scan: Mutex::new(None),
+        }
+    }
+
+    /// Start a new scan, if no scan is running at the moment.
+    ///
+    /// Returns the status of the scan that's in progress.
+    pub fn start(&self, config: Config) -> Status {
+        let mut bg_scan = self.background_scan.lock().unwrap();
+
+        // If there is an existing scan, we don't need to start a new one,
+        // unless the previous scan is already done.
+        if let Some(ref sc) = *bg_scan {
+            let status = sc.get_status();
+            match status.stage {
+                ScanStage::Done => { /* We need to start a new scan. */ },
+                _ => return status,
+            }
+        }
+
+        let new_scan = BackgroundScan::new(config);
+        let status = new_scan.get_status();
+        *bg_scan = Some(new_scan);
+
+        status
+    }
+
+    /// Return the status of the current scan, if any.
+    pub fn get_status(&self) -> Option<Status> {
+        self.background_scan.lock().unwrap().as_ref().map(|sc| sc.get_status())
     }
 }
 

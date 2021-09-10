@@ -12,8 +12,9 @@ use serde_json;
 use std::io;
 use std::io::Write;
 
-use crate::{Album, AlbumId, Artist, ArtistId, MetaIndex, TrackId};
 use crate::player::{Millibel, TrackSnapshot};
+use crate::scan;
+use crate::{Album, AlbumId, Artist, ArtistId, MetaIndex, TrackId};
 
 /// Write an album, but only with the album details, not its tracks.
 ///
@@ -225,4 +226,41 @@ pub fn write_queue_json<W: Write>(
 
 pub fn write_volume_json<W: Write>(mut w: W, current_volume: Millibel) -> io::Result<()> {
     write!(w, r#"{{"volume_db":{:.02}}}"#, current_volume.0 as f32 * 0.01)
+}
+
+pub fn write_scan_status_json<W: Write>(
+    mut w: W,
+    status_opt: Option<scan::Status>,
+) -> io::Result<()> {
+    use scan::ScanStage;
+    let status = match status_opt {
+        None => return write!(w, "null"),
+        Some(s) => s,
+    };
+
+    let stage = match status.stage {
+        ScanStage::Discovering => "discovering",
+        ScanStage::PreProcessingMetadata => "preprocessing_metadata",
+        ScanStage::ExtractingMetadata => "extracting_metadata",
+        ScanStage::PreProcessingThumbnails => "preprocessing_thumbnails",
+        ScanStage::GeneratingThumbnails => "generating_thumbnails",
+        ScanStage::Done => "done",
+    };
+
+    write!(w,
+        "{{\
+        \"stage\":\"{}\",\
+        \"files_discovered\":{},\
+        \"files_to_process_metadata\":{},\
+        \"files_processed_metadata\":{},\
+        \"files_to_process_thumbnails\":{},
+        \"files_processed_thumbnails\":{}\
+        }}",
+        stage,
+        status.files_discovered,
+        status.files_to_process_metadata,
+        status.files_processed_metadata,
+        status.files_to_process_thumbnails,
+        status.files_processed_thumbnails,
+    )
 }

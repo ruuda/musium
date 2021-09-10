@@ -15,6 +15,7 @@ use tiny_http::Method::{Get, Post, Put, self};
 
 use crate::player::{Millibel, Player};
 use crate::prim::{ArtistId, AlbumId, TrackId};
+use crate::scan::BackgroundScanner;
 use crate::serialization;
 use crate::string_utils::normalize_words;
 use crate::systemd;
@@ -39,6 +40,7 @@ pub struct MetaServer {
     index: Arc<MemoryMetaIndex>,
     thumb_cache: ThumbCache,
     player: Player,
+    scanner: BackgroundScanner,
 }
 
 impl MetaServer {
@@ -51,6 +53,7 @@ impl MetaServer {
             index: index,
             thumb_cache: thumb_cache,
             player: player,
+            scanner: BackgroundScanner::new(),
         }
     }
 
@@ -321,6 +324,16 @@ impl MetaServer {
             .boxed()
     }
 
+    fn handle_get_scan_status(&self) -> ResponseBox {
+        let buffer = Vec::new();
+        let mut w = io::Cursor::new(buffer);
+        let status = self.scanner.get_status();
+        serialization::write_scan_status_json(&mut w, status).unwrap();
+        Response::from_data(w.into_inner())
+            .with_header(header_content_type("application/json"))
+            .boxed()
+    }
+
     /// Router function for all /api/«endpoint» calls.
     fn handle_api_request(&self, method: &Method, endpoint: &str, arg: Option<&str>, query: &str) -> ResponseBox {
         match (method, endpoint, arg) {
@@ -339,6 +352,9 @@ impl MetaServer {
             (&Get,  "volume", None)         => self.handle_get_volume(),
             (&Post, "volume", Some("up"))   => self.handle_change_volume(Millibel( 1_00)),
             (&Post, "volume", Some("down")) => self.handle_change_volume(Millibel(-1_00)),
+
+            // Background library scanning.
+            (&Get,  "scan", Some("status")) => self.handle_get_scan_status(),
 
             _ => self.handle_bad_request("No such (method, endpoint, argument) combination."),
         }
