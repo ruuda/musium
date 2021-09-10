@@ -25,18 +25,21 @@
 //! * We can do incremental updates. We don't have to read the tags from files
 //!   that haven't changed.
 
+use std::thread::JoinHandle;
 use std::ffi::OsStr;
 use std::fmt;
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::mpsc::SyncSender;
+use std::sync::mpsc::{Receiver, SyncSender};
 
 use walkdir;
 
-use crate::database;
+use crate::config::Config;
 use crate::database::{Database, FileMetadataInsert, FileMetaId};
+use crate::database;
+use crate::error;
 use crate::prim::Mtime;
 
 type FlacReader = claxon::FlacReader<fs::File>;
@@ -527,6 +530,43 @@ fn insert_file_metadata(
     }
 
     db.insert_file_metadata(m)
+}
+
+pub fn run_scan_in_thread(config: &Config) -> (
+    JoinHandle<error::Result<()>>,
+    Receiver<Status>,
+) {
+    // Status updates should print much faster than they are produced, so use
+    // a small buffer for them.
+    let (mut tx, rx) = std::sync::mpsc::sync_channel(15);
+
+    let db_path = config.db_path();
+    let library_path = config.library_path.clone();
+    let covers_path = config.covers_path.clone();
+
+    let scan_thread = std::thread::Builder::new()
+        .name("scan".to_string())
+        .spawn(move || {
+            let mut status = Status::new();
+            scan(
+                &db_path,
+                &library_path,
+                &mut status,
+                &mut tx,
+            )?;
+            crate::thumb_gen::generate_thumbnails(
+                &db_path,
+                &covers_path,
+                &mut status,
+                &mut tx,
+            )?;
+            status.stage = ScanStage::Done;
+            tx.send(status).unwrap();
+            Ok(())
+        })
+        .expect("Failed to spawn scan thread.");
+
+    (scan_thread, rx)
 }
 
 #[cfg(test)]

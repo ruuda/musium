@@ -23,7 +23,6 @@ use std::sync::Arc;
 
 use musium::config::Config;
 use musium::error::Result;
-use musium::scan::ScanStage;
 use musium::server::{MetaServer, serve};
 use musium::string_utils::normalize_words;
 use musium::thumb_cache::ThumbCache;
@@ -191,35 +190,7 @@ fn match_listens(
 }
 
 fn run_scan(config: &Config) -> Result<()> {
-    // Status updates should print much faster than they are produced, so use
-    // a small buffer for them.
-    let (mut tx, rx) = std::sync::mpsc::sync_channel(15);
-
-    let db_path = config.db_path();
-    let library_path = config.library_path.clone();
-    let covers_path = config.covers_path.clone();
-
-    let scan_thread = std::thread::Builder::new()
-        .name("scan".to_string())
-        .spawn(move || {
-            let mut status = musium::scan::Status::new();
-            musium::scan::scan(
-                &db_path,
-                &library_path,
-                &mut status,
-                &mut tx,
-            )?;
-            musium::thumb_gen::generate_thumbnails(
-                &db_path,
-                &covers_path,
-                &mut status,
-                &mut tx,
-            )?;
-            status.stage = ScanStage::Done;
-            tx.send(status).unwrap();
-            Ok(())
-        })
-        .expect("Failed to spawn scan thread.");
+    let (scan_thread, rx) = musium::scan::run_scan_in_thread(config);
 
     {
         let stdout = std::io::stdout();
