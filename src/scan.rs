@@ -31,6 +31,7 @@ use std::fmt;
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender};
 
@@ -567,6 +568,63 @@ pub fn run_scan_in_thread(config: &Config) -> (
         .expect("Failed to spawn scan thread.");
 
     (scan_thread, rx)
+}
+
+/// A scan that is happening in a background thread.
+pub struct BackgroundScan {
+    /// The most recent scan status.
+    ///
+    /// The mutex should be held only briefly, either to write a new status, or
+    /// to copy the current one.
+    status: Arc<Mutex<Status>>,
+
+    /// Thread that watches the scan and writes new values to `status`.
+    ///
+    /// The actual scan runs in yet another thread, and it sends status updates
+    /// over a channel, to allow for reactive UIs. However, a background scan
+    /// triggered by the webinterface, the webinterface polls the status, we
+    /// don’t push. So the supervisor thread sits here, listening for status
+    /// updates, and it writes them to the `status` mutex when there is one.
+    _supervisor: JoinHandle<()>,
+}
+
+impl BackgroundScan {
+    pub fn new(config: Config) -> Self {
+        let status = Arc::new(Mutex::new(Status::new()));
+
+        let status_for_supervisor = status.clone();
+        let supervisor = std::thread::Builder::new()
+            .name("scan_supervisor".to_string())
+            .spawn(move || {
+                let status = status_for_supervisor;
+                let (scan_thread, rx) = run_scan_in_thread(&config);
+                for new_status in rx {
+                    *status.lock().unwrap() = new_status;
+                }
+                scan_thread
+                    .join()
+                    .expect("Scan thread panicked.")
+                    .expect("Scan failed.");
+
+                let final_status = *status.lock().unwrap();
+                assert_eq!(
+                    final_status.stage,
+                    ScanStage::Done,
+                    "Final status update should be Done after scan thread exits.",
+                );
+            })
+        .expect("Failed to spawn scan supervisor thread.");
+
+        Self {
+            status,
+            _supervisor: supervisor,
+        }
+    }
+
+    /// Return a copy of the current status.
+    pub fn get_status(&self) -> Status {
+        *self.status.lock().unwrap()
+    }
 }
 
 #[cfg(test)]
