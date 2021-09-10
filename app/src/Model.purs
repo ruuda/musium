@@ -21,18 +21,22 @@ module Model
   , QueuedTrack (..)
   , Volume (..)
   , VolumeChange (..)
+  , ScanStage (..)
+  , ScanStatus (..)
   , coverUrl
   , changeVolume
   , enqueueTrack
   , formatDurationSeconds
   , getAlbums
   , getArtist
-  , getString
   , getQueue
+  , getScanStatus
+  , getString
   , getTracks
   , getVolume
   , originalReleaseYear
   , search
+  , startScan
   , thumbUrl
   , trackUrl
   ) where
@@ -46,7 +50,7 @@ import Control.Monad.Error.Class (class MonadThrow, throwError)
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (decodeJson, getField) as Json
 import Data.Argonaut.Decode.Class (class DecodeJson)
-import Data.Argonaut.Decode.Error (JsonDecodeError, printJsonDecodeError)
+import Data.Argonaut.Decode.Error (JsonDecodeError (UnexpectedValue), printJsonDecodeError)
 import Data.Array (reverse, sortWith)
 import Data.Either (Either (..))
 import Data.Int (rem)
@@ -213,6 +217,71 @@ changeVolume change =
       Right response -> case Json.decodeJson response.body of
         Left err -> fatal $ "Failed to change volume: " <> printJsonDecodeError err
         Right newVolume -> pure newVolume
+
+data ScanStage
+  = ScanDiscovering
+  | ScanPreProcessingMetadata
+  | ScanExtractingMetadata
+  | ScanPreProcessingThumbnails
+  | ScanGeneratingThumbnails
+  | ScanDone
+
+instance decodeJsonScanStage :: DecodeJson ScanStage where
+  decodeJson json = do
+    str <- Json.decodeJson json
+    case str of
+      "discovering"              -> pure ScanDiscovering
+      "preprocessing_metadata"   -> pure ScanPreProcessingMetadata
+      "extracting_metadata"      -> pure ScanExtractingMetadata
+      "preprocessing_thumbnails" -> pure ScanPreProcessingThumbnails
+      "generating_thumbnails"    -> pure ScanGeneratingThumbnails
+      "done"                     -> pure ScanDone
+      _ -> Left $ UnexpectedValue json
+
+newtype ScanStatus = ScanStatus
+  { stage :: ScanStage
+  , filesDiscovered :: Int
+  , filesToProcessMetadata :: Int
+  , filesProcessedMetadata :: Int
+  , filesToProcessThumbnails :: Int
+  , filesProcessedThumbnails :: Int
+  }
+
+instance decodeJsonScanStatus :: DecodeJson ScanStatus where
+  decodeJson json = do
+    obj                      <- Json.decodeJson json
+    stage                    <- Json.getField obj "stage"
+    filesDiscovered          <- Json.getField obj "files_discovered"
+    filesToProcessMetadata   <- Json.getField obj "files_to_process_metadata"
+    filesProcessedMetadata   <- Json.getField obj "files_processed_metadata"
+    filesToProcessThumbnails <- Json.getField obj "files_to_process_thumbnails"
+    filesProcessedThumbnails <- Json.getField obj "files_processed_thumbnails"
+    pure $ ScanStatus
+      { stage
+      , filesDiscovered
+      , filesToProcessMetadata
+      , filesProcessedMetadata
+      , filesToProcessThumbnails
+      , filesProcessedThumbnails
+      }
+
+getScanStatus :: Aff (Maybe ScanStatus)
+getScanStatus = do
+  result <- Http.get Http.ResponseFormat.json "/api/scan/status"
+  case result of
+    Left err -> fatal $ "Failed to get scan status: " <> Http.printError err
+    Right response -> case Json.decodeJson response.body of
+      Left err -> fatal $ "Failed to get scan status: " <> printJsonDecodeError err
+      Right status -> pure status
+
+startScan :: Aff ScanStatus
+startScan = do
+  result <- Http.post Http.ResponseFormat.json "/api/scan/start" Nothing
+  case result of
+    Left err -> fatal $ "Failed to get scan status: " <> Http.printError err
+    Right response -> case Json.decodeJson response.body of
+      Left err -> fatal $ "Failed to get scan status: " <> printJsonDecodeError err
+      Right status -> pure status
 
 newtype SearchArtist = SearchArtist
   { id :: ArtistId
