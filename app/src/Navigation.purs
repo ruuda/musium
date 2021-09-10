@@ -23,6 +23,7 @@ data Location
   | Album AlbumId
   | NowPlaying
   | Search
+  | About
 
 derive instance eqLocation :: Eq Location
 
@@ -33,6 +34,7 @@ toUrl loc = case loc of
   Album (AlbumId id) -> "/?album=" <> id
   NowPlaying -> "/?current"
   Search -> "/?search"
+  About -> "/?about"
 
 fromUrl :: String -> Location
 fromUrl url =
@@ -41,6 +43,7 @@ fromUrl url =
     Nothing -> case stripPrefix (Pattern "/?album=") url of
       Just albumId -> Album (AlbumId albumId)
       Nothing       -> case url of
+        "/?about"   -> About
         "/?current" -> NowPlaying
         "/?search"  -> Search
         "/"         -> Library

@@ -72,6 +72,7 @@ type Elements =
   , paneQueue :: Element
   , paneCurrent :: Element
   , paneSearch :: Element
+  , paneAbout :: Element
   }
 
 type AppState =
@@ -144,6 +145,15 @@ setupElements postEvent = Html.withElement Dom.body $ do
     paneSearch <- ask
     pure $ { paneSearch, search }
 
+  { paneAbout } <- Html.div $ do
+    Html.setId "search-pane"
+    Html.addClass "pane"
+    Html.addClass "inactive"
+    Html.div $ do
+      Html.h1 $ Html.text "About"
+    paneAbout <- ask
+    pure $ { paneAbout }
+
   liftEffect $ Dom.onResizeWindow $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
 
   pure
@@ -158,6 +168,7 @@ setupElements postEvent = Html.withElement Dom.body $ do
     , paneQueue
     , paneCurrent
     , paneSearch
+    , paneAbout
     }
 
 new :: BusW Event -> Effect AppState
@@ -313,6 +324,9 @@ handleEvent event state = case event of
   Event.NavigateTo location@Navigation.NowPlaying mode ->
     navigateTo location mode state
 
+  Event.NavigateTo location@Navigation.About mode ->
+    navigateTo location mode state
+
   Event.NavigateTo location@Navigation.Search mode -> do
     -- Clear before transition, so we transition to the clean search page.
     liftEffect $ Search.clear state.elements.search
@@ -460,11 +474,13 @@ navigateTo newLocation historyMode state =
       Navigation.Album _    -> state.elements.paneAlbum
       Navigation.NowPlaying -> state.elements.paneCurrent
       Navigation.Search     -> state.elements.paneSearch
+      Navigation.About      -> state.elements.paneAbout
     paneBefore = getPane state.location
     paneAfter = getPane newLocation
     title = case newLocation of
       Navigation.NowPlaying -> "Current"
       Navigation.Search     -> "Search"
+      Navigation.About      -> "About"
       Navigation.Library    -> "Library"
       Navigation.Album albumId -> case getAlbum albumId state of
         Just (Album album) -> album.title <> " by " <> album.artist

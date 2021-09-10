@@ -36,6 +36,7 @@ type NavBarState =
   , tabQueue :: Element
   , tabNowPlaying :: Element
   , tabSearch :: Element
+  , tabAbout :: Element
     -- Little number to show the size of the queue.
   , queueIndicator :: Element
   }
@@ -60,6 +61,7 @@ new postEvent = Html.nav $ do
   tabQueue      <- navTab "Queue"   $ navEvent Navigation.Library -- TODO
   tabNowPlaying <- navTab "Current" $ navEvent Navigation.NowPlaying
   tabSearch     <- navTab "Search"  $ navEvent Navigation.Search
+  tabAbout      <- navTab "About"   $ navEvent Navigation.About
 
   queueIndicator <- liftEffect $ Html.withElement tabQueue $
     Html.span $ do
@@ -79,6 +81,7 @@ new postEvent = Html.nav $ do
     , tabQueue
     , tabNowPlaying
     , tabSearch
+    , tabAbout
     , queueIndicator
     }
 
@@ -90,6 +93,7 @@ tabs state =
   , state.tabQueue
   , state.tabNowPlaying
   , state.tabSearch
+  , state.tabAbout
   ]
 
 getTab :: Location -> NavBarState -> Element
@@ -99,6 +103,7 @@ getTab location state = case location of
   Navigation.Album _    -> state.tabAlbum
   Navigation.NowPlaying -> state.tabNowPlaying
   Navigation.Search     -> state.tabSearch
+  Navigation.About      -> state.tabAbout
 
 selectTab :: Location -> NavBarState -> Effect Unit
 selectTab location state =
