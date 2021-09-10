@@ -198,6 +198,26 @@ button {
   color: #888;
   background-color: transparent;
   border: none;
+  padding: 0.5em;
+  position: relative;
+  transition: background 0.3s ease-out;
+  border-radius: 0.3em;
+}
+
+button::before {
+  color: #ccc;
+  font-weight: 700;
+  width: 1em;
+  left: -0.75rem;
+  position: absolute;
+}
+
+button:active
+{
+  /* Background color on press should change instantly,
+   * but on release, the transition is the fade out. */
+  transition-duration: 0s;
+  background-color: #f8f8f8;
 }
 
 ul
@@ -489,22 +509,12 @@ img.thumb
 
 #album-view .album-actions {
   padding-top: 1rem;
+  padding-left: 0.25rem;
 }
 
 .album-info button {
-  color: #888;
   display: block;
-  position: relative;
-  padding-left: 0.75rem;
-  padding-top: 1rem;
-}
-
-button::before {
-  color: #ccc;
-  width: 1em;
-  left: -0.75rem;
-  position: absolute;
-  font-weight: 700;
+  margin-top: 0.5em;
 }
 
 button.enqueue::before {
@@ -637,7 +647,8 @@ button.play-next::before {
 }
 
 .volume-controls button {
-  width: 4em;
+  width: 3em;
+  margin: 0.5em;
 }
 
 button.volume-down { grid-area: volume-down; }
@@ -669,6 +680,51 @@ button.volume-up { grid-area: volume-up; }
   width: 5rem;
   text-align: center;
   color: #bbb;
+}
+
+#about-pane {
+  display: grid;
+  grid-template-columns: auto;
+  grid-template-rows: auto 20em auto;
+  grid-template-areas: "margin" "content";
+}
+
+#about-pane #about-inner {
+  grid-area: content;
+}
+
+.about-section {
+  margin-left: 8rem;
+  margin-bottom: 1rem;
+}
+
+.about-section h1 {
+  font-size: 2rem;
+  line-height: 2.2rem;
+  font-weight: 700;
+  color: #d8d8d8;
+  margin-bottom: 0.5rem;
+}
+
+.about-section p {
+  margin-left: -5.75rem;
+  color: #999;
+  display: grid;
+  grid-template-columns: 5rem auto;
+  grid-column-gap: 0.75rem;
+}
+
+.about-section .value {
+  text-align: right;
+}
+
+button.scan-library {
+  margin-left: -0.5em;
+}
+
+button.scan-library::before {
+  left: -1.25rem;
+  content: "↻";
 }
 
 /* On very narrow viewports, squeeze the text a bit. */

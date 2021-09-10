@@ -31,6 +31,7 @@ import Foreign.Object (Object)
 import Foreign.Object as Object
 import Prelude
 
+import About as About
 import AlbumListView (AlbumListView)
 import AlbumListView as AlbumListView
 import AlbumView (AlbumViewState)
@@ -146,12 +147,11 @@ setupElements postEvent = Html.withElement Dom.body $ do
     pure $ { paneSearch, search }
 
   { paneAbout } <- Html.div $ do
-    Html.setId "search-pane"
+    Html.setId "about-pane"
     Html.addClass "pane"
     Html.addClass "inactive"
-    Html.div $ do
-      Html.h1 $ Html.text "About"
     paneAbout <- ask
+    About.new
     pure $ { paneAbout }
 
   liftEffect $ Dom.onResizeWindow $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
