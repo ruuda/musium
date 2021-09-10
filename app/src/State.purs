@@ -42,7 +42,7 @@ import Event (Event, HistoryMode)
 import Event as Event
 import History as History
 import Html as Html
-import Model (Artist, ArtistId, Album (..), AlbumId (..), QueuedTrack (..), TrackId)
+import Model (Artist, ArtistId, Album (..), AlbumId (..), ScanStage (..), ScanStatus (..), QueuedTrack (..), TrackId)
 import Model as Model
 import NavBar (NavBarState)
 import NavBar as NavBar
@@ -151,7 +151,7 @@ setupElements postEvent = Html.withElement Dom.body $ do
     Html.addClass "pane"
     Html.addClass "inactive"
     paneAbout <- ask
-    About.new
+    About.new postEvent
     pure $ { paneAbout }
 
   liftEffect $ Dom.onResizeWindow $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
@@ -227,6 +227,24 @@ updateProgressBar state = do
           pure $ state { nextProgressUpdate = fiber }
 
       _ -> fatal "Mismatch between status bar current track, and queue."
+
+updateScanStatus :: ScanStatus -> AppState -> Aff AppState
+updateScanStatus (ScanStatus newStatus) state = do
+  -- TODO: Update the page.
+
+  -- If the scan is still ongoing, wait a bit and then poll again for the new
+  -- status.
+  case newStatus.stage of
+    ScanDone -> pure unit
+    -- TODO: Store the fiber in the state, so that we can cancel any currently
+    -- running ones, to ensure we don't amplify the queries.
+    _ -> void $ Aff.forkAff $ do
+      Aff.delay $ Milliseconds 100.0
+      Model.getScanStatus >>= case _ of
+        Nothing -> pure unit
+        Just s  -> state.postEvent $ Event.UpdateScanStatus s
+
+  pure state
 
 handleEvent :: Event -> AppState -> Aff AppState
 handleEvent event state = case event of
@@ -312,6 +330,8 @@ handleEvent event state = case event of
       }
 
   Event.UpdateProgress -> updateProgressBar state
+
+  Event.UpdateScanStatus newStatus -> updateScanStatus newStatus state
 
   Event.NavigateTo location@Navigation.Library mode ->
     navigateTo location mode state

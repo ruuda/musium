@@ -10,7 +10,7 @@ module Event
   , HistoryMode (..)
   ) where
 
-import Model (Album, QueuedTrack)
+import Model (Album, QueuedTrack, ScanStatus)
 import Navigation (Location)
 
 data HistoryMode
@@ -33,3 +33,5 @@ data Event
   | UpdateProgress
     -- The user typed the keyboard shortcut for 'search'.
   | SearchKeyPressed
+    -- A new scan status was received.
+  | UpdateScanStatus ScanStatus

@@ -9,15 +9,17 @@ module About
   ( new
   ) where
 
-import Effect.Aff (launchAff_)
+import Effect.Aff (Aff, launchAff_)
 import Prelude
 
 import Html (Html)
 import Html as Html
 import Model as Model
+import Event (Event)
+import Event as Event
 
-new :: Html Unit
-new = Html.div $ do
+new :: (Event -> Aff Unit) -> Html Unit
+new postEvent = Html.div $ do
   Html.setId "about-inner"
 
   Html.div $ do
@@ -48,5 +50,5 @@ new = Html.div $ do
       Html.addClass "scan-library"
       Html.text "Rescan library"
       Html.onClick $ launchAff_ $ do
-        _status <- Model.startScan
-        pure unit
+        status <- Model.startScan
+        postEvent $ Event.UpdateScanStatus status
