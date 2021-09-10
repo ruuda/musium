@@ -255,6 +255,7 @@ fn main() -> Result<()> {
 
     match &cmd[..] {
         "serve" => {
+            let config_clone = config.clone();
             let index = make_index(&config.db_path())?;
             let arc_index = std::sync::Arc::new(index);
             println!("Indexing complete.");
@@ -275,7 +276,12 @@ fn main() -> Result<()> {
                 db_path,
                 config.high_pass_cutoff,
             );
-            let service = MetaServer::new(arc_index.clone(), thumb_cache, player);
+            let service = MetaServer::new(
+                config_clone,
+                arc_index.clone(),
+                thumb_cache,
+                player,
+            );
             serve(&config.listen, Arc::new(service));
         }
         "scan" => {

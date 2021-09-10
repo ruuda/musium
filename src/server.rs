@@ -13,6 +13,7 @@ use std::thread;
 use tiny_http::{Header, Request, Response, ResponseBox, Server};
 use tiny_http::Method::{Get, Post, Put, self};
 
+use crate::config::Config;
 use crate::player::{Millibel, Player};
 use crate::prim::{ArtistId, AlbumId, TrackId};
 use crate::scan::BackgroundScanner;
@@ -37,6 +38,7 @@ fn header_expires_seconds(age_seconds: i64) -> Header {
 }
 
 pub struct MetaServer {
+    config: Config,
     index: Arc<MemoryMetaIndex>,
     thumb_cache: ThumbCache,
     player: Player,
@@ -45,11 +47,13 @@ pub struct MetaServer {
 
 impl MetaServer {
     pub fn new(
+        config: Config,
         index: Arc<MemoryMetaIndex>,
         thumb_cache: ThumbCache,
         player: Player,
     ) -> MetaServer {
         MetaServer {
+            config: config,
             index: index,
             thumb_cache: thumb_cache,
             player: player,
@@ -334,6 +338,16 @@ impl MetaServer {
             .boxed()
     }
 
+    fn handle_start_scan(&self) -> ResponseBox {
+        let buffer = Vec::new();
+        let mut w = io::Cursor::new(buffer);
+        let status = self.scanner.start(self.config.clone());
+        serialization::write_scan_status_json(&mut w, Some(status)).unwrap();
+        Response::from_data(w.into_inner())
+            .with_header(header_content_type("application/json"))
+            .boxed()
+    }
+
     /// Router function for all /api/«endpoint» calls.
     fn handle_api_request(&self, method: &Method, endpoint: &str, arg: Option<&str>, query: &str) -> ResponseBox {
         match (method, endpoint, arg) {
@@ -355,6 +369,7 @@ impl MetaServer {
 
             // Background library scanning.
             (&Get,  "scan", Some("status")) => self.handle_get_scan_status(),
+            (&Post, "scan", Some("start"))  => self.handle_start_scan(),
 
             _ => self.handle_bad_request("No such (method, endpoint, argument) combination."),
         }

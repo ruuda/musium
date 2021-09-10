@@ -253,7 +253,7 @@ pub fn write_scan_status_json<W: Write>(
         \"files_discovered\":{},\
         \"files_to_process_metadata\":{},\
         \"files_processed_metadata\":{},\
-        \"files_to_process_thumbnails\":{},
+        \"files_to_process_thumbnails\":{},\
         \"files_processed_thumbnails\":{}\
         }}",
         stage,

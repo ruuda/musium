@@ -18,7 +18,7 @@ use std::str::FromStr;
 use crate::error::{Error, Result};
 use crate::prim::Hertz;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Config {
     pub listen: String,
     pub library_path: PathBuf,
