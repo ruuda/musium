@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css?family=Work+Sans:300,400,500,600,700,800,900');
+@import url('https://fonts.googleapis.com/css?family=Work+Sans:300,400,500,600,700,800,900&subset=all');
 
 *
 {
@@ -691,6 +691,9 @@ button.volume-up { grid-area: volume-up; }
 
 #about-pane #about-inner {
   grid-area: content;
+  width: 30em;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .about-section {
@@ -707,15 +710,21 @@ button.volume-up { grid-area: volume-up; }
 }
 
 .about-section p {
-  margin-left: -5.75rem;
+  margin-left: -10.75rem;
   color: #999;
   display: grid;
-  grid-template-columns: 5rem auto;
+  grid-template-columns: 10rem auto;
   grid-column-gap: 0.75rem;
 }
 
 .about-section .value {
   text-align: right;
+  grid-column: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.about-section .description {
+  grid-column: 2;
 }
 
 button.scan-library {
@@ -725,6 +734,10 @@ button.scan-library {
 button.scan-library::before {
   left: -1.25rem;
   content: "↻";
+}
+
+#scan-status {
+  margin-top: 1em;
 }
 
 /* On very narrow viewports, squeeze the text a bit. */

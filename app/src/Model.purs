@@ -226,6 +226,9 @@ data ScanStage
   | ScanGeneratingThumbnails
   | ScanDone
 
+derive instance eqScanStage :: Eq ScanStage
+derive instance ordScanStage :: Ord ScanStage
+
 instance decodeJsonScanStage :: DecodeJson ScanStage where
   decodeJson json = do
     str <- Json.decodeJson json

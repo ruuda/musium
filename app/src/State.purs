@@ -32,6 +32,7 @@ import Foreign.Object as Object
 import Prelude
 
 import About as About
+import About (AboutElements)
 import AlbumListView (AlbumListView)
 import AlbumListView as AlbumListView
 import AlbumView (AlbumViewState)
@@ -67,6 +68,7 @@ type Elements =
   , albumView :: Element
   , currentView :: Element
   , search :: SearchElements
+  , about :: AboutElements
   , paneLibrary :: Element
   , paneArtist :: Element
   , paneAlbum :: Element
@@ -146,13 +148,13 @@ setupElements postEvent = Html.withElement Dom.body $ do
     paneSearch <- ask
     pure $ { paneSearch, search }
 
-  { paneAbout } <- Html.div $ do
+  { paneAbout, about } <- Html.div $ do
     Html.setId "about-pane"
     Html.addClass "pane"
     Html.addClass "inactive"
     paneAbout <- ask
-    About.new postEvent
-    pure $ { paneAbout }
+    about <- About.new postEvent
+    pure $ { paneAbout, about }
 
   liftEffect $ Dom.onResizeWindow $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
 
@@ -162,6 +164,7 @@ setupElements postEvent = Html.withElement Dom.body $ do
     , albumView
     , currentView
     , search
+    , about
     , paneLibrary
     , paneArtist
     , paneAlbum
@@ -230,7 +233,7 @@ updateProgressBar state = do
 
 updateScanStatus :: ScanStatus -> AppState -> Aff AppState
 updateScanStatus (ScanStatus newStatus) state = do
-  -- TODO: Update the page.
+  liftEffect $ About.updateScanStatus state.elements.about (ScanStatus newStatus)
 
   -- If the scan is still ongoing, wait a bit and then poll again for the new
   -- status.
