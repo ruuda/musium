@@ -396,21 +396,49 @@
       </nav>
       <article>
         <h1 id="api">API</h1>
-<p>Endpoints:</p>
-<ul>
-<li><code>GET  /api/track/:track_id.flac</code>: Return the track itself.</li>
-<li><code>GET  /api/album/:album_id</code>:      Return json album metadata.</li>
-<li><code>GET  /api/albums</code>:               Return a json list of all albums.</li>
-<li><code>GET  /api/artist/:artist_id</code>:    Return a json object with artist details, and albums in chronological order.</li>
-<li><code>GET  /api/cover/:album_id</code>:      Return cover art in original resolution.</li>
-<li><code>GET  /api/thumb/:album_id</code>:      Return downsampled cover art.</li>
-<li><code>GET  /api/search?q=</code>:            Return json search results.</li>
-<li><code>GET  /api/queue</code>:                Return the current play queue.</li>
-<li><code>PUT  /api/queue/:track_id</code>:      Enqueue the track with the given id.</li>
-<li><code>GET  /api/volume</code>:               Return the current volume.</li>
-<li><code>POST /api/volume/up</code>:            Increase the volume by 1 dB.</li>
-<li><code>POST /api/volume/down</code>:          Decrease the volume by 1 dB.</li>
-</ul>
+<p>The Musium daemon can be controlled with a <abbr>REST</abbr> <abbr>API</abbr>.
+This <abbr>API</abbr> is used by the webinterface. Because Musium is a work in
+progress, no stability promise is made about the <abbr>API</abbr>, and the
+<abbr>API</abbr> is not versioned.</p>
+<p>This page gives an overview of the endpoints that exist, it is not full
+reference-level material. The easiest way to learn more is to query the
+<abbr>API</abbr> with Curl.</p>
+<h2 id="library">Library</h2>
+<h3 id="get-apitracktrack_idflac"><code>GET</code> /api/track/:track_id.flac</h3>
+<p>Return the track itself, as a flac file.</p>
+<h3 id="get-apialbumalbum_id"><code>GET</code> /api/album/:album_id</h3>
+<p>Return json album metadata.</p>
+<h3 id="get-apialbums"><code>GET</code> /api/albums</h3>
+<p>Return a json list of all albums, ordered by album id.</p>
+<h3 id="get-apiartistartist_id"><code>GET</code> /api/artist/:artist_id</h3>
+<p>Return a json object with artist details, and albums in chronological order.</p>
+<h3 id="get-apicoveralbum_id"><code>GET</code> /api/cover/:album_id</h3>
+<p>Return cover art in original resolution.</p>
+<h3 id="get-apithumbalbum_id"><code>GET</code> /api/thumb/:album_id</h3>
+<p>Return downsampled cover art.</p>
+<h3 id="get-apisearchqquery"><code>GET</code> /api/search?q=:query</h3>
+<p>Return json search results.</p>
+<h2 id="queue">Queue</h2>
+<h3 id="get-apiqueue"><code>GET</code> /api/queue</h3>
+<p>Return the current play queue. The track at the front of the queue is the
+currently playing track, and it includes information about the playback
+position.</p>
+<h3 id="put-apiqueuetrack_id"><code>PUT</code> /api/queue/:track_id</h3>
+<p>Enqueue the track with the given id.</p>
+<h2 id="volume">Volume</h2>
+<h3 id="get-apivolume"><code>GET</code> /api/volume</h3>
+<p>Return the current volume.</p>
+<h3 id="post-apivolumeup"><code>POST</code> /api/volume/up</h3>
+<p>Increase the volume by 1 dB. Returns the new volume.</p>
+<h3 id="post-apivolumedown"><code>POST</code> /api/volume/down</h3>
+<p>Decrease the volume by 1 dB. Returns the new volume.</p>
+<h2 id="scanning">Scanning</h2>
+<h3 id="get-apiscanstatus"><code>GET</code> /api/scan/status</h3>
+<p>Return the status of the current scan as a json object. Returns <code>null</code> if no
+scan has ever been started.</p>
+<h3 id="post-apiscanstart"><code>POST</code> /api/scan/start</h3>
+<p>Start a scan of the library directory. If a scan is already in progress, this is
+a no-op. Returns the status of the scan.</p>
       </article>
       <nav id="nav-prev-next">
         <a id="nav-prev" href="../disks/" title="Disks">Previous</a>
