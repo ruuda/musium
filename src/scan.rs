@@ -41,6 +41,7 @@ use crate::config::Config;
 use crate::database::{Database, FileMetadataInsert, FileMetaId};
 use crate::database;
 use crate::error;
+use crate::mvar::MVar;
 use crate::prim::Mtime;
 
 type FlacReader = claxon::FlacReader<fs::File>;
@@ -573,10 +574,7 @@ pub fn run_scan_in_thread(config: &Config) -> (
 /// A scan that is happening in a background thread.
 struct BackgroundScan {
     /// The most recent scan status.
-    ///
-    /// The mutex should be held only briefly, either to write a new status, or
-    /// to copy the current one.
-    status: Arc<Mutex<Status>>,
+    status: Arc<MVar<Status>>,
 
     /// Thread that watches the scan and writes new values to `status`.
     ///
@@ -590,7 +588,7 @@ struct BackgroundScan {
 
 impl BackgroundScan {
     pub fn new(config: Config) -> Self {
-        let status = Arc::new(Mutex::new(Status::new()));
+        let status = Arc::new(MVar::new(Status::new()));
 
         let status_for_supervisor = status.clone();
         let supervisor = std::thread::Builder::new()
@@ -599,14 +597,14 @@ impl BackgroundScan {
                 let status = status_for_supervisor;
                 let (scan_thread, rx) = run_scan_in_thread(&config);
                 for new_status in rx {
-                    *status.lock().unwrap() = new_status;
+                    status.set(new_status);
                 }
                 scan_thread
                     .join()
                     .expect("Scan thread panicked.")
                     .expect("Scan failed.");
 
-                let final_status = *status.lock().unwrap();
+                let final_status = status.get();
                 assert_eq!(
                     final_status.stage,
                     ScanStage::Done,
@@ -623,7 +621,7 @@ impl BackgroundScan {
 
     /// Return a copy of the current status.
     pub fn get_status(&self) -> Status {
-        *self.status.lock().unwrap()
+        self.status.get()
     }
 }
 
