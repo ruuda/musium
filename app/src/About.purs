@@ -14,6 +14,7 @@ module About
 import Control.Monad.Reader.Class (ask)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
+import Effect.Class (liftEffect)
 import Prelude
 
 import Dom (Element)
@@ -21,11 +22,12 @@ import Event (Event)
 import Event as Event
 import Html (Html)
 import Html as Html
-import Model (ScanStatus (..), ScanStage (..))
+import Model (ScanStatus (..), ScanStage (..), Stats (..))
 import Model as Model
 
 type AboutElements =
   { scanStatus :: Element
+  , stats :: Element
   }
 
 valuePair :: String -> String -> Html Unit
@@ -41,14 +43,18 @@ new :: (Event -> Aff Unit) -> Html AboutElements
 new postEvent = Html.div $ do
   Html.setId "about-inner"
 
-  Html.div $ do
+  statsElem <- Html.div $ do
     Html.setId "about-library"
     Html.addClass "about-section"
     Html.h1 $ Html.text "Library"
-    -- TODO: Add stats endpoint, load actual values here.
-    valuePair "1000" "tracks"
-    valuePair "100" "albums"
-    valuePair "10" "artists"
+    Html.div $ ask
+
+  liftEffect $ launchAff_ $ do
+    Stats stats <- Model.getStats
+    liftEffect $ Html.withElement statsElem $ do
+      valuePair (show stats.tracks)  "tracks"
+      valuePair (show stats.albums)  "albums"
+      valuePair (show stats.artists) "artists"
 
   Html.div $ do
     Html.setId "about-scan"
@@ -64,7 +70,16 @@ new postEvent = Html.div $ do
     Html.div $ do
       Html.setId "scan-status"
       self <- ask
-      pure { scanStatus: self }
+      pure { scanStatus: self, stats: statsElem }
+
+-- TODO: Call this after a scan and refresh the stats.
+_updateStats :: AboutElements -> Stats -> Effect Unit
+_updateStats elems (Stats stats) =
+  Html.withElement elems.stats $ do
+    Html.clear
+    valuePair (show stats.tracks)  "tracks"
+    valuePair (show stats.albums)  "albums"
+    valuePair (show stats.artists) "artists"
 
 updateScanStatus :: AboutElements -> ScanStatus -> Effect Unit
 updateScanStatus elems (ScanStatus status) =

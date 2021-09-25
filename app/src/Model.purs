@@ -23,6 +23,7 @@ module Model
   , VolumeChange (..)
   , ScanStage (..)
   , ScanStatus (..)
+  , Stats (..)
   , coverUrl
   , changeVolume
   , enqueueTrack
@@ -31,6 +32,7 @@ module Model
   , getArtist
   , getQueue
   , getScanStatus
+  , getStats
   , getString
   , getTracks
   , getVolume
@@ -285,6 +287,29 @@ startScan = do
     Right response -> case Json.decodeJson response.body of
       Left err -> fatal $ "Failed to get scan status: " <> printJsonDecodeError err
       Right status -> pure status
+
+newtype Stats = Stats
+  { tracks :: Int
+  , albums :: Int
+  , artists :: Int
+  }
+
+instance decodeJsonStats :: DecodeJson Stats where
+  decodeJson json = do
+    obj     <- Json.decodeJson json
+    tracks  <- Json.getField obj "tracks"
+    albums  <- Json.getField obj "albums"
+    artists <- Json.getField obj "artists"
+    pure $ Stats { tracks, albums, artists }
+
+getStats :: Aff Stats
+getStats = do
+  result <- Http.get Http.ResponseFormat.json "/api/stats"
+  case result of
+    Left err -> fatal $ "Failed to get stats: " <> Http.printError err
+    Right response -> case Json.decodeJson response.body of
+      Left err -> fatal $ "Failed to get stats: " <> printJsonDecodeError err
+      Right stats -> pure stats
 
 newtype SearchArtist = SearchArtist
   { id :: ArtistId
