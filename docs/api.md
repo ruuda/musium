@@ -32,6 +32,9 @@ Return downsampled cover art.
 ### `GET` /api/search?q=:query
 Return json search results.
 
+### `GET` /api/stats
+Return json library statistics.
+
 ## Queue
 
 ### `GET` /api/queue

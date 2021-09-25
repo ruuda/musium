@@ -264,3 +264,20 @@ pub fn write_scan_status_json<W: Write>(
         status.files_processed_thumbnails,
     )
 }
+
+/// Write library statistics as json.
+pub fn write_stats_json<W: Write>(
+    index: &dyn MetaIndex,
+    mut w: W,
+) -> io::Result<()> {
+    write!(w,
+        "{{\
+        \"tracks\":{},\
+        \"albums\":{},\
+        \"artists\":{}\
+        }}",
+        index.get_tracks().len(),
+        index.get_albums().len(),
+        index.get_artists().len(),
+    )
+}

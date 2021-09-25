@@ -348,6 +348,15 @@ impl MetaServer {
             .boxed()
     }
 
+    fn handle_stats(&self) -> ResponseBox {
+        let buffer = Vec::new();
+        let mut w = io::Cursor::new(buffer);
+        serialization::write_stats_json(&*self.index, &mut w).unwrap();
+        Response::from_data(w.into_inner())
+            .with_header(header_content_type("application/json"))
+            .boxed()
+    }
+
     /// Router function for all /api/«endpoint» calls.
     fn handle_api_request(&self, method: &Method, endpoint: &str, arg: Option<&str>, query: &str) -> ResponseBox {
         match (method, endpoint, arg) {
@@ -359,6 +368,9 @@ impl MetaServer {
             (&Get, "artist", Some(a)) => self.handle_artist(a),
             (&Get, "albums", None)    => self.handle_albums(),
             (&Get, "search", None)    => self.handle_search(query),
+            (&Get, "stats",  None)    => self.handle_stats(),
+
+            // Play queue manipulation.
             (&Get, "queue",  None)    => self.handle_queue(),
             (&Put, "queue",  Some(t)) => self.handle_enqueue(t),
 
