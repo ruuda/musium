@@ -21,7 +21,7 @@ use crate::serialization;
 use crate::string_utils::normalize_words;
 use crate::systemd;
 use crate::thumb_cache::ThumbCache;
-use crate::{MetaIndex, MemoryMetaIndex};
+use crate::{MetaIndex, MetaIndexVar};
 
 fn header_content_type(content_type: &str) -> Header {
     Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes())
@@ -39,7 +39,8 @@ fn header_expires_seconds(age_seconds: i64) -> Header {
 
 pub struct MetaServer {
     config: Config,
-    index: Arc<MemoryMetaIndex>,
+    index_var: MetaIndexVar,
+    // TODO: Make the thumb cache updateable too, like the index var.
     thumb_cache: ThumbCache,
     player: Player,
     scanner: BackgroundScanner,
@@ -48,13 +49,13 @@ pub struct MetaServer {
 impl MetaServer {
     pub fn new(
         config: Config,
-        index: Arc<MemoryMetaIndex>,
+        index: MetaIndexVar,
         thumb_cache: ThumbCache,
         player: Player,
     ) -> MetaServer {
         MetaServer {
             config: config,
-            index: index,
+            index_var: index,
             thumb_cache: thumb_cache,
             player: player,
             scanner: BackgroundScanner::new(),
@@ -95,9 +96,10 @@ impl MetaServer {
             None => return self.handle_bad_request("Invalid album id."),
         };
 
-        let tracks = self.index.get_album_tracks(album_id);
+        let index = &*self.index_var.get();
+        let tracks = index.get_album_tracks(album_id);
         let (_track_id, track) = tracks.first().expect("Albums have at least one track.");
-        let fname = self.index.get_filename(track.filename);
+        let fname = index.get_filename(track.filename);
 
         let opts = claxon::FlacReaderOptions {
             metadata_only: true,
@@ -153,12 +155,13 @@ impl MetaServer {
             None => return self.handle_bad_request("Invalid track id."),
         };
 
-        let track = match self.index.get_track(track_id) {
+        let index = &*self.index_var.get();
+        let track = match index.get_track(track_id) {
             Some(t) => t,
             None => return self.handle_not_found(),
         };
 
-        let fname = self.index.get_filename(track.filename);
+        let fname = index.get_filename(track.filename);
 
         // TODO: Rather than reading the file into memory in userspace,
         // use sendfile.
@@ -179,14 +182,15 @@ impl MetaServer {
             None => return self.handle_bad_request("Invalid album id."),
         };
 
-        let album = match self.index.get_album(album_id) {
+        let index = &*self.index_var.get();
+        let album = match index.get_album(album_id) {
             Some(a) => a,
             None => return self.handle_not_found(),
         };
 
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        serialization::write_album_json(&*self.index, &mut w, album_id, album).unwrap();
+        serialization::write_album_json(index, &mut w, album_id, album).unwrap();
 
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
@@ -199,16 +203,17 @@ impl MetaServer {
             None => return self.handle_bad_request("Invalid artist id."),
         };
 
-        let artist = match self.index.get_artist(artist_id) {
+        let index = &*self.index_var.get();
+        let artist = match index.get_artist(artist_id) {
             Some(a) => a,
             None => return self.handle_not_found(),
         };
 
-        let albums = self.index.get_albums_by_artist(artist_id);
+        let albums = index.get_albums_by_artist(artist_id);
 
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        serialization::write_artist_json(&*self.index, &mut w, artist, albums).unwrap();
+        serialization::write_artist_json(index, &mut w, artist, albums).unwrap();
 
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
@@ -216,9 +221,10 @@ impl MetaServer {
     }
 
     fn handle_albums(&self) -> ResponseBox {
+        let index = &*self.index_var.get();
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        serialization::write_albums_json(&*self.index, &mut w).unwrap();
+        serialization::write_albums_json(index, &mut w).unwrap();
 
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
@@ -226,11 +232,12 @@ impl MetaServer {
     }
 
     fn handle_queue(&self) -> ResponseBox {
+        let index = &*self.index_var.get();
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
         let queue = self.player.get_queue();
         serialization::write_queue_json(
-            &*self.index,
+            index,
             &mut w,
             &queue.tracks[..],
         ).unwrap();
@@ -245,13 +252,15 @@ impl MetaServer {
             None => return self.handle_bad_request("Invalid track id."),
         };
 
+        let index = &*self.index_var.get();
+
         // Confirm that the track exists before we enqueue it.
-        let _track = match self.index.get_track(track_id) {
+        let _track = match index.get_track(track_id) {
             Some(t) => t,
             None => return self.handle_not_found(),
         };
 
-        let queue_id = self.player.enqueue(&*self.index, track_id);
+        let queue_id = self.player.enqueue(index, track_id);
         let queue_id_json = format!(r#""{}""#, queue_id);
 
         Response::from_string(queue_id_json)
@@ -281,6 +290,7 @@ impl MetaServer {
     }
 
     fn handle_search(&self, raw_query: &str) -> ResponseBox {
+
         let mut opt_query = None;
         for (k, v) in url::form_urlencoded::parse(raw_query.as_bytes()) {
             if k == "q" {
@@ -299,9 +309,10 @@ impl MetaServer {
         let mut albums = Vec::new();
         let mut tracks = Vec::new();
 
-        self.index.search_artist(&words[..], &mut artists);
-        self.index.search_album(&words[..], &mut albums);
-        self.index.search_track(&words[..], &mut tracks);
+        let index = &*self.index_var.get();
+        index.search_artist(&words[..], &mut artists);
+        index.search_album(&words[..], &mut albums);
+        index.search_track(&words[..], &mut tracks);
 
         // Cap the number of search results we serve. We can easily produce many
         // many results (especially when searching for "t", a prefix of "the",
@@ -315,7 +326,7 @@ impl MetaServer {
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
         serialization::write_search_results_json(
-            &*self.index,
+            index,
             &mut w,
             &artists[..n_artists],
             &albums[..n_albums],
@@ -349,9 +360,10 @@ impl MetaServer {
     }
 
     fn handle_stats(&self) -> ResponseBox {
+        let index = &*self.index_var.get();
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        serialization::write_stats_json(&*self.index, &mut w).unwrap();
+        serialization::write_stats_json(index, &mut w).unwrap();
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
             .boxed()
