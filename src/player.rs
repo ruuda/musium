@@ -896,7 +896,6 @@ fn decode_main(
 
 pub struct Player {
     state: Arc<Mutex<PlayerState>>,
-    index: Arc<dyn MetaIndex + Send + Sync>,
     decode_thread: JoinHandle<()>,
     playback_thread: JoinHandle<()>,
     history_thread: JoinHandle<()>,
@@ -993,7 +992,6 @@ impl Player {
 
         Player {
             state: state,
-            index: index,
             decode_thread: decode_join_handle,
             playback_thread: playback_join_handle,
             history_thread: history_join_handle,
@@ -1010,9 +1008,9 @@ impl Player {
     }
 
     /// Enqueue the track for playback at the end of the queue.
-    pub fn enqueue(&self, track_id: TrackId) -> QueueId {
-        let track = self.index.get_track(track_id).expect("Can only enqueue existing tracks.");
-        let album = self.index.get_album(track.album_id).expect("Track must belong to album.");
+    pub fn enqueue(&self, index: &dyn MetaIndex, track_id: TrackId) -> QueueId {
+        let track = index.get_track(track_id).expect("Can only enqueue existing tracks.");
+        let album = index.get_album(track.album_id).expect("Track must belong to album.");
         let track_loudness = track.loudness.unwrap_or(Lufs::default());
         let album_loudness = album.loudness.unwrap_or(Lufs::default());
 

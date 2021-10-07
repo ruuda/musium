@@ -251,7 +251,7 @@ impl MetaServer {
             None => return self.handle_not_found(),
         };
 
-        let queue_id = self.player.enqueue(track_id);
+        let queue_id = self.player.enqueue(&*self.index, track_id);
         let queue_id_json = format!(r#""{}""#, queue_id);
 
         Response::from_string(queue_id_json)
