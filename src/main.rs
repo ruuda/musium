@@ -23,6 +23,7 @@ use std::sync::Arc;
 
 use musium::config::Config;
 use musium::error::Result;
+use musium::mvar::MVar;
 use musium::server::{MetaServer, serve};
 use musium::string_utils::normalize_words;
 use musium::thumb_cache::ThumbCache;
@@ -257,7 +258,8 @@ fn main() -> Result<()> {
         "serve" => {
             let config_clone = config.clone();
             let index = make_index(&config.db_path())?;
-            let arc_index = std::sync::Arc::new(index);
+            let arc_index = Arc::new(index);
+            let index_var = Arc::new(MVar::new(arc_index.clone()));
             println!("Indexing complete.");
             println!("Loading cover art thumbnails ...");
 
@@ -270,7 +272,7 @@ fn main() -> Result<()> {
             println!("Starting server on {}.", config.listen);
             let db_path = config.db_path();
             let player = musium::player::Player::new(
-                arc_index.clone(),
+                index_var,
                 config.audio_device,
                 config.audio_volume_control,
                 db_path,

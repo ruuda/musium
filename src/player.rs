@@ -25,7 +25,7 @@ use crate::history::PlaybackEvent;
 use crate::history;
 use crate::playback;
 use crate::prim::Hertz;
-use crate::{AlbumId, Lufs, MetaIndex, TrackId};
+use crate::{AlbumId, Lufs, MetaIndex, MetaIndexVar, TrackId};
 
 type FlacReader = claxon::FlacReader<fs::File>;
 
@@ -871,7 +871,7 @@ fn decode_burst(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>, filters
 /// unparked, if the buffer is running low, it starts a new burst of decode and
 /// then parks itself again, etc.
 fn decode_main(
-    index: &dyn MetaIndex,
+    index: MetaIndexVar,
     state_mutex: &Mutex<PlayerState>,
     high_pass_cutoff: Hertz,
 ) {
@@ -885,7 +885,8 @@ fn decode_main(
 
 
         if should_decode {
-            decode_burst(index, state_mutex, &mut filters);
+            let current_index = index.get();
+            decode_burst(&*current_index, state_mutex, &mut filters);
         }
 
         println!("Decoder going to sleep.");
@@ -930,7 +931,7 @@ pub struct QueueSnapshot {
 
 impl Player {
     pub fn new(
-        index: Arc<dyn MetaIndex + Send + Sync>,
+        index_var: MetaIndexVar,
         card_name: String,
         volume_name: String,
         db_path: PathBuf,
@@ -946,13 +947,13 @@ impl Player {
         // Start the decode thread. It runs indefinitely, but we do need to
         // periodically unpark it when there is new stuff to decode.
         let state_mutex_for_decode = state.clone();
-        let index_for_decode = index.clone();
+        let index_for_decode = index_var.clone();
         let builder = std::thread::Builder::new();
         let decode_join_handle = builder
             .name("decoder".into())
             .spawn(move || {
                 decode_main(
-                    &*index_for_decode,
+                    index_for_decode,
                     &*state_mutex_for_decode,
                     high_pass_cutoff,
                 );
@@ -974,14 +975,14 @@ impl Player {
             }).unwrap();
 
         let builder = std::thread::Builder::new();
-        let index_for_history = index.clone();
+        let index_for_history = index_var.clone();
 
         let history_join_handle = builder
             .name("history".into())
             .spawn(move || {
                 let result = history::main(
                     &db_path,
-                    &*index_for_history,
+                    index_for_history,
                     receiver,
                 );
                 // The history thread should not exit. When it does, that's a

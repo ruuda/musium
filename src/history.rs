@@ -10,7 +10,7 @@
 use std::path::Path;
 use std::sync::mpsc::Receiver;
 
-use crate::{MetaIndex, TrackId};
+use crate::{MetaIndex, MetaIndexVar, TrackId};
 use crate::player::QueueId;
 use crate::database::{Database, Listen, Result};
 
@@ -23,7 +23,7 @@ pub enum PlaybackEvent {
 /// Main for the thread that logs historical playback events.
 pub fn main(
     db_path: &Path,
-    index: &dyn MetaIndex,
+    index_var: MetaIndexVar,
     events: Receiver<PlaybackEvent>,
 ) -> Result<()> {
     let connection = sqlite::open(db_path)?;
@@ -38,6 +38,7 @@ pub fn main(
 
         match event {
             PlaybackEvent::Started(queue_id, track_id) => {
+                let index = index_var.get();
                 let track = index.get_track(track_id).unwrap();
                 let album = index.get_album(track.album_id).unwrap();
                 let artist = index.get_artist(album.artist_id).unwrap();

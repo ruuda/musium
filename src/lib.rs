@@ -19,11 +19,11 @@ mod database;
 mod filter;
 mod search;
 mod word_index;
-mod mvar;
 
 pub mod config;
 pub mod error;
 pub mod history;
+pub mod mvar;
 pub mod playback;
 pub mod player;
 pub mod prim;
@@ -36,6 +36,7 @@ pub mod thumb_cache;
 pub mod thumb_gen;
 
 use std::path::Path;
+use std::sync::Arc;
 use std::u32;
 use std::u64;
 
@@ -45,6 +46,7 @@ use crate::error::Result;
 use crate::prim::{ArtistId, Artist, AlbumId, Album, TrackId, Track, Lufs, StringRef, FilenameRef, get_track_id};
 use crate::string_utils::StringDeduper;
 use crate::word_index::MemoryWordIndex;
+use crate::mvar::MVar;
 
 pub trait MetaIndex {
     /// Return the number of tracks in the index.
@@ -445,3 +447,5 @@ impl MetaIndex for MemoryMetaIndex {
     }
 }
 
+/// A `MemoryMetaIndex` that can be atomically swapped out for a new one.
+pub type MetaIndexVar = Arc<MVar<Arc<MemoryMetaIndex>>>;
