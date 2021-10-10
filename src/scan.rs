@@ -37,6 +37,7 @@ use std::sync::mpsc::{Receiver, SyncSender};
 
 use walkdir;
 
+use crate::{MetaIndexVar, MemoryMetaIndex};
 use crate::config::Config;
 use crate::database::{Database, FileMetadataInsert, FileMetaId};
 use crate::database;
@@ -534,7 +535,7 @@ fn insert_file_metadata(
     db.insert_file_metadata(m)
 }
 
-pub fn run_scan_in_thread(config: &Config) -> (
+pub fn run_scan_in_thread(config: &Config, index_var: MetaIndexVar) -> (
     JoinHandle<error::Result<()>>,
     Receiver<Status>,
 ) {
@@ -550,14 +551,36 @@ pub fn run_scan_in_thread(config: &Config) -> (
         .name("scan".to_string())
         .spawn(move || {
             let mut status = Status::new();
+
+            // Scan all files, put the metadata in the database.
             scan(
                 &db_path,
                 &library_path,
                 &mut status,
                 &mut tx,
             )?;
+
+            // Build a new index from the latest data in the database. Then
+            // immediately publish that new index so it can be accessed by the
+            // webinterface, even before the thumbnails are ready (because
+            // generating those may take a while).
+            let (index, builder) = MemoryMetaIndex::from_database(&db_path)?;
+            let index_arc = Arc::new(index);
+            index_var.set(index_arc.clone());
+
+            // TODO: Move issue reporting to a better place. Maybe take the builder and
+            // index as an argument to this method.
+            eprintln!();
+            for issue in &builder.issues {
+                eprintln!("{}", issue);
+            }
+            eprintln!("\n\n\n");
+
+            // If there are any new or updated albums, regenerate thumbnails for
+            // those.
             crate::thumb_gen::generate_thumbnails(
-                &db_path,
+                &*index_arc,
+                &builder,
                 &covers_path,
                 &mut status,
                 &mut tx,
@@ -587,7 +610,7 @@ struct BackgroundScan {
 }
 
 impl BackgroundScan {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config, index_var: MetaIndexVar) -> Self {
         let status = Arc::new(MVar::new(Status::new()));
 
         let status_for_supervisor = status.clone();
@@ -595,7 +618,7 @@ impl BackgroundScan {
             .name("scan_supervisor".to_string())
             .spawn(move || {
                 let status = status_for_supervisor;
-                let (scan_thread, rx) = run_scan_in_thread(&config);
+                let (scan_thread, rx) = run_scan_in_thread(&config, index_var);
                 for new_status in rx {
                     status.set(new_status);
                 }
@@ -627,12 +650,18 @@ impl BackgroundScan {
 
 pub struct BackgroundScanner {
     background_scan: Mutex<Option<BackgroundScan>>,
+
+    /// The latest index.
+    ///
+    /// The scanner replaces the inner value when the scan is complete.
+    index_var: MetaIndexVar,
 }
 
 impl BackgroundScanner {
-    pub fn new() -> Self {
+    pub fn new(index_var: MetaIndexVar) -> Self {
         Self {
             background_scan: Mutex::new(None),
+            index_var: index_var,
         }
     }
 
@@ -652,7 +681,7 @@ impl BackgroundScanner {
             }
         }
 
-        let new_scan = BackgroundScan::new(config);
+        let new_scan = BackgroundScan::new(config, self.index_var.clone());
         let status = new_scan.get_status();
         *bg_scan = Some(new_scan);
 

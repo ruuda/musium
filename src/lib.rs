@@ -286,6 +286,28 @@ impl MemoryMetaIndex {
         }
     }
 
+    /// Create a new empty index.
+    ///
+    /// This is useful as a placeholder value when the real index is still being
+    /// contstructed.
+    pub fn new_empty() -> MemoryMetaIndex {
+        MemoryMetaIndex {
+            artist_bookmarks: Bookmarks::new(std::iter::empty()),
+            album_bookmarks: Bookmarks::new(std::iter::empty()),
+            track_bookmarks: Bookmarks::new(std::iter::empty()),
+            albums_by_artist_bookmarks: Bookmarks::new(std::iter::empty()),
+            artists: Vec::new(),
+            albums: Vec::new(),
+            tracks: Vec::new(),
+            albums_by_artist: Vec::new(),
+            strings: Vec::new(),
+            filenames: Vec::new(),
+            words_artist: MemoryWordIndex::new(std::iter::empty()),
+            words_album: MemoryWordIndex::new(std::iter::empty()),
+            words_track: MemoryWordIndex::new(std::iter::empty()),
+        }
+    }
+
     /// Build an index from the data stored in the database.
     ///
     /// Also returns the intermediate builder. It contains any issues

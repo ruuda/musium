@@ -191,7 +191,14 @@ fn match_listens(
 }
 
 fn run_scan(config: &Config) -> Result<()> {
-    let (scan_thread, rx) = musium::scan::run_scan_in_thread(config);
+    // Running a scan requires an index var that the scan can update. When
+    // triggered from the server this updates the servers index, but when we
+    // run a standalone scan, the new value is not used. We still need to
+    // provide the var though.
+    let dummy_index = MemoryMetaIndex::new_empty();
+    let index_var = Arc::new(MVar::new(Arc::new(dummy_index)));
+
+    let (scan_thread, rx) = musium::scan::run_scan_in_thread(config, index_var);
 
     {
         let stdout = std::io::stdout();

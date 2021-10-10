@@ -16,10 +16,11 @@ use std::process;
 use std::sync::Mutex;
 use std::sync::mpsc::SyncSender;
 
-use crate::{MetaIndex, MemoryMetaIndex};
+use crate::build::BuildMetaIndex;
 use crate::error::{Error, Result};
 use crate::prim::{AlbumId, Mtime};
 use crate::scan::{ScanStage, Status};
+use crate::{MetaIndex, MemoryMetaIndex};
 
 /// Tracks the process of generating a thumbnail.
 struct GenThumb<'a> {
@@ -234,7 +235,8 @@ impl<'a> GenThumbs<'a> {
 }
 
 pub fn generate_thumbnails(
-    db_path: &Path,
+    index: &MemoryMetaIndex,
+    builder: &BuildMetaIndex,
     thumb_dir: &Path,
     status: &mut Status,
     status_sender: &mut SyncSender<Status>,
@@ -242,15 +244,6 @@ pub fn generate_thumbnails(
     status.stage = ScanStage::PreProcessingThumbnails;
     status_sender.send(*status).unwrap();
 
-    let (index, builder) = MemoryMetaIndex::from_database(db_path)?;
-
-    // TODO: Move issue reporting to a better place. Maybe take the builder and
-    // index as an argument to this method.
-    eprintln!();
-    for issue in &builder.issues {
-        eprintln!("{}", issue);
-    }
-    eprintln!("\n\n\n");
 
     // Determine which albums need to have a new thumbnail extracted.
     let mut pending_tasks = Vec::new();

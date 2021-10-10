@@ -49,16 +49,16 @@ pub struct MetaServer {
 impl MetaServer {
     pub fn new(
         config: Config,
-        index: MetaIndexVar,
+        index_var: MetaIndexVar,
         thumb_cache: ThumbCache,
         player: Player,
     ) -> MetaServer {
         MetaServer {
             config: config,
-            index_var: index,
+            index_var: index_var.clone(),
             thumb_cache: thumb_cache,
             player: player,
-            scanner: BackgroundScanner::new(),
+            scanner: BackgroundScanner::new(index_var),
         }
     }
 
