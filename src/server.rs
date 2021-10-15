@@ -41,8 +41,7 @@ fn header_expires_seconds(age_seconds: i64) -> Header {
 pub struct MetaServer {
     config: Config,
     index_var: Var<MemoryMetaIndex>,
-    // TODO: Make the thumb cache updateable too, like the index var.
-    thumb_cache: ThumbCache,
+    thumb_cache_var: Var<ThumbCache>,
     player: Player,
     scanner: BackgroundScanner,
 }
@@ -51,13 +50,13 @@ impl MetaServer {
     pub fn new(
         config: Config,
         index_var: Var<MemoryMetaIndex>,
-        thumb_cache: ThumbCache,
+        thumb_cache_var: Var<ThumbCache>,
         player: Player,
     ) -> MetaServer {
         MetaServer {
             config: config,
             index_var: index_var.clone(),
-            thumb_cache: thumb_cache,
+            thumb_cache_var: thumb_cache_var,
             player: player,
             scanner: BackgroundScanner::new(index_var),
         }
@@ -126,14 +125,15 @@ impl MetaServer {
     }
 
     fn handle_thumb(&self, id: &str) -> ResponseBox {
-        // TODO: DRY this track id parsing and loadong part.
+        // TODO: DRY this track id parsing and loading part.
         let album_id = match AlbumId::parse(id) {
             Some(aid) => aid,
             None => return self.handle_bad_request("Invalid album id."),
         };
 
-        let img = match self.thumb_cache.get(album_id) {
-            // TODO: Generate thumbs lazily?
+        let thumb_cache = self.thumb_cache_var.get();
+
+        let img = match thumb_cache.get(album_id) {
             None => return self.handle_not_found(),
             Some(bytes) => bytes,
         };
