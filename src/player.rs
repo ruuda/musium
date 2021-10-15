@@ -23,9 +23,10 @@ use claxon::metadata::StreamInfo;
 use crate::filter::StateVariableFilter;
 use crate::history::PlaybackEvent;
 use crate::history;
+use crate::mvar::Var;
 use crate::playback;
 use crate::prim::Hertz;
-use crate::{AlbumId, Lufs, MetaIndex, MetaIndexVar, TrackId};
+use crate::{AlbumId, Lufs, MetaIndex, MemoryMetaIndex, TrackId};
 
 type FlacReader = claxon::FlacReader<fs::File>;
 
@@ -871,7 +872,7 @@ fn decode_burst(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>, filters
 /// unparked, if the buffer is running low, it starts a new burst of decode and
 /// then parks itself again, etc.
 fn decode_main(
-    index: MetaIndexVar,
+    index: Var<MemoryMetaIndex>,
     state_mutex: &Mutex<PlayerState>,
     high_pass_cutoff: Hertz,
 ) {
@@ -931,7 +932,7 @@ pub struct QueueSnapshot {
 
 impl Player {
     pub fn new(
-        index_var: MetaIndexVar,
+        index_var: Var<MemoryMetaIndex>,
         card_name: String,
         volume_name: String,
         db_path: PathBuf,

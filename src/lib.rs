@@ -36,7 +36,6 @@ pub mod thumb_cache;
 pub mod thumb_gen;
 
 use std::path::Path;
-use std::sync::Arc;
 use std::u32;
 use std::u64;
 
@@ -46,7 +45,6 @@ use crate::error::Result;
 use crate::prim::{ArtistId, Artist, AlbumId, Album, TrackId, Track, Lufs, StringRef, FilenameRef, get_track_id};
 use crate::string_utils::StringDeduper;
 use crate::word_index::MemoryWordIndex;
-use crate::mvar::MVar;
 
 pub trait MetaIndex {
     /// Return the number of tracks in the index.
@@ -468,6 +466,3 @@ impl MetaIndex for MemoryMetaIndex {
         search::search(&self.words_track, words, into);
     }
 }
-
-/// A `MemoryMetaIndex` that can be atomically swapped out for a new one.
-pub type MetaIndexVar = Arc<MVar<Arc<MemoryMetaIndex>>>;

@@ -14,6 +14,7 @@ use tiny_http::{Header, Request, Response, ResponseBox, Server};
 use tiny_http::Method::{Get, Post, Put, self};
 
 use crate::config::Config;
+use crate::mvar::Var;
 use crate::player::{Millibel, Player};
 use crate::prim::{ArtistId, AlbumId, TrackId};
 use crate::scan::BackgroundScanner;
@@ -21,7 +22,7 @@ use crate::serialization;
 use crate::string_utils::normalize_words;
 use crate::systemd;
 use crate::thumb_cache::ThumbCache;
-use crate::{MetaIndex, MetaIndexVar};
+use crate::{MetaIndex, MemoryMetaIndex};
 
 fn header_content_type(content_type: &str) -> Header {
     Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes())
@@ -39,7 +40,7 @@ fn header_expires_seconds(age_seconds: i64) -> Header {
 
 pub struct MetaServer {
     config: Config,
-    index_var: MetaIndexVar,
+    index_var: Var<MemoryMetaIndex>,
     // TODO: Make the thumb cache updateable too, like the index var.
     thumb_cache: ThumbCache,
     player: Player,
@@ -49,7 +50,7 @@ pub struct MetaServer {
 impl MetaServer {
     pub fn new(
         config: Config,
-        index_var: MetaIndexVar,
+        index_var: Var<MemoryMetaIndex>,
         thumb_cache: ThumbCache,
         player: Player,
     ) -> MetaServer {

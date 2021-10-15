@@ -7,7 +7,7 @@
 
 //! Holds a convenient synchronization primitive.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// Pointer to a shared value that can be updated atomically.
 ///
@@ -43,3 +43,6 @@ impl<T: Clone> MVar<T> {
         std::mem::replace(&mut *self.inner.lock().unwrap(), new_value)
     }
 }
+
+/// Holds one instance of `T` that can be atomically swapped for another one.
+pub type Var<T> = Arc<MVar<Arc<T>>>;

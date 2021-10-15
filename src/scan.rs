@@ -37,12 +37,12 @@ use std::sync::mpsc::{Receiver, SyncSender};
 
 use walkdir;
 
-use crate::{MetaIndexVar, MemoryMetaIndex};
+use crate::MemoryMetaIndex;
 use crate::config::Config;
 use crate::database::{Database, FileMetadataInsert, FileMetaId};
 use crate::database;
 use crate::error;
-use crate::mvar::MVar;
+use crate::mvar::{MVar, Var};
 use crate::prim::Mtime;
 
 type FlacReader = claxon::FlacReader<fs::File>;
@@ -535,7 +535,7 @@ fn insert_file_metadata(
     db.insert_file_metadata(m)
 }
 
-pub fn run_scan_in_thread(config: &Config, index_var: MetaIndexVar) -> (
+pub fn run_scan_in_thread(config: &Config, index_var: Var<MemoryMetaIndex>) -> (
     JoinHandle<error::Result<()>>,
     Receiver<Status>,
 ) {
@@ -610,7 +610,7 @@ struct BackgroundScan {
 }
 
 impl BackgroundScan {
-    pub fn new(config: Config, index_var: MetaIndexVar) -> Self {
+    pub fn new(config: Config, index_var: Var<MemoryMetaIndex>) -> Self {
         let status = Arc::new(MVar::new(Status::new()));
 
         let status_for_supervisor = status.clone();
@@ -654,11 +654,11 @@ pub struct BackgroundScanner {
     /// The latest index.
     ///
     /// The scanner replaces the inner value when the scan is complete.
-    index_var: MetaIndexVar,
+    index_var: Var<MemoryMetaIndex>,
 }
 
 impl BackgroundScanner {
-    pub fn new(index_var: MetaIndexVar) -> Self {
+    pub fn new(index_var: Var<MemoryMetaIndex>) -> Self {
         Self {
             background_scan: Mutex::new(None),
             index_var: index_var,

@@ -10,9 +10,10 @@
 use std::path::Path;
 use std::sync::mpsc::Receiver;
 
-use crate::{MetaIndex, MetaIndexVar, TrackId};
-use crate::player::QueueId;
 use crate::database::{Database, Listen, Result};
+use crate::mvar::Var;
+use crate::player::QueueId;
+use crate::{MetaIndex, MemoryMetaIndex, TrackId};
 
 /// Changes in the playback state to be recorded.
 pub enum PlaybackEvent {
@@ -23,7 +24,7 @@ pub enum PlaybackEvent {
 /// Main for the thread that logs historical playback events.
 pub fn main(
     db_path: &Path,
-    index_var: MetaIndexVar,
+    index_var: Var<MemoryMetaIndex>,
     events: Receiver<PlaybackEvent>,
 ) -> Result<()> {
     let connection = sqlite::open(db_path)?;
