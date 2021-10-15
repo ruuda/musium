@@ -196,9 +196,15 @@ fn run_scan(config: &Config) -> Result<()> {
     // run a standalone scan, the new value is not used. We still need to
     // provide the var though.
     let dummy_index = MemoryMetaIndex::new_empty();
+    let dummy_thumb_cache = ThumbCache::new_empty();
     let index_var = Arc::new(MVar::new(Arc::new(dummy_index)));
+    let thumb_cache_var = Arc::new(MVar::new(Arc::new(dummy_thumb_cache)));
 
-    let (scan_thread, rx) = musium::scan::run_scan_in_thread(config, index_var);
+    let (scan_thread, rx) = musium::scan::run_scan_in_thread(
+        config,
+        index_var,
+        thumb_cache_var,
+    );
 
     {
         let stdout = std::io::stdout();
@@ -212,7 +218,7 @@ fn run_scan(config: &Config) -> Result<()> {
             // its stderr, but this allows the warning to at least be visible
             // very briefly.
             let up_clear = "\x1b[F\x1b[K";
-            write!(lock, "{}{}{}{}", up_clear, up_clear, up_clear, status).unwrap();
+            write!(lock, "{0}{0}{0}{0}{1}", up_clear, status).unwrap();
             lock.flush().unwrap();
         }
     }

@@ -244,6 +244,7 @@ pub fn write_scan_status_json<W: Write>(
         ScanStage::ExtractingMetadata => "extracting_metadata",
         ScanStage::PreProcessingThumbnails => "preprocessing_thumbnails",
         ScanStage::GeneratingThumbnails => "generating_thumbnails",
+        ScanStage::LoadingThumbnails => "loading_thumbnails",
         ScanStage::Done => "done",
     };
 

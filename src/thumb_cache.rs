@@ -75,6 +75,14 @@ impl fmt::Display for ThumbCacheSize {
 }
 
 impl ThumbCache {
+    /// Return an empty thumb cache, for use as placeholder when loading.
+    pub fn new_empty() -> ThumbCache {
+        Self {
+            data: Box::new([]),
+            references: AlbumTable::new(0, ImageReference { begin: 0, end: 0 }),
+        }
+    }
+
     /// Read the cover art thumbnails for the given albums into memory.
     ///
     /// The thumbnails are stored sequentially in an internal buffer in the

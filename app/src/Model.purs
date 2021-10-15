@@ -226,6 +226,7 @@ data ScanStage
   | ScanExtractingMetadata
   | ScanPreProcessingThumbnails
   | ScanGeneratingThumbnails
+  | ScanLoadingThumbnails
   | ScanDone
 
 derive instance eqScanStage :: Eq ScanStage
@@ -240,6 +241,7 @@ instance decodeJsonScanStage :: DecodeJson ScanStage where
       "extracting_metadata"      -> pure ScanExtractingMetadata
       "preprocessing_thumbnails" -> pure ScanPreProcessingThumbnails
       "generating_thumbnails"    -> pure ScanGeneratingThumbnails
+      "loading_thumbnails"       -> pure ScanLoadingThumbnails
       "done"                     -> pure ScanDone
       _ -> Left $ UnexpectedValue json
 

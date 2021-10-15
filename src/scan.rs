@@ -37,13 +37,14 @@ use std::sync::mpsc::{Receiver, SyncSender};
 
 use walkdir;
 
-use crate::MemoryMetaIndex;
+use crate::{MetaIndex, MemoryMetaIndex};
 use crate::config::Config;
 use crate::database::{Database, FileMetadataInsert, FileMetaId};
 use crate::database;
 use crate::error;
 use crate::mvar::{MVar, Var};
 use crate::prim::Mtime;
+use crate::thumb_cache::ThumbCache;
 
 type FlacReader = claxon::FlacReader<fs::File>;
 
@@ -59,8 +60,10 @@ pub enum ScanStage {
     PreProcessingThumbnails = 3,
     /// Generating thumbnails. `status.files_to_process_thumbnails` is now final.
     GeneratingThumbnails = 4,
-    /// Done. `status.files_to_process_thumbnails` is now final.
-    Done = 5,
+    /// Loading thumbnails. `status.files_to_process_thumbnails` is now final.
+    LoadingThumbnails = 5,
+    /// Done.
+    Done = 6,
 }
 
 /// Counters to report progress during scanning.
@@ -128,6 +131,11 @@ impl fmt::Display for Status {
             indicator(ScanStage::GeneratingThumbnails),
             self.files_processed_thumbnails,
             self.files_to_process_thumbnails,
+        )?;
+        writeln!(
+            f,
+            "{} Loading thumbnails",
+            indicator(ScanStage::LoadingThumbnails),
         )?;
         Ok(())
     }
@@ -535,7 +543,11 @@ fn insert_file_metadata(
     db.insert_file_metadata(m)
 }
 
-pub fn run_scan_in_thread(config: &Config, index_var: Var<MemoryMetaIndex>) -> (
+pub fn run_scan_in_thread(
+    config: &Config,
+    index_var: Var<MemoryMetaIndex>,
+    thumb_cache_var: Var<ThumbCache>,
+) -> (
     JoinHandle<error::Result<()>>,
     Receiver<Status>,
 ) {
@@ -585,6 +597,18 @@ pub fn run_scan_in_thread(config: &Config, index_var: Var<MemoryMetaIndex>) -> (
                 &mut status,
                 &mut tx,
             )?;
+
+            status.stage = ScanStage::LoadingThumbnails;
+            tx.send(status).unwrap();
+
+            // Load the new set of thumbnails, publish them to the webinterface.
+            let thumb_cache = ThumbCache::new(
+                index_arc.get_album_ids_ordered_by_artist(),
+                &covers_path,
+            )?;
+            let thumb_cache_arc = Arc::new(thumb_cache);
+            thumb_cache_var.set(thumb_cache_arc);
+
             status.stage = ScanStage::Done;
             tx.send(status).unwrap();
             Ok(())
@@ -610,7 +634,11 @@ struct BackgroundScan {
 }
 
 impl BackgroundScan {
-    pub fn new(config: Config, index_var: Var<MemoryMetaIndex>) -> Self {
+    pub fn new(
+        config: Config,
+        index_var: Var<MemoryMetaIndex>,
+        thumb_cache_var: Var<ThumbCache>,
+    ) -> Self {
         let status = Arc::new(MVar::new(Status::new()));
 
         let status_for_supervisor = status.clone();
@@ -618,7 +646,11 @@ impl BackgroundScan {
             .name("scan_supervisor".to_string())
             .spawn(move || {
                 let status = status_for_supervisor;
-                let (scan_thread, rx) = run_scan_in_thread(&config, index_var);
+                let (scan_thread, rx) = run_scan_in_thread(
+                    &config,
+                    index_var,
+                    thumb_cache_var,
+                );
                 for new_status in rx {
                     status.set(new_status);
                 }
@@ -655,13 +687,22 @@ pub struct BackgroundScanner {
     ///
     /// The scanner replaces the inner value when the scan is complete.
     index_var: Var<MemoryMetaIndex>,
+
+    /// The latest thumb cache.
+    ///
+    /// The scanner replaces the inner value when thumb generation is complete.
+    thumb_cache_var: Var<ThumbCache>,
 }
 
 impl BackgroundScanner {
-    pub fn new(index_var: Var<MemoryMetaIndex>) -> Self {
+    pub fn new(
+        index_var: Var<MemoryMetaIndex>,
+        thumb_cache_var: Var<ThumbCache>,
+    ) -> Self {
         Self {
             background_scan: Mutex::new(None),
             index_var: index_var,
+            thumb_cache_var: thumb_cache_var,
         }
     }
 
@@ -681,7 +722,11 @@ impl BackgroundScanner {
             }
         }
 
-        let new_scan = BackgroundScan::new(config, self.index_var.clone());
+        let new_scan = BackgroundScan::new(
+            config,
+            self.index_var.clone(),
+            self.thumb_cache_var.clone(),
+        );
         let status = new_scan.get_status();
         *bg_scan = Some(new_scan);
 

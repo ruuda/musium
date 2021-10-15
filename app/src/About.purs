@@ -94,6 +94,7 @@ updateScanStatus elems (ScanStatus status) =
         ScanExtractingMetadata      -> "Extracting metadata …"
         ScanPreProcessingThumbnails -> "Indexing metadata …"
         ScanGeneratingThumbnails    -> "Generating thumbnails …"
+        ScanLoadingThumbnails       -> "Loading thumbnails …"
         ScanDone                    -> "Scan complete"
 
     valuePair (show status.filesDiscovered) "files discovered"

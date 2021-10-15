@@ -56,9 +56,12 @@ impl MetaServer {
         MetaServer {
             config: config,
             index_var: index_var.clone(),
-            thumb_cache_var: thumb_cache_var,
+            thumb_cache_var: thumb_cache_var.clone(),
             player: player,
-            scanner: BackgroundScanner::new(index_var),
+            scanner: BackgroundScanner::new(
+                index_var,
+                thumb_cache_var,
+            ),
         }
     }
 
