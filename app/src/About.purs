@@ -91,9 +91,10 @@ updateScanStatus elems (ScanStatus status) =
       Html.text $ case status.stage of
         ScanDiscovering             -> "Discovering files …"
         ScanPreProcessingMetadata   -> "Determining which need to be processed …"
-        ScanExtractingMetadata      -> "Extracting metadata …"
-        ScanPreProcessingThumbnails -> "Indexing metadata …"
-        ScanGeneratingThumbnails    -> "Generating thumbnails …"
+        ScanExtractingMetadata      -> "Extracting metadata from new files …"
+        ScanIndexingMetadata        -> "Indexing metadata …"
+        ScanPreProcessingThumbnails -> "Discovering existing thumbnails …"
+        ScanGeneratingThumbnails    -> "Generating new thumbnails …"
         ScanLoadingThumbnails       -> "Loading thumbnails …"
         ScanDone                    -> "Scan complete"
 

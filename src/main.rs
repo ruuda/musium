@@ -210,7 +210,7 @@ fn run_scan(config: &Config) -> Result<()> {
         let stdout = std::io::stdout();
         let mut lock = stdout.lock();
 
-        write!(lock, "\n\n\n").unwrap();
+        write!(lock, "\n\n\n\n\n").unwrap();
 
         for status in rx {
             // Move the cursor up a line, and clear that line. We need to clear
@@ -218,7 +218,7 @@ fn run_scan(config: &Config) -> Result<()> {
             // its stderr, but this allows the warning to at least be visible
             // very briefly.
             let up_clear = "\x1b[F\x1b[K";
-            write!(lock, "{0}{0}{0}{0}{1}", up_clear, status).unwrap();
+            write!(lock, "{0}{0}{0}{0}{0}{1}", up_clear, status).unwrap();
             lock.flush().unwrap();
         }
     }

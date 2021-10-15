@@ -56,14 +56,16 @@ pub enum ScanStage {
     PreProcessingMetadata = 1,
     /// Reading metadata from files. `status.files_to_process_metadata` is now final.
     ExtractingMetadata = 2,
-    /// Determining which thumbnails to generate. `status.files_processed_metadata` is now final.
-    PreProcessingThumbnails = 3,
+    /// Joining all metadata into an in-memory index. `status.files_processed_metadata` is now final.
+    IndexingMetadata = 3,
+    /// Determining which thumbnails to generate.
+    PreProcessingThumbnails = 4,
     /// Generating thumbnails. `status.files_to_process_thumbnails` is now final.
-    GeneratingThumbnails = 4,
+    GeneratingThumbnails = 5,
     /// Loading thumbnails. `status.files_to_process_thumbnails` is now final.
-    LoadingThumbnails = 5,
+    LoadingThumbnails = 6,
     /// Done.
-    Done = 6,
+    Done = 7,
 }
 
 /// Counters to report progress during scanning.
@@ -124,6 +126,11 @@ impl fmt::Display for Status {
             indicator(ScanStage::ExtractingMetadata),
             self.files_processed_metadata,
             self.files_to_process_metadata,
+        )?;
+        writeln!(
+            f,
+            "{} Indexing metadata",
+            indicator(ScanStage::IndexingMetadata),
         )?;
         writeln!(
             f,
@@ -571,6 +578,9 @@ pub fn run_scan_in_thread(
                 &mut status,
                 &mut tx,
             )?;
+
+            status.stage = ScanStage::IndexingMetadata;
+            tx.send(status).unwrap();
 
             // Build a new index from the latest data in the database. Then
             // immediately publish that new index so it can be accessed by the

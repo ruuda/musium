@@ -224,6 +224,7 @@ data ScanStage
   = ScanDiscovering
   | ScanPreProcessingMetadata
   | ScanExtractingMetadata
+  | ScanIndexingMetadata
   | ScanPreProcessingThumbnails
   | ScanGeneratingThumbnails
   | ScanLoadingThumbnails
@@ -239,6 +240,7 @@ instance decodeJsonScanStage :: DecodeJson ScanStage where
       "discovering"              -> pure ScanDiscovering
       "preprocessing_metadata"   -> pure ScanPreProcessingMetadata
       "extracting_metadata"      -> pure ScanExtractingMetadata
+      "indexing_metadata"        -> pure ScanIndexingMetadata
       "preprocessing_thumbnails" -> pure ScanPreProcessingThumbnails
       "generating_thumbnails"    -> pure ScanGeneratingThumbnails
       "loading_thumbnails"       -> pure ScanLoadingThumbnails

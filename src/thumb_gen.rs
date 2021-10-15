@@ -244,7 +244,6 @@ pub fn generate_thumbnails(
     status.stage = ScanStage::PreProcessingThumbnails;
     status_sender.send(*status).unwrap();
 
-
     // Determine which albums need to have a new thumbnail extracted.
     let mut pending_tasks = Vec::new();
     let mut prev_album_id = AlbumId(0);
