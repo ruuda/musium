@@ -13,12 +13,13 @@ use std::mem;
 use std::path::PathBuf;
 use std::sync::mpsc::SyncSender;
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::thread;
 
 use claxon;
 use claxon::metadata::StreamInfo;
+use parking_lot::Mutex;
 
 use crate::filter::StateVariableFilter;
 use crate::history::PlaybackEvent;
@@ -818,7 +819,7 @@ fn decode_burst(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>, filters
         // only holds the mutex briefly, so we can do the decode without holding
         // the mutex.
         let (task, bytes_used, pending_duration_ms) = {
-            let mut state = state_mutex.lock().unwrap();
+            let mut state = state_mutex.lock();
 
             if let Some(result) = previous_result.take() {
                 state.return_decode_task(result);
@@ -880,7 +881,7 @@ fn decode_main(
 
     loop {
         let should_decode = {
-            let state = state_mutex.lock().unwrap();
+            let state = state_mutex.lock();
             state.needs_decode()
         };
 
@@ -1019,7 +1020,7 @@ impl Player {
         // If the queue is empty, then the playback thread may be parked,
         // so we may need to wake it after enqueuing something.
         let (queue_id, needs_wake) = {
-            let mut state = self.state.lock().unwrap();
+            let mut state = self.state.lock();
             let needs_wake = state.is_queue_empty();
             let id = state.next_unused_id;
             state.next_unused_id = QueueId(id.0 + 1);
@@ -1037,7 +1038,7 @@ impl Player {
 
     /// Return a snapshot of the queue.
     pub fn get_queue(&self) -> QueueSnapshot {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock();
 
         let mut tracks = Vec::with_capacity(state.queue.len());
         for queued_track in state.queue.iter() {
@@ -1061,13 +1062,13 @@ impl Player {
 
     /// Return the current playback volume.
     pub fn get_volume(&self) -> Millibel {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock();
         state.volume
     }
 
     /// Add a (possibly negative) amount to the current volume, return the new volume.
     pub fn change_volume(&self, add: Millibel) -> Millibel {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         state.volume.0 += add.0;
 
         // It makes no sense to crank up the volume further than the target
