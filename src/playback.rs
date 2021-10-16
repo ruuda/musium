@@ -9,6 +9,7 @@
 
 use std::mem;
 use std::result;
+use std::sync::Mutex;
 use std::thread::Thread;
 use std::thread;
 use std::ffi::CString;
@@ -16,7 +17,6 @@ use std::ffi::CString;
 use alsa;
 use alsa::PollDescriptors;
 use nix::errno::Errno;
-use parking_lot::Mutex;
 
 use crate::player::{Format, Millibel, PlayerState};
 use crate::prim::Hertz;
@@ -346,7 +346,7 @@ fn play_queue(
 
     loop {
         let (result, target_volume, needs_decode, pending_ms) = {
-            let mut state = state_mutex.lock();
+            let mut state = state_mutex.lock().unwrap();
             let result = ensure_buffers_full(
                 &device,
                 format,
@@ -407,7 +407,7 @@ pub fn main(
     // TODO: Set thread priority to high.
     loop {
         let has_audio = {
-            let state = state_mutex.lock();
+            let state = state_mutex.lock().unwrap();
             !state.is_queue_empty()
         };
         if has_audio {

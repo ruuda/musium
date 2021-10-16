@@ -7,8 +7,7 @@
 
 //! Holds a convenient synchronization primitive.
 
-use std::sync::{Arc};
-use parking_lot::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// Pointer to a shared value that can be updated atomically.
 ///
@@ -36,12 +35,12 @@ impl<T: Clone> MVar<T> {
 
     /// Return a clone of the current value.
     pub fn get(&self) -> T {
-        self.inner.lock().clone()
+        self.inner.lock().unwrap().clone()
     }
 
     /// Replace the current value with a new value, return the old value.
     pub fn set(&self, new_value: T) -> T {
-        std::mem::replace(&mut *self.inner.lock(), new_value)
+        std::mem::replace(&mut *self.inner.lock().unwrap(), new_value)
     }
 }
 
