@@ -28,21 +28,17 @@ fn print_available_cards() -> Result<()> {
     let mut found_any = false;
 
     for res_card in cards {
-        if found_any {
-            println!();
-        }
-
         let card = res_card?;
-        println!("Name:       {}", card.get_name()?);
-        println!("Long name:  {}", card.get_longname()?);
+        println!("{}Name: {}", if found_any { "\n" } else { "" }, card.get_name()?);
+        println!("  Long name:  {}", card.get_longname()?);
 
         let non_block = false;
         let ctl = alsa::ctl::Ctl::from_card(&card, non_block)?;
         let info = ctl.card_info()?;
-        println!("Card id:    {}", info.get_id()?);
-        println!("Driver:     {}", info.get_driver()?);
-        println!("Components: {}", info.get_components()?);
-        println!("Mixer name: {}", info.get_mixername()?);
+        println!("  Card id:    {}", info.get_id()?);
+        println!("  Driver:     {}", info.get_driver()?);
+        println!("  Components: {}", info.get_components()?);
+        println!("  Mixer name: {}", info.get_mixername()?);
 
         found_any = true;
     }
@@ -72,7 +68,7 @@ fn open_device(card_name: &str) -> Result<(alsa::PCM, alsa::Mixer)> {
             println!("Could not find a card with name '{}'.", card_name);
             println!("Valid options:\n");
             print_available_cards()?;
-            panic!("TODO: Add a better error handler.");
+            std::process::exit(1);
         }
     };
 
