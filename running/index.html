@@ -407,8 +407,9 @@ and the speed of your disks. Generating thumbnails will take a long time, but we
 do not need to wait for it, we can already start the server:</p>
 <pre><code>target/release/musium serve musium.conf
 </code></pre>
-<p>We do need to restart the server after thumbnail generation is complete to make
-the thumbnails show up.</p>
+<p>After thumbnail generation is complete, we can either restart the server, or use
+the <em>rescan library</em> option on the <em>about</em> page and then refresh the
+webinterface to make the new thumbnails show up.</p>
 <h2 id="with-systemd">With systemd</h2>
 <p>An example unit file:</p>
 <pre><code>[Unit]
@@ -446,7 +447,9 @@ headless system, you may need to run</p>
 <h2 id="scanning-the-library">Scanning the library</h2>
 <p><code>musium serve</code> will serve the library as it was when it was last scanned. When
 the library changes, you need to run <code>musium scan musium.conf</code> to pick up the
-changes, and then restart the server.</p>
+changes, and then restart the server. Alternatively, you can use the <em>rescan
+library</em> button on the <em>about</em> page. In this case, no restart is needed to pick
+up the changes, but you do need to refresh the webinterface.</p>
       </article>
       <nav id="nav-prev-next">
         <a id="nav-prev" href="../configuration/" title="Configuration">Previous</a>
