@@ -13,8 +13,9 @@ do not need to wait for it, we can already start the server:
 
     target/release/musium serve musium.conf
 
-We do need to restart the server after thumbnail generation is complete to make
-the thumbnails show up.
+After thumbnail generation is complete, we can either restart the server, or use
+the _rescan library_ option on the _about_ page and then refresh the
+webinterface to make the new thumbnails show up.
 
 ## With systemd
 
@@ -60,4 +61,6 @@ to allow the deamon to linger after you log out.
 
 `musium serve` will serve the library as it was when it was last scanned. When
 the library changes, you need to run `musium scan musium.conf` to pick up the
-changes, and then restart the server.
+changes, and then restart the server. Alternatively, you can use the _rescan
+library_ button on the _about_ page. In this case, no restart is needed to pick
+up the changes, but you do need to refresh the webinterface.
