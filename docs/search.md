@@ -36,8 +36,6 @@ because it includes a feat. artist, because the track is part of a compilation
 album), then we cannot reach that track through the artist search results, so
 then we do need to include the track itself, to make it discoverable.
 
-Similarly, a seac
-
 Conclusion:
 
  * Words that occur in the track artist and also in the album artist, should not
