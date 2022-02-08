@@ -32,6 +32,7 @@ jobs:
       - uses: "cachix/install-nix-action@v13"
         with:
           nix_path: "nixpkgs=channel:nixos-unstable"
+          install_url: "https://releases.nixos.org/nix/nix-2.3.15/install"
 
       - name: "Install system dependencies"
         run: |
