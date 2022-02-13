@@ -18,6 +18,7 @@ use alsa;
 use alsa::PollDescriptors;
 use nix::errno::Errno;
 
+use crate::config::Config;
 use crate::player::{Format, Millibel, PlayerState};
 use crate::prim::Hertz;
 
@@ -395,8 +396,7 @@ fn play_queue(
 /// the queue is empty, the device is released, and the thread parks itself
 /// again.
 pub fn main(
-    card_name: &str,
-    volume_name: &str,
+    config: &Config,
     state_mutex: &Mutex<PlayerState>,
     decode_thread: &Thread,
 ) {
@@ -407,9 +407,16 @@ pub fn main(
             !state.is_queue_empty()
         };
         if has_audio {
+            // TODO: Run pre-playback command.
             println!("Starting playback ...");
-            play_queue(card_name, volume_name, state_mutex, decode_thread);
+            play_queue(
+                &config.audio_device,
+                &config.audio_volume_control,
+                state_mutex,
+                decode_thread,
+            );
             println!("Playback done, sleeping ...");
+            // TODO: Start timer for post-idle command.
         }
         thread::park();
     }

@@ -10,7 +10,6 @@
 use std::fmt;
 use std::fs;
 use std::mem;
-use std::path::PathBuf;
 use std::sync::mpsc::SyncSender;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -20,6 +19,7 @@ use std::thread;
 use claxon;
 use claxon::metadata::StreamInfo;
 
+use crate::config::Config;
 use crate::filter::StateVariableFilter;
 use crate::history::PlaybackEvent;
 use crate::history;
@@ -933,10 +933,7 @@ pub struct QueueSnapshot {
 impl Player {
     pub fn new(
         index_var: Var<MemoryMetaIndex>,
-        card_name: String,
-        volume_name: String,
-        db_path: PathBuf,
-        high_pass_cutoff: Hertz,
+        config: &Config,
     ) -> Player {
         // Build the channel to send playback events to the history thread. That
         // thread is expected to process them immediately and be idle most of
@@ -949,6 +946,7 @@ impl Player {
         // periodically unpark it when there is new stuff to decode.
         let state_mutex_for_decode = state.clone();
         let index_for_decode = index_var.clone();
+        let high_pass_cutoff = config.high_pass_cutoff;
         let builder = std::thread::Builder::new();
         let decode_join_handle = builder
             .name("decoder".into())
@@ -962,14 +960,14 @@ impl Player {
 
         let state_mutex_for_playback = state.clone();
         let decode_thread_for_playback = decode_join_handle.thread().clone();
+        let config_for_playback = config.clone();
 
         let builder = std::thread::Builder::new();
         let playback_join_handle = builder
             .name("playback".into())
             .spawn(move || {
                 playback::main(
-                    &card_name,
-                    &volume_name,
+                    &config_for_playback,
                     &*state_mutex_for_playback,
                     &decode_thread_for_playback,
                 );
@@ -978,6 +976,7 @@ impl Player {
         let builder = std::thread::Builder::new();
         let index_for_history = index_var.clone();
 
+        let db_path = config.db_path();
         let history_join_handle = builder
             .name("history".into())
             .spawn(move || {

@@ -285,13 +285,9 @@ fn main() -> Result<()> {
             let thumb_cache_var = Arc::new(MVar::new(arc_thumb_cache));
 
             println!("Starting server on {}.", config.listen);
-            let db_path = config.db_path();
             let player = musium::player::Player::new(
                 index_var.clone(),
-                config.audio_device,
-                config.audio_volume_control,
-                db_path,
-                config.high_pass_cutoff,
+                &config,
             );
             let service = MetaServer::new(
                 config_clone,
