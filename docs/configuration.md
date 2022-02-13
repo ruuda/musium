@@ -85,3 +85,43 @@ for this use case.
 The high pass filter is not perfect. It has a gain of -3&nbsp;dB at the cutoff
 frequency, and a rolloff of -12&nbsp;dB per octave. For example, at a cutoff
 frequency of 50&nbsp;Hz, a 25&nbsp;Hz tone would be diminished by 15&nbsp;dB.
+
+### exec_pre_playback_path
+
+When Musium starts playback from an idle state, it can optionally execute a
+program before continuing. For example, you can use this to ensure that your
+speakers are powered on. See the page about [Trådfri control](tradfri.md) for
+how to do this with Ikea Trådfri outlets.
+
+The value is the path of a program to be executed. It is not possible to pass
+arguments to the program. Instead, you can create a shell script that will call
+the program with the required arguments. Musium waits for the program to exit
+before starting playback. However, if the program does not finish within TODO
+seconds, Musium starts playback anyway.
+
+This setting is optional. When it is not set, Musium starts playback instantly.
+
+### exec_post_idle_path
+
+After playback ends, Musium can optionally execute a program. For example, you
+can use this to turn your speakers off when there is no longer any music
+playing. See the page about [Trådfri control](tradfri.md) for how to do this
+with Ikea Trådfri outlets.
+
+The value is the path of a program to be executed. It is not possible to pass
+arguments to the program. Instead, you can create a shell script that will call
+the program with the required arguments.
+
+You can control the time between playback ending, and executing the program,
+with the `idle_timeout_seconds` setting. If playback resumes within this time,
+Musium does not execute the post-idle program. It _will_ execute the
+pre-playback program when playback resumes, regardless of whether the post-idle
+program was executed.
+
+This setting is optional.
+
+### idle_timeout_seconds
+
+The time between playback ending, and executing the post-idle program, in
+seconds. This setting is optional and defaults to three minutes. This setting
+is only useful in combination with `exec_post_idle_path`.

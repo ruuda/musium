@@ -28,17 +28,30 @@ pub struct Config {
     pub audio_device: String,
     pub audio_volume_control: String,
     pub high_pass_cutoff: Hertz,
+    pub exec_pre_playback_path: Option<PathBuf>,
+    pub exec_post_idle_path: Option<PathBuf>,
+    pub idle_timeout_seconds: u32,
 }
 
 impl fmt::Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "  listen = {}\n", self.listen)?;
-        write!(f, "  library_path = {}\n", self.library_path.to_string_lossy())?;
-        write!(f, "  covers_path = {}\n", self.covers_path.to_string_lossy())?;
-        write!(f, "  data_path = {}\n", self.data_path.to_string_lossy())?;
-        write!(f, "  audio_device = {}\n", self.audio_device)?;
-        write!(f, "  audio_volume_control = {}\n", self.audio_volume_control)?;
-        write!(f, "  high_pass_cutoff = {}", self.high_pass_cutoff)?;
+        write!(f, "  listen                 = {}\n", self.listen)?;
+        write!(f, "  library_path           = {}\n", self.library_path.to_string_lossy())?;
+        write!(f, "  covers_path            = {}\n", self.covers_path.to_string_lossy())?;
+        write!(f, "  data_path              = {}\n", self.data_path.to_string_lossy())?;
+        write!(f, "  audio_device           = {}\n", self.audio_device)?;
+        write!(f, "  audio_volume_control   = {}\n", self.audio_volume_control)?;
+        write!(f, "  high_pass_cutoff       = {}\n", self.high_pass_cutoff)?;
+        match self.exec_pre_playback_path.as_ref() {
+            Some(path) => write!(f, "  exec_pre_playback_path = {}\n", path.to_string_lossy())?,
+            None => write!(f, "  exec_pre_playback_path is not set\n")?,
+        }
+        match self.exec_post_idle_path.as_ref() {
+            Some(path) => write!(f, "  exec_post_idle_path    = {}\n", path.to_string_lossy())?,
+            None => write!(f, "  exec_post_idle_path    is not set\n")?,
+        }
+        write!(f, "  idle_timeout_seconds   = {}", self.idle_timeout_seconds)?;
+
         Ok(())
     }
 }
@@ -56,6 +69,9 @@ impl Config {
         let mut audio_device = None;
         let mut audio_volume_control = None;
         let mut high_pass_cutoff = None;
+        let mut exec_pre_playback_path = None;
+        let mut exec_post_idle_path = None;
+        let mut idle_timeout_seconds = 180;
 
         for (lineno, line_raw) in lines.into_iter().enumerate() {
             let line = line_raw.as_ref();
@@ -84,10 +100,17 @@ impl Config {
                         Ok(hz) => high_pass_cutoff = Some(hz),
                         Err(msg) => return Err(Error::InvalidConfig(lineno, msg)),
                     }
+                    "exec_pre_playback_path" => exec_pre_playback_path = Some(PathBuf::from(value)),
+                    "exec_post_idle_path" => exec_post_idle_path = Some(PathBuf::from(value)),
+                    "idle_timeout_seconds" => match u32::from_str(value) {
+                        Ok(seconds) => idle_timeout_seconds = seconds,
+                        Err(_) => {
+                            let msg = "Invalid idle_timout_seconds value, must be an integer.";
+                            return Err(Error::InvalidConfig(lineno, msg));
+                        }
+                    }
                     _ => {
-                        let msg = "Unknown key. Expected one of \
-                            'listen', 'library_path', 'covers_path', \
-                            or 'audio_device'.";
+                        let msg = "Unknown key. See the configuration docs for supported keys.";
                         return Err(Error::InvalidConfig(lineno, msg))
                     }
                 }
@@ -137,6 +160,9 @@ impl Config {
                 Some(hz) => hz,
                 None => Hertz(0),
             },
+            exec_pre_playback_path: exec_pre_playback_path,
+            exec_post_idle_path: exec_post_idle_path,
+            idle_timeout_seconds: idle_timeout_seconds,
         };
 
         Ok(config)
