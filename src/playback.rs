@@ -336,7 +336,11 @@ fn play_queue(
         sample_rate: Hertz(44_100),
         bits_per_sample: 16,
     };
-    set_format(&device, format).expect("TODO: Failed to set format.");
+    if let Err(err) = set_format(&device, format) {
+        panic!("Failed to set format for device {} to format {:?}: {:?}",
+            card_name, format, err,
+        );
+    }
 
     // There is also "direct mode" that works with mmaps, but it is not
     // supported by the kernel on ARM, and I want to run this on a Raspberry Pi,
