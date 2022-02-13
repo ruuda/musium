@@ -9,16 +9,18 @@
 
 use std::mem;
 use std::result;
-use std::sync::Mutex;
+use std::ffi::CString;
+use std::sync::{Arc, Mutex, Condvar};
+use std::sync::mpsc::SyncSender;
 use std::thread::Thread;
 use std::thread;
-use std::ffi::CString;
 
 use alsa;
 use alsa::PollDescriptors;
 use nix::errno::Errno;
 
 use crate::config::Config;
+use crate::exec_pre_post::QueueEvent;
 use crate::player::{Format, Millibel, PlayerState};
 use crate::prim::Hertz;
 
@@ -395,28 +397,57 @@ fn play_queue(
 /// the queue to play, and if so, open the Alsa device and start playing. When
 /// the queue is empty, the device is released, and the thread parks itself
 /// again.
+///
+/// In the past I thought the priority of this thread should be set to high, but
+/// it doesn't seem to be needed. (Or maybe this is the cause of the popping
+/// sound I sometimes hear! Needs further investigation, TODO!)
 pub fn main(
     config: &Config,
-    state_mutex: &Mutex<PlayerState>,
+    state_mutex: Arc<Mutex<PlayerState>>,
     decode_thread: &Thread,
+    queue_events: SyncSender<QueueEvent>,
 ) {
-    // TODO: Set thread priority to high.
+    use std::time::{Instant, Duration};
+
     loop {
         let has_audio = {
             let state = state_mutex.lock().unwrap();
             !state.is_queue_empty()
         };
         if has_audio {
-            // TODO: Run pre-playback command.
+            // We are resuming playback now from an idle state. Let the exec
+            // thread execute the pre-playback program. For simplicity, the
+            // exec thread runs even if no such program is configured.
+            let is_running_condvar = Arc::new((Mutex::new(true), Condvar::new()));
+            queue_events
+                .send(QueueEvent::StartPlayback(is_running_condvar.clone()))
+                .expect("Exec thread runs indefinitely, sending does not fail.");
+
+            // If a pre-playback program is configured, we should wait for it to
+            // finish, but only up to 10 seconds. The exec thread will set
+            // is_running to false and wake us with the condvar.
+            if config.exec_pre_playback_path.is_some() {
+                let _ignored_guard = is_running_condvar.1.wait_timeout_while(
+                    is_running_condvar.0.lock().unwrap(),
+                    Duration::from_secs(10),
+                    |&mut is_running| is_running,
+                ).unwrap();
+            }
+
             println!("Starting playback ...");
             play_queue(
                 &config.audio_device,
                 &config.audio_volume_control,
-                state_mutex,
+                &*state_mutex,
                 decode_thread,
             );
             println!("Playback done, sleeping ...");
-            // TODO: Start timer for post-idle command.
+
+            // Signal the exec thread to start the idle timeout and execute the
+            // post-idle program afterwards.
+            queue_events
+                .send(QueueEvent::EndPlayback(Instant::now()))
+                .expect("Exec thread runs indefinitely, sending does not fail.");
         }
         thread::park();
     }

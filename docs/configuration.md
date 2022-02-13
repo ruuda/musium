@@ -96,8 +96,9 @@ how to do this with Ikea Trådfri outlets.
 The value is the path of a program to be executed. It is not possible to pass
 arguments to the program. Instead, you can create a shell script that will call
 the program with the required arguments. Musium waits for the program to exit
-before starting playback. However, if the program does not finish within TODO
-seconds, Musium starts playback anyway.
+before starting playback. However, if the program does not finish within 10
+seconds, Musium will continue playback anyway. After 20 more seconds, Musium
+will kill the child process if it is still running.
 
 This setting is optional. When it is not set, Musium starts playback instantly.
 
@@ -110,7 +111,8 @@ with Ikea Trådfri outlets.
 
 The value is the path of a program to be executed. It is not possible to pass
 arguments to the program. Instead, you can create a shell script that will call
-the program with the required arguments.
+the program with the required arguments. If the program does not finish within
+30 seconds, Musium will kill the child process.
 
 You can control the time between playback ending, and executing the program,
 with the `idle_timeout_seconds` setting. If playback resumes within this time,

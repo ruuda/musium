@@ -19,6 +19,7 @@ mod database;
 mod filter;
 mod search;
 mod word_index;
+mod exec_pre_post;
 
 pub mod config;
 pub mod error;

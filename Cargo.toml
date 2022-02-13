@@ -17,6 +17,7 @@ tiny_http             = "0.7.0"
 unicode-normalization = "0.1.13"
 url                   = "2.1"
 walkdir               = "2.3"
+wait-timeout          = "0.2.0"
 
 [dependencies.claxon]
 git = "https://github.com/ruuda/claxon"

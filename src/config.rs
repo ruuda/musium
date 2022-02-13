@@ -30,7 +30,7 @@ pub struct Config {
     pub high_pass_cutoff: Hertz,
     pub exec_pre_playback_path: Option<PathBuf>,
     pub exec_post_idle_path: Option<PathBuf>,
-    pub idle_timeout_seconds: u32,
+    pub idle_timeout_seconds: u64,
 }
 
 impl fmt::Display for Config {
@@ -102,7 +102,7 @@ impl Config {
                     }
                     "exec_pre_playback_path" => exec_pre_playback_path = Some(PathBuf::from(value)),
                     "exec_post_idle_path" => exec_post_idle_path = Some(PathBuf::from(value)),
-                    "idle_timeout_seconds" => match u32::from_str(value) {
+                    "idle_timeout_seconds" => match u64::from_str(value) {
                         Ok(seconds) => idle_timeout_seconds = seconds,
                         Err(_) => {
                             let msg = "Invalid idle_timout_seconds value, must be an integer.";

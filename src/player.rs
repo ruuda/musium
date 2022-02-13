@@ -20,6 +20,7 @@ use claxon;
 use claxon::metadata::StreamInfo;
 
 use crate::config::Config;
+use crate::exec_pre_post;
 use crate::filter::StateVariableFilter;
 use crate::history::PlaybackEvent;
 use crate::history;
@@ -901,6 +902,7 @@ pub struct Player {
     decode_thread: JoinHandle<()>,
     playback_thread: JoinHandle<()>,
     history_thread: JoinHandle<()>,
+    exec_pre_post_thread: JoinHandle<()>,
 }
 
 pub struct TrackSnapshot {
@@ -938,9 +940,12 @@ impl Player {
         // Build the channel to send playback events to the history thread. That
         // thread is expected to process them immediately and be idle most of
         // the time, so pick a small channel size.
-        let (sender, receiver) = mpsc::sync_channel(5);
+        let (hist_sender, hist_receiver) = mpsc::sync_channel(5);
 
-        let state = Arc::new(Mutex::new(PlayerState::new(sender)));
+        // Same for playback start and end queue events, for the exec thread.
+        let (queue_events_sender, queue_events_receiver) = mpsc::sync_channel(5);
+
+        let state = Arc::new(Mutex::new(PlayerState::new(hist_sender)));
 
         // Start the decode thread. It runs indefinitely, but we do need to
         // periodically unpark it when there is new stuff to decode.
@@ -968,8 +973,9 @@ impl Player {
             .spawn(move || {
                 playback::main(
                     &config_for_playback,
-                    &*state_mutex_for_playback,
+                    state_mutex_for_playback,
                     &decode_thread_for_playback,
+                    queue_events_sender,
                 );
             }).unwrap();
 
@@ -983,7 +989,7 @@ impl Player {
                 let result = history::main(
                     &db_path,
                     index_for_history,
-                    receiver,
+                    hist_receiver,
                 );
                 // The history thread should not exit. When it does, that's a
                 // problem.
@@ -991,11 +997,21 @@ impl Player {
                 std::process::exit(1);
             }).unwrap();
 
+        let builder = std::thread::Builder::new();
+        let config_exec = config.clone();
+        let exec_pre_post_handle = builder
+            .name("exec_pre_post".into())
+            .spawn(move || exec_pre_post::main(
+                &config_exec,
+                queue_events_receiver,
+            )).unwrap();
+
         Player {
             state: state,
             decode_thread: decode_join_handle,
             playback_thread: playback_join_handle,
             history_thread: history_join_handle,
+            exec_pre_post_thread: exec_pre_post_handle,
         }
     }
 
@@ -1006,6 +1022,7 @@ impl Player {
         self.playback_thread.join().unwrap();
         self.decode_thread.join().unwrap();
         self.history_thread.join().unwrap();
+        self.exec_pre_post_thread.join().unwrap();
     }
 
     /// Enqueue the track for playback at the end of the queue.
