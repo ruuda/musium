@@ -8,6 +8,9 @@
 
 let
   pkgs = (import ./nixpkgs-pinned.nix) {};
+  python = pkgs.python3.withPackages (ps: [
+    ps.pytradfri
+  ]);
 in
   pkgs.buildEnv {
     name = "musium-devenv";
@@ -16,5 +19,6 @@ in
       pkgs.psc-package
       pkgs.purescript
       pkgs.rustup
+      python
     ];
   }
