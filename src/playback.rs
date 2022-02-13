@@ -136,7 +136,7 @@ fn set_format(pcm: &alsa::PCM, format: Format) -> Result<()> {
         hwp.set_access(alsa::pcm::Access::MMapInterleaved)?;
         // TODO: Pick a good buffer size.
         hwp.set_buffer_size(2048)?;
-        hwp.set_period_size(256, alsa::ValueOr::Nearest)?;
+        hwp.set_period_size_near(256, alsa::ValueOr::Nearest)?;
         pcm.hw_params(&hwp)?;
     }
 
