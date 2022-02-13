@@ -15,6 +15,7 @@ in
   pkgs.buildEnv {
     name = "musium-devenv";
     paths = [
+      pkgs.libcoap
       pkgs.mkdocs
       pkgs.psc-package
       pkgs.purescript

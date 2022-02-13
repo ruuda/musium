@@ -16,6 +16,7 @@ nav:
     - Loudness normalization: loudness.md
     - Scrobbling to Last.fm: scrobbling.md
     - Submitting to Listenbrainz: listenbrainz.md
+    - Trådfri control: tradfri.md
     - Disks: disks.md
   - API Reference: api.md
   - Internals:
