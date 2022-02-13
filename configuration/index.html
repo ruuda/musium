@@ -460,6 +460,37 @@ for this use case.</p>
 <p>The high pass filter is not perfect. It has a gain of -3&nbsp;dB at the cutoff
 frequency, and a rolloff of -12&nbsp;dB per octave. For example, at a cutoff
 frequency of 50&nbsp;Hz, a 25&nbsp;Hz tone would be diminished by 15&nbsp;dB.</p>
+<h3 id="exec_pre_playback_path">exec_pre_playback_path</h3>
+<p>When Musium starts playback from an idle state, it can optionally execute a
+program before continuing. For example, you can use this to ensure that your
+speakers are powered on. See the page about <a href="../tradfri/">Trådfri control</a> for
+how to do this with Ikea Trådfri outlets.</p>
+<p>The value is the path of a program to be executed. It is not possible to pass
+arguments to the program. Instead, you can create a shell script that will call
+the program with the required arguments. Musium waits for the program to exit
+before starting playback. However, if the program does not finish within 10
+seconds, Musium will continue playback anyway. After 20 more seconds, Musium
+will kill the child process if it is still running.</p>
+<p>This setting is optional. When it is not set, Musium starts playback instantly.</p>
+<h3 id="exec_post_idle_path">exec_post_idle_path</h3>
+<p>After playback ends, Musium can optionally execute a program. For example, you
+can use this to turn your speakers off when there is no longer any music
+playing. See the page about <a href="../tradfri/">Trådfri control</a> for how to do this
+with Ikea Trådfri outlets.</p>
+<p>The value is the path of a program to be executed. It is not possible to pass
+arguments to the program. Instead, you can create a shell script that will call
+the program with the required arguments. If the program does not finish within
+30 seconds, Musium will kill the child process.</p>
+<p>You can control the time between playback ending, and executing the program,
+with the <code>idle_timeout_seconds</code> setting. If playback resumes within this time,
+Musium does not execute the post-idle program. It <em>will</em> execute the
+pre-playback program when playback resumes, regardless of whether the post-idle
+program was executed.</p>
+<p>This setting is optional.</p>
+<h3 id="idle_timeout_seconds">idle_timeout_seconds</h3>
+<p>The time between playback ending, and executing the post-idle program, in
+seconds. This setting is optional and defaults to three minutes. This setting
+is only useful in combination with <code>exec_post_idle_path</code>.</p>
       </article>
       <nav id="nav-prev-next">
         <a id="nav-prev" href="../building/" title="Building">Previous</a>
@@ -500,6 +531,9 @@ frequency of 50&nbsp;Hz, a 25&nbsp;Hz tone would be diminished by 15&nbsp;dB.</p
             
             <li class="toc-chapter
               "><a href="../listenbrainz/">Submitting to Listenbrainz</a></li>
+            
+            <li class="toc-chapter
+              "><a href="../tradfri/">Trådfri control</a></li>
             
             <li class="toc-chapter
               "><a href="../disks/">Disks</a></li>

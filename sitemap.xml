@@ -2,77 +2,82 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://ruuda.github.io/musium/</loc>
-         <lastmod>2022-02-06</lastmod>
+         <lastmod>2022-02-13</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ruuda.github.io/musium/api/</loc>
-         <lastmod>2022-02-06</lastmod>
+         <lastmod>2022-02-13</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ruuda.github.io/musium/building/</loc>
-         <lastmod>2022-02-06</lastmod>
+         <lastmod>2022-02-13</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ruuda.github.io/musium/configuration/</loc>
-         <lastmod>2022-02-06</lastmod>
+         <lastmod>2022-02-13</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ruuda.github.io/musium/disks/</loc>
-         <lastmod>2022-02-06</lastmod>
+         <lastmod>2022-02-13</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ruuda.github.io/musium/listenbrainz/</loc>
-         <lastmod>2022-02-06</lastmod>
+         <lastmod>2022-02-13</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ruuda.github.io/musium/loudness/</loc>
-         <lastmod>2022-02-06</lastmod>
+         <lastmod>2022-02-13</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ruuda.github.io/musium/performance/</loc>
-         <lastmod>2022-02-06</lastmod>
+         <lastmod>2022-02-13</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ruuda.github.io/musium/running/</loc>
-         <lastmod>2022-02-06</lastmod>
+         <lastmod>2022-02-13</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ruuda.github.io/musium/scrobbling/</loc>
-         <lastmod>2022-02-06</lastmod>
+         <lastmod>2022-02-13</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ruuda.github.io/musium/search/</loc>
-         <lastmod>2022-02-06</lastmod>
+         <lastmod>2022-02-13</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ruuda.github.io/musium/tagging/</loc>
-         <lastmod>2022-02-06</lastmod>
+         <lastmod>2022-02-13</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ruuda.github.io/musium/thumbnails/</loc>
-         <lastmod>2022-02-06</lastmod>
+         <lastmod>2022-02-13</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://ruuda.github.io/musium/tradfri/</loc>
+         <lastmod>2022-02-13</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ruuda.github.io/musium/webinterface/</loc>
-         <lastmod>2022-02-06</lastmod>
+         <lastmod>2022-02-13</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://ruuda.github.io/musium/theme/</loc>
-         <lastmod>2022-02-06</lastmod>
+         <lastmod>2022-02-13</lastmod>
          <changefreq>daily</changefreq>
     </url>
 </urlset>

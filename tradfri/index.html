@@ -9,7 +9,7 @@
   -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Running — Musium</title>
+  <title>Trådfri control — Musium</title>
   <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
@@ -391,69 +391,57 @@
       <nav id="breadcrumbs">
         <a href="https://ruuda.github.io/musium/">Musium</a>
          › <a href="../building/">User Guide</a> 
-         › <a href="./">Running</a> 
+         › <a href="./">Trådfri control</a> 
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="running">Running</h1>
-<p>Musium logs to stdout and runs until it is killed, which makes it easy to run in
-a terminal for development, and it works well with systemd to run as a daemon.
-Before we can start the server, we need to scan the library. After
-<a href="../building/">building</a>:</p>
-<pre><code>target/release/musium scan musium.conf
+        <h1 id="tradfri-control">Trådfri control</h1>
+<p>Musium can <a href="../configuration/#exec_pre_playback_path">run a command</a> before
+starting playback and after a period of inactivity. In combination with <a href="https://www.ikea.com/nl/en/p/tradfri-wireless-control-outlet-90356166/">Ikea
+Trådfri wireless control outlets</a>, this is a nice way to turn speakers
+on and off.</p>
+<h2 id="controlling-outlets-with-libcoap">Controlling outlets with libcoap</h2>
+<p>We can send <em>Constrained Application Protocol</em> (CoAP) messages to the Trådfri
+gateway using <code>coap-client</code>, part of <a href="https://www.libcoap.net/">libcoap</a>. You
+will need the <abbr>ip</abbr> address of the gateway, and the security code on
+the back of the device.</p>
+<p><a href="https://github.com/glenndehaan/ikea-tradfri-coap-docs">This excellent guide to Trådfri’s CoAP implementation</a> explains how
+to authenticate, and interact with the gateway. You can also use
+<a href="https://github.com/home-assistant-libs/pytradfri">Pytradfri</a> for a nicer interface to browsing your devices, and to
+find the id of your outlets. In this example, we want to control device 65539.</p>
+<p>To turn an outlet on, we need to send a message with the following payload:</p>
+<pre><code>{"3312": [{"5850": 1}]}
 </code></pre>
-<p>The first scan might take a few minutes, depending on the size of the library
-and the speed of your disks. Generating thumbnails will take a long time, but we
-do not need to wait for it, we can already start the server:</p>
-<pre><code>target/release/musium serve musium.conf
+<p>A value of 0 instead of 1 turns the outlet off again. Putting everything
+together, the following command will turn the outlet on:</p>
+<pre><code>$ coap-client -u musium -k «redacted»    \
+  coaps://192.168.0.100:5684/15001/65539 \
+  -m put -e '{"3312": [{"5850": 1}]}'
 </code></pre>
-<p>After thumbnail generation is complete, we can either restart the server, or use
-the <em>rescan library</em> option on the <em>about</em> page and then refresh the
-webinterface to make the new thumbnails show up.</p>
-<h2 id="with-systemd">With systemd</h2>
-<p>An example unit file:</p>
-<pre><code>[Unit]
-Description=Musium Music Daemon
-
-[Service]
-# TODO: Currently the server loads static files from the repository,
-# so the working directory needs to be a checkout. We should embed the
-# static files in the binary instead.
-WorkingDirectory=/home/media/checkouts/musium
-ExecStart=/usr/local/bin/musium serve /etc/musium.conf
-
-# Musium supports reporting startup progress to systemd, set this to enable.
-Type=notify
-
-[Install]
-WantedBy=default.target
-
-# TODO: Enable some hardening options.
+<p>Note: In my case, the gateway is at <code>192.168.1.100</code>. I also authenticated
+previously and created the <code>musium</code> user <a href="https://github.com/glenndehaan/ikea-tradfri-coap-docs/blob/68976e6641e4533f9ad51ec724942a0b6c143bce/README.md#authenticate">as described here</a>.</p>
+<h2 id="pre-playback-and-post-idle-scripts">Pre-playback and post-idle scripts</h2>
+<p>To call <code>coap-client</code> before and after playback, we need to create a
+pre-playback and post-idle script, that we can use with the
+<a href="../configuration/#exec_pre_playback_path"><code>exec_pre_playback_path</code></a> setting.
+Create <code>pre_playback.sh</code>, with the following contents:</p>
+<pre><code>#!/bin/sh
+# Turn the outlet for the speaker on.
+coap-client -u musium -k ...
 </code></pre>
-<p>This assumes that you have a <a href="../building/">release binary</a> in <code>/usr/local/bin</code>,
-and a <a href="../configuration/">configuration file</a> at <code>/etc/musium.conf</code>. Write the
-above file to <code>/etc/systemd/system/musium.service</code>, then start the service:</p>
-<pre><code>systemctl daemon-reload
-systemctl start musium
+<p>and replace the <code>coap-client</code> command with the one for your outlet, as shown in
+the previous section. Create a similar <code>post_idle.sh</code> script, with the payload
+to turn the outlets off again, and make both scripts executable with <code>chmod +x</code>.
+Now edit your <a href="../configuration/">config file</a> to point to these scripts:</p>
+<pre><code>exec_pre_playback_path = /path/to/pre_playback.sh
+exec_post_idle_path = /path/to/post_playback.sh
+idle_timeout_seconds = 180
 </code></pre>
-<h2 id="with-systemd-user">With systemd-user</h2>
-<p>It is also possible to run Musium using your systemd user instance. In that
-case, place the unit at <code>~/.config/systemd/user/musium.service</code>, and use
-<code>system --user</code> to start it. If you run the deamon under your own account on a
-headless system, you may need to run</p>
-<pre><code>loginctl enable-linger $USER
-</code></pre>
-<p>to allow the deamon to linger after you log out.</p>
-<h2 id="scanning-the-library">Scanning the library</h2>
-<p><code>musium serve</code> will serve the library as it was when it was last scanned. When
-the library changes, you need to run <code>musium scan musium.conf</code> to pick up the
-changes, and then restart the server. Alternatively, you can use the <em>rescan
-library</em> button on the <em>about</em> page. In this case, no restart is needed to pick
-up the changes, but you do need to refresh the webinterface.</p>
+<p>Make sure to restart Musium to pick up the new configuration.</p>
       </article>
       <nav id="nav-prev-next">
-        <a id="nav-prev" href="../configuration/" title="Configuration">Previous</a>
-        <a id="nav-next" href="../webinterface/" title="Webinterface">Next</a>
+        <a id="nav-prev" href="../listenbrainz/" title="Submitting to Listenbrainz">Previous</a>
+        <a id="nav-next" href="../disks/" title="Disks">Next</a>
         </nav>
       </div>
     <aside>
@@ -470,13 +458,8 @@ up the changes, but you do need to refresh the webinterface.</p>
               "><a href="../configuration/">Configuration</a></li>
             
             <li class="toc-chapter
-               current"><a href="./">Running</a></li>
-            <li><ul>
-                <li class="toc-heading"><a href="#with-systemd">With systemd</a></li>
-                <li class="toc-heading"><a href="#with-systemd-user">With systemd-user</a></li>
-                <li class="toc-heading"><a href="#scanning-the-library">Scanning the library</a></li>
-                </ul></li>
-               
+              "><a href="../running/">Running</a></li>
+            
             <li class="toc-chapter
               "><a href="../webinterface/">Webinterface</a></li>
             
@@ -493,8 +476,12 @@ up the changes, but you do need to refresh the webinterface.</p>
               "><a href="../listenbrainz/">Submitting to Listenbrainz</a></li>
             
             <li class="toc-chapter
-              "><a href="../tradfri/">Trådfri control</a></li>
-            
+               current"><a href="./">Trådfri control</a></li>
+            <li><ul>
+                <li class="toc-heading"><a href="#controlling-outlets-with-libcoap">Controlling outlets with libcoap</a></li>
+                <li class="toc-heading"><a href="#pre-playback-and-post-idle-scripts">Pre-playback and post-idle scripts</a></li>
+                </ul></li>
+               
             <li class="toc-chapter
               "><a href="../disks/">Disks</a></li>
             <li class="toc-section"><a href="../api/">API Reference</a></li>
