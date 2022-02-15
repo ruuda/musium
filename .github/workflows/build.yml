@@ -26,8 +26,11 @@ jobs:
             target
             ~/.cargo
             ~/.rustup
-          key: "rust-${{ hashFiles('Cargo.lock', 'rust-toolchain') }}"
-          restore-keys: "rust-"
+          # Rustup can be incompatible across versions, so if we update the
+          # Nixpkgs snapshot and get a newer rustup, we should *not* reuse the
+          # cache.
+          key: "rust-${{ hashFiles('nixpkgs-pinned.nix') }}-${{ hashFiles('Cargo.lock', 'rust-toolchain') }}"
+          restore-key: "rust-${{ hashFiles('nixpkgs-pinned.nix') }}-"
 
       - uses: "cachix/install-nix-action@v13"
         with:
