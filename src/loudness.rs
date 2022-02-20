@@ -13,9 +13,11 @@ use std::thread;
 
 use bs1770::{ChannelLoudnessMeter};
 
-use crate::waveform;
-use crate::{MetaIndex, MemoryMetaIndex, Track};
+use crate::database::Database;
+use crate::database;
 use crate::prim::{AlbumId, TrackId};
+use crate::waveform;
+use crate::{MetaIndex, MemoryMetaIndex};
 
 /// Tracks the state of loudness analysis for one album.
 struct AlbumTask {
@@ -86,28 +88,64 @@ impl Task {
 /// 1. `Task::AnalyzeAlbum` if there is an album whose tracks are done.
 /// 2. `Task::AnalyzeTrack` if there is a track to analyze.
 /// 3. `None` if we are done for now.
-struct TaskQueue {
+pub struct TaskQueue {
     index: Arc<MemoryMetaIndex>,
     tasks: Vec<AlbumTask>,
 }
 
 impl TaskQueue {
-    fn new(index: Arc<MemoryMetaIndex>, albums: &[AlbumId]) -> TaskQueue {
-        let mut tasks = Vec::with_capacity(albums.len());
-        for &album_id in albums {
-            let tracks = index.get_album_tracks(album_id);
-            let task = AlbumTask {
-                album_id: album_id,
-                tracks_pending: tracks.iter().map(|(id, _)| *id).collect(),
-                tracks_done: Vec::with_capacity(tracks.len()),
-                num_tracks: tracks.len(),
-            };
-            tasks.push(task);
-        }
+    pub fn new(index: Arc<MemoryMetaIndex>) -> TaskQueue {
         TaskQueue {
-            index,
-            tasks
+            index: index,
+            tasks: Vec::new(),
         }
+    }
+
+    /// Add a task to analyze the loudness of the given album and its tracks.
+    pub fn push_task_album(&mut self, album_id: AlbumId) {
+        let tracks = self.index.get_album_tracks(album_id);
+        let task = AlbumTask {
+            album_id: album_id,
+            tracks_pending: tracks.iter().map(|(id, _)| *id).collect(),
+            tracks_done: Vec::with_capacity(tracks.len()),
+            num_tracks: tracks.len(),
+        };
+        self.tasks.push(task);
+    }
+
+    /// Add tasks to analyze the loudness of missing albums and tracks.
+    ///
+    /// This adds tasks for all albums and tracks that are in the index, but not
+    /// in the database. Note, this is a somewhat expensive query, since we
+    /// check the existence of every album and track. It's better to rely on
+    /// incremental building, but this can be used to backfill an old database.
+    pub fn push_tasks_missing(&mut self, db: &mut Database) -> database::Result<()> {
+        let index = self.index.clone();
+
+        // Note, this is not the most efficient index query, because we have to
+        // locate the tracks per album. We could do better by iterating the
+        // tracks instead, but it complicates this code, and we are issueing a
+        // SELECT against the database for every track anyway, so the difference
+        // should be dwarfed by the SQLite call anyway.
+        'albums: for (album_id, _album) in index.get_albums() {
+            // If the album is not there, we need to add it.
+            if db.select_album_loudness(*album_id)?.is_none() {
+                self.push_task_album(*album_id);
+                continue 'albums
+            }
+
+            // If one of the tracks is not there, we also add the full album.
+            for (track_id, _track) in index.get_album_tracks(*album_id) {
+                if db.select_track_loudness(*track_id)?.is_none() {
+                    self.push_task_album(*album_id);
+                    continue 'albums
+                }
+
+                // TODO: Check the waveforms as well.
+            }
+        }
+
+        Ok(())
     }
 
     fn finish_track(&mut self, album_id: AlbumId, meters: [ChannelLoudnessMeter; 2]) {
@@ -170,14 +208,16 @@ impl TaskQueue {
     ///
     /// The thread pool has as many threads as cores on the system. This method
     /// blocks until processing is done.
-    fn process_all_in_thread_pool(self) {
+    pub fn process_all_in_thread_pool(self) {
+        eprintln!("{} tasks in loudness queue", self.tasks.len());
         let task_queue = Arc::new(Mutex::new(self));
 
+        // TODO: Share this thread pool with the thumbnail generation pool.
         let n_threads = num_cpus::get();
         let mut threads = Vec::with_capacity(n_threads);
         for i in 0..n_threads {
             let task_queue_i = task_queue.clone();
-            let name = format!("loudness_analysis_{}", i);
+            let name = format!("Loudness analysis thread {}", i);
             let builder = thread::Builder::new().name(name);
             let join_handle = builder.spawn(move || {
                 let mut prev_result = None;

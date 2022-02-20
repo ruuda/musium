@@ -111,6 +111,16 @@ impl Lufs {
         )
     }
 
+
+    /// Construct a LUFS value from a float. This is in LUFS, not in centi-LUFS
+    /// like `Lufs::new` is.
+    pub fn from_f64(loudness_units: f64) -> Lufs {
+        Lufs(
+            std::num::NonZeroI16::new((loudness_units * 100.0) as i16)
+            .expect("A value of 0.0 LUFS is not allowed, use -0.01 LUFS instead.")
+        )
+    }
+
     pub fn default() -> Lufs {
         Lufs(std::num::NonZeroI16::new(-900).unwrap())
     }

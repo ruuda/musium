@@ -11,7 +11,7 @@ use sqlite;
 use sqlite::Statement;
 
 use crate::player::QueueId;
-use crate::prim::{TrackId};
+use crate::prim::{AlbumId, TrackId, Lufs};
 
 pub type Result<T> = sqlite::Result<T>;
 
@@ -118,7 +118,10 @@ macro_rules! sql_read {
         }
 
         query {
-            SELECT * FROM $table_name:ident $( $extra_token:tt )*
+            SELECT * FROM $table_name:ident
+            $( WHERE $where_field:ident = ? )?
+            $( ORDER BY $order_field:ident $order_dir:ident )?
+            ;
         }
     } => {
         $( #[$struct_attrs] )*
@@ -141,9 +144,17 @@ macro_rules! sql_read {
                 statement.push_str(" FROM ");
                 statement.push_str(stringify!($table_name));
                 $(
+                    statement.push_str(" WHERE ");
+                    statement.push_str(stringify!($where_field));
+                    statement.push_str(" = :");
+                    statement.push_str(stringify!($where_field));
+                )?
+                $(
+                    statement.push_str(" ORDER BY ");
+                    statement.push_str(stringify!($order_field));
                     statement.push(' ');
-                    statement.push_str(stringify!($extra_token));
-                )*
+                    statement.push_str(stringify!($order_dir));
+                )?
                 connection.prepare(&statement)
             }
         }
@@ -202,10 +213,19 @@ macro_rules! sql_iter {
 /// Wraps the SQLite connection with some things to manipulate the DB.
 pub struct Database<'conn> {
     pub connection: &'conn sqlite::Connection,
+
+    // Listens table queries.
     insert_started: Statement<'conn>,
     update_completed: Statement<'conn>,
+
+    // File metadata queries.
     insert_file_metadata: Statement<'conn>,
     delete_file_metadata: Statement<'conn>,
+
+    // Loudness queries.
+    select_album_loudness: Statement<'conn>,
+    select_track_loudness: Statement<'conn>,
+    select_track_waveform: Statement<'conn>,
 }
 
 /// Create the necessary tables with `IF NOT EXISTS` queries.
@@ -463,12 +483,25 @@ impl<'conn> Database<'conn> {
             "
         )?;
 
+        let select_album_loudness = connection.prepare(
+            "SELECT bs17704_loudness_lufs FROM album_loudness WHERE album_id = ?;"
+        )?;
+        let select_track_loudness = connection.prepare(
+            "SELECT bs17704_loudness_lufs FROM track_loudness WHERE track_id = ?;"
+        )?;
+        let select_track_waveform = connection.prepare(
+            "SELECT data FROM waveforms WHERE track_id = ?;"
+        )?;
+
         let result = Database {
             connection: connection,
             insert_started: insert_started,
             update_completed: update_completed,
             insert_file_metadata: insert_file_metadata,
             delete_file_metadata: delete_file_metadata,
+            select_album_loudness: select_album_loudness,
+            select_track_loudness: select_track_loudness,
+            select_track_waveform: select_track_waveform,
         };
 
         Ok(result)
@@ -553,5 +586,31 @@ impl<'conn> Database<'conn> {
     /// Returns the columns needed to build the `MetaIndex`.
     pub fn iter_file_metadata(&mut self) -> Result<FileMetadataIter> {
         FileMetadataIter::new(&self.connection)
+    }
+
+    /// Select `bs17704_loudness` from the `album_loudness` table.
+    pub fn select_album_loudness(&mut self, album_id: AlbumId) -> Result<Option<Lufs>> {
+        self.select_album_loudness.reset()?;
+        self.select_album_loudness.bind(1, album_id.0 as i64)?;
+        match self.select_album_loudness.next()? {
+            sqlite::State::Done => Ok(None),
+            sqlite::State::Row => {
+                let lufs: f64 = self.select_album_loudness.read(0)?;
+                Ok(Some(Lufs::from_f64(lufs)))
+            }
+        }
+    }
+
+    /// Select `bs17704_loudness` from the `track_loudness` table.
+    pub fn select_track_loudness(&mut self, track_id: TrackId) -> Result<Option<Lufs>> {
+        self.select_track_loudness.reset()?;
+        self.select_track_loudness.bind(1, track_id.0 as i64)?;
+        match self.select_track_loudness.next()? {
+            sqlite::State::Done => Ok(None),
+            sqlite::State::Row => {
+                let lufs: f64 = self.select_track_loudness.read(0)?;
+                Ok(Some(Lufs::from_f64(lufs)))
+            }
+        }
     }
 }
