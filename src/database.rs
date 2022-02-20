@@ -306,6 +306,35 @@ pub fn ensure_schema_exists(connection: &sqlite::Connection) -> Result<()> {
         ",
     )?;
 
+    connection.execute(
+        "
+        -- BS1770.4 integrated loudness over the track, in LUFS.
+        create table if not exists track_loudness
+        ( track_id              integer primary key
+        , bs17704_loudness_lufs real not null
+        );
+        ",
+    )?;
+    connection.execute(
+        "
+        -- BS1770.4 integrated loudness over the album, in LUFS.
+        create table if not exists album_loudness
+        ( album_id              integer primary key
+        , bs17704_loudness_lufs real not null
+        );
+        ",
+    )?;
+    connection.execute(
+        "
+        -- \"Waveform\" data per track, used to render waveforms in the UI.
+        -- See waveform.rs for the data format.
+        create table if not exists waveforms
+        ( track_id integer primary key
+        , data     blob not null
+        );
+        ",
+    )?;
+
     Ok(())
 }
 

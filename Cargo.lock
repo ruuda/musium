@@ -41,6 +41,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
 
 [[package]]
+name = "bs1770"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6332c61c205ff066246fff2cb876cdf9009557200f96e15d88d156193b16775b"
+
+[[package]]
 name = "cc"
 version = "1.0.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -132,6 +138,7 @@ name = "musium"
 version = "0.0.0"
 dependencies = [
  "alsa",
+ "bs1770",
  "chrono",
  "claxon",
  "crossbeam",

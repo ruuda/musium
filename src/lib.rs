@@ -12,14 +12,17 @@ extern crate libc;
 extern crate nix;
 extern crate serde_json;
 extern crate unicode_normalization;
+extern crate bs1770;
 
 mod album_table;
 mod build;
 mod database;
-mod filter;
-mod search;
-mod word_index;
 mod exec_pre_post;
+mod filter;
+mod loudness;
+mod search;
+mod waveform;
+mod word_index;
 
 pub mod config;
 pub mod error;
