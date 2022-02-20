@@ -7,12 +7,17 @@
 
 //! Computation of track and album loudness, and track waveforms.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::thread::JoinHandle;
 
 use bs1770::{ChannelLoudnessMeter};
+use claxon::FlacReader;
+use claxon;
+use sqlite;
 
+use crate::error;
 use crate::database::Database;
 use crate::database;
 use crate::prim::{AlbumId, TrackId};
@@ -57,8 +62,52 @@ struct TrackTask {
 }
 
 impl TrackTask {
-    pub fn execute(self) -> TrackResult {
-        unimplemented!();
+    pub fn execute(self, db: &mut Database) -> error::Result<TrackResult> {
+        use error::Error;
+        let path = self.path;
+
+        let mut reader = FlacReader::open(&path)
+            .map_err(|err| Error::FormatError(path.clone(), err))?;
+
+        let streaminfo = reader.streaminfo();
+        // The maximum amplitude is 1 << (bits per sample - 1), because one bit
+        // is the sign bit.
+        let normalizer = 1.0 / (1_u64 << (streaminfo.bits_per_sample - 1)) as f32;
+
+        assert_eq!(streaminfo.channels, 2, "Only stereo files should enter loudness analysis.");
+        let mut meters = [
+            ChannelLoudnessMeter::new(streaminfo.sample_rate),
+            ChannelLoudnessMeter::new(streaminfo.sample_rate),
+        ];
+
+        let mut blocks = reader.blocks();
+        let mut buffer = Vec::new();
+
+        // Decode the full track, feed the samples in the meters.
+        while let Some(block) = blocks.read_next_or_eof(buffer)
+            .map_err(|err| Error::FormatError(path.clone(), err))?
+        {
+            for (ch, meter) in meters.iter_mut().enumerate() {
+                meter.push(block.channel(ch as u32).iter().map(|s| *s as f32 * normalizer));
+            }
+            buffer = block.into_buffer();
+        }
+
+        // We can now determine the track loudness.
+        let zipped = bs1770::reduce_stereo(
+            meters[0].as_100ms_windows(),
+            meters[1].as_100ms_windows(),
+        );
+        let mean_power = bs1770::gated_mean(zipped.as_ref());
+
+        // TODO: Insert into database.
+        eprintln!("{:.1} LUFS <- {:?}", mean_power.loudness_lkfs(), path);
+
+        let result = TrackResult {
+            album_id: self.album_id,
+            meters: meters,
+        };
+        Ok(result)
     }
 }
 
@@ -71,12 +120,12 @@ impl Task {
     /// Execute this task.
     ///
     /// Returns the result in case of a `Task::AnalyzeTrack` task.
-    pub fn execute(self) -> Option<TrackResult> {
+    pub fn execute(self, db: &mut Database) -> error::Result<Option<TrackResult>> {
         match self {
-            Task::AnalyzeTrack(task) => return Some(task.execute()),
+            Task::AnalyzeTrack(task) => return task.execute(db).map(Some),
             Task::AnalyzeAlbum(task) => task.execute(),
         }
-        None
+        Ok(None)
     }
 }
 
@@ -208,18 +257,21 @@ impl TaskQueue {
     ///
     /// The thread pool has as many threads as cores on the system. This method
     /// blocks until processing is done.
-    pub fn process_all_in_thread_pool(self) {
+    pub fn process_all_in_thread_pool(self, db_path: PathBuf) -> error::Result<()> {
         eprintln!("{} tasks in loudness queue", self.tasks.len());
         let task_queue = Arc::new(Mutex::new(self));
 
         // TODO: Share this thread pool with the thumbnail generation pool.
         let n_threads = num_cpus::get();
-        let mut threads = Vec::with_capacity(n_threads);
+        let mut threads: Vec<JoinHandle<error::Result<()>>> = Vec::with_capacity(n_threads);
         for i in 0..n_threads {
+            let db_path_i = db_path.clone();
             let task_queue_i = task_queue.clone();
             let name = format!("Loudness analysis thread {}", i);
             let builder = thread::Builder::new().name(name);
             let join_handle = builder.spawn(move || {
+                let connection = sqlite::open(db_path_i)?;
+                let mut db = Database::new(&connection)?;
                 let mut prev_result = None;
                 // Run the thread until there is no more task to execute. If
                 // there is currently no task, it doesn't mean there will be no
@@ -231,16 +283,23 @@ impl TaskQueue {
                     .unwrap()
                     .get_next_task(prev_result)
                 {
-                    prev_result = task.execute();
+                    prev_result = task.execute(&mut db)?;
                 }
+
+                Ok(())
             }).unwrap();
             threads.push(join_handle);
         }
         for join_handle in threads.drain(..) {
-            join_handle.join().unwrap();
+            // The first unwrap is on joining, that should not fail because we
+            // set panic=abort. The ? then propagates any errors that might have
+            // happened in the thread.
+            join_handle.join().unwrap()?;
         }
 
         // We shouldn't have exited all threads before the work was done.
         assert!(task_queue.lock().unwrap().is_done());
+
+        Ok(())
     }
 }

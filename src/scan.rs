@@ -628,7 +628,7 @@ pub fn run_scan_in_thread(
                         loudness_tasks.push_tasks_missing(&mut db)?;
                     }
                 }
-                loudness_tasks.process_all_in_thread_pool();
+                loudness_tasks.process_all_in_thread_pool(db_path)?;
             }
 
             // If there are any new or updated albums, regenerate thumbnails for
