@@ -223,6 +223,9 @@ pub struct Database<'conn> {
     delete_file_metadata: Statement<'conn>,
 
     // Loudness queries.
+    insert_album_loudness: Statement<'conn>,
+    insert_track_loudness: Statement<'conn>,
+    insert_track_waveform: Statement<'conn>,
     select_album_loudness: Statement<'conn>,
     select_track_loudness: Statement<'conn>,
     select_track_waveform: Statement<'conn>,
@@ -462,6 +465,9 @@ sql_iter!(FileMetadata => FileMetadataIter);
 impl<'conn> Database<'conn> {
     /// Ensure that the schema exists, then prepare statements.
     pub fn new(connection: &sqlite::Connection) -> Result<Database> {
+        // Use the faster WAL mode, see https://www.sqlite.org/wal.html.
+        connection.execute("PRAGMA journal_mode = WAL;")?;
+
         ensure_schema_exists(connection)?;
         let insert_started = Listen::prepare_query(connection)?;
         let insert_file_metadata = FileMetadataInsert::prepare_query(connection)?;
@@ -483,6 +489,27 @@ impl<'conn> Database<'conn> {
             "
         )?;
 
+        let insert_album_loudness = connection.prepare(
+            "
+            INSERT INTO album_loudness (album_id, bs17704_loudness_lufs)
+            VALUES (:album_id, :loudness)
+            ON CONFLICT (album_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
+            "
+        )?;
+        let insert_track_loudness = connection.prepare(
+            "
+            INSERT INTO track_loudness (track_id, bs17704_loudness_lufs)
+            VALUES (:track_id, :loudness)
+            ON CONFLICT (track_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
+            "
+        )?;
+        let insert_track_waveform = connection.prepare(
+            "
+            INSERT INTO waveforms (track_id, data)
+            VALUES (:track_id, :data)
+            ON CONFLICT (track_id) DO UPDATE SET data = :data;
+            "
+        )?;
         let select_album_loudness = connection.prepare(
             "SELECT bs17704_loudness_lufs FROM album_loudness WHERE album_id = ?;"
         )?;
@@ -494,14 +521,20 @@ impl<'conn> Database<'conn> {
         )?;
 
         let result = Database {
-            connection: connection,
-            insert_started: insert_started,
-            update_completed: update_completed,
-            insert_file_metadata: insert_file_metadata,
-            delete_file_metadata: delete_file_metadata,
-            select_album_loudness: select_album_loudness,
-            select_track_loudness: select_track_loudness,
-            select_track_waveform: select_track_waveform,
+            connection,
+
+            insert_started,
+            update_completed,
+
+            insert_file_metadata,
+            delete_file_metadata,
+
+            insert_album_loudness,
+            insert_track_loudness,
+            insert_track_waveform,
+            select_album_loudness,
+            select_track_loudness,
+            select_track_waveform,
         };
 
         Ok(result)
@@ -586,6 +619,45 @@ impl<'conn> Database<'conn> {
     /// Returns the columns needed to build the `MetaIndex`.
     pub fn iter_file_metadata(&mut self) -> Result<FileMetadataIter> {
         FileMetadataIter::new(&self.connection)
+    }
+
+    /// Insert or update a row in the `album_loudness` table.
+    pub fn insert_album_loudness(&mut self, album_id: AlbumId, loudness_lufs: f64) -> Result<()> {
+        self.insert_album_loudness.reset()?;
+        self.insert_album_loudness.bind(1, album_id.0 as i64)?;
+        self.insert_album_loudness.bind(2, loudness_lufs)?;
+
+        let result = self.insert_album_loudness.next()?;
+        // This query returns no rows, it should be done immediately.
+        assert_eq!(result, sqlite::State::Done);
+
+        Ok(())
+    }
+
+    /// Insert or update a row in the `track_loudness` table.
+    pub fn insert_track_loudness(&mut self, track_id: TrackId, loudness_lufs: f64) -> Result<()> {
+        self.insert_track_loudness.reset()?;
+        self.insert_track_loudness.bind(1, track_id.0 as i64)?;
+        self.insert_track_loudness.bind(2, loudness_lufs)?;
+
+        let result = self.insert_track_loudness.next()?;
+        // This query returns no rows, it should be done immediately.
+        assert_eq!(result, sqlite::State::Done);
+
+        Ok(())
+    }
+
+    /// Insert or update a row in the `waveforms` table.
+    pub fn insert_track_waveform(&mut self, track_id: TrackId, data: &[u8]) -> Result<()> {
+        self.insert_track_waveform.reset()?;
+        self.insert_track_waveform.bind(1, track_id.0 as i64)?;
+        self.insert_track_waveform.bind(2, data)?;
+
+        let result = self.insert_track_waveform.next()?;
+        // This query returns no rows, it should be done immediately.
+        assert_eq!(result, sqlite::State::Done);
+
+        Ok(())
     }
 
     /// Select `bs17704_loudness` from the `album_loudness` table.

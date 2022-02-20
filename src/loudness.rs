@@ -45,7 +45,7 @@ impl AlbumTask {
         assert!(self.tracks_pending.is_empty());
         assert_eq!(self.tracks_done.len(), self.num_tracks);
 
-        println!("TODO");
+        eprintln!("TODO: Finish album {}", self.album_id);
     }
 }
 
@@ -100,8 +100,9 @@ impl TrackTask {
         );
         let mean_power = bs1770::gated_mean(zipped.as_ref());
 
-        // TODO: Insert into database.
-        eprintln!("{:.1} LUFS <- {:?}", mean_power.loudness_lkfs(), path);
+        db.insert_track_loudness(self.track_id, mean_power.loudness_lkfs() as f64)?;
+
+        // TODO: Compute waveform and insert it.
 
         let result = TrackResult {
             album_id: self.album_id,
@@ -219,9 +220,11 @@ impl TaskQueue {
         // pop at the end, so removal is efficient.
         for i in (0..self.tasks.len()).rev() {
             if self.tasks[i].num_tracks == self.tasks[i].tracks_done.len() {
+                eprintln!("[TASK] Finish album {}", self.tasks[i].album_id);
                 return Some(Task::AnalyzeAlbum(self.tasks.swap_remove(i)));
             }
         }
+        eprintln!("[TASK] No albums to finish");
 
         // Apparently we have no album that is done; find the next track that we
         // can analyze. Also start from the end, because then we can pop albums
@@ -242,6 +245,7 @@ impl TaskQueue {
                 track_id: track_id,
                 path: PathBuf::from(fname),
             };
+            eprintln!("[TASK] Analyze track {}", track_id);
             return Some(Task::AnalyzeTrack(task));
         }
 
@@ -255,14 +259,19 @@ impl TaskQueue {
 
     /// Process all loudness analysis on a threadpool.
     ///
-    /// The thread pool has as many threads as cores on the system. This method
+    /// The thread pool more threads than cores on the system, to to ensure that
+    /// we can saturate all cores if IO to read the tracks is slow. This method
     /// blocks until processing is done.
     pub fn process_all_in_thread_pool(self, db_path: PathBuf) -> error::Result<()> {
         eprintln!("{} tasks in loudness queue", self.tasks.len());
         let task_queue = Arc::new(Mutex::new(self));
 
         // TODO: Share this thread pool with the thumbnail generation pool.
-        let n_threads = num_cpus::get();
+
+        // Some experimentation on my system showed that 4 times the number of
+        // CPU threads could keep my 16-thread CPU busy, sometimes at 100%, but
+        // most of the time it was bottlenecked on IO from a spinning disk.
+        let n_threads = 4 * num_cpus::get();
         let mut threads: Vec<JoinHandle<error::Result<()>>> = Vec::with_capacity(n_threads);
         for i in 0..n_threads {
             let db_path_i = db_path.clone();
@@ -270,7 +279,17 @@ impl TaskQueue {
             let name = format!("Loudness analysis thread {}", i);
             let builder = thread::Builder::new().name(name);
             let join_handle = builder.spawn(move || {
-                let connection = sqlite::open(db_path_i)?;
+                // We are going to be writing to the database from a few
+                // threads, so choose the non-serialized mode (we do not share
+                // the connection across threads, so no_mutex is safe). Also set
+                // a retry on busy.
+                let flags = sqlite::OpenFlags::new()
+                    .set_no_mutex()
+                    .set_read_write();
+                let mut connection = sqlite::Connection::open_with_flags(db_path_i, flags)?;
+                let timeout_ms = 2_000;
+                connection.set_busy_timeout(timeout_ms)?;
+
                 let mut db = Database::new(&connection)?;
 
                 // Run the thread until there is no more task to execute. If
