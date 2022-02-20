@@ -272,17 +272,21 @@ impl TaskQueue {
             let join_handle = builder.spawn(move || {
                 let connection = sqlite::open(db_path_i)?;
                 let mut db = Database::new(&connection)?;
-                let mut prev_result = None;
+
                 // Run the thread until there is no more task to execute. If
                 // there is currently no task, it doesn't mean there will be no
                 // tasks in the future, but those future tasks can only appear
                 // after finishing an existing one, so this thread is no longer
                 // useful.
-                while let Some(task) = task_queue_i
-                    .lock()
-                    .unwrap()
-                    .get_next_task(prev_result)
-                {
+                let mut prev_result = None;
+                loop {
+                    let task = {
+                        let mut queue = task_queue_i.lock().unwrap();
+                        match queue.get_next_task(prev_result) {
+                            Some(task) => task,
+                            None => break,
+                        }
+                    };
                     prev_result = task.execute(&mut db)?;
                 }
 
