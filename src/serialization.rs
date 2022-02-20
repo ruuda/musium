@@ -243,6 +243,8 @@ pub fn write_scan_status_json<W: Write>(
         ScanStage::PreProcessingMetadata => "preprocessing_metadata",
         ScanStage::ExtractingMetadata => "extracting_metadata",
         ScanStage::IndexingMetadata => "indexing_metadata",
+        ScanStage::PreProcessingLoudness => "preprocessing_loudness",
+        ScanStage::AnalyzingLoudness => "analyzing_loudness",
         ScanStage::PreProcessingThumbnails => "preprocessing_thumbnails",
         ScanStage::GeneratingThumbnails => "generating_thumbnails",
         ScanStage::LoadingThumbnails => "loading_thumbnails",

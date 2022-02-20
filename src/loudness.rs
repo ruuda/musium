@@ -278,6 +278,17 @@ impl TaskQueue {
         self.tasks.is_empty()
     }
 
+    pub fn num_pending_albums(&self) -> usize {
+        self.tasks.len()
+    }
+
+    pub fn num_pending_tracks(&self) -> usize {
+        self.tasks
+            .iter()
+            .map(|t| t.tracks_pending.len())
+            .sum()
+    }
+
     /// Process all loudness analysis on a threadpool.
     ///
     /// The thread pool more threads than cores on the system, to to ensure that

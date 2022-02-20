@@ -244,6 +244,7 @@ instance decodeJsonScanStage :: DecodeJson ScanStage where
       "preprocessing_thumbnails" -> pure ScanPreProcessingThumbnails
       "generating_thumbnails"    -> pure ScanGeneratingThumbnails
       "loading_thumbnails"       -> pure ScanLoadingThumbnails
+      -- TODO: Handle "preprocessing_loudness" and "analyzing_loudness".
       "done"                     -> pure ScanDone
       _ -> Left $ UnexpectedValue json
 

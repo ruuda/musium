@@ -219,7 +219,7 @@ fn run_scan(config: &Config) -> Result<()> {
             // its stderr, but this allows the warning to at least be visible
             // very briefly.
             let up_clear = "\x1b[F\x1b[K";
-            write!(lock, "{0}{0}{0}{0}{0}{1}", up_clear, status).unwrap();
+            write!(lock, "{0}{0}{0}{0}{0}{0}{1}", up_clear, status).unwrap();
             lock.flush().unwrap();
         }
     }

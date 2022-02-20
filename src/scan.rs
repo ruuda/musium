@@ -52,21 +52,50 @@ type FlacReader = claxon::FlacReader<fs::File>;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum ScanStage {
     /// Discovering flac files in the library path.
-    Discovering = 0,
-    /// Determining which files to process. `status.files_discovered` is now final.
+    Discovering= 0,
+
+    /// Determining which files to process.
+    ///
+    /// `status.files_discovered` is now final.
     PreProcessingMetadata = 1,
-    /// Reading metadata from files. `status.files_to_process_metadata` is now final.
+
+    /// Reading metadata from files.
+    ///
+    /// `status.files_to_process_metadata` is now final.
     ExtractingMetadata = 2,
-    /// Joining all metadata into an in-memory index. `status.files_processed_metadata` is now final.
+
+    /// Joining all metadata into an in-memory index.
+    ///
+    /// `status.files_processed_metadata` is now final.
     IndexingMetadata = 3,
+
+    /// Determining which files to analyze loudness for.
+    PreProcessingLoudness = 4,
+
+    /// Analyzing loudness and track waveforms.
+    ///
+    /// `status.tracks_to_process_loudness` and
+    /// `status.albums_to_process_loudness` are now final.
+    AnalyzingLoudness = 5,
+
     /// Determining which thumbnails to generate.
-    PreProcessingThumbnails = 4,
-    /// Generating thumbnails. `status.files_to_process_thumbnails` is now final.
-    GeneratingThumbnails = 5,
-    /// Loading thumbnails. `status.files_to_process_thumbnails` is now final.
-    LoadingThumbnails = 6,
+    ///
+    /// `status.tracks_processed_loudness` and
+    /// `status.albums_processed_loudness` are now final.
+    PreProcessingThumbnails = 6,
+
+    /// Generating thumbnails.
+    ///
+    /// `status.files_to_process_thumbnails` is now final.
+    GeneratingThumbnails = 7,
+
+    /// Loading thumbnails.
+    ///
+    /// `status.files_to_process_thumbnails` is now final.
+    LoadingThumbnails = 8,
+
     /// Done.
-    Done = 7,
+    Done = 9,
 }
 
 /// Counters to report progress during scanning.
@@ -87,6 +116,18 @@ pub struct Status {
     /// Of the `files_to_process_metadata`, the number processed so far.
     pub files_processed_metadata: u64,
 
+    /// The number of tracks that need their loudness analyzed.
+    pub tracks_to_process_loudness: u64,
+
+    /// The number of tracks for which loudness has been analyzed.
+    pub tracks_processed_loudness: u64,
+
+    /// The number of albums that need their loudness analyzed.
+    pub albums_to_process_loudness: u64,
+
+    /// The number of albums for which their loudness has been analyzed.
+    pub albums_processed_loudness: u64,
+
     /// The number of files for which we need to generate a thumbnail.
     pub files_to_process_thumbnails: u64,
 
@@ -101,6 +142,10 @@ impl Status {
             files_discovered: 0,
             files_to_process_metadata: 0,
             files_processed_metadata: 0,
+            tracks_to_process_loudness: 0,
+            tracks_processed_loudness: 0,
+            albums_to_process_loudness: 0,
+            albums_processed_loudness: 0,
             files_to_process_thumbnails: 0,
             files_processed_thumbnails: 0,
         }
@@ -123,7 +168,7 @@ impl fmt::Display for Status {
         )?;
         writeln!(
             f,
-            "{} Extracting metadata:   {} of {}",
+            "{} Extracting metadata:   {} of {} files",
             indicator(ScanStage::ExtractingMetadata),
             self.files_processed_metadata,
             self.files_to_process_metadata,
@@ -135,7 +180,16 @@ impl fmt::Display for Status {
         )?;
         writeln!(
             f,
-            "{} Generating thumbnails: {} of {}",
+            "{} Analyzing loudness:    {} of {} tracks, {} of {} albums",
+            indicator(ScanStage::AnalyzingLoudness),
+            self.tracks_processed_loudness,
+            self.tracks_to_process_loudness,
+            self.albums_processed_loudness,
+            self.albums_to_process_loudness,
+        )?;
+        writeln!(
+            f,
+            "{} Generating thumbnails: {} of {} albums",
             indicator(ScanStage::GeneratingThumbnails),
             self.files_processed_thumbnails,
             self.files_to_process_thumbnails,
@@ -618,6 +672,9 @@ pub fn run_scan_in_thread(
             eprintln!("\n\n\n");
 
             {
+                status.stage = ScanStage::PreProcessingLoudness;
+                tx.send(status).unwrap();
+
                 let mut loudness_tasks = loudness::TaskQueue::new(index_arc.clone());
                 let mut db = Database::new(&connection)?;
                 match mode {
@@ -628,6 +685,12 @@ pub fn run_scan_in_thread(
                         loudness_tasks.push_tasks_missing(&mut db)?;
                     }
                 }
+                status.albums_to_process_loudness = loudness_tasks.num_pending_albums() as u64;
+                status.tracks_to_process_loudness = loudness_tasks.num_pending_tracks() as u64;
+
+                status.stage = ScanStage::AnalyzingLoudness;
+                tx.send(status).unwrap();
+
                 loudness_tasks.process_all_in_thread_pool(db_path)?;
             }
 
