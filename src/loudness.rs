@@ -7,7 +7,7 @@
 
 //! Computation of track and album loudness, and track waveforms.
 
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
@@ -17,11 +17,11 @@ use claxon::FlacReader;
 use claxon;
 use sqlite;
 
-use crate::error;
 use crate::database::Database;
 use crate::database;
+use crate::error;
 use crate::prim::{AlbumId, TrackId};
-use crate::waveform;
+use crate::waveform::Waveform;
 use crate::{MetaIndex, MemoryMetaIndex};
 
 /// Tracks the state of loudness analysis for one album.
@@ -39,13 +39,38 @@ struct AlbumTask {
 }
 
 impl AlbumTask {
-    fn execute(self) {
+    fn execute(self, db: &mut Database) -> error::Result<()> {
         // We should only execute the album task once all track tasks for the
         // album are done.
         assert!(self.tracks_pending.is_empty());
         assert_eq!(self.tracks_done.len(), self.num_tracks);
 
-        eprintln!("TODO: Finish album {}", self.album_id);
+        let num_windows = self
+            .tracks_done
+            .iter()
+            .map(|windows| windows[0].as_100ms_windows().len())
+            .sum();
+
+        // Concatenate the loudness meters of all tracks on the album.
+        let mut windows = [
+            bs1770::Windows100ms { inner: Vec::with_capacity(num_windows) },
+            bs1770::Windows100ms { inner: Vec::with_capacity(num_windows) },
+        ];
+        for track_meters in self.tracks_done {
+            windows[0].inner.extend_from_slice(track_meters[0].as_100ms_windows().inner);
+            windows[1].inner.extend_from_slice(track_meters[1].as_100ms_windows().inner);
+        }
+
+        // Now the process is the same as for individual tracks. We can reduce
+        // the channels in-place this time, because we are not going to use the
+        // power values for anything else any more.
+        let [mut channel0, channel1] = windows;
+        bs1770::reduce_stereo_in_place(channel0.as_mut(), channel1.as_ref());
+        let mean_power = bs1770::gated_mean(channel0.as_ref());
+
+        db.insert_album_loudness(self.album_id, mean_power.loudness_lkfs() as f64)?;
+
+        Ok(())
     }
 }
 
@@ -99,10 +124,10 @@ impl TrackTask {
             meters[1].as_100ms_windows(),
         );
         let mean_power = bs1770::gated_mean(zipped.as_ref());
+        let waveform = Waveform::from_meters(&meters);
 
         db.insert_track_loudness(self.track_id, mean_power.loudness_lkfs() as f64)?;
-
-        // TODO: Compute waveform and insert it.
+        db.insert_track_waveform(self.track_id, waveform.as_bytes())?;
 
         let result = TrackResult {
             album_id: self.album_id,
@@ -124,9 +149,8 @@ impl Task {
     pub fn execute(self, db: &mut Database) -> error::Result<Option<TrackResult>> {
         match self {
             Task::AnalyzeTrack(task) => return task.execute(db).map(Some),
-            Task::AnalyzeAlbum(task) => task.execute(),
+            Task::AnalyzeAlbum(task) => task.execute(db).map(|()| None),
         }
-        Ok(None)
     }
 }
 
@@ -220,11 +244,9 @@ impl TaskQueue {
         // pop at the end, so removal is efficient.
         for i in (0..self.tasks.len()).rev() {
             if self.tasks[i].num_tracks == self.tasks[i].tracks_done.len() {
-                eprintln!("[TASK] Finish album {}", self.tasks[i].album_id);
                 return Some(Task::AnalyzeAlbum(self.tasks.swap_remove(i)));
             }
         }
-        eprintln!("[TASK] No albums to finish");
 
         // Apparently we have no album that is done; find the next track that we
         // can analyze. Also start from the end, because then we can pop albums
@@ -245,7 +267,6 @@ impl TaskQueue {
                 track_id: track_id,
                 path: PathBuf::from(fname),
             };
-            eprintln!("[TASK] Analyze track {}", track_id);
             return Some(Task::AnalyzeTrack(task));
         }
 
@@ -263,7 +284,6 @@ impl TaskQueue {
     /// we can saturate all cores if IO to read the tracks is slow. This method
     /// blocks until processing is done.
     pub fn process_all_in_thread_pool(self, db_path: PathBuf) -> error::Result<()> {
-        eprintln!("{} tasks in loudness queue", self.tasks.len());
         let task_queue = Arc::new(Mutex::new(self));
 
         // TODO: Share this thread pool with the thumbnail generation pool.
