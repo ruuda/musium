@@ -402,6 +402,13 @@ impl<'a> TaskQueue<'a> {
         self,
         db_path: &Path,
     ) -> error::Result<()> {
+        // Even if we have nothing to do, we will vacuum the database, which can
+        // take a few hundred milliseconds, and we'd rather not do that if it is
+        // not necessary, so exit early if we can.
+        if self.is_done() {
+            return Ok(())
+        }
+
         let task_queue = Arc::new(Mutex::new(self));
 
         // TODO: Share this thread pool with the thumbnail generation pool.
