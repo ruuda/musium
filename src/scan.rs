@@ -203,22 +203,6 @@ impl fmt::Display for Status {
     }
 }
 
-pub enum ScanMode {
-    /// Analyze loudness for all tracks and albums missing loudness.
-    ///
-    /// For a database that is up to date, where we are incrementally adding
-    /// or updating files, this should never be needed, `LoudnessOnlyForNew`
-    /// should pick up the changes there. But this mode is useful to backfill
-    /// an existing database.
-    LoudnessAll,
-
-    /// Only analyze loudness of new and changed files.
-    ///
-    /// If any existing tracks don't have loudness information, it will not be
-    /// backfilled.
-    LoudnessOnlyForNew,
-}
-
 pub fn scan(
     connection: &sqlite::Connection,
     library_path: &Path,
@@ -270,7 +254,10 @@ pub fn scan(
 
     // If we deleted anything vacuum the database to ensure it's packed tightly
     // again. Deletes are expected to be infrequent and the database is expected
-    // to be small (a few megabytes), so the additional IO is not an issue.
+    // to be small (a few megabytes*), so the additional IO is not an issue.
+    // *Now that we also store loudness info and waveform data, it has grown to
+    // a few dozen megabytes. But still, it should be fine to vacuum after a
+    // scan.
     if rows_to_delete.len() > 0 {
         db.connection.execute("VACUUM")?;
     }
@@ -621,7 +608,6 @@ fn insert_file_metadata(
 }
 
 pub fn run_scan_in_thread(
-    mode: ScanMode,
     config: &Config,
     index_var: Var<MemoryMetaIndex>,
     thumb_cache_var: Var<ThumbCache>,
@@ -681,14 +667,7 @@ pub fn run_scan_in_thread(
                     &mut tx,
                 );
                 let mut db = Database::new(&connection)?;
-                match mode {
-                    ScanMode::LoudnessOnlyForNew => {
-                        // TODO
-                    }
-                    ScanMode::LoudnessAll => {
-                        loudness_tasks.push_tasks_missing(&mut db)?;
-                    }
-                }
+                loudness_tasks.push_tasks_missing(&mut db)?;
                 loudness_tasks.status.stage = ScanStage::AnalyzingLoudness;
                 loudness_tasks.status_sender.send(*loudness_tasks.status).unwrap();
 
@@ -754,7 +733,6 @@ impl BackgroundScan {
             .spawn(move || {
                 let status = status_for_supervisor;
                 let (scan_thread, rx) = run_scan_in_thread(
-                    ScanMode::LoudnessOnlyForNew,
                     &config,
                     index_var,
                     thumb_cache_var,

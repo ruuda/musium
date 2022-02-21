@@ -299,6 +299,11 @@ impl<'a> TaskQueue<'a> {
         // tracks instead, but it complicates this code, and we are issueing a
         // SELECT against the database for every track anyway, so the difference
         // should be dwarfed by the SQLite call anyway.
+        // TODO: Instead, enumerate both the index and the database in
+        // parallel, and do a merge-diff.
+        // TODO: This will not invalidate loudness after replacing the
+        // tracks. We would need to store an mtime, or the id of the file
+        // row in the database for that.
         'albums: for (album_id, _album) in index.get_albums() {
             // If the album is not there, we need to add it.
             if db.select_album_loudness(*album_id)?.is_none() {
@@ -313,7 +318,10 @@ impl<'a> TaskQueue<'a> {
                     continue 'albums
                 }
 
-                // TODO: Check the waveforms as well.
+                if db.select_track_waveform(*track_id)?.is_none() {
+                    self.push_task_album(*album_id);
+                    continue 'albums
+                }
             }
         }
 

@@ -685,4 +685,17 @@ impl<'conn> Database<'conn> {
             }
         }
     }
+
+    /// Select `data` from the `waveforms` table.
+    pub fn select_track_waveform(&mut self, track_id: TrackId) -> Result<Option<Vec<u8>>> {
+        self.select_track_waveform.reset()?;
+        self.select_track_waveform.bind(1, track_id.0 as i64)?;
+        match self.select_track_waveform.next()? {
+            sqlite::State::Done => Ok(None),
+            sqlite::State::Row => {
+                let data: Vec<u8> = self.select_track_waveform.read(0)?;
+                Ok(Some(data))
+            }
+        }
+    }
 }

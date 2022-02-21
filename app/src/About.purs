@@ -107,10 +107,10 @@ updateScanStatus elems (ScanStatus status) =
       "new files processed"
     valuePair
       ((show status.tracksProcessedLoudness) <> " of " <> (show status.tracksToProcessLoudness))
-      "tracks analyzed for loudness"
+      "new tracks analyzed for loudness"
     valuePair
       ((show status.albumsProcessedLoudness) <> " of " <> (show status.albumsToProcessLoudness))
-      "albums analyzed for loudness"
+      "new albums analyzed for loudness"
     valuePair
       ((show status.filesProcessedThumbnails) <> " of " <> (show status.filesToProcessThumbnails))
       "new thumbnails extracted"

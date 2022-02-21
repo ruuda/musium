@@ -201,7 +201,6 @@ fn run_scan(config: &Config) -> Result<()> {
     let thumb_cache_var = Arc::new(MVar::new(Arc::new(dummy_thumb_cache)));
 
     let (scan_thread, rx) = musium::scan::run_scan_in_thread(
-        musium::scan::ScanMode::LoudnessAll,
         config,
         index_var.clone(),
         thumb_cache_var,
