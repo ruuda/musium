@@ -186,6 +186,12 @@ fn process_inserts(
     let connection = sqlite::open(db_path)?;
     let mut db = Database::new(&connection)?;
 
+    // We commit after every album, instead of at every single write, to reduce
+    // the number of syncs. This makes a big difference for disk utilisation
+    // when the disk to read from and the disk that contain the database are the
+    // same disk.
+    db.connection.execute("BEGIN")?;
+
     for insert in inserts {
         match insert {
             Insert::Track { track_id, loudness, waveform } => {
@@ -194,9 +200,19 @@ fn process_inserts(
             }
             Insert::Album { album_id, loudness } => {
                 db.insert_album_loudness(album_id, loudness.loudness_lkfs() as f64)?;
+                db.connection.execute("COMMIT")?;
+                db.connection.execute("BEGIN")?;
             }
         }
     }
+
+    db.connection.execute("COMMIT")?;
+
+    // Integrate the WAL into the rest of the database, now that we are done
+    // writing. Also vacuum the database to clean up any index pages that may
+    // have become redundant.
+    db.connection.execute("PRAGMA wal_checkpoint(TRUNCATE);")?;
+    db.connection.execute("VACUUM;")?;
 
     Ok(())
 }
