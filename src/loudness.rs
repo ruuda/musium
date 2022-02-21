@@ -186,6 +186,13 @@ fn process_inserts(
     let connection = sqlite::open(db_path)?;
     let mut db = Database::new(&connection)?;
 
+    // Reduce the number of fsyncs (and thereby improve performance), at the
+    // cost of losing durability (but not consistency). This is fine, if we lose
+    // power and some work is lost, we can re-do it. But more likely we kill the
+    // process because it takes a long time or because it crashed, and then we
+    // still have the progress.
+    db.connection.execute("PRAGMA synchronous = NORMAL;")?;
+
     // We commit after every album, instead of at every single write, to reduce
     // the number of syncs. This makes a big difference for disk utilisation
     // when the disk to read from and the disk that contain the database are the
