@@ -91,7 +91,20 @@ impl TrackTask {
         use error::Error;
         let path = self.path;
 
-        let mut reader = FlacReader::open(&path)
+        let f = std::fs::File::open(&path)?;
+
+        // Hint to the OS that we are going to read the entire file, and we are
+        // going to do it sequentially, so it can read the entire file at once
+        // and hopefully avoid a few seeks.
+        let offset = 0;
+        let len = f.metadata()?.len();
+        let advice = libc::POSIX_FADV_SEQUENTIAL | libc::POSIX_FADV_WILLNEED;
+        unsafe {
+            use std::os::unix::io::AsRawFd;
+            libc::posix_fadvise64(f.as_raw_fd(), offset, len as i64, advice);
+        }
+
+        let mut reader = FlacReader::new(f)
             .map_err(|err| Error::FormatError(path.clone(), err))?;
 
         let streaminfo = reader.streaminfo();
@@ -363,10 +376,10 @@ impl<'a> TaskQueue<'a> {
         // TODO: Share this thread pool with the thumbnail generation pool.
 
         crossbeam::scope::<_, error::Result<()>>(|scope| {
-            // Some experimentation on my system showed that 4 times the number of
-            // CPU threads could keep my 16-thread CPU busy, sometimes at 100%, but
-            // most of the time it was bottlenecked on IO from a spinning disk.
-            let n_threads = 4 * num_cpus::get();
+            // Use as many threads as the CPU has threads, so that in theory we
+            // can keep it busy. But in practice, all of this is going to be
+            // severely IO-bound with a fast CPU and a spinning disk.
+            let n_threads = num_cpus::get();
             let mut threads:
                 Vec<crossbeam::ScopedJoinHandle<error::Result<()>>> =
                 Vec::with_capacity(n_threads);
