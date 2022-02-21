@@ -344,6 +344,11 @@ impl MetaServer {
     }
 
     fn handle_get_scan_status(&self) -> ResponseBox {
+        // TODO: We could add a long polling query parameter here, and version
+        // the status. Then in the request, include the previous version. If the
+        // current version is newer, respond immediately. If not, block for some
+        // time to wait for a new status, then return the current status. That
+        // way, we could make extremely responsive status updates.
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
         let status = self.scanner.get_status();
