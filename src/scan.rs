@@ -675,7 +675,11 @@ pub fn run_scan_in_thread(
                 status.stage = ScanStage::PreProcessingLoudness;
                 tx.send(status).unwrap();
 
-                let mut loudness_tasks = loudness::TaskQueue::new(index_arc.clone());
+                let mut loudness_tasks = loudness::TaskQueue::new(
+                    &*index_arc,
+                    &mut status,
+                    &mut tx,
+                );
                 let mut db = Database::new(&connection)?;
                 match mode {
                     ScanMode::LoudnessOnlyForNew => {
@@ -685,11 +689,8 @@ pub fn run_scan_in_thread(
                         loudness_tasks.push_tasks_missing(&mut db)?;
                     }
                 }
-                status.albums_to_process_loudness = loudness_tasks.num_pending_albums() as u64;
-                status.tracks_to_process_loudness = loudness_tasks.num_pending_tracks() as u64;
-
-                status.stage = ScanStage::AnalyzingLoudness;
-                tx.send(status).unwrap();
+                loudness_tasks.status.stage = ScanStage::AnalyzingLoudness;
+                loudness_tasks.status_sender.send(*loudness_tasks.status).unwrap();
 
                 loudness_tasks.process_all_in_thread_pool(db_path)?;
             }

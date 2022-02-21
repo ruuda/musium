@@ -8,9 +8,8 @@
 //! Computation of track and album loudness, and track waveforms.
 
 use std::path::{PathBuf};
+use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Mutex};
-use std::thread;
-use std::thread::JoinHandle;
 
 use bs1770::{ChannelLoudnessMeter};
 use claxon::FlacReader;
@@ -21,6 +20,7 @@ use crate::database::Database;
 use crate::database;
 use crate::error;
 use crate::prim::{AlbumId, TrackId};
+use crate::scan::Status;
 use crate::waveform::Waveform;
 use crate::{MetaIndex, MemoryMetaIndex};
 
@@ -68,7 +68,9 @@ impl AlbumTask {
         bs1770::reduce_stereo_in_place(channel0.as_mut(), channel1.as_ref());
         let mean_power = bs1770::gated_mean(channel0.as_ref());
 
-        db.insert_album_loudness(self.album_id, mean_power.loudness_lkfs() as f64)?;
+        db
+            .insert_album_loudness(self.album_id, mean_power.loudness_lkfs() as f64)
+            .expect("Failed to insert album loudness.");
 
         Ok(())
     }
@@ -126,8 +128,8 @@ impl TrackTask {
         let mean_power = bs1770::gated_mean(zipped.as_ref());
         let waveform = Waveform::from_meters(&meters);
 
-        db.insert_track_loudness(self.track_id, mean_power.loudness_lkfs() as f64)?;
-        db.insert_track_waveform(self.track_id, waveform.as_bytes())?;
+        db.insert_track_loudness(self.track_id, mean_power.loudness_lkfs() as f64).expect("Failed to insert track loudness.");
+        db.insert_track_waveform(self.track_id, waveform.as_bytes()).expect("Failed to insert waveform.");
 
         let result = TrackResult {
             album_id: self.album_id,
@@ -142,14 +144,20 @@ enum Task {
     AnalyzeAlbum(AlbumTask),
 }
 
+enum TaskResult {
+    None,
+    Track(TrackResult),
+    Album,
+}
+
 impl Task {
     /// Execute this task.
     ///
     /// Returns the result in case of a `Task::AnalyzeTrack` task.
-    pub fn execute(self, db: &mut Database) -> error::Result<Option<TrackResult>> {
+    pub fn execute(self, db: &mut Database) -> error::Result<TaskResult> {
         match self {
-            Task::AnalyzeTrack(task) => return task.execute(db).map(Some),
-            Task::AnalyzeAlbum(task) => task.execute(db).map(|()| None),
+            Task::AnalyzeTrack(task) => return task.execute(db).map(TaskResult::Track),
+            Task::AnalyzeAlbum(task) => task.execute(db).map(|()| TaskResult::Album),
         }
     }
 }
@@ -162,20 +170,31 @@ impl Task {
 /// 1. `Task::AnalyzeAlbum` if there is an album whose tracks are done.
 /// 2. `Task::AnalyzeTrack` if there is a track to analyze.
 /// 3. `None` if we are done for now.
-pub struct TaskQueue {
-    index: Arc<MemoryMetaIndex>,
+pub struct TaskQueue<'a> {
+    index: &'a MemoryMetaIndex,
     tasks: Vec<AlbumTask>,
+    pub status: &'a mut Status,
+    pub status_sender: &'a mut SyncSender<Status>,
 }
 
-impl TaskQueue {
-    pub fn new(index: Arc<MemoryMetaIndex>) -> TaskQueue {
+impl<'a> TaskQueue<'a> {
+    pub fn new(
+        index: &'a MemoryMetaIndex,
+        status: &'a mut Status,
+        status_sender: &'a mut SyncSender<Status>,
+    ) -> TaskQueue<'a> {
         TaskQueue {
-            index: index,
             tasks: Vec::new(),
+            index,
+            status,
+            status_sender,
         }
     }
 
     /// Add a task to analyze the loudness of the given album and its tracks.
+    ///
+    /// Also updates the `*_to_process_loudness` fields in the status, but does
+    /// not publish a status update.
     pub fn push_task_album(&mut self, album_id: AlbumId) {
         let tracks = self.index.get_album_tracks(album_id);
         let task = AlbumTask {
@@ -184,6 +203,8 @@ impl TaskQueue {
             tracks_done: Vec::with_capacity(tracks.len()),
             num_tracks: tracks.len(),
         };
+        self.status.albums_to_process_loudness += 1;
+        self.status.tracks_to_process_loudness += tracks.len() as u64;
         self.tasks.push(task);
     }
 
@@ -234,9 +255,18 @@ impl TaskQueue {
     }
 
     /// Store the result of the previous task, if any, then get the next task.
-    fn get_next_task(&mut self, prev_result: Option<TrackResult>) -> Option<Task> {
-        if let Some(track_result) = prev_result {
-            self.finish_track(track_result.album_id, track_result.meters);
+    fn get_next_task(&mut self, prev_result: TaskResult) -> Option<Task> {
+        match prev_result {
+            TaskResult::Track(track_result) => {
+                self.finish_track(track_result.album_id, track_result.meters);
+                self.status.tracks_processed_loudness += 1;
+                self.status_sender.send(self.status.clone()).unwrap();
+            }
+            TaskResult::Album => {
+                self.status.albums_processed_loudness += 1;
+                self.status_sender.send(self.status.clone()).unwrap();
+            }
+            TaskResult::None => {}
         }
 
         // If we have an album for which all tracks have been analyzed, our next
@@ -278,78 +308,79 @@ impl TaskQueue {
         self.tasks.is_empty()
     }
 
-    pub fn num_pending_albums(&self) -> usize {
-        self.tasks.len()
-    }
-
-    pub fn num_pending_tracks(&self) -> usize {
-        self.tasks
-            .iter()
-            .map(|t| t.tracks_pending.len())
-            .sum()
-    }
-
     /// Process all loudness analysis on a threadpool.
     ///
     /// The thread pool more threads than cores on the system, to to ensure that
     /// we can saturate all cores if IO to read the tracks is slow. This method
     /// blocks until processing is done.
-    pub fn process_all_in_thread_pool(self, db_path: PathBuf) -> error::Result<()> {
+    pub fn process_all_in_thread_pool(
+        self,
+        db_path: PathBuf,
+    ) -> error::Result<()> {
         let task_queue = Arc::new(Mutex::new(self));
 
         // TODO: Share this thread pool with the thumbnail generation pool.
 
-        // Some experimentation on my system showed that 4 times the number of
-        // CPU threads could keep my 16-thread CPU busy, sometimes at 100%, but
-        // most of the time it was bottlenecked on IO from a spinning disk.
-        let n_threads = 4 * num_cpus::get();
-        let mut threads: Vec<JoinHandle<error::Result<()>>> = Vec::with_capacity(n_threads);
-        for i in 0..n_threads {
-            let db_path_i = db_path.clone();
-            let task_queue_i = task_queue.clone();
-            let name = format!("Loudness analysis thread {}", i);
-            let builder = thread::Builder::new().name(name);
-            let join_handle = builder.spawn(move || {
-                // We are going to be writing to the database from a few
-                // threads, so choose the non-serialized mode (we do not share
-                // the connection across threads, so no_mutex is safe). Also set
-                // a retry on busy.
-                let flags = sqlite::OpenFlags::new()
-                    .set_no_mutex()
-                    .set_read_write();
-                let mut connection = sqlite::Connection::open_with_flags(db_path_i, flags)?;
-                let timeout_ms = 2_000;
-                connection.set_busy_timeout(timeout_ms)?;
+        crossbeam::scope::<_, error::Result<()>>(|scope| {
+            // Some experimentation on my system showed that 4 times the number of
+            // CPU threads could keep my 16-thread CPU busy, sometimes at 100%, but
+            // most of the time it was bottlenecked on IO from a spinning disk.
+            let n_threads = 4 * num_cpus::get();
+            let mut threads:
+                Vec<crossbeam::ScopedJoinHandle<error::Result<()>>> =
+                Vec::with_capacity(n_threads);
 
-                let mut db = Database::new(&connection)?;
+            for i in 0..n_threads {
+                let db_path_i = db_path.clone();
+                let task_queue_i = task_queue.clone();
+                let process = move || {
+                    // We are going to be writing to the database from a few
+                    // threads, so choose the non-serialized mode (we do not share
+                    // the connection across threads, so no_mutex is safe). Also set
+                    // a retry on busy.
+                    let flags = sqlite::OpenFlags::new()
+                        .set_no_mutex()
+                        .set_read_write();
+                    let mut connection = sqlite::Connection::open_with_flags(db_path_i, flags)?;
+                    let timeout_ms = 2_000;
+                    connection.set_busy_timeout(timeout_ms)?;
 
-                // Run the thread until there is no more task to execute. If
-                // there is currently no task, it doesn't mean there will be no
-                // tasks in the future, but those future tasks can only appear
-                // after finishing an existing one, so this thread is no longer
-                // useful.
-                let mut prev_result = None;
-                loop {
-                    let task = {
-                        let mut queue = task_queue_i.lock().unwrap();
-                        match queue.get_next_task(prev_result) {
-                            Some(task) => task,
-                            None => break,
-                        }
-                    };
-                    prev_result = task.execute(&mut db)?;
-                }
+                    let mut db = Database::new(&connection)?;
 
-                Ok(())
-            }).unwrap();
-            threads.push(join_handle);
-        }
-        for join_handle in threads.drain(..) {
-            // The first unwrap is on joining, that should not fail because we
-            // set panic=abort. The ? then propagates any errors that might have
-            // happened in the thread.
-            join_handle.join().unwrap()?;
-        }
+                    // Run the thread until there is no more task to execute. If
+                    // there is currently no task, it doesn't mean there will be no
+                    // tasks in the future, but those future tasks can only appear
+                    // after finishing an existing one, so this thread is no longer
+                    // useful.
+                    let mut prev_result = TaskResult::None;
+                    loop {
+                        let task = {
+                            let mut queue = task_queue_i.lock().unwrap();
+                            match queue.get_next_task(prev_result) {
+                                Some(task) => task,
+                                None => break,
+                            }
+                        };
+                        prev_result = task.execute(&mut db)?;
+                    }
+
+                    Ok(())
+                };
+                let join_handle = scope
+                    .builder()
+                    .name(format!("Loudness {}", i))
+                    .spawn(process)
+                    .expect("Failed to spawn OS thread.");
+                threads.push(join_handle);
+            }
+            for join_handle in threads.drain(..) {
+                // The first unwrap is on joining, that should not fail because we
+                // set panic=abort. The ? then propagates any errors that might have
+                // happened in the thread.
+                join_handle.join()?;
+            }
+            Ok(())
+        })?;
 
         // We shouldn't have exited all threads before the work was done.
         assert!(task_queue.lock().unwrap().is_done());
