@@ -238,7 +238,7 @@ updateScanStatus (ScanStatus newStatus) state = do
   -- If the scan is still ongoing, wait a bit and then poll again for the new
   -- status.
   case newStatus.stage of
-    ScanDone -> pure unit
+    ScanDone -> liftEffect $ About.refreshStats state.elements.about
     -- TODO: Store the fiber in the state, so that we can cancel any currently
     -- running ones, to ensure we don't amplify the queries.
     _ -> void $ Aff.forkAff $ do

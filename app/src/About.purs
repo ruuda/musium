@@ -9,6 +9,7 @@ module About
   ( AboutElements (..)
   , new
   , updateScanStatus
+  , refreshStats
   ) where
 
 import Control.Monad.Reader.Class (ask)
@@ -49,14 +50,6 @@ new postEvent = Html.div $ do
     Html.h1 $ Html.text "Library"
     Html.div $ ask
 
-  liftEffect $ launchAff_ $ do
-    stats <- Model.getStats
-    liftEffect $ updateStats
-      -- We provide a dummy value for scanStatus here,
-      -- the function doesn't use it anyway.
-      { stats: statsElem, scanStatus: statsElem }
-      stats
-
   Html.div $ do
     Html.setId "about-scan"
     Html.addClass "about-section"
@@ -71,9 +64,12 @@ new postEvent = Html.div $ do
     Html.div $ do
       Html.setId "scan-status"
       self <- ask
-      pure { scanStatus: self, stats: statsElem }
 
--- TODO: Call this after a scan and refresh the stats.
+      let result = { scanStatus: self, stats: statsElem }
+      liftEffect $ refreshStats result
+      pure result
+
+-- Replace stats on the page with new stats.
 updateStats :: AboutElements -> Stats -> Effect Unit
 updateStats elems (Stats stats) =
   Html.withElement elems.stats $ do
@@ -81,6 +77,12 @@ updateStats elems (Stats stats) =
     valuePair (show stats.tracks)  "tracks"
     valuePair (show stats.albums)  "albums"
     valuePair (show stats.artists) "artists"
+
+-- Fetch the latest stats and update the page with them.
+refreshStats :: AboutElements -> Effect Unit
+refreshStats elems = launchAff_ $ do
+  stats <- Model.getStats
+  liftEffect $ updateStats elems stats
 
 updateScanStatus :: AboutElements -> ScanStatus -> Effect Unit
 updateScanStatus elems (ScanStatus status) =
