@@ -225,6 +225,8 @@ data ScanStage
   | ScanPreProcessingMetadata
   | ScanExtractingMetadata
   | ScanIndexingMetadata
+  | ScanPreProcessingLoudness
+  | ScanAnalyzingLoudness
   | ScanPreProcessingThumbnails
   | ScanGeneratingThumbnails
   | ScanLoadingThumbnails
@@ -241,10 +243,11 @@ instance decodeJsonScanStage :: DecodeJson ScanStage where
       "preprocessing_metadata"   -> pure ScanPreProcessingMetadata
       "extracting_metadata"      -> pure ScanExtractingMetadata
       "indexing_metadata"        -> pure ScanIndexingMetadata
+      "preprocessing_loudness"   -> pure ScanPreProcessingLoudness
+      "analyzing_loudness"       -> pure ScanAnalyzingLoudness
       "preprocessing_thumbnails" -> pure ScanPreProcessingThumbnails
       "generating_thumbnails"    -> pure ScanGeneratingThumbnails
       "loading_thumbnails"       -> pure ScanLoadingThumbnails
-      -- TODO: Handle "preprocessing_loudness" and "analyzing_loudness".
       "done"                     -> pure ScanDone
       _ -> Left $ UnexpectedValue json
 
@@ -253,6 +256,10 @@ newtype ScanStatus = ScanStatus
   , filesDiscovered :: Int
   , filesToProcessMetadata :: Int
   , filesProcessedMetadata :: Int
+  , tracksToProcessLoudness :: Int
+  , tracksProcessedLoudness :: Int
+  , albumsToProcessLoudness :: Int
+  , albumsProcessedLoudness :: Int
   , filesToProcessThumbnails :: Int
   , filesProcessedThumbnails :: Int
   }
@@ -264,6 +271,10 @@ instance decodeJsonScanStatus :: DecodeJson ScanStatus where
     filesDiscovered          <- Json.getField obj "files_discovered"
     filesToProcessMetadata   <- Json.getField obj "files_to_process_metadata"
     filesProcessedMetadata   <- Json.getField obj "files_processed_metadata"
+    tracksToProcessLoudness  <- Json.getField obj "tracks_to_process_loudness"
+    tracksProcessedLoudness  <- Json.getField obj "tracks_processed_loudness"
+    albumsToProcessLoudness  <- Json.getField obj "albums_to_process_loudness"
+    albumsProcessedLoudness  <- Json.getField obj "albums_processed_loudness"
     filesToProcessThumbnails <- Json.getField obj "files_to_process_thumbnails"
     filesProcessedThumbnails <- Json.getField obj "files_processed_thumbnails"
     pure $ ScanStatus
@@ -271,6 +282,10 @@ instance decodeJsonScanStatus :: DecodeJson ScanStatus where
       , filesDiscovered
       , filesToProcessMetadata
       , filesProcessedMetadata
+      , tracksToProcessLoudness
+      , tracksProcessedLoudness
+      , albumsToProcessLoudness
+      , albumsProcessedLoudness
       , filesToProcessThumbnails
       , filesProcessedThumbnails
       }

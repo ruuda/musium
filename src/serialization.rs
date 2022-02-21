@@ -257,6 +257,10 @@ pub fn write_scan_status_json<W: Write>(
         \"files_discovered\":{},\
         \"files_to_process_metadata\":{},\
         \"files_processed_metadata\":{},\
+        \"tracks_to_process_loudness\":{},\
+        \"tracks_processed_loudness\":{},\
+        \"albums_to_process_loudness\":{},\
+        \"albums_processed_loudness\":{},\
         \"files_to_process_thumbnails\":{},\
         \"files_processed_thumbnails\":{}\
         }}",
@@ -264,6 +268,10 @@ pub fn write_scan_status_json<W: Write>(
         status.files_discovered,
         status.files_to_process_metadata,
         status.files_processed_metadata,
+        status.tracks_to_process_loudness,
+        status.tracks_processed_loudness,
+        status.albums_to_process_loudness,
+        status.albums_processed_loudness,
         status.files_to_process_thumbnails,
         status.files_processed_thumbnails,
     )

@@ -50,11 +50,12 @@ new postEvent = Html.div $ do
     Html.div $ ask
 
   liftEffect $ launchAff_ $ do
-    Stats stats <- Model.getStats
-    liftEffect $ Html.withElement statsElem $ do
-      valuePair (show stats.tracks)  "tracks"
-      valuePair (show stats.albums)  "albums"
-      valuePair (show stats.artists) "artists"
+    stats <- Model.getStats
+    liftEffect $ updateStats
+      -- We provide a dummy value for scanStatus here,
+      -- the function doesn't use it anyway.
+      { stats: statsElem, scanStatus: statsElem }
+      stats
 
   Html.div $ do
     Html.setId "about-scan"
@@ -73,8 +74,8 @@ new postEvent = Html.div $ do
       pure { scanStatus: self, stats: statsElem }
 
 -- TODO: Call this after a scan and refresh the stats.
-_updateStats :: AboutElements -> Stats -> Effect Unit
-_updateStats elems (Stats stats) =
+updateStats :: AboutElements -> Stats -> Effect Unit
+updateStats elems (Stats stats) =
   Html.withElement elems.stats $ do
     Html.clear
     valuePair (show stats.tracks)  "tracks"
@@ -93,6 +94,8 @@ updateScanStatus elems (ScanStatus status) =
         ScanPreProcessingMetadata   -> "Determining which need to be processed …"
         ScanExtractingMetadata      -> "Extracting metadata from new files …"
         ScanIndexingMetadata        -> "Indexing metadata …"
+        ScanPreProcessingLoudness   -> "Identifying missing loudness data …"
+        ScanAnalyzingLoudness       -> "Analyzing loudness …"
         ScanPreProcessingThumbnails -> "Discovering existing thumbnails …"
         ScanGeneratingThumbnails    -> "Generating new thumbnails …"
         ScanLoadingThumbnails       -> "Loading thumbnails …"
@@ -102,6 +105,12 @@ updateScanStatus elems (ScanStatus status) =
     valuePair
       ((show status.filesProcessedMetadata) <> " of " <> (show status.filesToProcessMetadata))
       "new files processed"
+    valuePair
+      ((show status.tracksProcessedLoudness) <> " of " <> (show status.tracksToProcessLoudness))
+      "tracks analyzed for loudness"
+    valuePair
+      ((show status.albumsProcessedLoudness) <> " of " <> (show status.albumsToProcessLoudness))
+      "albums analyzed for loudness"
     valuePair
       ((show status.filesProcessedThumbnails) <> " of " <> (show status.filesToProcessThumbnails))
       "new thumbnails extracted"
