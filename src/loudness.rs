@@ -7,8 +7,8 @@
 
 //! Computation of track and album loudness, and track waveforms.
 
-use std::path::{PathBuf};
-use std::sync::mpsc::SyncSender;
+use std::path::{Path, PathBuf};
+use std::sync::mpsc::{SyncSender, Receiver, sync_channel};
 use std::sync::{Arc, Mutex};
 
 use bs1770::{ChannelLoudnessMeter};
@@ -39,7 +39,7 @@ struct AlbumTask {
 }
 
 impl AlbumTask {
-    fn execute(self, db: &mut Database) -> error::Result<()> {
+    fn execute(self, inserts: &SyncSender<Insert>) {
         // We should only execute the album task once all track tasks for the
         // album are done.
         assert!(self.tracks_pending.is_empty());
@@ -66,13 +66,11 @@ impl AlbumTask {
         // power values for anything else any more.
         let [mut channel0, channel1] = windows;
         bs1770::reduce_stereo_in_place(channel0.as_mut(), channel1.as_ref());
-        let mean_power = bs1770::gated_mean(channel0.as_ref());
 
-        db
-            .insert_album_loudness(self.album_id, mean_power.loudness_lkfs() as f64)
-            .expect("Failed to insert album loudness.");
-
-        Ok(())
+        inserts.send(Insert::Album {
+            album_id: self.album_id,
+            loudness: bs1770::gated_mean(channel0.as_ref()),
+        }).unwrap();
     }
 }
 
@@ -89,7 +87,7 @@ struct TrackTask {
 }
 
 impl TrackTask {
-    pub fn execute(self, db: &mut Database) -> error::Result<TrackResult> {
+    pub fn execute(self, inserts: &SyncSender<Insert>) -> error::Result<TrackResult> {
         use error::Error;
         let path = self.path;
 
@@ -125,16 +123,18 @@ impl TrackTask {
             meters[0].as_100ms_windows(),
             meters[1].as_100ms_windows(),
         );
-        let mean_power = bs1770::gated_mean(zipped.as_ref());
-        let waveform = Waveform::from_meters(&meters);
 
-        db.insert_track_loudness(self.track_id, mean_power.loudness_lkfs() as f64).expect("Failed to insert track loudness.");
-        db.insert_track_waveform(self.track_id, waveform.as_bytes()).expect("Failed to insert waveform.");
+        inserts.send(Insert::Track {
+            track_id: self.track_id,
+            loudness: bs1770::gated_mean(zipped.as_ref()),
+            waveform: Waveform::from_meters(&meters),
+        }).unwrap();
 
         let result = TrackResult {
             album_id: self.album_id,
             meters: meters,
         };
+
         Ok(result)
     }
 }
@@ -150,14 +150,55 @@ enum TaskResult {
     Album,
 }
 
+/// A database insert operation.
+///
+/// We serialize inserts into the database to avoid write contention, this is
+/// what gets sent over a channel.
+enum Insert {
+    Track {
+        track_id: TrackId,
+        loudness: bs1770::Power,
+        waveform: Waveform,
+    },
+    Album {
+        album_id: AlbumId,
+        loudness: bs1770::Power,
+    }
+}
+
+fn process_inserts(
+    db_path: &Path,
+    inserts: Receiver<Insert>,
+) -> database::Result<()> {
+    let connection = sqlite::open(db_path)?;
+    let mut db = Database::new(&connection)?;
+
+    for insert in inserts {
+        match insert {
+            Insert::Track { track_id, loudness, waveform } => {
+                db.insert_track_loudness(track_id, loudness.loudness_lkfs() as f64)?;
+                db.insert_track_waveform(track_id, waveform.as_bytes())?;
+            }
+            Insert::Album { album_id, loudness } => {
+                db.insert_album_loudness(album_id, loudness.loudness_lkfs() as f64)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
 impl Task {
     /// Execute this task.
     ///
     /// Returns the result in case of a `Task::AnalyzeTrack` task.
-    pub fn execute(self, db: &mut Database) -> error::Result<TaskResult> {
+    pub fn execute(self, inserts: &SyncSender<Insert>) -> error::Result<TaskResult> {
         match self {
-            Task::AnalyzeTrack(task) => return task.execute(db).map(TaskResult::Track),
-            Task::AnalyzeAlbum(task) => task.execute(db).map(|()| TaskResult::Album),
+            Task::AnalyzeTrack(task) => task.execute(inserts).map(TaskResult::Track),
+            Task::AnalyzeAlbum(task) => {
+                task.execute(inserts);
+                Ok(TaskResult::Album)
+            }
         }
     }
 }
@@ -315,7 +356,7 @@ impl<'a> TaskQueue<'a> {
     /// blocks until processing is done.
     pub fn process_all_in_thread_pool(
         self,
-        db_path: PathBuf,
+        db_path: &Path,
     ) -> error::Result<()> {
         let task_queue = Arc::new(Mutex::new(self));
 
@@ -330,23 +371,17 @@ impl<'a> TaskQueue<'a> {
                 Vec<crossbeam::ScopedJoinHandle<error::Result<()>>> =
                 Vec::with_capacity(n_threads);
 
+            // Make a channel where we receive database writes. Previously every
+            // thread would have its own database connection and they would all
+            // write, but this lead to contention and "database is locked"
+            // errors. So instead we let all threads send their inserts to this
+            // channel, and one thread will serialize all writes.
+            let (insert_sender, insert_receiver) = sync_channel(32);
+
             for i in 0..n_threads {
-                let db_path_i = db_path.clone();
                 let task_queue_i = task_queue.clone();
+                let mut sender_i = insert_sender.clone();
                 let process = move || {
-                    // We are going to be writing to the database from a few
-                    // threads, so choose the non-serialized mode (we do not share
-                    // the connection across threads, so no_mutex is safe). Also set
-                    // a retry on busy.
-                    let flags = sqlite::OpenFlags::new()
-                        .set_no_mutex()
-                        .set_read_write();
-                    let mut connection = sqlite::Connection::open_with_flags(db_path_i, flags)?;
-                    let timeout_ms = 2_000;
-                    connection.set_busy_timeout(timeout_ms)?;
-
-                    let mut db = Database::new(&connection)?;
-
                     // Run the thread until there is no more task to execute. If
                     // there is currently no task, it doesn't mean there will be no
                     // tasks in the future, but those future tasks can only appear
@@ -361,7 +396,7 @@ impl<'a> TaskQueue<'a> {
                                 None => break,
                             }
                         };
-                        prev_result = task.execute(&mut db)?;
+                        prev_result = task.execute(&mut sender_i)?;
                     }
 
                     Ok(())
@@ -373,6 +408,14 @@ impl<'a> TaskQueue<'a> {
                     .expect("Failed to spawn OS thread.");
                 threads.push(join_handle);
             }
+
+            // While those threads are running the loudness analysis, this
+            // thread can do the database inserts for them. This function
+            // returns when all senders have closed their channel, which happens
+            // after all threads exit.
+            std::mem::drop(insert_sender);
+            process_inserts(db_path, insert_receiver)?;
+
             for join_handle in threads.drain(..) {
                 // The first unwrap is on joining, that should not fail because we
                 // set panic=abort. The ? then propagates any errors that might have

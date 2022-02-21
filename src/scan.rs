@@ -692,7 +692,7 @@ pub fn run_scan_in_thread(
                 loudness_tasks.status.stage = ScanStage::AnalyzingLoudness;
                 loudness_tasks.status_sender.send(*loudness_tasks.status).unwrap();
 
-                loudness_tasks.process_all_in_thread_pool(db_path)?;
+                loudness_tasks.process_all_in_thread_pool(&db_path)?;
             }
 
             // If there are any new or updated albums, regenerate thumbnails for
