@@ -14,6 +14,8 @@ use tiny_http::{Header, Request, Response, ResponseBox, Server};
 use tiny_http::Method::{Get, Post, Put, self};
 
 use crate::config::Config;
+use crate::database::Database;
+use crate::database;
 use crate::mvar::Var;
 use crate::player::{Millibel, Player};
 use crate::prim::{ArtistId, AlbumId, TrackId};
@@ -143,6 +145,33 @@ impl MetaServer {
 
         Response::from_data(img)
             .with_header(header_content_type("image/jpeg"))
+            .with_header(header_expires_seconds(3600 * 24 * 30))
+            .boxed()
+    }
+
+    fn handle_waveform(&self, db: &mut Database, id: &str) -> ResponseBox {
+        use crate::waveform::Waveform;
+
+        // TODO: DRY this track id parsing and loading part.
+        let track_id = match TrackId::parse(id) {
+            Some(tid) => tid,
+            None => return self.handle_bad_request("Invalid track id."),
+        };
+
+        let waveform = match db.select_track_waveform(track_id) {
+            Ok(Some(data)) => Waveform::from_bytes(data),
+            Ok(None) => return self.handle_not_found(),
+            Err(err) => {
+                eprintln!("Error while loading waveform: {:?}", err);
+                return self.handle_error("Database error.");
+            }
+        };
+
+        let mut svg = Vec::new();
+        waveform.write_svg(&mut svg).expect("Write to memory does not fail.");
+
+        Response::from_data(svg)
+            .with_header(header_content_type("image/svg+xml"))
             .with_header(header_expires_seconds(3600 * 24 * 30))
             .boxed()
     }
@@ -379,17 +408,25 @@ impl MetaServer {
     }
 
     /// Router function for all /api/«endpoint» calls.
-    fn handle_api_request(&self, method: &Method, endpoint: &str, arg: Option<&str>, query: &str) -> ResponseBox {
+    fn handle_api_request(
+        &self,
+        db: &mut Database,
+        method: &Method,
+        endpoint: &str,
+        arg: Option<&str>,
+        query: &str,
+    ) -> ResponseBox {
         match (method, endpoint, arg) {
             // API endpoints.
-            (&Get, "cover",  Some(t)) => self.handle_album_cover(t),
-            (&Get, "thumb",  Some(t)) => self.handle_thumb(t),
-            (&Get, "track",  Some(t)) => self.handle_track(t),
-            (&Get, "album",  Some(a)) => self.handle_album(a),
-            (&Get, "artist", Some(a)) => self.handle_artist(a),
-            (&Get, "albums", None)    => self.handle_albums(),
-            (&Get, "search", None)    => self.handle_search(query),
-            (&Get, "stats",  None)    => self.handle_stats(),
+            (&Get, "cover",    Some(t)) => self.handle_album_cover(t),
+            (&Get, "thumb",    Some(t)) => self.handle_thumb(t),
+            (&Get, "waveform", Some(t)) => self.handle_waveform(db, t),
+            (&Get, "track",    Some(t)) => self.handle_track(t),
+            (&Get, "album",    Some(a)) => self.handle_album(a),
+            (&Get, "artist",   Some(a)) => self.handle_artist(a),
+            (&Get, "albums",   None)    => self.handle_albums(),
+            (&Get, "search",   None)    => self.handle_search(query),
+            (&Get, "stats",    None)    => self.handle_stats(),
 
             // Play queue manipulation.
             (&Get, "queue",  None)    => self.handle_queue(),
@@ -408,7 +445,7 @@ impl MetaServer {
         }
     }
 
-    fn handle_request(&self, request: Request) {
+    fn handle_request(&self, db: &mut Database, request: Request) {
         // Break url into the part before the ? and the part after. The part
         // before we split on slashes.
         let mut url_iter = request.url().splitn(2, '?');
@@ -432,7 +469,7 @@ impl MetaServer {
         let response = match (request.method(), p0, p1) {
             // API endpoints go through the API router, to keep this match arm
             // a bit more concise.
-            (method, Some("api"), Some(endpoint)) => self.handle_api_request(method, endpoint, p2, query),
+            (method, Some("api"), Some(endpoint)) => self.handle_api_request(db, method, endpoint, p2, query),
 
             // Web endpoints.
             (&Get, None,                  None) => self.handle_static_file("app/index.html", "text/html"),
@@ -480,6 +517,10 @@ pub fn serve(bind: &str, service: Arc<MetaServer>) -> ! {
         let name = format!("http_server_{}", i);
         let builder = thread::Builder::new().name(name);
         let join_handle = builder.spawn(move || {
+            let connection = database::connect_readonly(service_i.config.db_path())
+                .expect("Failed to connect to database.");
+            let mut db = Database::new(&connection)
+                .expect("Failed to initialize database.");
             loop {
                 let request = match server_i.recv() {
                     Ok(rq) => rq,
@@ -488,7 +529,7 @@ pub fn serve(bind: &str, service: Arc<MetaServer>) -> ! {
                         break;
                     }
                 };
-                service_i.handle_request(request);
+                service_i.handle_request(&mut db, request);
             }
         }).unwrap();
         threads.push(join_handle);

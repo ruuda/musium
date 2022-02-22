@@ -10,6 +10,7 @@
 use std::path::Path;
 use std::sync::mpsc::Receiver;
 
+use crate::database;
 use crate::database::{Database, Listen, Result};
 use crate::mvar::Var;
 use crate::player::QueueId;
@@ -27,7 +28,7 @@ pub fn main(
     index_var: Var<MemoryMetaIndex>,
     events: Receiver<PlaybackEvent>,
 ) -> Result<()> {
-    let connection = sqlite::open(db_path)?;
+    let connection = database::connect_read_write(db_path)?;
     let mut db = Database::new(&connection)?;
 
     let mut last_listen_id = None;

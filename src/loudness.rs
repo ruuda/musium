@@ -14,7 +14,6 @@ use std::sync::{Arc, Mutex};
 use bs1770::{ChannelLoudnessMeter};
 use claxon::FlacReader;
 use claxon;
-use sqlite;
 
 use crate::database::Database;
 use crate::database;
@@ -183,7 +182,7 @@ fn process_inserts(
     db_path: &Path,
     inserts: Receiver<Insert>,
 ) -> database::Result<()> {
-    let connection = sqlite::open(db_path)?;
+    let connection = database::connect_read_write(db_path)?;
     let mut db = Database::new(&connection)?;
 
     // Reduce the number of fsyncs (and thereby improve performance), at the

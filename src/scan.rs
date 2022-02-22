@@ -628,7 +628,7 @@ pub fn run_scan_in_thread(
         .spawn(move || {
             let mut status = Status::new();
 
-            let connection = sqlite::open(&db_path)?;
+            let connection = database::connect_read_write(&db_path)?;
 
             // Scan all files, put the metadata in the database.
             scan(
