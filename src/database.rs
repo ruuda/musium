@@ -216,7 +216,9 @@ pub fn connect_readonly<P: AsRef<Path>>(path: P) -> Result<sqlite::Connection> {
     // We use set_no_mutex, because the the connection will not be shared among
     // different threads.
     let flags = sqlite::OpenFlags::new().set_no_mutex().set_read_only();
-    let connection = sqlite::Connection::open_with_flags(path, flags)?;
+    let mut connection = sqlite::Connection::open_with_flags(path, flags)?;
+    let timeout_ms = 10_000;
+    connection.set_busy_timeout(timeout_ms)?;
     // Use the faster WAL mode, see https://www.sqlite.org/wal.html.
     connection.execute("PRAGMA journal_mode = WAL;")?;
     Ok(connection)
