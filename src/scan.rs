@@ -216,7 +216,7 @@ pub fn scan(
     status.stage = ScanStage::PreProcessingMetadata;
     status_sender.send(*status).unwrap();
 
-    // Sort the files in memcpm order. The default Ord instance of PathBuf is
+    // Sort the files in memcmp order. The default Ord instance of PathBuf is
     // not what we want, it orders / before space (presumably because it does
     // tuple ordering on the path segments?). Memcmp order matches SQLite's
     // default string ordering.
