@@ -30,7 +30,7 @@ jobs:
           # Nixpkgs snapshot and get a newer rustup, we should *not* reuse the
           # cache.
           key: "rust-${{ hashFiles('nixpkgs-pinned.nix') }}-${{ hashFiles('Cargo.lock', 'rust-toolchain') }}"
-          restore-key: "rust-${{ hashFiles('nixpkgs-pinned.nix') }}-"
+          restore-keys: "rust-${{ hashFiles('nixpkgs-pinned.nix') }}-"
 
       - uses: "cachix/install-nix-action@v13"
         with:
