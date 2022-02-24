@@ -6,7 +6,7 @@ jobs:
   build:
     # We deliberate use a somewhat older version here to ensure compatibility
     # with it. But also not too old that we have to use ancient software.
-    runs-on: "ubuntu-18.04"
+    runs-on: "ubuntu-20.04"
     steps:
       - uses: "actions/checkout@v2"
         with:

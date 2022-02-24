@@ -16,6 +16,5 @@ in
       pkgs.psc-package
       pkgs.purescript
       pkgs.rustup
-      pkgs.sqlite
     ];
   }
