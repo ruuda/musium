@@ -38,6 +38,19 @@ previously and created the `musium` user [as described here][gate-auth].
 [pytradfri]: https://github.com/home-assistant-libs/pytradfri
 [gate-auth]: https://github.com/glenndehaan/ikea-tradfri-coap-docs/blob/68976e6641e4533f9ad51ec724942a0b6c143bce/README.md#authenticate
 
+## Device groups
+
+If you have multiple outlets in a group — for example, one per speaker — and you
+want to turn the entire group on and off, the paths are different. Instead of
+15001 to address a single device, we use 15004 to address a group. Furthermore,
+the `5850` property that toggles the group is not nested in the `3312` property
+like with individual outlets. Putting that together, the following command will
+turn group 131078 on:
+
+    $ coap-client -u musium -k «redacted»     \
+      coaps://192.168.0.100:5684/15004/131078 \
+      -m put -e '{"5850": 1}'
+
 ## Pre-playback and post-idle scripts
 
 To call `coap-client` before and after playback, we need to create a
