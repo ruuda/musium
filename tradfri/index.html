@@ -420,6 +420,17 @@ together, the following command will turn the outlet on:</p>
 </code></pre>
 <p>Note: In my case, the gateway is at <code>192.168.1.100</code>. I also authenticated
 previously and created the <code>musium</code> user <a href="https://github.com/glenndehaan/ikea-tradfri-coap-docs/blob/68976e6641e4533f9ad51ec724942a0b6c143bce/README.md#authenticate">as described here</a>.</p>
+<h2 id="device-groups">Device groups</h2>
+<p>If you have multiple outlets in a group — for example, one per speaker — and you
+want to turn the entire group on and off, the paths are different. Instead of
+15001 to address a single device, we use 15004 to address a group. Furthermore,
+the <code>5850</code> property that toggles the group is not nested in the <code>3312</code> property
+like with individual outlets. Putting that together, the following command will
+turn group 131078 on:</p>
+<pre><code>$ coap-client -u musium -k «redacted»     \
+  coaps://192.168.0.100:5684/15004/131078 \
+  -m put -e '{"5850": 1}'
+</code></pre>
 <h2 id="pre-playback-and-post-idle-scripts">Pre-playback and post-idle scripts</h2>
 <p>To call <code>coap-client</code> before and after playback, we need to create a
 pre-playback and post-idle script, that we can use with the
@@ -479,6 +490,7 @@ idle_timeout_seconds = 180
                current"><a href="./">Trådfri control</a></li>
             <li><ul>
                 <li class="toc-heading"><a href="#controlling-outlets-with-libcoap">Controlling outlets with libcoap</a></li>
+                <li class="toc-heading"><a href="#device-groups">Device groups</a></li>
                 <li class="toc-heading"><a href="#pre-playback-and-post-idle-scripts">Pre-playback and post-idle scripts</a></li>
                 </ul></li>
                
