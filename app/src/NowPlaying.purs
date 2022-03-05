@@ -84,22 +84,25 @@ nowPlayingInfo postEvent (QueuedTrack track) = Html.div $ do
     Html.img (Model.coverUrl track.albumId) alt $ pure unit
     onClickGoTo $ Navigation.Album track.albumId
 
-  Html.hgroup $ do
-    Html.h1 $ Html.text track.title
-    Html.h2 $ do
-      Html.addClass "artist"
-      Html.text track.artist
-      onClickGoTo $ Navigation.Artist track.albumArtistId
-    Html.h2 $ do
-      Html.addClass "album-title"
-      Html.text track.album
-      onClickGoTo $ Navigation.Album track.albumId
-
   Html.div $ do
-    Html.addClass "waveform"
-    Html.setMaskImage $ "url(/api/waveform/" <> (show track.trackId) <> ")"
+    Html.addClass "current-info"
+
+    Html.hgroup $ do
+      Html.h1 $ Html.text track.title
+      Html.h2 $ do
+        Html.addClass "artist"
+        Html.text track.artist
+        onClickGoTo $ Navigation.Artist track.albumArtistId
+      Html.h2 $ do
+        Html.addClass "album-title"
+        Html.text track.album
+        onClickGoTo $ Navigation.Album track.albumId
+
     Html.div $ do
-      Html.addClass "progress"
+      Html.addClass "waveform"
+      Html.setMaskImage $ "url(/api/waveform/" <> (show track.trackId) <> ")"
+      Html.div $ do
+        Html.addClass "progress"
 
 nothingPlayingInfo :: Html Unit
 nothingPlayingInfo = Html.div $ do

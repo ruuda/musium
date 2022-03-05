@@ -889,7 +889,7 @@ button.scan-library::before {
 
   .current .album-info {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1.5fr;
     grid-template-rows: auto;
     grid-template-areas:
       "cover info"
@@ -901,14 +901,34 @@ button.scan-library::before {
     margin-right: 1em;
   }
 
-  .current .album-info hgroup {
+  .current .current-info {
     grid-area: info;
+
+    display: grid;
+    grid-template-columns: auto;
+    grid-template-rows: 1fr auto auto 1fr;
+    grid-template-areas:
+      "margin-top"
+      "text"
+      "waveform"
+      "margin-bottom"
+    ;
+  }
+
+  .current .album-info hgroup {
+    grid-area: text;
     margin-left: 1em;
-    padding-top: 11rem;
   }
 
   .current .album-info h1 {
     margin-top: 0;
+  }
+
+  .current .waveform {
+    grid-area: waveform;
+    margin-left: 1.5em;
+    width: 75%;
+    height: 2.75em;
   }
 }
 
