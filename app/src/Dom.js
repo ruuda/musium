@@ -197,6 +197,16 @@ exports.setTransitionImpl = function(transition, element) {
   }
 }
 
+exports.setMaskImageImpl = function(mask, element) {
+  return function() {
+    if ('webkitMaskImage' in element.style) {
+      element.style.webkitMaskImage = mask;
+    } else {
+      element.style.maskImage = mask;
+    }
+  }
+}
+
 exports.setWidthImpl = function(width, element) {
   return function() {
     element.style.width = width;

@@ -35,6 +35,7 @@ module Dom
   , setAttribute
   , setHeight
   , setId
+  , setMaskImage
   , setImage
   , setScrollTop
   , setTransform
@@ -91,6 +92,7 @@ foreign import removeClassImpl :: Fn2 String Element (Effect Unit)
 foreign import setAttributeImpl :: Fn3 String String Element (Effect Unit)
 foreign import setHeightImpl :: Fn2 String Element (Effect Unit)
 foreign import setIdImpl :: Fn2 String Element (Effect Unit)
+foreign import setMaskImageImpl :: Fn2 String Element (Effect Unit)
 foreign import setImageImpl :: Fn3 String String Element (Effect Unit)
 foreign import setScrollTopImpl :: Fn2 Number Element (Effect Unit)
 foreign import setTransformImpl :: Fn2 String Element (Effect Unit)
@@ -134,6 +136,9 @@ setTransform transform element = runFn2 setTransformImpl transform element
 
 setTransition :: String -> Element -> Effect Unit
 setTransition transition element = runFn2 setTransitionImpl transition element
+
+setMaskImage :: String -> Element -> Effect Unit
+setMaskImage mask element = runFn2 setMaskImageImpl mask element
 
 setScrollTop :: Number -> Element -> Effect Unit
 setScrollTop off element = runFn2 setScrollTopImpl off element

@@ -95,6 +95,12 @@ nowPlayingInfo postEvent (QueuedTrack track) = Html.div $ do
       Html.text track.album
       onClickGoTo $ Navigation.Album track.albumId
 
+  Html.div $ do
+    Html.addClass "waveform"
+    Html.setMaskImage $ "url(/api/waveform/" <> (show track.trackId) <> ")"
+    Html.div $ do
+      Html.addClass "progress"
+
 nothingPlayingInfo :: Html Unit
 nothingPlayingInfo = Html.div $ do
   Html.addClass "nothing-playing"

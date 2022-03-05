@@ -30,6 +30,7 @@ module Html
   , scrollIntoView
   , setHeight
   , setId
+  , setMaskImage
   , setScrollTop
   , setTitle
   , setType
@@ -98,6 +99,9 @@ setTransform transform = ReaderT $ \container -> Dom.setTransform transform cont
 
 setTransition :: String -> Html Unit
 setTransition transition = ReaderT $ \container -> Dom.setTransition transition container
+
+setMaskImage :: String -> Html Unit
+setMaskImage mask = ReaderT $ \container -> Dom.setMaskImage mask container
 
 setTitle :: String -> Html Unit
 setTitle title = ReaderT $ \self -> Dom.setAttribute "title" title self
