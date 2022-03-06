@@ -43,7 +43,7 @@ import Event (Event, HistoryMode)
 import Event as Event
 import History as History
 import Html as Html
-import Model (Artist, ArtistId, Album (..), AlbumId (..), ScanStage (..), ScanStatus (..), QueuedTrack (..), TrackId)
+import Model (Artist, ArtistId, Album (..), AlbumId (..), QueueId, ScanStage (..), ScanStatus (..), QueuedTrack (..), TrackId)
 import Model as Model
 import NavBar (NavBarState)
 import NavBar as NavBar
@@ -90,6 +90,7 @@ type AppState =
   , location :: Location
   , lastArtist :: Maybe ArtistId
   , lastAlbum :: Maybe AlbumId
+  , currentTrack :: Maybe QueueId
   , albumView :: Maybe AlbumViewState
   , elements :: Elements
   , postEvent :: Event -> Aff Unit
@@ -200,6 +201,7 @@ new bus = do
     , location: Navigation.Library
     , lastArtist: Nothing
     , lastAlbum: Nothing
+    , currentTrack: Nothing
     , albumView: Nothing
     , elements: elements
     , postEvent: postEvent
@@ -307,12 +309,17 @@ handleEvent event state = case event of
     -- track.
     liftEffect $ NavBar.setQueueSize state.navBar $ max 0 ((Array.length queue) - 1)
 
-    -- TODO: Only update when the track did not change.
-    liftEffect $ Html.withElement state.elements.currentView $ do
-      Html.clear
-      case Array.head queue of
-        Nothing -> NowPlaying.nothingPlayingInfo
-        Just currentTrack -> NowPlaying.nowPlayingInfo state.postEvent currentTrack
+    -- Update the "Current" / "Now Playing" page only if the current track
+    -- changed. We don't want to rebuild the DOM nodes all the time if the track
+    -- did not change, to be able to preserve transitions. Also, it's just
+    -- easier to debug if DOM nodes don't disappear all the time.
+    let currentTrack = map (\(QueuedTrack t) -> t.queueId) (Array.head queue)
+    when (state.currentTrack /= currentTrack) $ do
+      liftEffect $ Html.withElement state.elements.currentView $ do
+        Html.clear
+        case Array.head queue of
+          Nothing -> NowPlaying.nothingPlayingInfo
+          Just track -> NowPlaying.nowPlayingInfo state.postEvent track
 
     -- Update the queue again either 30 seconds from now, or at the time when
     -- we expect the current track will run out, so the point where we expect
@@ -330,6 +337,7 @@ handleEvent event state = case event of
     updateProgressBar <=< scheduleFetchQueue nextUpdate $ state
       { queue = queue
       , statusBar = statusBar'
+      , currentTrack = currentTrack
       }
 
   Event.UpdateProgress -> updateProgressBar state
