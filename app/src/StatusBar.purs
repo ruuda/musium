@@ -10,6 +10,7 @@ module StatusBar
   , StatusBarState
   , new
   , updateProgressBar
+  , updateProgressElement
   , updateStatusBar
   ) where
 
@@ -172,26 +173,29 @@ nextProgressPlaying now (QueuedTrack currentTrack) =
   in
     { completion, animationDuration }
 
--- Update the progress of the current track, return delay until the next update
--- is needed. This does not confirm that the current track in the view matches
--- the track passed to this function.
-updateProgressBar :: QueuedTrack -> StatusBarState -> Effect Duration
-updateProgressBar (QueuedTrack currentTrack) state = do
+nextProgressForCurrent :: QueuedTrack -> Instant -> NextProgress
+nextProgressForCurrent (QueuedTrack currentTrack) now =
+  -- Compute the future position of the playhead, and how long it should take
+  -- to reach that position. When we are blocked, aim for the current position
+  -- with no extrapolation (but do add a bit of time for smooth animations and
+  -- to avoid busy-waiting). When we are not blocked, extrapolate up to 5s in
+  -- the future.
+  if isBlocked (QueuedTrack currentTrack)
+    then
+      { completion: currentTrack.positionSeconds / Int.toNumber currentTrack.durationSeconds
+      , animationDuration: Time.fromSeconds 0.2
+      }
+    else
+      nextProgressPlaying now (QueuedTrack currentTrack)
+
+-- Update the transform and transition of the element so its offset should
+-- coincide with the playback position of the track. Return a delay until the
+-- next update is needed.
+updateProgressElement :: Element -> QueuedTrack -> Effect Duration
+updateProgressElement element (QueuedTrack currentTrack) = do
   now <- Time.getCurrentInstant
   let
-    -- Compute the future position of the playhead, and how long it should take
-    -- to reach that position. When we are blocked, aim for the current position
-    -- with no extrapolation (but do add a bit of time for smooth animations and
-    -- to avoid busy-waiting). When we are not blocked, extrapolate up to 5s in
-    -- the future.
-    blocked = isBlocked (QueuedTrack currentTrack)
-    { completion, animationDuration } = if blocked
-      then
-        { completion: currentTrack.positionSeconds / Int.toNumber currentTrack.durationSeconds
-        , animationDuration: Time.fromSeconds 0.2
-        }
-      else
-        nextProgressPlaying now (QueuedTrack currentTrack)
+    { completion, animationDuration } = nextProgressForCurrent (QueuedTrack currentTrack) now
 
     -- Then set a css transition, to make sure that we reach the target at the
     -- desired time. This way we get contiuous smooth updates without having to
@@ -203,26 +207,32 @@ updateProgressBar (QueuedTrack currentTrack) state = do
     animationDurationSeconds = max 0.2 $ Time.toSeconds animationDuration
     transition = "transform " <> show animationDurationSeconds <> "s linear"
 
-  case state.current of
-    Nothing -> pure unit
-    Just t -> do
-      -- If we apply the transition and transform at the same time (even if we
-      -- set the transition first), then the new transition will not be used to
-      -- transition to the new transform, the old transition will be used. This
-      -- means that the timing will be all wrong. In particular, for the initial
-      -- update it will be very bad, because there is no transition yet.
-      -- Therefore, force layout in between.
-      Html.withElement t.progressBar $ do
-        Html.setTransition transition
-        Html.forceLayout
-        Html.setTransform transform
-
-      -- Update the blocked status as well, to reveal or hide the spinner
-      -- underneath the thumbnail.
-      if blocked
-        then liftEffect $ Html.withElement t.container $ Html.addClass "blocked"
-        else liftEffect $ Html.withElement t.container $ Html.removeClass "blocked"
+  -- If we apply the transition and transform at the same time (even if we
+  -- set the transition first), then the new transition will not be used to
+  -- transition to the new transform, the old transition will be used. This
+  -- means that the timing will be all wrong. In particular, for the initial
+  -- update it will be very bad, because there is no transition yet.
+  -- Therefore, force layout in between.
+  Html.withElement element $ do
+    Html.setTransition transition
+    Html.forceLayout
+    Html.setTransform transform
 
   -- Schedule the next update slightly before the animation completes, so we
   -- will not be too late to start the next one, which could cause a stutter.
   pure $ Time.fromSeconds $ max 0.2 $ animationDurationSeconds - 0.2
+
+-- Update the progress of the current track, return delay until the next update
+-- is needed. This does not confirm that the current track in the view matches
+-- the track passed to this function.
+updateProgressBar :: QueuedTrack -> StatusBarState -> Effect Duration
+updateProgressBar currentTrack state = case state.current of
+  Nothing -> pure $ Time.fromSeconds 0.1
+  Just t  -> do
+    -- Update the blocked status as well, to reveal or hide the spinner
+    -- underneath the thumbnail.
+    if isBlocked currentTrack
+      then liftEffect $ Html.withElement t.container $ Html.addClass "blocked"
+      else liftEffect $ Html.withElement t.container $ Html.removeClass "blocked"
+
+    updateProgressElement t.progressBar currentTrack

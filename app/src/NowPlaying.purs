@@ -6,24 +6,31 @@
 -- A copy of the License has been included in the root of the repository.
 
 module NowPlaying
-  ( nothingPlayingInfo
+  ( NowPlayingState (..)
+  , nothingPlayingInfo
   , nowPlayingInfo
   , volumeControls
+  , updateProgressBar
   ) where
 
 import Control.Monad.Reader.Class (ask)
 import Effect.Aff (Aff, launchAff_)
+import Effect (Effect)
 import Effect.Class (liftEffect)
 import Prelude
+import Dom (Element)
+import Time (Duration)
 
 import Dom as Dom
 import Event (Event)
 import Event as Event
-import Navigation as Navigation
 import Html (Html)
 import Html as Html
 import Model (Decibel (Decibel), QueuedTrack (QueuedTrack), Volume (Volume))
 import Model as Model
+import Navigation as Navigation
+import StatusBar as StatusBar
+import Time as Time
 
 volumeControls :: Html Unit
 volumeControls = Html.div $ do
@@ -68,7 +75,11 @@ volumeControls = Html.div $ do
     Html.text "V+"
     Html.onClick $ changeVolume Model.VolumeUp
 
-nowPlayingInfo :: (Event -> Aff Unit) -> QueuedTrack -> Html Unit
+data NowPlayingState
+  = StatePlaying { progressBar :: Element }
+  | StateNotPlaying
+
+nowPlayingInfo :: (Event -> Aff Unit) -> QueuedTrack -> Html NowPlayingState
 nowPlayingInfo postEvent (QueuedTrack track) = Html.div $ do
   let
     onClickGoTo target = Html.onClick $ launchAff_ $
@@ -108,8 +119,17 @@ nowPlayingInfo postEvent (QueuedTrack track) = Html.div $ do
       Html.setMaskImage $ "url(/api/waveform/" <> (show track.trackId) <> ")"
       Html.div $ do
         Html.addClass "progress"
+        self <- ask
+        pure $ StatePlaying { progressBar: self }
 
-nothingPlayingInfo :: Html Unit
+nothingPlayingInfo :: Html NowPlayingState
 nothingPlayingInfo = Html.div $ do
   Html.addClass "nothing-playing"
   Html.text "Nothing playing right now"
+  pure StateNotPlaying
+
+updateProgressBar :: QueuedTrack -> NowPlayingState -> Effect Duration
+updateProgressBar currentTrack state = case state of
+  StateNotPlaying -> pure $ Time.fromSeconds 0.1
+  StatePlaying { progressBar } -> do
+    StatusBar.updateProgressElement progressBar currentTrack

@@ -651,7 +651,6 @@ button.play-next::before {
 .waveform .progress {
   width: 100%;
   height: 100%;
-  transform: translateX(-50%);
   background: linear-gradient(
     90deg,
     #eee 0% 33%,

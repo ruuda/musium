@@ -49,6 +49,7 @@ import NavBar (NavBarState)
 import NavBar as NavBar
 import Navigation (Location)
 import Navigation as Navigation
+import NowPlaying (NowPlayingState (..))
 import NowPlaying as NowPlaying
 import Search (SearchElements)
 import Search as Search
@@ -91,6 +92,7 @@ type AppState =
   , lastArtist :: Maybe ArtistId
   , lastAlbum :: Maybe AlbumId
   , currentTrack :: Maybe QueueId
+  , nowPlayingState :: NowPlayingState
   , albumView :: Maybe AlbumViewState
   , elements :: Elements
   , postEvent :: Event -> Aff Unit
@@ -202,6 +204,7 @@ new bus = do
     , lastArtist: Nothing
     , lastAlbum: Nothing
     , currentTrack: Nothing
+    , nowPlayingState: StateNotPlaying
     , albumView: Nothing
     , elements: elements
     , postEvent: postEvent
@@ -222,7 +225,13 @@ updateProgressBar state = do
       -- If there is a current track, and if it matches the one in the status
       -- bar, then we can update progress in the status bar.
       Just current | current.track == t.trackId -> do
-          delay <- liftEffect $ StatusBar.updateProgressBar (QueuedTrack t) state.statusBar
+          let currentTrack = (QueuedTrack t)
+          -- Update the progress bar in the status bar.
+          delay <- liftEffect $ StatusBar.updateProgressBar currentTrack state.statusBar
+          -- And the waveform in the "now playing" page. Like above it returns
+          -- the delay until the next update, they should be the same, so we
+          -- ignore this one.
+          _ <- liftEffect $ NowPlaying.updateProgressBar currentTrack state.nowPlayingState
 
           -- Schedule the next update.
           fiber <- Aff.forkAff $ do
@@ -314,12 +323,16 @@ handleEvent event state = case event of
     -- did not change, to be able to preserve transitions. Also, it's just
     -- easier to debug if DOM nodes don't disappear all the time.
     let currentTrack = map (\(QueuedTrack t) -> t.queueId) (Array.head queue)
-    when (state.currentTrack /= currentTrack) $ do
-      liftEffect $ Html.withElement state.elements.currentView $ do
-        Html.clear
-        case Array.head queue of
-          Nothing -> NowPlaying.nothingPlayingInfo
-          Just track -> NowPlaying.nowPlayingInfo state.postEvent track
+    newNowPlayingState <- if state.currentTrack /= currentTrack
+      then do
+        -- TODO: Use a nice transition, like in the status bar.
+        liftEffect $ Html.withElement state.elements.currentView $ do
+          Html.clear
+          case Array.head queue of
+            Nothing -> NowPlaying.nothingPlayingInfo
+            Just track -> NowPlaying.nowPlayingInfo state.postEvent track
+      else
+        pure state.nowPlayingState
 
     -- Update the queue again either 30 seconds from now, or at the time when
     -- we expect the current track will run out, so the point where we expect
@@ -338,6 +351,7 @@ handleEvent event state = case event of
       { queue = queue
       , statusBar = statusBar'
       , currentTrack = currentTrack
+      , nowPlayingState = newNowPlayingState
       }
 
   Event.UpdateProgress -> updateProgressBar state
