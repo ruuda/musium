@@ -301,6 +301,7 @@ enqueueTrack postEvent (Album album) (Track track) trackElement = do
     , album: album.title
     , albumId: album.id
     , albumArtistId: album.artistId
+    , date: album.date
     , durationSeconds: track.durationSeconds
     , positionSeconds: 0.0
     , bufferedSeconds: 0.0

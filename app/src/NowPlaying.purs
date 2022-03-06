@@ -94,9 +94,14 @@ nowPlayingInfo postEvent (QueuedTrack track) = Html.div $ do
         Html.text track.artist
         onClickGoTo $ Navigation.Artist track.albumArtistId
       Html.h2 $ do
-        Html.addClass "album-title"
-        Html.text track.album
-        onClickGoTo $ Navigation.Album track.albumId
+        Html.span $ do
+          Html.addClass "album-title"
+          Html.text track.album
+          onClickGoTo $ Navigation.Album track.albumId
+        Html.text " ⋅ "
+        Html.span $ do
+          Html.addClass "date"
+          Html.text track.date
 
     Html.div $ do
       Html.addClass "waveform"

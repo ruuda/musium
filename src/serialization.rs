@@ -199,7 +199,12 @@ fn write_queued_track_json<W: Write>(
     serde_json::to_writer(&mut w, index.get_string(album.title))?;
     write!(w, r#","artist":"#)?;
     serde_json::to_writer(&mut w, index.get_string(track.artist))?;
-    write!(w, r#","duration_seconds":{}"#, track.duration_seconds)?;
+    write!(
+        w,
+        r#","date":"{}","duration_seconds":{}"#,
+        album.original_release_date,
+        track.duration_seconds,
+    )?;
 
     let position_seconds = queued_track.position_ms as f32 * 1e-3;
     let buffered_seconds = queued_track.buffered_ms as f32 * 1e-3;

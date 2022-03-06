@@ -410,6 +410,7 @@ newtype QueuedTrackRaw = QueuedTrackRaw
   , album :: String
   , albumId :: AlbumId
   , albumArtistId :: ArtistId
+  , date :: String
   , durationSeconds :: Int
   , positionSeconds :: Number
   , bufferedSeconds :: Number
@@ -424,6 +425,7 @@ newtype QueuedTrack = QueuedTrack
   , album :: String
   , albumId :: AlbumId
   , albumArtistId :: ArtistId
+  , date :: String
   , durationSeconds :: Int
   , positionSeconds :: Number
   , bufferedSeconds :: Number
@@ -442,6 +444,7 @@ instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
     album           <- Json.getField obj "album"
     albumId         <- map AlbumId $ Json.getField obj "album_id"
     albumArtistId   <- map ArtistId $ Json.getField obj "album_artist_id"
+    date            <- Json.getField obj "date"
     durationSeconds <- Json.getField obj "duration_seconds"
     positionSeconds <- Json.getField obj "position_seconds"
     bufferedSeconds <- Json.getField obj "buffered_seconds"
@@ -454,6 +457,7 @@ instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
       , album
       , albumId
       , albumArtistId
+      , date
       , durationSeconds
       , positionSeconds
       , bufferedSeconds
@@ -479,6 +483,7 @@ getQueue = do
       , album: track.album
       , albumId: track.albumId
       , albumArtistId: track.albumArtistId
+      , date: track.date
       , durationSeconds: track.durationSeconds
       , positionSeconds: track.positionSeconds
       , bufferedSeconds: track.bufferedSeconds
