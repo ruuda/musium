@@ -188,6 +188,13 @@ pub fn normalize_words(title: &str, dest: &mut Vec<String>) {
                 push_word(dest, &mut word);
                 dest.push("!".to_string());
             }
+            // Cut on an en- and em-dash just like we cut on a hyphen, but
+            // include the hyphen, so they are equivalent for the purpose of
+            // search.
+            '–' | '—' => {
+                push_word(dest, &mut word);
+                dest.push("-".to_string());
+            }
             // Normalize a few characters to more common ones.
             // Sometimes used in "n°", map to "no".
             '°' => word.push('o'),
