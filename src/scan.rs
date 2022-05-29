@@ -591,7 +591,15 @@ fn insert_file_metadata(
             "albumartistsort"           => m.tag_albumartistsort = Some(value),
             "artist"                    => m.tag_artist = Some(value),
             "discnumber"                => m.tag_discnumber = Some(value),
-            "musicbrainz_albumartistid" => m.tag_musicbrainz_albumartistid = Some(value),
+            "musicbrainz_albumartistid" => {
+                // At the moment we do not support albums with multiple artists
+                // in the data model, so warn about this.
+                if m.tag_musicbrainz_albumartistid.is_some() {
+                    // TODO: Propagate this warning more properly.
+                    eprintln!("Warning: {:?} contains multiple album artists.", path);
+                }
+                m.tag_musicbrainz_albumartistid = Some(value);
+            }
             "musicbrainz_albumid"       => m.tag_musicbrainz_albumid = Some(value),
             "musicbrainz_trackid"       => m.tag_musicbrainz_trackid = Some(value),
             "originaldate"              => m.tag_originaldate = Some(value),
