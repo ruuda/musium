@@ -17,7 +17,6 @@ use std::thread;
 
 use alsa;
 use alsa::PollDescriptors;
-use nix::errno::Errno;
 
 use crate::config::Config;
 use crate::exec_pre_post::QueueEvent;
@@ -89,7 +88,7 @@ fn open_device(card_name: &str) -> Result<(alsa::PCM, alsa::Mixer)> {
     let non_block = false;
     let pcm = match alsa::PCM::new(&device, alsa::Direction::Playback, non_block) {
         Ok(pcm) => pcm,
-        Err(error) if error.errno() == Some(Errno::EBUSY) => {
+        Err(error) if error.errno() == alsa::nix::errno::Errno::EBUSY => {
             println!("Could not open audio interface for exclusive access, it is already use.");
             return Err(error);
         }
@@ -345,7 +344,7 @@ fn play_queue(
     // There is also "direct mode" that works with mmaps, but it is not
     // supported by the kernel on ARM, and I want to run this on a Raspberry Pi,
     // so for simplicity I will use the mode that is supported everywhere.
-    let mut io = device.io();
+    let mut io = device.io_bytes();
 
     loop {
         let (result, target_volume, needs_decode, pending_ms) = {
@@ -389,7 +388,7 @@ fn play_queue(
                 set_format(&device, new_format).expect("TODO: Failed to set format.");
                 println!("Changed format to {:?}", new_format);
                 format = new_format;
-                io = device.io();
+                io = device.io_bytes();
             }
         }
     }

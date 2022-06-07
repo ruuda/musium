@@ -9,7 +9,6 @@ extern crate alsa;
 extern crate claxon;
 extern crate crossbeam;
 extern crate libc;
-extern crate nix;
 extern crate serde_json;
 extern crate unicode_normalization;
 extern crate bs1770;
