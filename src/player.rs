@@ -326,7 +326,7 @@ impl DecodeTask {
     fn start(index: &dyn MetaIndex, track_id: TrackId, filters: &mut Filters, stop_after_bytes: usize) -> DecodeResult {
         let track = match index.get_track(track_id) {
             Some(t) => t,
-            None => panic!("Track {} does not exist, how did it end up queued?"),
+            None => panic!("Track {} does not exist, how did it end up queued?", track_id),
         };
         let fname = index.get_filename(track.filename);
         // TODO: Add a proper way to do logging.

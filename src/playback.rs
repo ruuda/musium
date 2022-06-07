@@ -215,7 +215,7 @@ fn write_samples(
                 let samples_written = num_channels * io.mmap(n_available, |dst| {
                     let src = block.slice();
                     let n = dst.len().min(src.len());
-                    &mut dst[..n].copy_from_slice(&src[..n]);
+                    dst[..n].copy_from_slice(&src[..n]);
                     // We have to return the number of frames (count independent
                     // of the number of channels), but we have bytes.
                     n / (num_channels * current_format.bits_per_sample as usize / 8)
