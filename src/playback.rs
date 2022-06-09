@@ -458,10 +458,11 @@ fn try_increase_thread_priority() {
 /// the queue is empty, the device is released, and the thread parks itself
 /// again.
 ///
-/// In the past I thought the priority of this thread should be set to high, but
-/// it did not seem to be needed, Musium mostly ran fine without it. However,
-/// there wan an occasional stutter caused by a buffer underrun, so now we do
-/// boost the priority either way.
+/// This thread tries to boost its own priority. It is usually not necessary,
+/// especially not at 16 bit / 44.1 kHz, but for 24 bit / 192 kHz audio, I
+/// noticed occasional periods of silence of ~1s, caused by a buffer underrun
+/// and then having to reset the device. Since increasing the thread priority,
+/// I have not observed such stutters any more even at 24/192.
 pub fn main(
     config: &Config,
     state_mutex: Arc<Mutex<PlayerState>>,
