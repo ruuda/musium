@@ -196,6 +196,7 @@ fn write_samples(
             let silent = true;
             pcm.try_recover(err, silent)?;
             println!("DEBUG: write_samples was in error, but recovered now.");
+            println!("The error was {:?}", err);
             pcm.avail_update()?
         }
     } as usize;
