@@ -15,8 +15,9 @@ use std::sync::mpsc::SyncSender;
 use std::thread::Thread;
 use std::thread;
 
-use alsa;
 use alsa::PollDescriptors;
+use alsa;
+use libc;
 
 use crate::config::Config;
 use crate::exec_pre_post::QueueEvent;
@@ -395,6 +396,61 @@ fn play_queue(
     }
 }
 
+/// Try to increase the scheduling priority of the current thread.
+///
+/// The playback thread is responsible for re-filling the audio card's buffer.
+/// If it is too late, it might miss the deadline, and cause a buffer underrun.
+/// To try and avoid this, instruct the OS to prioritize this thread when
+/// multiple threads are runnable. We use two ways of doing this:
+///
+/// 1. The niceness, which affects scheduling relative to other threads for
+///    SCHED_OTHER (the default) threads. Lower niceness is higher priority.
+///
+/// 2. The scheduling policy. We set it to "RR" (round robin), which makes
+///    the thread higher priority than all other SCHED_OTHER threads, but will
+///    make it share time in round-robin fashion with other SCHED_RR threads, if
+///    there are any. See "man 7 sched" for details.
+fn try_increase_thread_priority() {
+    // We use niceness -11 (relative to the default 0), because that is what
+    // Pipewire and Pulseaudio use by default.
+    let new_nice = unsafe { libc::nice(-11) };
+    if new_nice == -1 {
+        println!("Playback thread likely failed to set niceness.");
+        println!("Consider using setrlimit, granting CAP_SYS_NICE, \
+                  or setting LimitNICE=-11:-11 when using systemd.");
+    } else {
+        println!("Playback thread new niceness: {}", new_nice);
+    }
+
+    let sched_policy = libc::SCHED_RR;
+    let sched_param = libc::sched_param {
+        // Priority runs from 0 (low) to 99 (high) on Linux,
+        // but in any case this value is ignored for SCHED_RR threads.
+        sched_priority: 50,
+    };
+    let sched_retval = unsafe {
+        libc::pthread_setschedparam(
+            libc::pthread_self(),
+            sched_policy,
+            &sched_param,
+        )
+    };
+    match sched_retval {
+        0 => println!(
+            "Playback thread is now SCHED_RR (high priority)."
+        ),
+        libc::EPERM => println!(
+            "Playback thread was not allowed to change its scheduling \
+             policy to SCHED_RR. Consider granting CAP_SYS_NICE."
+        ),
+        _ => println!(
+            "An unknown error occurred when setting playback thread \
+             scheduling policy: {}.",
+             sched_retval,
+        ),
+    }
+}
+
 /// Play audio from the queue, then park the thread.
 ///
 /// When the thread that runs this is unparked, check if there is anything in
@@ -403,8 +459,9 @@ fn play_queue(
 /// again.
 ///
 /// In the past I thought the priority of this thread should be set to high, but
-/// it doesn't seem to be needed. (Or maybe this is the cause of the popping
-/// sound I sometimes hear! Needs further investigation, TODO!)
+/// it did not seem to be needed, Musium mostly ran fine without it. However,
+/// there wan an occasional stutter caused by a buffer underrun, so now we do
+/// boost the priority either way.
 pub fn main(
     config: &Config,
     state_mutex: Arc<Mutex<PlayerState>>,
@@ -412,6 +469,8 @@ pub fn main(
     queue_events: SyncSender<QueueEvent>,
 ) {
     use std::time::{Instant, Duration};
+
+    try_increase_thread_priority();
 
     loop {
         let has_audio = {
