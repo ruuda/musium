@@ -34,6 +34,10 @@ An example unit file:
     # Musium supports reporting startup progress to systemd, set this to enable.
     Type=notify
 
+    # When running as non-root user, CAP_SYS_NICE is needed to boost the
+    # priority of the audio playback thread.
+    AmbientCapabilities=CAP_SYS_NICE
+
     [Install]
     WantedBy=default.target
 
