@@ -28,7 +28,7 @@ A value of 0 instead of 1 turns the outlet off again. Putting everything
 together, the following command will turn the outlet on:
 
     $ coap-client -u musium -k «redacted»    \
-      coaps://192.168.0.100:5684/15001/65539 \
+      coaps://192.168.1.100:5684/15001/65539 \
       -m put -e '{"3312": [{"5850": 1}]}'
 
 Note: In my case, the gateway is at `192.168.1.100`. I also authenticated
@@ -48,7 +48,7 @@ like with individual outlets. Putting that together, the following command will
 turn group 131078 on:
 
     $ coap-client -u musium -k «redacted»     \
-      coaps://192.168.0.100:5684/15004/131078 \
+      coaps://192.168.1.100:5684/15004/131078 \
       -m put -e '{"5850": 1}'
 
 ## Pre-playback and post-idle scripts
