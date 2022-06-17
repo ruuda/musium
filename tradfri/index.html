@@ -415,7 +415,7 @@ find the id of your outlets. In this example, we want to control device 65539.</
 <p>A value of 0 instead of 1 turns the outlet off again. Putting everything
 together, the following command will turn the outlet on:</p>
 <pre><code>$ coap-client -u musium -k «redacted»    \
-  coaps://192.168.0.100:5684/15001/65539 \
+  coaps://192.168.1.100:5684/15001/65539 \
   -m put -e '{"3312": [{"5850": 1}]}'
 </code></pre>
 <p>Note: In my case, the gateway is at <code>192.168.1.100</code>. I also authenticated
@@ -428,7 +428,7 @@ the <code>5850</code> property that toggles the group is not nested in the <code
 like with individual outlets. Putting that together, the following command will
 turn group 131078 on:</p>
 <pre><code>$ coap-client -u musium -k «redacted»     \
-  coaps://192.168.0.100:5684/15004/131078 \
+  coaps://192.168.1.100:5684/15004/131078 \
   -m put -e '{"5850": 1}'
 </code></pre>
 <h2 id="pre-playback-and-post-idle-scripts">Pre-playback and post-idle scripts</h2>
