@@ -609,7 +609,7 @@ pub fn run_scan_in_thread(
     // a small buffer for them.
     let (mut tx, rx) = std::sync::mpsc::sync_channel(15);
 
-    let db_path = config.db_path();
+    let db_path = config.db_path.clone();
     let library_path = config.library_path.clone();
     let covers_path = config.covers_path.clone();
 

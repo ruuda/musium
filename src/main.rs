@@ -274,7 +274,7 @@ fn main() -> Result<()> {
     match &cmd[..] {
         "serve" => {
             let config_clone = config.clone();
-            let index = make_index(&config.db_path())?;
+            let index = make_index(&config.db_path)?;
             let arc_index = Arc::new(index);
             let index_var = Arc::new(MVar::new(arc_index.clone()));
             println!("Indexing complete.");

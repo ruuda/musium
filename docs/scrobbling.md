@@ -28,10 +28,10 @@ environment to be able to submit scrobbles.
 With the environment variables set up, run the `scrobble` command in the
 repository:
 
-    tools/scrobble.py scrobble /data_path/musium.sqlite3
+    tools/scrobble.py scrobble /db_path/musium.sqlite3
 
-The data path is the [`data_path` as configured](configuration.md#data_path).
-Musium stores `musium.sqlite3` in that directory.
+The file to pass is the [`db_path` as configured](configuration.md#db_path);
+this is where Musium tracks listens.
 
 The script only scrobbles listens that originated from Musium itself, it does
 not scrobble imported listening history. Listens that were scrobbled

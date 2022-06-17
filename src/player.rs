@@ -1031,7 +1031,7 @@ impl Player {
         let builder = std::thread::Builder::new();
         let index_for_history = index_var.clone();
 
-        let db_path = config.db_path();
+        let db_path = config.db_path.clone();
         let history_join_handle = builder
             .name("history".into())
             .spawn(move || {
