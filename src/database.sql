@@ -110,18 +110,18 @@ INSERT INTO listens
   , source
   )
 VALUES
-  ( ":started_at: &str"
-  , ":queue_id: i64"
-  , ":track_id: i64"
-  , ":album_id: i64"
-  , ":album_artist_id: i64"
-  , ":track_title: &str"
-  , ":track_artist: &str"
-  , ":album_title: &str"
-  , ":album_artist: &str"
-  , ":duration_seconds: i64"
-  , ":track_number: i64"
-  , ":disc_number: i64"
+  ( :started_at        -- :str
+  , :queue_id          -- :i64
+  , :track_id          -- :i64
+  , :album_id          -- :i64
+  , :album_artist_id   -- :i64
+  , :track_title       -- :str
+  , :track_artist      -- :str
+  , :album_title       -- :str
+  , :album_artist      -- :str
+  , :duration_seconds  -- :i64
+  , :track_number      -- :i64
+  , :disc_number       -- :i64
   , 'musium'
   )
 RETURNING
@@ -132,7 +132,7 @@ RETURNING
 --     listen_id: i64,
 --     queue_id: i64,
 --     track_id: i64,
---     completed_at: &str,
+--     completed_at: str,
 -- )
 UPDATE
   listens
@@ -156,20 +156,20 @@ INSERT INTO files
   , streaminfo_sample_rate_hz
   )
 VALUES
-  ( ":filename: &str"
-  , ":mtime: i64"
-  , ":imported_at: &str"
-  , ":streaminfo_num_channels: i64"
-  , ":streaminfo_bits_per_sample: i64"
-  , ":streaminfo_num_samples: i64"
-  , ":streaminfo_sample_rate_hz: i64"
+  ( :filename                   -- :str
+  , :mtime                      -- :i64
+  , :imported_at                -- :str
+  , :streaminfo_num_channels    -- :i64
+  , :streaminfo_bits_per_sample -- :i64
+  , :streaminfo_num_samples     -- :i64
+  , :streaminfo_sample_rate_hz  -- :i64
   )
 RETURNING
   id;
 
 
 -- Add a `TAG=VALUE` pair to the given file.
--- @query insert_file_tag(file_id: i64, tag: &str, value: &str)
+-- @query insert_file_tag(file_id: i64, tag: str, value: str)
 INSERT INTO file_tags
   (file_id, tag, value)
 VALUES
@@ -178,9 +178,9 @@ VALUES
 
 -- @query iter_files_simple() -> Iterator<FileSimple>
 SELECT
-  id AS "id: i64",
-  filename AS "filename: String",
-  mtime AS "mtime: i64"
+  id       /* :i64 */,
+  filename /* :str */,
+  mtime    /* :i64 */
 FROM
   files
 ORDER BY
@@ -192,12 +192,12 @@ ORDER BY
 -- This is to be paired with [`iter_file_tags`] in a merge join style.
 -- @query iter_file_streaminfo() -> Iterator<FileStreamInfo>
 SELECT
-  file_id as "file_id: i64",
-  filename as "filename: String",
-  streaminfo_channels as "channels: i64",
-  streaminfo_bits_per_sample as "bits_per_sample: i64",
-  streaminfo_num_samples as "num_samples: i64",
-  streaminfo_sample_rate_hz as "sample_rate_hz: i64"
+  file_id  /* :i64 */,
+  filename /* :str */,
+  streaminfo_channels        as channels        /* :i64 */,
+  streaminfo_bits_per_sample as bits_per_sample /* :i64 */,
+  streaminfo_num_samples     as num_samples     /* :i64 */,
+  streaminfo_sample_rate_hz  as sample_rate_hz  /* :i64 */
 FROM
   files
 ORDER BY
@@ -209,9 +209,9 @@ ORDER BY
 -- This is to be paired with [`iter_file_tags`] in a merge join style.
 -- @query iter_file_tags() -> Iterator<FileTag>
 SELECT
-  file_tags.file_id as "file_id: i64",
-  file_tags.tag_name as "tag_name: String",
-  file_tags.tag_value as "tag_value: String",
+  file_tags.file_id   /* :i64 */,
+  file_tags.tag_name  /* :str */,
+  file_tags.tag_value /* :str */
 FROM
   files,
   file_tags
