@@ -93,7 +93,7 @@ create table if not exists thumbnails
 
 -- #end create_schema
 
--- @query insert_listen(listen: Listen) -> i64
+-- @query insert_listen(listen: Listen) ->1 i64
 INSERT INTO listens
   ( started_at
   , queue_id
@@ -145,7 +145,7 @@ WHERE
   
 
 -- Insert a new file and its streaminfo metadata, return the file id.
--- @query insert_file(file: InsertFile) -> i64
+-- @query insert_file(file: InsertFile) ->1 i64
 INSERT INTO files
   ( filename
   , mtime
@@ -176,7 +176,7 @@ VALUES
   (:file_id, :tag, :value);
 
 
--- @query iter_files_simple() -> Iterator<FileSimple>
+-- @query iter_files_simple() ->* FileSimple
 SELECT
   id       /* :i64 */,
   filename /* :str */,
@@ -190,7 +190,7 @@ ORDER BY
 -- Iterate all files by ascending file name, yield streaminfo and metadata.
 --
 -- This is to be paired with [`iter_file_tags`] in a merge join style.
--- @query iter_file_streaminfo() -> Iterator<FileStreamInfo>
+-- @query iter_file_streaminfo() ->* FileStreamInfo
 SELECT
   file_id  /* :i64 */,
   filename /* :str */,
@@ -207,7 +207,7 @@ ORDER BY
 -- Iterate all tags of all files by ascending file name.
 --
 -- This is to be paired with [`iter_file_tags`] in a merge join style.
--- @query iter_file_tags() -> Iterator<FileTag>
+-- @query iter_file_tags() ->* FileTag
 SELECT
   file_tags.file_id   /* :i64 */,
   file_tags.tag_name  /* :str */,
