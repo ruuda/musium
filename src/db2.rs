@@ -150,6 +150,48 @@ ORDER BY
     Ok(result)
 }
 
+pub fn insert_album_loudness(tx: &mut Transaction, album_id: i64, loudness: f64) -> Result<()> {
+    let sql = r#"
+INSERT INTO album_loudness (album_id, bs17704_loudness_lufs)
+VALUES (:album_id, :loudness)
+ON CONFLICT (album_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
+    "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    statement.bind(1, album_id)?;
+    statement.bind(2, loudness)?;
+    statement.bind(3, loudness)?;
+    let result = match statement.next()? {
+        Row => panic!("Query 'insert_album_loudness' unexpectedly returned a row."),
+        Done => (),
+    };
+    Ok(result)
+}
+
+pub fn insert_track_loudness(tx: &mut Transaction, track_id: i64, loudness: f64) -> Result<()> {
+    let sql = r#"
+INSERT INTO track_loudness (track_id, bs17704_loudness_lufs)
+VALUES (:track_id, :loudness)
+ON CONFLICT (track_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
+    "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    statement.bind(1, track_id)?;
+    statement.bind(2, loudness)?;
+    statement.bind(3, loudness)?;
+    let result = match statement.next()? {
+        Row => panic!("Query 'insert_track_loudness' unexpectedly returned a row."),
+        Done => (),
+    };
+    Ok(result)
+}
+
 // A useless main function, included only to make the example compile with
 // Cargo’s default settings for examples.
 fn main() {

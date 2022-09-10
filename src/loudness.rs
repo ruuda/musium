@@ -15,8 +15,9 @@ use bs1770::{ChannelLoudnessMeter};
 use claxon::FlacReader;
 use claxon;
 
-use crate::database::Database;
 use crate::database;
+use crate::database::Database;
+use crate::db2;
 use crate::error;
 use crate::prim::{AlbumId, TrackId};
 use crate::scan::Status;
@@ -183,41 +184,42 @@ fn process_inserts(
     inserts: Receiver<Insert>,
 ) -> database::Result<()> {
     let connection = database::connect_read_write(db_path)?;
-    let mut db = Database::new(&connection)?;
 
     // Reduce the number of fsyncs (and thereby improve performance), at the
     // cost of losing durability (but not consistency). This is fine, if we lose
     // power and some work is lost, we can re-do it. But more likely we kill the
     // process because it takes a long time or because it crashed, and then we
     // still have the progress.
-    db.connection.execute("PRAGMA synchronous = NORMAL;")?;
+    connection.execute("PRAGMA synchronous = NORMAL;")?;
 
     // We commit after every album, instead of at every single write, to reduce
     // the number of syncs. This makes a big difference for disk utilisation
     // when the disk to read from and the disk that contain the database are the
     // same disk.
-    db.connection.execute("BEGIN")?;
+    let mut db = db2::Connection::new(&connection);
+    let mut tx = db.begin()?;
 
     for insert in inserts {
         match insert {
             Insert::Track { track_id, loudness, waveform } => {
-                db.insert_track_loudness(track_id, loudness.loudness_lkfs() as f64)?;
-                db.insert_track_waveform(track_id, waveform.as_bytes())?;
+                db2::insert_track_loudness(&mut tx, track_id.0 as i64, loudness.loudness_lkfs() as f64)?;
+                // TODO: Restore this query.
+                // db.insert_track_waveform(track_id, waveform.as_bytes())?;
             }
             Insert::Album { album_id, loudness } => {
-                db.insert_album_loudness(album_id, loudness.loudness_lkfs() as f64)?;
-                db.connection.execute("COMMIT")?;
-                db.connection.execute("BEGIN")?;
+                db2::insert_album_loudness(&mut tx, album_id.0 as i64, loudness.loudness_lkfs() as f64)?;
+                tx.commit()?;
+                tx = db.begin()?;
             }
         }
     }
 
-    db.connection.execute("COMMIT")?;
+    tx.commit()?;
 
     // Integrate the WAL into the rest of the database, now that we are done
     // writing. Also vacuum the database to clean up any index pages that may
     // have become redundant.
-    db.connection.execute("PRAGMA wal_checkpoint(TRUNCATE);")?;
+    connection.execute("PRAGMA wal_checkpoint(TRUNCATE);")?;
 
     Ok(())
 }

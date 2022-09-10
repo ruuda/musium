@@ -30,3 +30,14 @@ FROM
   file_metadata
 ORDER BY
   filename ASC;
+
+
+-- @query insert_album_loudness(album_id: i64, loudness: f64)
+INSERT INTO album_loudness (album_id, bs17704_loudness_lufs)
+VALUES (:album_id, :loudness)
+ON CONFLICT (album_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
+
+-- @query insert_track_loudness(track_id: i64, loudness: f64)
+INSERT INTO track_loudness (track_id, bs17704_loudness_lufs)
+VALUES (:track_id, :loudness)
+ON CONFLICT (track_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
