@@ -203,8 +203,7 @@ fn process_inserts(
         match insert {
             Insert::Track { track_id, loudness, waveform } => {
                 db2::insert_track_loudness(&mut tx, track_id.0 as i64, loudness.loudness_lkfs() as f64)?;
-                // TODO: Restore this query.
-                // db.insert_track_waveform(track_id, waveform.as_bytes())?;
+                db2::insert_track_waveform(&mut tx, track_id.0 as i64, waveform.as_bytes())?;
             }
             Insert::Album { album_id, loudness } => {
                 db2::insert_album_loudness(&mut tx, album_id.0 as i64, loudness.loudness_lkfs() as f64)?;

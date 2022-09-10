@@ -31,7 +31,6 @@ FROM
 ORDER BY
   filename ASC;
 
-
 -- @query insert_album_loudness(album_id: i64, loudness: f64)
 INSERT INTO album_loudness (album_id, bs17704_loudness_lufs)
 VALUES (:album_id, :loudness)
@@ -41,3 +40,8 @@ ON CONFLICT (album_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
 INSERT INTO track_loudness (track_id, bs17704_loudness_lufs)
 VALUES (:track_id, :loudness)
 ON CONFLICT (track_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
+
+-- @query insert_track_waveform(track_id: i64, data: bytes)
+INSERT INTO waveforms (track_id, data)
+VALUES (:track_id, :data)
+ON CONFLICT (track_id) DO UPDATE SET data = :data;

@@ -192,6 +192,27 @@ ON CONFLICT (track_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
     Ok(result)
 }
 
+pub fn insert_track_waveform(tx: &mut Transaction, track_id: i64, data: &[u8]) -> Result<()> {
+    let sql = r#"
+INSERT INTO waveforms (track_id, data)
+VALUES (:track_id, :data)
+ON CONFLICT (track_id) DO UPDATE SET data = :data;
+    "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    statement.bind(1, track_id)?;
+    statement.bind(2, data)?;
+    statement.bind(3, data)?;
+    let result = match statement.next()? {
+        Row => panic!("Query 'insert_track_waveform' unexpectedly returned a row."),
+        Done => (),
+    };
+    Ok(result)
+}
+
 // A useless main function, included only to make the example compile with
 // Cargo’s default settings for examples.
 fn main() {
