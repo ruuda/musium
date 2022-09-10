@@ -13,7 +13,7 @@ use std::u16;
 use crate::prim::{AlbumId, Album, ArtistId, Artist, Mtime, TrackId, Track, Date, Lufs, FilenameRef, StringRef, get_track_id};
 use crate::string_utils::{StringDeduper, normalize_words};
 use crate::word_index::{WordMeta};
-use crate::database::FileMetadata;
+use crate::db2::FileMetadata;
 
 #[derive(Clone, Debug)]
 pub enum IssueDetail {

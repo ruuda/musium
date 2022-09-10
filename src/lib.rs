@@ -16,6 +16,7 @@ extern crate bs1770;
 mod album_table;
 mod build;
 mod database;
+mod db2;
 mod exec_pre_post;
 mod filter;
 mod loudness;
@@ -43,7 +44,6 @@ use std::u32;
 use std::u64;
 
 use crate::build::BuildMetaIndex;
-use crate::database::Database;
 use crate::error::Result;
 use crate::prim::{ArtistId, Artist, AlbumId, Album, TrackId, Track, Lufs, StringRef, FilenameRef, get_track_id};
 use crate::string_utils::StringDeduper;
@@ -316,11 +316,12 @@ impl MemoryMetaIndex {
     /// thumbnails need updating.
     pub fn from_database(db_path: &Path) -> Result<(MemoryMetaIndex, BuildMetaIndex)> {
         let conn = sqlite::Connection::open(db_path)?;
-        let mut db = Database::new(&conn)?;
+        let mut db = db2::Connection::new(&conn);
+        let mut tx = db.begin()?;
 
         let mut builder = BuildMetaIndex::new();
 
-        for file in db.iter_file_metadata()? {
+        for file in db2::iter_file_metadata(&mut tx)? {
             builder.insert(file?);
         }
 
