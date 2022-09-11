@@ -22,7 +22,7 @@
           version = builtins.substring 0 8 self.lastModifiedDate;
           pkgs = import nixpkgs { inherit system; };
         in
-          {
+          rec {
             devShells.default = pkgs.mkShell {
               inherit name;
               nativeBuildInputs = [
@@ -32,7 +32,9 @@
                 pkgs.rustup
                 pkgs.sqlite
                 querybinder.packages.${system}.default
-              ];
+              ]
+              ++ packages.default.nativeBuildInputs
+              ++ packages.default.buildInputs;
             };
 
             packages.default = pkgs.rustPlatform.buildRustPackage {
@@ -45,7 +47,11 @@
                 };
               };
               nativeBuildInputs = [ pkgs.pkg-config ];
-              buildInputs = [ pkgs.sqlite pkgs.alsa-lib ];
+              buildInputs = [
+                pkgs.alsa-lib
+                pkgs.sqlite
+                pkgs.systemd
+              ];
             };
           }
       );
