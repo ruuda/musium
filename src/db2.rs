@@ -163,7 +163,6 @@ ON CONFLICT (album_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
     statement.reset()?;
     statement.bind(1, album_id)?;
     statement.bind(2, loudness)?;
-    statement.bind(3, loudness)?;
     let result = match statement.next()? {
         Row => panic!("Query 'insert_album_loudness' unexpectedly returned a row."),
         Done => (),
@@ -184,7 +183,6 @@ ON CONFLICT (track_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
     statement.reset()?;
     statement.bind(1, track_id)?;
     statement.bind(2, loudness)?;
-    statement.bind(3, loudness)?;
     let result = match statement.next()? {
         Row => panic!("Query 'insert_track_loudness' unexpectedly returned a row."),
         Done => (),
@@ -205,7 +203,6 @@ ON CONFLICT (track_id) DO UPDATE SET data = :data;
     statement.reset()?;
     statement.bind(1, track_id)?;
     statement.bind(2, data)?;
-    statement.bind(3, data)?;
     let result = match statement.next()? {
         Row => panic!("Query 'insert_track_waveform' unexpectedly returned a row."),
         Done => (),
