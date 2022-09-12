@@ -284,12 +284,9 @@ returning
         Row => decode_row(statement)?,
         Done => panic!("Query 'insert_listen_started' should return exactly one row."),
     };
-    // TODO: This second `next()` is needed, without it we can't commit.
-    // Implement in Querybinder!
-    match statement.next()? {
-        Row => panic!("Query 'insert_listen_started' should return exactly one row."),
-        Done => {}
-    };
+    if statement.next()? != Done {
+        panic!("Query 'insert_listen_started' should return exactly one row.");
+    }
     Ok(result)
 }
 

@@ -35,11 +35,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1662928213,
-        "narHash": "sha256-VmQ2ay+oGoiN63G/FK7a1z6jV/M8r7iyuDxqY1M7APk=",
+        "lastModified": 1663012960,
+        "narHash": "sha256-DQFK8oZ05s7TeamnorXOBjqWOwdw8PixELeoV7+NncA=",
         "owner": "ruuda",
         "repo": "querybinder",
-        "rev": "1503199b00ffab7f5f3bb9ebbc7ee0f7cc6ece6a",
+        "rev": "cf1ee09f4670f809d4d9d53c13a41ffdfd962b8a",
         "type": "github"
       },
       "original": {
