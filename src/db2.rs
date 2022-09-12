@@ -210,6 +210,114 @@ ON CONFLICT (track_id) DO UPDATE SET data = :data;
     Ok(result)
 }
 
+#[derive(Debug)]
+pub struct Listen<'a> {
+    pub started_at: &'a str,
+    pub queue_id: i64,
+    pub track_id: i64,
+    pub album_id: i64,
+    pub album_artist_id: i64,
+    pub track_title: &'a str,
+    pub track_artist: &'a str,
+    pub album_title: &'a str,
+    pub album_artist: &'a str,
+    pub duration_seconds: i64,
+    pub track_number: i64,
+    pub disc_number: i64,
+}
+
+pub fn insert_listen_started(tx: &mut Transaction, listen: Listen) -> Result<i64> {
+    let sql = r#"
+insert into
+  listens
+  ( started_at
+  , queue_id
+  , track_id
+  , album_id
+  , album_artist_id
+  , track_title
+  , track_artist
+  , album_title
+  , album_artist
+  , duration_seconds
+  , track_number
+  , disc_number
+  , source
+  )
+values
+  ( :started_at
+  , :queue_id
+  , :track_id
+  , :album_id
+  , :album_artist_id
+  , :track_title
+  , :track_artist
+  , :album_title
+  , :album_artist
+  , :duration_seconds
+  , :track_number
+  , :disc_number
+  , 'musium'
+  )
+returning
+  id;
+    "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    statement.bind(1, listen.started_at)?;
+    statement.bind(2, listen.queue_id)?;
+    statement.bind(3, listen.track_id)?;
+    statement.bind(4, listen.album_id)?;
+    statement.bind(5, listen.album_artist_id)?;
+    statement.bind(6, listen.track_title)?;
+    statement.bind(7, listen.track_artist)?;
+    statement.bind(8, listen.album_title)?;
+    statement.bind(9, listen.album_artist)?;
+    statement.bind(10, listen.duration_seconds)?;
+    statement.bind(11, listen.track_number)?;
+    statement.bind(12, listen.disc_number)?;
+    let decode_row = |statement: &Statement| Ok(statement.read(0)?);
+    let result = match statement.next()? {
+        Row => decode_row(statement)?,
+        Done => panic!("Query 'insert_listen_started' should return exactly one row."),
+    };
+    // TODO: This second `next()` is needed, without it we can't commit.
+    // Implement in Querybinder!
+    match statement.next()? {
+        Row => panic!("Query 'insert_listen_started' should return exactly one row."),
+        Done => {}
+    };
+    Ok(result)
+}
+
+pub fn update_listen_completed(tx: &mut Transaction, listen_id: i64, queue_id: i64, track_id: i64, completed_at: &str) -> Result<()> {
+    let sql = r#"
+update listens
+  set completed_at = :completed_at
+where
+  id = :listen_id
+  and queue_id = :queue_id
+  and track_id = :track_id;
+    "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    statement.bind(1, completed_at)?;
+    statement.bind(2, listen_id)?;
+    statement.bind(3, queue_id)?;
+    statement.bind(4, track_id)?;
+    let result = match statement.next()? {
+        Row => panic!("Query 'update_listen_completed' unexpectedly returned a row."),
+        Done => (),
+    };
+    Ok(result)
+}
+
 // A useless main function, included only to make the example compile with
 // Cargo’s default settings for examples.
 fn main() {

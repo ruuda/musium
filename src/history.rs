@@ -11,7 +11,8 @@ use std::path::Path;
 use std::sync::mpsc::Receiver;
 
 use crate::database;
-use crate::database::{Database, Listen, Result};
+use crate::db2;
+use crate::db2::{Connection, Listen, Result};
 use crate::mvar::Var;
 use crate::player::QueueId;
 use crate::{MetaIndex, MemoryMetaIndex, TrackId};
@@ -29,7 +30,7 @@ pub fn main(
     events: Receiver<PlaybackEvent>,
 ) -> Result<()> {
     let connection = database::connect_read_write(db_path)?;
-    let mut db = Database::new(&connection)?;
+    let mut db = Connection::new(&connection);
 
     let mut last_listen_id = None;
 
@@ -58,17 +59,22 @@ pub fn main(
                     track_number: track.track_number as i64,
                     disc_number: track.disc_number as i64,
                 };
-                let result = db.insert_listen_started(listen);
-                last_listen_id = Some(result?);
+                let mut tx = db.begin()?;
+                let result = db2::insert_listen_started(&mut tx, listen)?;
+                tx.commit()?;
+                last_listen_id = Some(result);
             }
             PlaybackEvent::Completed(queue_id, track_id) => {
                 if let Some(listen_id) = last_listen_id {
-                    db.update_listen_completed(
+                    let mut tx = db.begin()?;
+                    db2::update_listen_completed(
+                        &mut tx,
                         listen_id,
+                        queue_id.0 as i64,
+                        track_id.0 as i64,
                         &now_str[..],
-                        queue_id,
-                        track_id,
                     )?;
+                    tx.commit()?;
                 } else {
                     panic!(
                         "Completed queue entry {}, track {}, before starting.",

@@ -45,3 +45,51 @@ ON CONFLICT (track_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
 INSERT INTO waveforms (track_id, data)
 VALUES (:track_id, :data)
 ON CONFLICT (track_id) DO UPDATE SET data = :data;
+
+-- @query insert_listen_started(listen: Listen) ->1 i64
+insert into
+  listens
+  ( started_at
+  , queue_id
+  , track_id
+  , album_id
+  , album_artist_id
+  , track_title
+  , track_artist
+  , album_title
+  , album_artist
+  , duration_seconds
+  , track_number
+  , disc_number
+  , source
+  )
+values
+  ( :started_at       -- :str
+  , :queue_id         -- :i64
+  , :track_id         -- :i64
+  , :album_id         -- :i64
+  , :album_artist_id  -- :i64
+  , :track_title      -- :str
+  , :track_artist     -- :str
+  , :album_title      -- :str
+  , :album_artist     -- :str
+  , :duration_seconds -- :i64
+  , :track_number     -- :i64
+  , :disc_number      -- :i64
+  , 'musium'
+  )
+returning
+  id;
+
+-- @query update_listen_completed(
+--   listen_id: i64,
+--   queue_id: i64,
+--   track_id: i64,
+--   completed_at: str,
+-- )
+update listens
+  set completed_at = :completed_at
+where
+  id = :listen_id
+  and queue_id = :queue_id
+  and track_id = :track_id;
