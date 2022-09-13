@@ -40,6 +40,7 @@ use walkdir;
 use crate::config::Config;
 use crate::database::{Database, FileMetadataInsert, FileMetaId};
 use crate::database;
+use crate::db2::Connection;
 use crate::error;
 use crate::loudness;
 use crate::mvar::{MVar, Var};
@@ -676,8 +677,10 @@ pub fn run_scan_in_thread(
                     &mut status,
                     &mut tx,
                 );
-                let mut db = Database::new(&connection)?;
-                loudness_tasks.push_tasks_missing(&mut db)?;
+                let mut db = Connection::new(&connection);
+                let mut tx = db.begin()?;
+                loudness_tasks.push_tasks_missing(&mut tx)?;
+                tx.commit()?;
                 loudness_tasks.status.stage = ScanStage::AnalyzingLoudness;
                 loudness_tasks.status_sender.send(*loudness_tasks.status).unwrap();
 

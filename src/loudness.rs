@@ -16,8 +16,8 @@ use claxon::FlacReader;
 use claxon;
 
 use crate::database;
-use crate::database::Database;
 use crate::db2;
+use crate::db2::Transaction;
 use crate::error;
 use crate::prim::{AlbumId, TrackId};
 use crate::scan::Status;
@@ -290,7 +290,7 @@ impl<'a> TaskQueue<'a> {
     /// in the database. Note, this is a somewhat expensive query, since we
     /// check the existence of every album and track. It's better to rely on
     /// incremental building, but this can be used to backfill an old database.
-    pub fn push_tasks_missing(&mut self, db: &mut Database) -> database::Result<()> {
+    pub fn push_tasks_missing(&mut self, tx: &mut Transaction) -> database::Result<()> {
         let index = self.index.clone();
 
         // Note, this is not the most efficient index query, because we have to
@@ -305,19 +305,19 @@ impl<'a> TaskQueue<'a> {
         // row in the database for that.
         'albums: for (album_id, _album) in index.get_albums() {
             // If the album is not there, we need to add it.
-            if db.select_album_loudness(*album_id)?.is_none() {
+            if db2::select_album_loudness_lufs(tx, album_id.0 as i64)?.is_none() {
                 self.push_task_album(*album_id);
                 continue 'albums
             }
 
             // If one of the tracks is not there, we also add the full album.
             for (track_id, _track) in index.get_album_tracks(*album_id) {
-                if db.select_track_loudness(*track_id)?.is_none() {
+                if db2::select_track_loudness_lufs(tx, track_id.0 as i64)?.is_none() {
                     self.push_task_album(*album_id);
                     continue 'albums
                 }
 
-                if db.select_track_waveform(*track_id)?.is_none() {
+                if db2::select_track_waveform(tx, track_id.0 as i64)?.is_none() {
                     self.push_task_album(*album_id);
                     continue 'albums
                 }
