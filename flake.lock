@@ -15,43 +15,30 @@
         "type": "indirect"
       }
     },
-    "nixpkgs_2": {
-      "locked": {
-        "lastModified": 1661628722,
-        "narHash": "sha256-D3VuWLdnLmAXIkooWAtbTGSQI9Fc1lkvAr94wTxhnTU=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "48d63e924a2666baf37f4f14a18f19347fbd54a2",
-        "type": "github"
-      },
-      "original": {
-        "id": "nixpkgs",
-        "ref": "nixos-unstable",
-        "type": "indirect"
-      }
-    },
-    "querybinder": {
-      "inputs": {
-        "nixpkgs": "nixpkgs_2"
-      },
-      "locked": {
-        "lastModified": 1663012960,
-        "narHash": "sha256-DQFK8oZ05s7TeamnorXOBjqWOwdw8PixELeoV7+NncA=",
-        "owner": "ruuda",
-        "repo": "querybinder",
-        "rev": "cf1ee09f4670f809d4d9d53c13a41ffdfd962b8a",
-        "type": "github"
-      },
-      "original": {
-        "owner": "ruuda",
-        "repo": "querybinder",
-        "type": "github"
-      }
-    },
     "root": {
       "inputs": {
         "nixpkgs": "nixpkgs",
-        "querybinder": "querybinder"
+        "squiller": "squiller"
+      }
+    },
+    "squiller": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1663098999,
+        "narHash": "sha256-20emSYVHdC/BDreTuU7mU+wig1qQ9N0mDKOC/TuSV8A=",
+        "owner": "ruuda",
+        "repo": "squiller",
+        "rev": "1b6006eb36b77ef0a794adfe87b14d3c4f091a45",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ruuda",
+        "repo": "squiller",
+        "type": "github"
       }
     }
   },

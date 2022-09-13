@@ -2,9 +2,10 @@
   description = "Musium";
 
   inputs.nixpkgs.url = "nixpkgs/nixos-unstable";
-  inputs.querybinder.url = "github:ruuda/querybinder";
+  inputs.squiller.url = "github:ruuda/squiller";
+  inputs.squiller.inputs.nixpkgs.follows = "nixpkgs";
 
-  outputs = { self, nixpkgs, querybinder }:
+  outputs = { self, nixpkgs, squiller }:
     let
       supportedSystems = ["x86_64-linux" "aarch64-linux"];
       # Ridiculous boilerplate required to make flakes somewhat usable.
@@ -31,7 +32,7 @@
                 pkgs.purescript
                 pkgs.rustup
                 pkgs.sqlite
-                querybinder.packages.${system}.default
+                squiller.packages.${system}.default
               ]
               ++ packages.default.nativeBuildInputs
               ++ packages.default.buildInputs;
