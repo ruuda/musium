@@ -93,3 +93,12 @@ where
   id = :listen_id
   and queue_id = :queue_id
   and track_id = :track_id;
+
+-- @query select_album_loudness_lufs(album_id: i64) ->? f64
+select bs17704_loudness_lufs from album_loudness where album_id = :album_id;
+
+-- @query select_track_loudness_lufs(track_id: i64) ->? f64
+select bs17704_loudness_lufs from track_loudness where track_id = :track_id;
+
+-- @query select_track_waveform(track_id: i64) ->? bytes
+select data from waveforms where track_id = :track_id;
