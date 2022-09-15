@@ -40,7 +40,9 @@ module Model
   , search
   , startScan
   , thumbUrl
+  , timeLeft
   , trackUrl
+  , waveformUrl
   ) where
 
 import Prelude
@@ -56,6 +58,7 @@ import Data.Argonaut.Decode.Error (JsonDecodeError (UnexpectedValue), printJsonD
 import Data.Array (reverse, sortWith)
 import Data.Either (Either (..))
 import Data.Int (rem)
+import Data.Int as Int
 import Data.Maybe (Maybe (Nothing))
 import Data.String as String
 import Effect.Aff (Aff)
@@ -63,7 +66,7 @@ import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (Error, error)
 import Time as Time
-import Time (Instant)
+import Time (Duration, Instant)
 
 fatal :: forall m a. MonadThrow Error m => String -> m a
 fatal = error >>> throwError
@@ -105,6 +108,9 @@ thumbUrl (AlbumId id) = "/api/thumb/" <> id
 
 coverUrl :: AlbumId -> String
 coverUrl (AlbumId id) = "/api/cover/" <> id
+
+waveformUrl :: TrackId -> String
+waveformUrl (TrackId id) = "/api/waveform/" <> id
 
 trackUrl :: TrackId -> String
 trackUrl (TrackId id) = "/api/track/" <> id <> ".flac"
@@ -433,6 +439,14 @@ newtype QueuedTrack = QueuedTrack
   , startedAt :: Instant
   , refreshAt :: Instant
   }
+
+-- For a playing track, the time left until it stops playing.
+timeLeft :: Instant -> QueuedTrack -> Duration
+timeLeft now (QueuedTrack track) =
+  let
+    posSeconds = Time.toSeconds $ now `Time.subtract` track.startedAt
+  in
+    Time.fromSeconds $ (Int.toNumber track.durationSeconds) - posSeconds
 
 instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
   decodeJson json = do

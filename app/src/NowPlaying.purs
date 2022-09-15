@@ -116,7 +116,7 @@ nowPlayingInfo postEvent (QueuedTrack track) = Html.div $ do
 
     Html.div $ do
       Html.addClass "waveform"
-      Html.setMaskImage $ "url(/api/waveform/" <> (show track.trackId) <> ")"
+      Html.setMaskImage $ "url(" <> (Model.waveformUrl track.trackId) <> ")"
       Html.div $ do
         Html.addClass "progress"
         StatusBar.setInitialProgress (QueuedTrack track)

@@ -92,6 +92,8 @@ type AppState =
   , lastArtist :: Maybe ArtistId
   , lastAlbum :: Maybe AlbumId
   , currentTrack :: Maybe QueueId
+  , prefetchedThumb :: Maybe QueueId
+  , prefetchedFull :: Maybe QueueId
   , nowPlayingState :: NowPlayingState
   , albumView :: Maybe AlbumViewState
   , elements :: Elements
@@ -204,6 +206,8 @@ new bus = do
     , lastArtist: Nothing
     , lastAlbum: Nothing
     , currentTrack: Nothing
+    , prefetchedThumb: Nothing
+    , prefetchedFull: Nothing
     , nowPlayingState: StateNotPlaying
     , albumView: Nothing
     , elements: elements
@@ -259,6 +263,38 @@ updateScanStatus (ScanStatus newStatus) state = do
         Just s  -> state.postEvent $ Event.UpdateScanStatus s
 
   pure state
+
+-- If there is a new track queued, and it is going to play soon, begin
+-- prefetching its thumb and waveform, and possibly the cover image, if the now
+-- playing pane is visible. This ensures that when the Now Playing pane is
+-- visible, there is no flash of missing waveform when the next track starts.
+prefetchImagesIfNeeded :: Instant -> AppState -> Effect AppState
+prefetchImagesIfNeeded now state = case Array.head state.queue of
+  -- We only take action if the track ends within 30 seconds.
+  Just first | Model.timeLeft now first < Time.fromSeconds 30.0 ->
+    case Array.index state.queue 1 of
+      Nothing -> pure state
+      Just (QueuedTrack track) -> do
+        -- If we did not yet prefetch the thumb for the next track, do so now.
+        -- This is always useful, because the thumb is always visible in the
+        -- status bar (though also likely cached).
+        state' <- if state.prefetchedThumb /= Just track.queueId
+          then do
+            _ <- Dom.createImg (Model.thumbUrl track.albumId) "Thumb preload"
+            pure $ state { prefetchedThumb = Just track.queueId }
+          else
+            pure state
+
+        -- Then additionally, if we are on the now playing pane, and we did
+        -- not yet prefetch the next waveform or cover image, do so now.
+        case state'.location of
+          Navigation.NowPlaying | state.prefetchedFull /= Just track.queueId -> do
+            _ <- Dom.createImg (Model.waveformUrl track.trackId) "Waveform preload"
+            _ <- Dom.createImg (Model.coverUrl track.albumId) "Cover preload"
+            pure $ state' { prefetchedFull = Just track.queueId }
+          _ -> pure state'
+
+  _ -> pure state
 
 handleEvent :: Event -> AppState -> Aff AppState
 handleEvent event state = case event of
@@ -354,7 +390,10 @@ handleEvent event state = case event of
       , nowPlayingState = newNowPlayingState
       }
 
-  Event.UpdateProgress -> updateProgressBar state
+  Event.UpdateProgress -> do
+    now <- liftEffect $ Time.getCurrentInstant
+    state' <- liftEffect $ prefetchImagesIfNeeded now state
+    updateProgressBar state'
 
   Event.UpdateScanStatus newStatus -> updateScanStatus newStatus state
 
