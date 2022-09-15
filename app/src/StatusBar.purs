@@ -12,6 +12,7 @@ module StatusBar
   , updateProgressBar
   , updateProgressElement
   , updateStatusBar
+  , setInitialProgress
   ) where
 
 import Control.Monad.Reader.Class (ask)
@@ -54,11 +55,7 @@ newCurrentTrack (QueuedTrack currentTrack) = Html.div $ do
 
   progressBar <- Html.div $ do
     Html.addClass "progress"
-    now <- liftEffect $ Time.getCurrentInstant
-    let
-      position = Time.subtract now currentTrack.startedAt
-      completion = Time.toSeconds position / Int.toNumber currentTrack.durationSeconds
-    Html.setTransform $ "translateX(" <> show (-100.0 * (1.0 - completion)) <> "%)"
+    setInitialProgress (QueuedTrack currentTrack)
     ask
 
   Html.div $ do
@@ -142,12 +139,12 @@ updateStatusBar currentTrack state =
       -- the same track twice in a row. Instead, the client should assign a
       -- unique identifier with every enqueue operation.
       Just old | old.track == newTrack.trackId -> pure state
-      Just old -> addCurrentTrack (QueuedTrack newTrack) =<< removeCurrentTrack state
-      Nothing  -> addCurrentTrack (QueuedTrack newTrack) state
+      Just _old -> addCurrentTrack (QueuedTrack newTrack) =<< removeCurrentTrack state
+      Nothing   -> addCurrentTrack (QueuedTrack newTrack) state
 
     Nothing -> case state.current of
-      Just old -> removeCurrentTrack state
-      Nothing  -> pure state
+      Just _old -> removeCurrentTrack state
+      Nothing   -> pure state
 
 isBlocked :: QueuedTrack -> Boolean
 isBlocked (QueuedTrack track) = track.isBuffering && track.bufferedSeconds == 0.0
@@ -187,6 +184,16 @@ nextProgressForCurrent (QueuedTrack currentTrack) now =
       }
     else
       nextProgressPlaying now (QueuedTrack currentTrack)
+
+-- Like `updateProgressElement`, but don't animate. Intended for setting the
+-- initial position when constructing the progress bar.
+setInitialProgress :: QueuedTrack -> Html Unit
+setInitialProgress (QueuedTrack currentTrack) = do
+  now <- liftEffect $ Time.getCurrentInstant
+  let
+    position = Time.subtract now currentTrack.startedAt
+    completion = Time.toSeconds position / Int.toNumber currentTrack.durationSeconds
+  Html.setTransform $ "translateX(" <> show (-100.0 * (1.0 - completion)) <> "%)"
 
 -- Update the transform and transition of the element so its offset should
 -- coincide with the playback position of the track. Return a delay until the
