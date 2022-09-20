@@ -8,26 +8,26 @@
 -- @query insert_file_metadata(metadata: InsertFileMetadata)
 insert into
   file_metadata
-  ( filename,
-  , mtime,
+  ( filename
+  , mtime
   , imported_at
-  , streaminfo_channels,
-  , streaminfo_bits_per_sample,
-  , streaminfo_num_samples,
-  , streaminfo_sample_rate,
-  , tag_album,
-  , tag_albumartist,
-  , tag_albumartistsort,
-  , tag_artist,
-  , tag_musicbrainz_albumartistid,
-  , tag_musicbrainz_albumid,
-  , tag_musicbrainz_trackid,
-  , tag_discnumber,
-  , tag_tracknumber,
-  , tag_originaldate,
-  , tag_date,
-  , tag_title,
-  , tag_bs17704_track_loudness,
+  , streaminfo_channels
+  , streaminfo_bits_per_sample
+  , streaminfo_num_samples
+  , streaminfo_sample_rate
+  , tag_album
+  , tag_albumartist
+  , tag_albumartistsort
+  , tag_artist
+  , tag_musicbrainz_albumartistid
+  , tag_musicbrainz_albumid
+  , tag_musicbrainz_trackid
+  , tag_discnumber
+  , tag_tracknumber
+  , tag_originaldate
+  , tag_date
+  , tag_title
+  , tag_bs17704_track_loudness
   , tag_bs17704_album_loudness
   )
 values
