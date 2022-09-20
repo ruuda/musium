@@ -5,8 +5,60 @@
 -- you may not use this file except in compliance with the License.
 -- A copy of the License has been included in the root of the repository.
 
+-- @query insert_file_metadata(metadata: InsertFileMetadata)
+insert into
+  file_metadata
+  ( filename,
+  , mtime,
+  , imported_at
+  , streaminfo_channels,
+  , streaminfo_bits_per_sample,
+  , streaminfo_num_samples,
+  , streaminfo_sample_rate,
+  , tag_album,
+  , tag_albumartist,
+  , tag_albumartistsort,
+  , tag_artist,
+  , tag_musicbrainz_albumartistid,
+  , tag_musicbrainz_albumid,
+  , tag_musicbrainz_trackid,
+  , tag_discnumber,
+  , tag_tracknumber,
+  , tag_originaldate,
+  , tag_date,
+  , tag_title,
+  , tag_bs17704_track_loudness,
+  , tag_bs17704_album_loudness
+  )
+values
+  ( :filename                      -- :str
+  , :mtime                         -- :i64
+  , :imported_at                   -- :str
+  , :streaminfo_channels           -- :i64
+  , :streaminfo_bits_per_sample    -- :i64
+  , :streaminfo_num_samples        -- :i64?
+  , :streaminfo_sample_rate        -- :i64
+  , :tag_album                     -- :str?
+  , :tag_albumartist               -- :str?
+  , :tag_albumartistsort           -- :str?
+  , :tag_artist                    -- :str?
+  , :tag_musicbrainz_albumartistid -- :str?
+  , :tag_musicbrainz_albumid       -- :str?
+  , :tag_musicbrainz_trackid       -- :str?
+  , :tag_discnumber                -- :str?
+  , :tag_tracknumber               -- :str?
+  , :tag_originaldate              -- :str?
+  , :tag_date                      -- :str?
+  , :tag_title                     -- :str?
+  , :tag_bs17704_track_loudness    -- :str?
+  , :tag_bs17704_album_loudness    -- :str?
+);
+
+-- @query delete_file_metadata(file_id: i64)
+delete from file_metadata where id = :file_id;
+
 -- @query iter_file_metadata() ->* FileMetadata
-SELECT
+select
   filename                      /* :str  */,
   mtime                         /* :i64  */,
   streaminfo_channels           /* :i64  */,
@@ -26,10 +78,20 @@ SELECT
   tag_title                     /* :str? */,
   tag_bs17704_track_loudness    /* :str? */,
   tag_bs17704_album_loudness    /* :str? */
-FROM
+from
   file_metadata
-ORDER BY
-  filename ASC;
+order by
+  filename asc;
+
+-- @query iter_file_metadata_mtime() ->* FileMetadataSimple
+select
+    id       -- :i64
+  , filename -- :str
+  , mtime    -- :i64
+from
+  file_metadata
+order by
+  filename asc;
 
 -- @query insert_album_loudness(album_id: i64, loudness: f64)
 INSERT INTO album_loudness (album_id, bs17704_loudness_lufs)
