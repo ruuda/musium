@@ -351,7 +351,7 @@ fn play_queue(
     let mut io = device.io_bytes();
 
     loop {
-        let (result, target_volume, needs_decode, pending_ms) = {
+        let (result, target_volume, needs_decode) = {
             let mut state = state_mutex.lock().unwrap();
             let result = ensure_buffers_full(
                 &device,
@@ -364,7 +364,6 @@ fn play_queue(
                 result,
                 state.target_volume_full_scale(),
                 state.needs_decode(),
-                state.pending_duration_ms(),
             )
         };
 
@@ -384,7 +383,10 @@ fn play_queue(
         match result {
             FillResult::QueueEmpty => return,
             FillResult::Yield => {
-                let max_sleep_ms = 5_000.min(pending_ms as i32 / 2);
+                // If we are in this loop, then we are already playing, so for
+                // the sake of being responsive to songs starting, we don't have
+                // to have a low timeout here. But for volume changes we might.
+                let max_sleep_ms = 15;
                 alsa::poll::poll(&mut fds, max_sleep_ms).expect("TODO: Failed to wait for events.");
             }
             FillResult::ChangeFormat(new_format) => {
