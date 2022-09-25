@@ -194,11 +194,13 @@ fn write_samples(
     let n_available = match pcm.avail_update() {
         Ok(n) => n,
         Err(err) => {
-            let silent = true;
+            println!("DEBUG: write_samples was in error, the error was {:?}.", err);
+            let silent = false;
             pcm.try_recover(err, silent)?;
-            println!("DEBUG: write_samples was in error, but recovered now.");
-            println!("The error was {:?}", err);
-            pcm.avail_update()?
+            println!("DEBUG: we are recovered now.");
+            let n = pcm.avail_update()?;
+            println!("DEBUG: avail_update after recover: {}.", n);
+            n
         }
     } as usize;
 
