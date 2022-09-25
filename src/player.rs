@@ -20,6 +20,7 @@ use claxon;
 use claxon::metadata::StreamInfo;
 
 use crate::config::Config;
+use crate::error::Error;
 use crate::exec_pre_post;
 use crate::filter::StateVariableFilter;
 use crate::history::PlaybackEvent;
@@ -64,6 +65,15 @@ impl fmt::Display for Millibel {
 pub struct Format {
     pub sample_rate: Hertz,
     pub bits_per_sample: u32,
+}
+
+impl Format {
+    pub fn default() -> Format {
+        Format {
+            sample_rate: Hertz(44_100),
+            bits_per_sample: 16,
+        }
+    }
 }
 
 /// A block of interleaved samples, queued for playback.
@@ -309,6 +319,38 @@ pub struct DecodeResult {
     reader: Option<FlacReader>,
 }
 
+/// Open a file, and `fadvise` that we will read it entirely.
+///
+/// In the decoder we might sometimes open a file, then decode it partially
+/// (because our buffer is full), and then resume decoding only a long time
+/// later. Possibly a disk will spin down. Tell the kernel that we are going to
+/// want the entire thing, so we can later finish decoding without having to
+/// spin the disk up again (for this particular file).
+///
+/// A related scenario that sometimes happens is that the disk is spun down, but
+/// a part of a file is still cached in the page cache. Then if we play it,
+/// playback starts immediately, but then gets stuck half-way because the
+/// decoder is waiting for the rest of the file. There too, it can help to tell
+/// the kernel early that we will need the entire thing. (Though probably it’s
+/// still too late, because decoding is fast, so we would have hit the blocking
+/// IO anyway within a few seconds.)
+fn open_with_readahead(fname: &str) -> crate::error::Result<FlacReader> {
+    use std::os::unix::io::AsRawFd;
+    let file = fs::File::open(fname)?;
+    let fd = file.as_raw_fd();
+    let offset = 0;
+    let len = file.metadata()?.len() as libc::off64_t;
+    unsafe {
+        let _ = libc::posix_fadvise64(fd, offset, len, libc::POSIX_FADV_SEQUENTIAL);
+        let _ = libc::posix_fadvise64(fd, offset, len, libc::POSIX_FADV_WILLNEED);
+    }
+    let reader = match FlacReader::new(file) {
+        Ok(r) => r,
+        Err(err) => return Err(Error::FormatError(fname.into(), err)),
+    };
+    Ok(reader)
+}
+
 impl DecodeTask {
     /// Decode until the end of the file, or until we produced more than `stop_after_bytes`.
     pub fn run(
@@ -331,11 +373,18 @@ impl DecodeTask {
         let fname = index.get_filename(track.filename);
         // TODO: Add a proper way to do logging.
         println!("Opening {:?} for decode.", fname);
-        let reader = match FlacReader::open(fname) {
+
+        let reader = match open_with_readahead(fname) {
             Ok(r) => r,
-            // TODO: Don't crash the full daemon on decode errors.
-            Err(err) => panic!("Failed to open {:?} for reading: {:?}", fname, err),
+            Err(err) => {
+                println!("Error in {:?}: {:?}", fname, err);
+                return DecodeResult {
+                    block: Block::new(Format::default(), Vec::new()),
+                    reader: None,
+                };
+            }
         };
+
         DecodeTask::decode(reader, filters, stop_after_bytes)
     }
 
