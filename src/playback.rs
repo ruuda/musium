@@ -170,7 +170,7 @@ enum WriteResult {
     /// Done for now, check back later.
     ///
     /// This can happen either when the playback buffer is full, or when the
-    /// decode buffer is empty. After a yield we release the stake lock, so if
+    /// decode buffer is empty. After a yield we release the state lock, so if
     /// the decode thread has new blocks for the decode buffer, we will pick
     /// that up. And then we poll the file descriptor, until it is ready to
     /// write to again.
@@ -186,6 +186,7 @@ fn write_samples(
     use alsa::pcm::State;
 
     let mut next_format = None;
+    let mut n_consumed = 0;
 
     // Query how many frames are available for writing. If the device is in a
     // failed state, for example because of an underrun, then this fails, and
@@ -195,17 +196,16 @@ fn write_samples(
         Ok(n) => n,
         Err(err) => {
             println!("DEBUG: write_samples was in error, the error was {:?}.", err);
-            let silent = false;
-            pcm.try_recover(err, silent)?;
-            println!("DEBUG: we are recovered now.");
-            let n = pcm.avail_update()?;
-            println!("DEBUG: avail_update after recover: {}.", n);
-            n
+            // Previously we used try_recover here, but all it does is call
+            // prepare, which we would do anyway below. See [1].
+            // [1]: https://git.alsa-project.org/?p=alsa-lib.git;a=blob;f=src/pcm/pcm.c;
+            // h=bc18954b92da124bafd3a67913bd3c8900dd012f;hb=HEAD#l7864
+            0
         }
     } as usize;
 
     if n_available > 0 {
-        let n_consumed = match player.peek_mut() {
+        n_consumed = match player.peek_mut() {
             Some(ref block) if current_format != block.format() => {
                 // Next block has a different sample rate or bit depth, finish
                 // what is still in the buffer, so we can switch afterwards.
@@ -239,7 +239,25 @@ fn write_samples(
     }
 
     match pcm.state() {
+        // We are playing, we tried to replenish the buffer, but there are no
+        // decoded samples available, or there was nothing to fill. In the first
+        // case we need to release the state lock and hope that the decoder has
+        // caught up in the next iteration, in the second case we just need to
+        // wait a bit for the audio device to make room in the buffer, so either
+        // way, we yield.
+        State::Running if n_consumed == 0 => Ok(WriteResult::Yield),
+
+        // We are playing. We replenished the buffer a bit, but not fully. But
+        // we did make progress. Run another iteration immediately, there might
+        // be more decoded samples available in a next block.
+        State::Running if n_consumed < n_available => Ok(WriteResult::Continue),
+
+        // We are playing, and we replenished the buffer fully (since n_consumed
+        // >= n_available because of the above pattern, and n_consumed <=
+        // n_available because we cannot write more samples than there is space
+        // available). Sleep until there is space in the buffer again.
         State::Running => Ok(WriteResult::Yield),
+
         State::Draining => match next_format {
             Some(_) => Ok(WriteResult::Yield),
             None if player.is_queue_empty() => Ok(WriteResult::QueueEmpty),
@@ -268,11 +286,17 @@ fn write_samples(
             pcm.drain()?;
             Ok(WriteResult::QueueEmpty)
         }
+        // If the PCM is ready for playback, but we are not in one of the above
+        // two cases, then we could fill the buffer a bit more before we start,
+        // which is a good idea to reduce the risk of buffer underrun.
+        State::Prepared if n_consumed > 0 && n_consumed < n_available => {
+            // If we wrote anything, we can try again immediately, there might
+            // be more decoded samples in a next block.
+            Ok(WriteResult::Continue)
+        }
         State::Prepared => {
-            // If the PCM is ready for playback, but we are not in one of the
-            // above two cases, then we could fill the buffer a bit more before
-            // we start, which is a good idea to reduce the risk of buffer
-            // underrun.
+            // But if we had no samples, yield, so the decoder can take the
+            // state lock.
             Ok(WriteResult::Yield)
         }
         State::XRun => {
