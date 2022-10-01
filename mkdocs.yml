@@ -2,9 +2,16 @@ site_name: Musium
 site_url: https://ruuda.github.io/musium/
 repo_url: https://github.com/ruuda/musium
 strict: true
+
 theme:
   name: null
   custom_dir: docs/theme
+
+markdown_extensions:
+  - toc:
+      permalink: true
+      permalink_title: null
+
 nav:
   - Overview: index.md
   - User Guide:
