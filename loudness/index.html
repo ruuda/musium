@@ -10,7 +10,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Loudness normalization — Musium</title>
-  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500,400i" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
      https://rsms.me/inter/#faq-cdn suggests that linking these files directly is fine.
@@ -110,6 +110,7 @@
     font-weight: 600;
     font-size: 1rem;
     color: #444;
+    position: relative;
   }
   h1 {
     font-size: 2rem;
@@ -122,6 +123,19 @@
     font-size: 1.42rem;
     margin-top: 3.5rem;
     margin-bottom: 1.6rem;
+  }
+  .headerlink {
+    position: absolute;
+    left: -0.9em;
+    width: 1em;
+    opacity: 0.0;
+    transition: opacity 0.2s ease-in;
+  }
+  /* Don't show the link for h1, usually you only have a single h1 at the top
+     of the page, so it doesn't make much sense to add an anchor there, and with
+     the larger font size, it doesn't fit in a narrow viewport. */
+  h2:hover .headerlink, h3:hover .headerlink {
+    opacity: 1.0;
   }
   code {
     font-family: 'Roboto Mono', monospace;
@@ -190,6 +204,10 @@
     margin-right: 1.41rem;
     color: #555;
   }
+  code .k { color: #36d; }
+  code .kt, code .nb { color: #d36; }
+  code .c1, code .cm { color: #d36; font-style: italic; }
+  code .s { color: #c43; }
   ul, ol {
     list-style-type: none;
     counter-reset: item;
@@ -308,6 +326,7 @@
   }
   aside li.toc-heading {
     padding-left: 1em;
+    padding-right: 0.3em;
   }
 
   @media(max-width: 63rem)
@@ -395,7 +414,7 @@
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="loudness-normalization">Loudness normalization</h1>
+        <h1 id="loudness-normalization">Loudness normalization<a class="headerlink" href="#loudness-normalization">&para;</a></h1>
 <p>Musium can normalize the perceptual playback loudness based on loudness
 information in flac tags.</p>
 <p>The volume slider in Musium treats 0 dB volume as 0 dB gain for the output
@@ -410,7 +429,7 @@ When the Musium volume slider is set to -5 dB, a track with a loudness of -10
 for inherently loud tracks: a track with a loudness of -23 <abbr>LUFS</abbr> is
 already playing at the maximum device volume, but a track with a loudness of
 -13 <abbr>LUFS</abbr> has enough headroom to allow the volume to be set to 10 dB.</p>
-<h2 id="tags">Tags</h2>
+<h2 id="tags">Tags<a class="headerlink" href="#tags">&para;</a></h2>
 <p>Two tags affect loudness normalization:</p>
 <ul>
 <li><code>BS17704_TRACK_LOUDNESS</code></li>
@@ -422,7 +441,7 @@ of all tracks respectively. The value must be a decimal number, followed by the
 suffix “<abbr>LUFS</abbr>” for Loudness Units Full Scale. For example,
 <code>-9.317 LUFS</code>. The value for album loudness must be consistent across all tracks
 in the album.</p>
-<h2 id="replaygain">ReplayGain</h2>
+<h2 id="replaygain">ReplayGain<a class="headerlink" href="#replaygain">&para;</a></h2>
 <p>ReplayGain has been very influential for loudness normalization, and it is
 widely supported by both taggers and players, but unfortunately it has become
 ambiguous over time. ReplayGain does not store the loudness of the track
@@ -442,7 +461,7 @@ to match the loudness of your music to e.g. external streaming services.)
 Furthermore, by naming the tag after the revision of the standard, future
 revisions to <abbr>BS.1770</abbr> will not create ambiguities in the meaning of
 existing tags.</p>
-<h2 id="writing-bs1770-4-tags">Writing BS.1770-4 tags</h2>
+<h2 id="writing-bs1770-4-tags">Writing BS.1770-4 tags<a class="headerlink" href="#writing-bs1770-4-tags">&para;</a></h2>
 <p><a href="https://github.com/ruuda/bs1770#tagging-flac-files">The <abbr>BS1770</abbr> <code>flacgain</code> utility</a> can be used to analyze a
 collection of flac files, and to add <code>BS17704_*</code> tags.</p>
       </article>

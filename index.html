@@ -10,7 +10,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Overview — Musium</title>
-  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500,400i" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
      https://rsms.me/inter/#faq-cdn suggests that linking these files directly is fine.
@@ -110,6 +110,7 @@
     font-weight: 600;
     font-size: 1rem;
     color: #444;
+    position: relative;
   }
   h1 {
     font-size: 2rem;
@@ -122,6 +123,19 @@
     font-size: 1.42rem;
     margin-top: 3.5rem;
     margin-bottom: 1.6rem;
+  }
+  .headerlink {
+    position: absolute;
+    left: -0.9em;
+    width: 1em;
+    opacity: 0.0;
+    transition: opacity 0.2s ease-in;
+  }
+  /* Don't show the link for h1, usually you only have a single h1 at the top
+     of the page, so it doesn't make much sense to add an anchor there, and with
+     the larger font size, it doesn't fit in a narrow viewport. */
+  h2:hover .headerlink, h3:hover .headerlink {
+    opacity: 1.0;
   }
   code {
     font-family: 'Roboto Mono', monospace;
@@ -190,6 +204,10 @@
     margin-right: 1.41rem;
     color: #555;
   }
+  code .k { color: #36d; }
+  code .kt, code .nb { color: #d36; }
+  code .c1, code .cm { color: #d36; font-style: italic; }
+  code .s { color: #c43; }
   ul, ol {
     list-style-type: none;
     counter-reset: item;
@@ -308,6 +326,7 @@
   }
   aside li.toc-heading {
     padding-left: 1em;
+    padding-right: 0.3em;
   }
 
   @media(max-width: 63rem)
@@ -395,13 +414,13 @@
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="musium">Musium</h1>
+        <h1 id="musium">Musium<a class="headerlink" href="#musium">&para;</a></h1>
 <p>Musium is an album-centered music player. It is designed to run as a daemon on
 an always-on device connected to speakers. Playback can be controlled from
 anywhere on the local network through a webinterface.</p>
 <p><em>Vaporware warning: while Musium is usable, it is missing essential features,
 such as the ability to pause playback.</em></p>
-<h2 id="features">Features</h2>
+<h2 id="features">Features<a class="headerlink" href="#features">&para;</a></h2>
 <ul>
 <li>Respects album artist and original release date metadata.</li>
 <li>Designed to scale to hundreds of thousands of tracks.</li>
@@ -411,14 +430,14 @@ such as the ability to pause playback.</em></p>
 <li>Logarithmic volume control and loudness normalization.</li>
 <li>Last.fm and Listenbrainz scrobbling.</li>
 </ul>
-<h2 id="limitations">Limitations</h2>
+<h2 id="limitations">Limitations<a class="headerlink" href="#limitations">&para;</a></h2>
 <ul>
 <li>Musium is not a tagger, it expects your files to be tagged correctly already.</li>
 <li>Supports only flac, with no intention to support other audio formats.</li>
 <li>Requires Linux, with no intention to become cross-platform.</li>
 <li>Uses raw Alsa, with no intention to support PulseAudio.</li>
 </ul>
-<h2 id="getting-started">Getting started</h2>
+<h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started">&para;</a></h2>
 <p>Follow the <a href="building/">building</a> chapter to build from source. Then write a
 <a href="configuration/">configuration file</a> to <code>musium.conf</code>:</p>
 <pre><code>listen = 0.0.0.0:8233

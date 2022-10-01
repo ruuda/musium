@@ -17,7 +17,7 @@ A copy of the License has been included in the root of the repository.
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% if page.title %}{{ page.title }} — {% endif %}{{ config.site_name }}</title>
-  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500,400i" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
      https://rsms.me/inter/#faq-cdn suggests that linking these files directly is fine.
@@ -117,6 +117,7 @@ A copy of the License has been included in the root of the repository.
     font-weight: 600;
     font-size: 1rem;
     color: #444;
+    position: relative;
   }
   h1 {
     font-size: 2rem;
@@ -129,6 +130,19 @@ A copy of the License has been included in the root of the repository.
     font-size: 1.42rem;
     margin-top: 3.5rem;
     margin-bottom: 1.6rem;
+  }
+  .headerlink {
+    position: absolute;
+    left: -0.9em;
+    width: 1em;
+    opacity: 0.0;
+    transition: opacity 0.2s ease-in;
+  }
+  /* Don't show the link for h1, usually you only have a single h1 at the top
+     of the page, so it doesn't make much sense to add an anchor there, and with
+     the larger font size, it doesn't fit in a narrow viewport. */
+  h2:hover .headerlink, h3:hover .headerlink {
+    opacity: 1.0;
   }
   code {
     font-family: 'Roboto Mono', monospace;
@@ -197,6 +211,10 @@ A copy of the License has been included in the root of the repository.
     margin-right: 1.41rem;
     color: #555;
   }
+  code .k { color: #36d; }
+  code .kt, code .nb { color: #d36; }
+  code .c1, code .cm { color: #d36; font-style: italic; }
+  code .s { color: #c43; }
   ul, ol {
     list-style-type: none;
     counter-reset: item;
@@ -315,6 +333,7 @@ A copy of the License has been included in the root of the repository.
   }
   aside li.toc-heading {
     padding-left: 1em;
+    padding-right: 0.3em;
   }
 
   @media(max-width: 63rem)

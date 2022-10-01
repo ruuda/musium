@@ -10,7 +10,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Disks — Musium</title>
-  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500,400i" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
      https://rsms.me/inter/#faq-cdn suggests that linking these files directly is fine.
@@ -110,6 +110,7 @@
     font-weight: 600;
     font-size: 1rem;
     color: #444;
+    position: relative;
   }
   h1 {
     font-size: 2rem;
@@ -122,6 +123,19 @@
     font-size: 1.42rem;
     margin-top: 3.5rem;
     margin-bottom: 1.6rem;
+  }
+  .headerlink {
+    position: absolute;
+    left: -0.9em;
+    width: 1em;
+    opacity: 0.0;
+    transition: opacity 0.2s ease-in;
+  }
+  /* Don't show the link for h1, usually you only have a single h1 at the top
+     of the page, so it doesn't make much sense to add an anchor there, and with
+     the larger font size, it doesn't fit in a narrow viewport. */
+  h2:hover .headerlink, h3:hover .headerlink {
+    opacity: 1.0;
   }
   code {
     font-family: 'Roboto Mono', monospace;
@@ -190,6 +204,10 @@
     margin-right: 1.41rem;
     color: #555;
   }
+  code .k { color: #36d; }
+  code .kt, code .nb { color: #d36; }
+  code .c1, code .cm { color: #d36; font-style: italic; }
+  code .s { color: #c43; }
   ul, ol {
     list-style-type: none;
     counter-reset: item;
@@ -308,6 +326,7 @@
   }
   aside li.toc-heading {
     padding-left: 1em;
+    padding-right: 0.3em;
   }
 
   @media(max-width: 63rem)
@@ -395,7 +414,7 @@
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="disks">Disks</h1>
+        <h1 id="disks">Disks<a class="headerlink" href="#disks">&para;</a></h1>
 <p>Musium is built to handle music libraries in the order of terabytes in size.
 Spinning disks are still the most cost-effective storage medium at this scale,
 but storing your music on a spinning disk has downsides:</p>
@@ -407,7 +426,7 @@ but storing your music on a spinning disk has downsides:</p>
 <p>Furthermore, disks can spin down to save power when unused. While this does
 reduce audible noise, it also causes access latencies of dozens of seconds when
 accessing the disk after a period of inactivity.</p>
-<h2 id="playback-disk-optimizations">Playback disk optimizations</h2>
+<h2 id="playback-disk-optimizations">Playback disk optimizations<a class="headerlink" href="#playback-disk-optimizations">&para;</a></h2>
 <p>To optimize for disks that aggressively try to spin down, Musium takes the
 following actions:</p>
 <ul>
@@ -422,7 +441,7 @@ following actions:</p>
 <li>Resume decoding well in time to allow for the disk to spin up before the
    buffer runs out.</li>
 </ul>
-<h2 id="indexing-disk-optimizations">Indexing disk optimizations</h2>
+<h2 id="indexing-disk-optimizations">Indexing disk optimizations<a class="headerlink" href="#indexing-disk-optimizations">&para;</a></h2>
 <p>Indexing is typically <abbr>IO</abbr>-bound when the music library is not in the
 page cache. (And the only reason why it would be in the page cache, is because
 you indexed the library a moment ago.) Musium optimizes for this by indexing
@@ -434,7 +453,7 @@ disk should be sufficiently large. Set the size using e.g.</p>
 <pre><code>echo 2048 | sudo tee /sys/block/sda/queue/nr_requests
 </code></pre>
 <p>A queue size of 2 versus 2048 can make a factor 2 difference in indexing time!</p>
-<h2 id="the-play-database">The play database</h2>
+<h2 id="the-play-database">The play database<a class="headerlink" href="#the-play-database">&para;</a></h2>
 <p>Musium keeps a record of which songs you played in a database. It writes to this
 database every time a new track starts playing. When you keep this database on
 a spinning disk, that undermines the above optimizations. Fortunately, the

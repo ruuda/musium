@@ -10,7 +10,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Webinterface — Musium</title>
-  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500,400i" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
      https://rsms.me/inter/#faq-cdn suggests that linking these files directly is fine.
@@ -110,6 +110,7 @@
     font-weight: 600;
     font-size: 1rem;
     color: #444;
+    position: relative;
   }
   h1 {
     font-size: 2rem;
@@ -122,6 +123,19 @@
     font-size: 1.42rem;
     margin-top: 3.5rem;
     margin-bottom: 1.6rem;
+  }
+  .headerlink {
+    position: absolute;
+    left: -0.9em;
+    width: 1em;
+    opacity: 0.0;
+    transition: opacity 0.2s ease-in;
+  }
+  /* Don't show the link for h1, usually you only have a single h1 at the top
+     of the page, so it doesn't make much sense to add an anchor there, and with
+     the larger font size, it doesn't fit in a narrow viewport. */
+  h2:hover .headerlink, h3:hover .headerlink {
+    opacity: 1.0;
   }
   code {
     font-family: 'Roboto Mono', monospace;
@@ -190,6 +204,10 @@
     margin-right: 1.41rem;
     color: #555;
   }
+  code .k { color: #36d; }
+  code .kt, code .nb { color: #d36; }
+  code .c1, code .cm { color: #d36; font-style: italic; }
+  code .s { color: #c43; }
   ul, ol {
     list-style-type: none;
     counter-reset: item;
@@ -308,6 +326,7 @@
   }
   aside li.toc-heading {
     padding-left: 1em;
+    padding-right: 0.3em;
   }
 
   @media(max-width: 63rem)
@@ -395,19 +414,19 @@
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="webinterface">Webinterface</h1>
+        <h1 id="webinterface">Webinterface<a class="headerlink" href="#webinterface">&para;</a></h1>
 <p>The webinterface is the primary client for Musium. It is served from the
 <code>listen</code> location <a href="../configuration/">configured in the config file</a>. The client
 controls the Musium daemon through a <abbr>REST</abbr> <abbr>API</abbr>,
 see also the <a href="../api/"><abbr>API</abbr> reference</a>.</p>
 <p>The user interface should be straightforward to use. Browse the library, and
 click or tap a track to enqueue it.</p>
-<h2 id="keyboard-shortcuts">Keyboard shortcuts</h2>
+<h2 id="keyboard-shortcuts">Keyboard shortcuts<a class="headerlink" href="#keyboard-shortcuts">&para;</a></h2>
 <p>On desktop, the following keyboard shortcuts are supported:</p>
 <ul>
 <li><strong>/</strong> or <strong>?</strong> — Open the search panel.</li>
 </ul>
-<h2 id="use-as-mobile-app">Use as mobile app</h2>
+<h2 id="use-as-mobile-app">Use as mobile app<a class="headerlink" href="#use-as-mobile-app">&para;</a></h2>
 <p>For an app-like experience, open the webinterface in a browser, and then use the
 “add to home screen” feature to add Musium as an app.</p>
       </article>

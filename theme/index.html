@@ -10,7 +10,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kilsbergen — Musium</title>
-  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500,400i" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
      https://rsms.me/inter/#faq-cdn suggests that linking these files directly is fine.
@@ -110,6 +110,7 @@
     font-weight: 600;
     font-size: 1rem;
     color: #444;
+    position: relative;
   }
   h1 {
     font-size: 2rem;
@@ -122,6 +123,19 @@
     font-size: 1.42rem;
     margin-top: 3.5rem;
     margin-bottom: 1.6rem;
+  }
+  .headerlink {
+    position: absolute;
+    left: -0.9em;
+    width: 1em;
+    opacity: 0.0;
+    transition: opacity 0.2s ease-in;
+  }
+  /* Don't show the link for h1, usually you only have a single h1 at the top
+     of the page, so it doesn't make much sense to add an anchor there, and with
+     the larger font size, it doesn't fit in a narrow viewport. */
+  h2:hover .headerlink, h3:hover .headerlink {
+    opacity: 1.0;
   }
   code {
     font-family: 'Roboto Mono', monospace;
@@ -190,6 +204,10 @@
     margin-right: 1.41rem;
     color: #555;
   }
+  code .k { color: #36d; }
+  code .kt, code .nb { color: #d36; }
+  code .c1, code .cm { color: #d36; font-style: italic; }
+  code .s { color: #c43; }
   ul, ol {
     list-style-type: none;
     counter-reset: item;
@@ -308,6 +326,7 @@
   }
   aside li.toc-heading {
     padding-left: 1em;
+    padding-right: 0.3em;
   }
 
   @media(max-width: 63rem)
@@ -395,23 +414,24 @@
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="kilsbergen">Kilsbergen</h1>
+        <h1 id="kilsbergen">Kilsbergen<a class="headerlink" href="#kilsbergen">&para;</a></h1>
 <p>A clean <a href="https://www.mkdocs.org/">MkDocs</a> theme.</p>
 <p>This theme is designed for <a href="https://github.com/ruuda/tako">Tako</a>, <a href="https://github.com/ruuda/pris">Pris</a>, and <a href="https://github.com/ruuda/noblit">Noblit</a>.
 It is not flexible on purpose: it supports everything I need, and nothing more.</p>
-<h2 id="demos">Demos</h2>
+<h2 id="demos">Demos<a class="headerlink" href="#demos">&para;</a></h2>
 <ul>
 <li><a href="https://ruuda.github.io/musium">Musium documentation</a></li>
 <li><a href="https://ruuda.github.io/noblit">Noblit documentation</a></li>
 <li><a href="https://ruuda.github.io/pris">Pris documentation</a></li>
+<li><a href="https://ruuda.github.io/squiller/">Squiller documentation</a></li>
 <li><a href="https://ruuda.github.io/tako">Tako documentation</a></li>
 </ul>
-<h2 id="features">Features</h2>
+<h2 id="features">Features<a class="headerlink" href="#features">&para;</a></h2>
 <ul>
 <li>Responsive design</li>
 <li>Zero javascript</li>
 </ul>
-<h2 id="usage">Usage</h2>
+<h2 id="usage">Usage<a class="headerlink" href="#usage">&para;</a></h2>
 <p>One easy way to use this theme, is to add it as a Git submodule to your <code>docs</code>
 directory, e.g. at <code>docs/theme</code>. Then add the following in your <code>mkdocs.yml</code>:</p>
 <pre><code class="language-yaml">theme:
@@ -420,7 +440,20 @@ directory, e.g. at <code>docs/theme</code>. Then add the following in your <code
 </code></pre>
 <p>This theme requires MkDocs 1.1 or later. For earlier versions, delete this
 <code>README.md</code> to work around <a href="https://github.com/mkdocs/mkdocs/issues/1766">this bug</a>.</p>
-<h2 id="license">License</h2>
+<p>To enable anchors next to section headings, add the following to your
+<code>mkdocs.yml</code>:</p>
+<pre><code class="language-yaml">markdown_extensions:
+  - toc:
+      permalink: true
+      permalink_title: null
+</code></pre>
+<p>To enable syntax highlighting, ensure that <code>pygmentize</code> is available, and add
+the following to your <code>mkdocs.yml</code>:</p>
+<pre><code class="language-yaml">markdown_extensions:
+  - codehilite
+</code></pre>
+<p>See also <a href="https://python-markdown.github.io/extensions/">the python-markdown list of extensions</a>.</p>
+<h2 id="license">License<a class="headerlink" href="#license">&para;</a></h2>
 <p>Kilsbergen is licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache 2.0</a> license. In the generated
 documentation, it is fine to just link to this readme from a comment.</p>
       </article>

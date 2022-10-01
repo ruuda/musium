@@ -10,7 +10,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Running — Musium</title>
-  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500,400i" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
      https://rsms.me/inter/#faq-cdn suggests that linking these files directly is fine.
@@ -110,6 +110,7 @@
     font-weight: 600;
     font-size: 1rem;
     color: #444;
+    position: relative;
   }
   h1 {
     font-size: 2rem;
@@ -122,6 +123,19 @@
     font-size: 1.42rem;
     margin-top: 3.5rem;
     margin-bottom: 1.6rem;
+  }
+  .headerlink {
+    position: absolute;
+    left: -0.9em;
+    width: 1em;
+    opacity: 0.0;
+    transition: opacity 0.2s ease-in;
+  }
+  /* Don't show the link for h1, usually you only have a single h1 at the top
+     of the page, so it doesn't make much sense to add an anchor there, and with
+     the larger font size, it doesn't fit in a narrow viewport. */
+  h2:hover .headerlink, h3:hover .headerlink {
+    opacity: 1.0;
   }
   code {
     font-family: 'Roboto Mono', monospace;
@@ -190,6 +204,10 @@
     margin-right: 1.41rem;
     color: #555;
   }
+  code .k { color: #36d; }
+  code .kt, code .nb { color: #d36; }
+  code .c1, code .cm { color: #d36; font-style: italic; }
+  code .s { color: #c43; }
   ul, ol {
     list-style-type: none;
     counter-reset: item;
@@ -308,6 +326,7 @@
   }
   aside li.toc-heading {
     padding-left: 1em;
+    padding-right: 0.3em;
   }
 
   @media(max-width: 63rem)
@@ -395,7 +414,7 @@
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="running">Running</h1>
+        <h1 id="running">Running<a class="headerlink" href="#running">&para;</a></h1>
 <p>Musium logs to stdout and runs until it is killed, which makes it easy to run in
 a terminal for development, and it works well with systemd to run as a daemon.
 Before we can start the server, we need to scan the library. After
@@ -410,7 +429,7 @@ do not need to wait for it, we can already start the server:</p>
 <p>After thumbnail generation is complete, we can either restart the server, or use
 the <em>rescan library</em> option on the <em>about</em> page and then refresh the
 webinterface to make the new thumbnails show up.</p>
-<h2 id="with-systemd">With systemd</h2>
+<h2 id="with-systemd">With systemd<a class="headerlink" href="#with-systemd">&para;</a></h2>
 <p>An example unit file:</p>
 <pre><code>[Unit]
 Description=Musium Music Daemon
@@ -440,7 +459,7 @@ above file to <code>/etc/systemd/system/musium.service</code>, then start the se
 <pre><code>systemctl daemon-reload
 systemctl start musium
 </code></pre>
-<h2 id="with-systemd-user">With systemd-user</h2>
+<h2 id="with-systemd-user">With systemd-user<a class="headerlink" href="#with-systemd-user">&para;</a></h2>
 <p>It is also possible to run Musium using your systemd user instance. In that
 case, place the unit at <code>~/.config/systemd/user/musium.service</code>, and use
 <code>system --user</code> to start it. If you run the deamon under your own account on a
@@ -448,7 +467,7 @@ headless system, you may need to run</p>
 <pre><code>loginctl enable-linger $USER
 </code></pre>
 <p>to allow the deamon to linger after you log out.</p>
-<h2 id="scanning-the-library">Scanning the library</h2>
+<h2 id="scanning-the-library">Scanning the library<a class="headerlink" href="#scanning-the-library">&para;</a></h2>
 <p><code>musium serve</code> will serve the library as it was when it was last scanned. When
 the library changes, you need to run <code>musium scan musium.conf</code> to pick up the
 changes, and then restart the server. Alternatively, you can use the <em>rescan

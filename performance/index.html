@@ -10,7 +10,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Performance — Musium</title>
-  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500,400i" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
      https://rsms.me/inter/#faq-cdn suggests that linking these files directly is fine.
@@ -110,6 +110,7 @@
     font-weight: 600;
     font-size: 1rem;
     color: #444;
+    position: relative;
   }
   h1 {
     font-size: 2rem;
@@ -122,6 +123,19 @@
     font-size: 1.42rem;
     margin-top: 3.5rem;
     margin-bottom: 1.6rem;
+  }
+  .headerlink {
+    position: absolute;
+    left: -0.9em;
+    width: 1em;
+    opacity: 0.0;
+    transition: opacity 0.2s ease-in;
+  }
+  /* Don't show the link for h1, usually you only have a single h1 at the top
+     of the page, so it doesn't make much sense to add an anchor there, and with
+     the larger font size, it doesn't fit in a narrow viewport. */
+  h2:hover .headerlink, h3:hover .headerlink {
+    opacity: 1.0;
   }
   code {
     font-family: 'Roboto Mono', monospace;
@@ -190,6 +204,10 @@
     margin-right: 1.41rem;
     color: #555;
   }
+  code .k { color: #36d; }
+  code .kt, code .nb { color: #d36; }
+  code .c1, code .cm { color: #d36; font-style: italic; }
+  code .s { color: #c43; }
   ul, ol {
     list-style-type: none;
     counter-reset: item;
@@ -308,6 +326,7 @@
   }
   aside li.toc-heading {
     padding-left: 1em;
+    padding-right: 0.3em;
   }
 
   @media(max-width: 63rem)
@@ -395,8 +414,8 @@
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="performance">Performance</h1>
-<h2 id="disk-io">Disk IO</h2>
+        <h1 id="performance">Performance<a class="headerlink" href="#performance">&para;</a></h1>
+<h2 id="disk-io">Disk IO<a class="headerlink" href="#disk-io">&para;</a></h2>
 <p>Should files be read from multiple threads, even when the disk is the
 bottleneck? By having multiple concurrent reads, the operating system might be
 able to optimize the disk access pattern, and schedule reads more efficiently
@@ -694,7 +713,7 @@ instead:</p>
 </tr>
 </tbody>
 </table>
-<h2 id="precollect">Precollect</h2>
+<h2 id="precollect">Precollect<a class="headerlink" href="#precollect">&para;</a></h2>
 <p>At commit <code>c6c611be9179d939dc5646dc43ab8bdf5ddc2962</code>, with 24 threads. First
 collecting discovered paths into a vec, and constructing the index by iterating
 over the paths in the vec. Is this the right thing to do, or should we put the
@@ -803,7 +822,7 @@ and reallocations for storing the pathbuf pointers in a vec are totally worth
 it. It might be even better then to alternate beween scanning paths and
 processing them, to reduce peak memory usage, but let’s not worry about that at
 this point.</p>
-<h2 id="fadvise">Fadvise</h2>
+<h2 id="fadvise">Fadvise<a class="headerlink" href="#fadvise">&para;</a></h2>
 <p>Command:</p>
 <pre><code>echo 3 | sudo tee /proc/sys/vm/drop_caches
 perf stat target/release/musium cache /pool/music /pool/volatile/covers dummy

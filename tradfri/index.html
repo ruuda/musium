@@ -10,7 +10,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Trådfri control — Musium</title>
-  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500,400i" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
      https://rsms.me/inter/#faq-cdn suggests that linking these files directly is fine.
@@ -110,6 +110,7 @@
     font-weight: 600;
     font-size: 1rem;
     color: #444;
+    position: relative;
   }
   h1 {
     font-size: 2rem;
@@ -122,6 +123,19 @@
     font-size: 1.42rem;
     margin-top: 3.5rem;
     margin-bottom: 1.6rem;
+  }
+  .headerlink {
+    position: absolute;
+    left: -0.9em;
+    width: 1em;
+    opacity: 0.0;
+    transition: opacity 0.2s ease-in;
+  }
+  /* Don't show the link for h1, usually you only have a single h1 at the top
+     of the page, so it doesn't make much sense to add an anchor there, and with
+     the larger font size, it doesn't fit in a narrow viewport. */
+  h2:hover .headerlink, h3:hover .headerlink {
+    opacity: 1.0;
   }
   code {
     font-family: 'Roboto Mono', monospace;
@@ -190,6 +204,10 @@
     margin-right: 1.41rem;
     color: #555;
   }
+  code .k { color: #36d; }
+  code .kt, code .nb { color: #d36; }
+  code .c1, code .cm { color: #d36; font-style: italic; }
+  code .s { color: #c43; }
   ul, ol {
     list-style-type: none;
     counter-reset: item;
@@ -308,6 +326,7 @@
   }
   aside li.toc-heading {
     padding-left: 1em;
+    padding-right: 0.3em;
   }
 
   @media(max-width: 63rem)
@@ -395,12 +414,12 @@
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="tradfri-control">Trådfri control</h1>
+        <h1 id="tradfri-control">Trådfri control<a class="headerlink" href="#tradfri-control">&para;</a></h1>
 <p>Musium can <a href="../configuration/#exec_pre_playback_path">run a command</a> before
 starting playback and after a period of inactivity. In combination with <a href="https://www.ikea.com/nl/en/p/tradfri-wireless-control-outlet-90356166/">Ikea
 Trådfri wireless control outlets</a>, this is a nice way to turn speakers
 on and off.</p>
-<h2 id="controlling-outlets-with-libcoap">Controlling outlets with libcoap</h2>
+<h2 id="controlling-outlets-with-libcoap">Controlling outlets with libcoap<a class="headerlink" href="#controlling-outlets-with-libcoap">&para;</a></h2>
 <p>We can send <em>Constrained Application Protocol</em> (CoAP) messages to the Trådfri
 gateway using <code>coap-client</code>, part of <a href="https://www.libcoap.net/">libcoap</a>. You
 will need the <abbr>ip</abbr> address of the gateway, and the security code on
@@ -420,7 +439,7 @@ together, the following command will turn the outlet on:</p>
 </code></pre>
 <p>Note: In my case, the gateway is at <code>192.168.1.100</code>. I also authenticated
 previously and created the <code>musium</code> user <a href="https://github.com/glenndehaan/ikea-tradfri-coap-docs/blob/68976e6641e4533f9ad51ec724942a0b6c143bce/README.md#authenticate">as described here</a>.</p>
-<h2 id="device-groups">Device groups</h2>
+<h2 id="device-groups">Device groups<a class="headerlink" href="#device-groups">&para;</a></h2>
 <p>If you have multiple outlets in a group — for example, one per speaker — and you
 want to turn the entire group on and off, the paths are different. Instead of
 15001 to address a single device, we use 15004 to address a group. Furthermore,
@@ -431,7 +450,7 @@ turn group 131078 on:</p>
   coaps://192.168.1.100:5684/15004/131078 \
   -m put -e '{"5850": 1}'
 </code></pre>
-<h2 id="pre-playback-and-post-idle-scripts">Pre-playback and post-idle scripts</h2>
+<h2 id="pre-playback-and-post-idle-scripts">Pre-playback and post-idle scripts<a class="headerlink" href="#pre-playback-and-post-idle-scripts">&para;</a></h2>
 <p>To call <code>coap-client</code> before and after playback, we need to create a
 pre-playback and post-idle script, that we can use with the
 <a href="../configuration/#exec_pre_playback_path"><code>exec_pre_playback_path</code></a> setting.

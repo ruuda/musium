@@ -10,7 +10,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Submitting to Listenbrainz — Musium</title>
-  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500,400i" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
      https://rsms.me/inter/#faq-cdn suggests that linking these files directly is fine.
@@ -110,6 +110,7 @@
     font-weight: 600;
     font-size: 1rem;
     color: #444;
+    position: relative;
   }
   h1 {
     font-size: 2rem;
@@ -122,6 +123,19 @@
     font-size: 1.42rem;
     margin-top: 3.5rem;
     margin-bottom: 1.6rem;
+  }
+  .headerlink {
+    position: absolute;
+    left: -0.9em;
+    width: 1em;
+    opacity: 0.0;
+    transition: opacity 0.2s ease-in;
+  }
+  /* Don't show the link for h1, usually you only have a single h1 at the top
+     of the page, so it doesn't make much sense to add an anchor there, and with
+     the larger font size, it doesn't fit in a narrow viewport. */
+  h2:hover .headerlink, h3:hover .headerlink {
+    opacity: 1.0;
   }
   code {
     font-family: 'Roboto Mono', monospace;
@@ -190,6 +204,10 @@
     margin-right: 1.41rem;
     color: #555;
   }
+  code .k { color: #36d; }
+  code .kt, code .nb { color: #d36; }
+  code .c1, code .cm { color: #d36; font-style: italic; }
+  code .s { color: #c43; }
   ul, ol {
     list-style-type: none;
     counter-reset: item;
@@ -308,6 +326,7 @@
   }
   aside li.toc-heading {
     padding-left: 1em;
+    padding-right: 0.3em;
   }
 
   @media(max-width: 63rem)
@@ -395,13 +414,13 @@
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="submitting-listens-to-listenbrainz">Submitting listens to Listenbrainz</h1>
+        <h1 id="submitting-listens-to-listenbrainz">Submitting listens to Listenbrainz<a class="headerlink" href="#submitting-listens-to-listenbrainz">&para;</a></h1>
 <p>Musium can be set up to submit plays to <a href="https://listenbrainz.org">Listenbrainz</a>. Musium logs plays to
 a SQLite database in the data directory. An enclosed script can batch-submit
 those plays to Listenbrainz. Running the script regularly ensures that all plays
 get submitted. Musium does not currently offer immediate submission or <em>now
 playing</em> updates.</p>
-<h2 id="running-manually">Running manually</h2>
+<h2 id="running-manually">Running manually<a class="headerlink" href="#running-manually">&para;</a></h2>
 <p>To submit listens to your profile, you need to obtain your <em>user token</em> from
 <a href="https://listenbrainz.org/profile/">listenbrainz.org/profile</a>. Make this
 available in the <code>LISTENBRAINZ_USER_TOKEN</code> environment variable, for example:</p>
@@ -416,7 +435,7 @@ Musium stores <code>musium.sqlite3</code> in that directory.</p>
 <p>The script only submits listens that originated from Musium itself, it does
 not submit imported listening history. Listens that were submitted successfully
 get marked as such in the database, so they are only submitted once.</p>
-<h2 id="with-systemd">With systemd</h2>
+<h2 id="with-systemd">With systemd<a class="headerlink" href="#with-systemd">&para;</a></h2>
 <p>Systemd timers can be useful for submitting listens periodically. This works the
 same as <a href="../scrobbling/#with-systemd">Last.fm scrobbling with systemd</a>, with two
 small differences:</p>

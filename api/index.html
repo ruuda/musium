@@ -10,7 +10,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>API Reference — Musium</title>
-  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500,400i" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
      https://rsms.me/inter/#faq-cdn suggests that linking these files directly is fine.
@@ -110,6 +110,7 @@
     font-weight: 600;
     font-size: 1rem;
     color: #444;
+    position: relative;
   }
   h1 {
     font-size: 2rem;
@@ -122,6 +123,19 @@
     font-size: 1.42rem;
     margin-top: 3.5rem;
     margin-bottom: 1.6rem;
+  }
+  .headerlink {
+    position: absolute;
+    left: -0.9em;
+    width: 1em;
+    opacity: 0.0;
+    transition: opacity 0.2s ease-in;
+  }
+  /* Don't show the link for h1, usually you only have a single h1 at the top
+     of the page, so it doesn't make much sense to add an anchor there, and with
+     the larger font size, it doesn't fit in a narrow viewport. */
+  h2:hover .headerlink, h3:hover .headerlink {
+    opacity: 1.0;
   }
   code {
     font-family: 'Roboto Mono', monospace;
@@ -190,6 +204,10 @@
     margin-right: 1.41rem;
     color: #555;
   }
+  code .k { color: #36d; }
+  code .kt, code .nb { color: #d36; }
+  code .c1, code .cm { color: #d36; font-style: italic; }
+  code .s { color: #c43; }
   ul, ol {
     list-style-type: none;
     counter-reset: item;
@@ -308,6 +326,7 @@
   }
   aside li.toc-heading {
     padding-left: 1em;
+    padding-right: 0.3em;
   }
 
   @media(max-width: 63rem)
@@ -395,7 +414,7 @@
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="api">API</h1>
+        <h1 id="api">API<a class="headerlink" href="#api">&para;</a></h1>
 <p>The Musium daemon can be controlled with a <abbr>REST</abbr> <abbr>API</abbr>.
 This <abbr>API</abbr> is used by the webinterface. Because Musium is a work in
 progress, no stability promise is made about the <abbr>API</abbr>, and the
@@ -403,42 +422,42 @@ progress, no stability promise is made about the <abbr>API</abbr>, and the
 <p>This page gives an overview of the endpoints that exist, it is not full
 reference-level material. The easiest way to learn more is to query the
 <abbr>API</abbr> with Curl.</p>
-<h2 id="library">Library</h2>
-<h3 id="get-apitracktrack_idflac"><code>GET</code> /api/track/:track_id.flac</h3>
+<h2 id="library">Library<a class="headerlink" href="#library">&para;</a></h2>
+<h3 id="get-apitracktrack_idflac"><code>GET</code> /api/track/:track_id.flac<a class="headerlink" href="#get-apitracktrack_idflac">&para;</a></h3>
 <p>Return the track itself, as a flac file.</p>
-<h3 id="get-apialbumalbum_id"><code>GET</code> /api/album/:album_id</h3>
+<h3 id="get-apialbumalbum_id"><code>GET</code> /api/album/:album_id<a class="headerlink" href="#get-apialbumalbum_id">&para;</a></h3>
 <p>Return json album metadata.</p>
-<h3 id="get-apialbums"><code>GET</code> /api/albums</h3>
+<h3 id="get-apialbums"><code>GET</code> /api/albums<a class="headerlink" href="#get-apialbums">&para;</a></h3>
 <p>Return a json list of all albums, ordered by album id.</p>
-<h3 id="get-apiartistartist_id"><code>GET</code> /api/artist/:artist_id</h3>
+<h3 id="get-apiartistartist_id"><code>GET</code> /api/artist/:artist_id<a class="headerlink" href="#get-apiartistartist_id">&para;</a></h3>
 <p>Return a json object with artist details, and albums in chronological order.</p>
-<h3 id="get-apicoveralbum_id"><code>GET</code> /api/cover/:album_id</h3>
+<h3 id="get-apicoveralbum_id"><code>GET</code> /api/cover/:album_id<a class="headerlink" href="#get-apicoveralbum_id">&para;</a></h3>
 <p>Return cover art in original resolution.</p>
-<h3 id="get-apithumbalbum_id"><code>GET</code> /api/thumb/:album_id</h3>
+<h3 id="get-apithumbalbum_id"><code>GET</code> /api/thumb/:album_id<a class="headerlink" href="#get-apithumbalbum_id">&para;</a></h3>
 <p>Return downsampled cover art.</p>
-<h3 id="get-apisearchqquery"><code>GET</code> /api/search?q=:query</h3>
+<h3 id="get-apisearchqquery"><code>GET</code> /api/search?q=:query<a class="headerlink" href="#get-apisearchqquery">&para;</a></h3>
 <p>Return json search results.</p>
-<h3 id="get-apistats"><code>GET</code> /api/stats</h3>
+<h3 id="get-apistats"><code>GET</code> /api/stats<a class="headerlink" href="#get-apistats">&para;</a></h3>
 <p>Return json library statistics.</p>
-<h2 id="queue">Queue</h2>
-<h3 id="get-apiqueue"><code>GET</code> /api/queue</h3>
+<h2 id="queue">Queue<a class="headerlink" href="#queue">&para;</a></h2>
+<h3 id="get-apiqueue"><code>GET</code> /api/queue<a class="headerlink" href="#get-apiqueue">&para;</a></h3>
 <p>Return the current play queue. The track at the front of the queue is the
 currently playing track, and it includes information about the playback
 position.</p>
-<h3 id="put-apiqueuetrack_id"><code>PUT</code> /api/queue/:track_id</h3>
+<h3 id="put-apiqueuetrack_id"><code>PUT</code> /api/queue/:track_id<a class="headerlink" href="#put-apiqueuetrack_id">&para;</a></h3>
 <p>Enqueue the track with the given id.</p>
-<h2 id="volume">Volume</h2>
-<h3 id="get-apivolume"><code>GET</code> /api/volume</h3>
+<h2 id="volume">Volume<a class="headerlink" href="#volume">&para;</a></h2>
+<h3 id="get-apivolume"><code>GET</code> /api/volume<a class="headerlink" href="#get-apivolume">&para;</a></h3>
 <p>Return the current volume.</p>
-<h3 id="post-apivolumeup"><code>POST</code> /api/volume/up</h3>
+<h3 id="post-apivolumeup"><code>POST</code> /api/volume/up<a class="headerlink" href="#post-apivolumeup">&para;</a></h3>
 <p>Increase the volume by 1 dB. Returns the new volume.</p>
-<h3 id="post-apivolumedown"><code>POST</code> /api/volume/down</h3>
+<h3 id="post-apivolumedown"><code>POST</code> /api/volume/down<a class="headerlink" href="#post-apivolumedown">&para;</a></h3>
 <p>Decrease the volume by 1 dB. Returns the new volume.</p>
-<h2 id="scanning">Scanning</h2>
-<h3 id="get-apiscanstatus"><code>GET</code> /api/scan/status</h3>
+<h2 id="scanning">Scanning<a class="headerlink" href="#scanning">&para;</a></h2>
+<h3 id="get-apiscanstatus"><code>GET</code> /api/scan/status<a class="headerlink" href="#get-apiscanstatus">&para;</a></h3>
 <p>Return the status of the current scan as a json object. Returns <code>null</code> if no
 scan has ever been started.</p>
-<h3 id="post-apiscanstart"><code>POST</code> /api/scan/start</h3>
+<h3 id="post-apiscanstart"><code>POST</code> /api/scan/start<a class="headerlink" href="#post-apiscanstart">&para;</a></h3>
 <p>Start a scan of the library directory. If a scan is already in progress, this is
 a no-op. Returns the status of the scan.</p>
       </article>

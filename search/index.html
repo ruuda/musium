@@ -10,7 +10,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Search — Musium</title>
-  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500,400i" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
      https://rsms.me/inter/#faq-cdn suggests that linking these files directly is fine.
@@ -110,6 +110,7 @@
     font-weight: 600;
     font-size: 1rem;
     color: #444;
+    position: relative;
   }
   h1 {
     font-size: 2rem;
@@ -122,6 +123,19 @@
     font-size: 1.42rem;
     margin-top: 3.5rem;
     margin-bottom: 1.6rem;
+  }
+  .headerlink {
+    position: absolute;
+    left: -0.9em;
+    width: 1em;
+    opacity: 0.0;
+    transition: opacity 0.2s ease-in;
+  }
+  /* Don't show the link for h1, usually you only have a single h1 at the top
+     of the page, so it doesn't make much sense to add an anchor there, and with
+     the larger font size, it doesn't fit in a narrow viewport. */
+  h2:hover .headerlink, h3:hover .headerlink {
+    opacity: 1.0;
   }
   code {
     font-family: 'Roboto Mono', monospace;
@@ -190,6 +204,10 @@
     margin-right: 1.41rem;
     color: #555;
   }
+  code .k { color: #36d; }
+  code .kt, code .nb { color: #d36; }
+  code .c1, code .cm { color: #d36; font-style: italic; }
+  code .s { color: #c43; }
   ul, ol {
     list-style-type: none;
     counter-reset: item;
@@ -308,6 +326,7 @@
   }
   aside li.toc-heading {
     padding-left: 1em;
+    padding-right: 0.3em;
   }
 
   @media(max-width: 63rem)
@@ -395,18 +414,18 @@
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="search">Search</h1>
+        <h1 id="search">Search<a class="headerlink" href="#search">&para;</a></h1>
 <p>Each of the three Musium data types (artists, albums, and tracks) can be
 searched from a single search box, that searches all three simultaneously.
 To facilitate search, Musium maintains indexes from words to artists, albums,
 and tracks. Indexes are sorted on normalized word, so we can locate the words
 with a given prefix in logarithmic time.</p>
-<h2 id="single-search">Single search</h2>
+<h2 id="single-search">Single search<a class="headerlink" href="#single-search">&para;</a></h2>
 <p>Musium has a one search box. It should be able to find what you need from a
 single query, without the need to select what you are searching for, and without
 the need for separate browsers for artists, albums, and tracks, with independent
 search functions.</p>
-<h2 id="minimal-results">Minimal results</h2>
+<h2 id="minimal-results">Minimal results<a class="headerlink" href="#minimal-results">&para;</a></h2>
 <p>Search should find everything that is relevant, but nothing more. For example,
 when searching for “queen”, we should show the artist Queen, but not every
 individual track by that artist, otherwise “Dancing Queen” by Abba would get
@@ -437,7 +456,7 @@ then we do need to include the track itself, to make it discoverable.</p>
 <li>Words that occur in the track artist, but not in the album artist, should
    make the track show up.</li>
 </ul>
-<h2 id="search-combinations">Search combinations</h2>
+<h2 id="search-combinations">Search combinations<a class="headerlink" href="#search-combinations">&para;</a></h2>
 <p>We want to support the following queries:</p>
 <ul>
 <li>Track title only, e.g. “dancing queen”</li>
@@ -451,7 +470,7 @@ then we do need to include the track itself, to make it discoverable.</p>
 <li>Track title and album, e.g. “arrival dancing queen”</li>
 <li>Artist, album, and track, e.g. “abba arrival dancing queen”</li>
 </ul>
-<h2 id="indexes">Indexes</h2>
+<h2 id="indexes">Indexes<a class="headerlink" href="#indexes">&para;</a></h2>
 <p>Based on the above considerations, we need the following indexes:</p>
 <ul>
 <li>Album artist words.</li>

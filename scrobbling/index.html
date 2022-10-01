@@ -10,7 +10,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Scrobbling to Last.fm — Musium</title>
-  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500,400i" rel="stylesheet">
   <style>
   /* The Inter font family, see https://rsms.me/inter.
      https://rsms.me/inter/#faq-cdn suggests that linking these files directly is fine.
@@ -110,6 +110,7 @@
     font-weight: 600;
     font-size: 1rem;
     color: #444;
+    position: relative;
   }
   h1 {
     font-size: 2rem;
@@ -122,6 +123,19 @@
     font-size: 1.42rem;
     margin-top: 3.5rem;
     margin-bottom: 1.6rem;
+  }
+  .headerlink {
+    position: absolute;
+    left: -0.9em;
+    width: 1em;
+    opacity: 0.0;
+    transition: opacity 0.2s ease-in;
+  }
+  /* Don't show the link for h1, usually you only have a single h1 at the top
+     of the page, so it doesn't make much sense to add an anchor there, and with
+     the larger font size, it doesn't fit in a narrow viewport. */
+  h2:hover .headerlink, h3:hover .headerlink {
+    opacity: 1.0;
   }
   code {
     font-family: 'Roboto Mono', monospace;
@@ -190,6 +204,10 @@
     margin-right: 1.41rem;
     color: #555;
   }
+  code .k { color: #36d; }
+  code .kt, code .nb { color: #d36; }
+  code .c1, code .cm { color: #d36; font-style: italic; }
+  code .s { color: #c43; }
   ul, ol {
     list-style-type: none;
     counter-reset: item;
@@ -308,6 +326,7 @@
   }
   aside li.toc-heading {
     padding-left: 1em;
+    padding-right: 0.3em;
   }
 
   @media(max-width: 63rem)
@@ -395,13 +414,13 @@
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="scrobbling-to-lastfm">Scrobbling to Last.fm</h1>
+        <h1 id="scrobbling-to-lastfm">Scrobbling to Last.fm<a class="headerlink" href="#scrobbling-to-lastfm">&para;</a></h1>
 <p>Musium can be set up to scrobble plays to <a href="https://last.fm/">Last.fm</a>. Musium logs plays to a
 SQLite database in the data directory. An enclosed script can batch-submit those
 plays to Last.fm. Running the script regularly ensures that all plays get
 scrobbled.  Musium does not currently offer immediate scrobbling or <em>now
 playing</em> updates.</p>
-<h2 id="authenticating">Authenticating</h2>
+<h2 id="authenticating">Authenticating<a class="headerlink" href="#authenticating">&para;</a></h2>
 <p>To scrobble to Last.fm, you need an <abbr>API</abbr> key and secret. Create those
 at <a href="https://www.last.fm/api/account/create">last.fm/api/account/create</a>.
 Ensure that the <abbr>API</abbr> key and secret are available in the environment
@@ -412,7 +431,7 @@ the repository, run</p>
 </code></pre>
 <p>This will print a <code>LAST_FM_SESSION_KEY</code>, which you also need to put in the
 environment to be able to submit scrobbles.</p>
-<h2 id="running-manually">Running manually</h2>
+<h2 id="running-manually">Running manually<a class="headerlink" href="#running-manually">&para;</a></h2>
 <p>With the environment variables set up, run the <code>scrobble</code> command in the
 repository:</p>
 <pre><code>tools/scrobble.py scrobble /data_path/musium.sqlite3
@@ -423,7 +442,7 @@ Musium stores <code>musium.sqlite3</code> in that directory.</p>
 not scrobble imported listening history. Listens that were scrobbled
 successfully get marked as such in the database, so they are only scrobbled
 once.</p>
-<h2 id="with-systemd">With systemd</h2>
+<h2 id="with-systemd">With systemd<a class="headerlink" href="#with-systemd">&para;</a></h2>
 <p>Systemd timers can be useful for scrobbling periodically. First create a
 one-shot service that runs the scrobble script:</p>
 <pre><code class="language-systemd">[Unit]
