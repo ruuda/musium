@@ -38,7 +38,6 @@ use std::sync::mpsc::{Receiver, SyncSender};
 use walkdir;
 
 use crate::config::Config;
-use crate::database::{Database, FileMetadataInsert, FileMetaId};
 use crate::database;
 use crate::db2;
 use crate::db2::{Connection, Transaction};
@@ -50,6 +49,8 @@ use crate::thumb_cache::ThumbCache;
 use crate::{MetaIndex, MemoryMetaIndex};
 
 type FlacReader = claxon::FlacReader<fs::File>;
+
+pub struct FileMetaId(i64);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum ScanStage {
@@ -211,8 +212,6 @@ pub fn scan(
     status: &mut Status,
     status_sender: &mut SyncSender<Status>,
 ) -> database::Result<()> {
-    let mut db_legacy = Database::new(&connection)?;
-
     let mut files_current = enumerate_flac_files(library_path, status_sender, status);
 
     status.stage = ScanStage::PreProcessingMetadata;
@@ -822,7 +821,6 @@ impl BackgroundScanner {
 #[cfg(test)]
 mod test {
     use crate::db2::Connection;
-    use crate::database::{Database, FileMetaId};
     use super::{Mtime, get_updates};
     use std::path::PathBuf;
 

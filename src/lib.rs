@@ -13,9 +13,9 @@ extern crate serde_json;
 extern crate unicode_normalization;
 extern crate bs1770;
 
+mod database;
 mod album_table;
 mod build;
-mod database;
 mod db2;
 mod exec_pre_post;
 mod filter;
