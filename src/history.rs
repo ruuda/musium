@@ -10,9 +10,9 @@
 use std::path::Path;
 use std::sync::mpsc::Receiver;
 
-use crate::database;
-use crate::db2;
-use crate::db2::{Connection, Listen, Result};
+use crate::database_utils;
+use crate::database as db;
+use crate::database::{Connection, Listen, Result};
 use crate::mvar::Var;
 use crate::player::QueueId;
 use crate::{MetaIndex, MemoryMetaIndex, TrackId};
@@ -29,7 +29,7 @@ pub fn main(
     index_var: Var<MemoryMetaIndex>,
     events: Receiver<PlaybackEvent>,
 ) -> Result<()> {
-    let connection = database::connect_read_write(db_path)?;
+    let connection = database_utils::connect_read_write(db_path)?;
     let mut db = Connection::new(&connection);
 
     let mut last_listen_id = None;
@@ -60,14 +60,14 @@ pub fn main(
                     disc_number: track.disc_number as i64,
                 };
                 let mut tx = db.begin()?;
-                let result = db2::insert_listen_started(&mut tx, listen)?;
+                let result = db::insert_listen_started(&mut tx, listen)?;
                 tx.commit()?;
                 last_listen_id = Some(result);
             }
             PlaybackEvent::Completed(queue_id, track_id) => {
                 if let Some(listen_id) = last_listen_id {
                     let mut tx = db.begin()?;
-                    db2::update_listen_completed(
+                    db::update_listen_completed(
                         &mut tx,
                         listen_id,
                         queue_id.0 as i64,

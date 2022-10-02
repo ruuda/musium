@@ -13,10 +13,10 @@ extern crate serde_json;
 extern crate unicode_normalization;
 extern crate bs1770;
 
-mod database;
 mod album_table;
 mod build;
-mod db2;
+mod database;
+mod database_utils;
 mod exec_pre_post;
 mod filter;
 mod loudness;
@@ -316,12 +316,12 @@ impl MemoryMetaIndex {
     /// thumbnails need updating.
     pub fn from_database(db_path: &Path) -> Result<(MemoryMetaIndex, BuildMetaIndex)> {
         let conn = sqlite::Connection::open(db_path)?;
-        let mut db = db2::Connection::new(&conn);
+        let mut db = database::Connection::new(&conn);
         let mut tx = db.begin()?;
 
         let mut builder = BuildMetaIndex::new();
 
-        for file in db2::iter_file_metadata(&mut tx)? {
+        for file in database::iter_file_metadata(&mut tx)? {
             builder.insert(file?);
         }
 

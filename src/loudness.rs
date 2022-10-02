@@ -15,9 +15,9 @@ use bs1770::{ChannelLoudnessMeter};
 use claxon::FlacReader;
 use claxon;
 
-use crate::database;
-use crate::db2;
-use crate::db2::Transaction;
+use crate::database_utils;
+use crate::database as db;
+use crate::database::Transaction;
 use crate::error;
 use crate::prim::{AlbumId, TrackId};
 use crate::scan::Status;
@@ -182,8 +182,8 @@ enum Insert {
 fn process_inserts(
     db_path: &Path,
     inserts: Receiver<Insert>,
-) -> database::Result<()> {
-    let connection = database::connect_read_write(db_path)?;
+) -> db::Result<()> {
+    let connection = database_utils::connect_read_write(db_path)?;
 
     // Reduce the number of fsyncs (and thereby improve performance), at the
     // cost of losing durability (but not consistency). This is fine, if we lose
@@ -196,17 +196,17 @@ fn process_inserts(
     // the number of syncs. This makes a big difference for disk utilisation
     // when the disk to read from and the disk that contain the database are the
     // same disk.
-    let mut db = db2::Connection::new(&connection);
+    let mut db = db::Connection::new(&connection);
     let mut tx = db.begin()?;
 
     for insert in inserts {
         match insert {
             Insert::Track { track_id, loudness, waveform } => {
-                db2::insert_track_loudness(&mut tx, track_id.0 as i64, loudness.loudness_lkfs() as f64)?;
-                db2::insert_track_waveform(&mut tx, track_id.0 as i64, waveform.as_bytes())?;
+                db::insert_track_loudness(&mut tx, track_id.0 as i64, loudness.loudness_lkfs() as f64)?;
+                db::insert_track_waveform(&mut tx, track_id.0 as i64, waveform.as_bytes())?;
             }
             Insert::Album { album_id, loudness } => {
-                db2::insert_album_loudness(&mut tx, album_id.0 as i64, loudness.loudness_lkfs() as f64)?;
+                db::insert_album_loudness(&mut tx, album_id.0 as i64, loudness.loudness_lkfs() as f64)?;
                 tx.commit()?;
                 tx = db.begin()?;
             }
@@ -290,7 +290,7 @@ impl<'a> TaskQueue<'a> {
     /// in the database. Note, this is a somewhat expensive query, since we
     /// check the existence of every album and track. It's better to rely on
     /// incremental building, but this can be used to backfill an old database.
-    pub fn push_tasks_missing(&mut self, tx: &mut Transaction) -> database::Result<()> {
+    pub fn push_tasks_missing(&mut self, tx: &mut Transaction) -> db::Result<()> {
         let index = self.index.clone();
 
         // Note, this is not the most efficient index query, because we have to
@@ -305,19 +305,19 @@ impl<'a> TaskQueue<'a> {
         // row in the database for that.
         'albums: for (album_id, _album) in index.get_albums() {
             // If the album is not there, we need to add it.
-            if db2::select_album_loudness_lufs(tx, album_id.0 as i64)?.is_none() {
+            if db::select_album_loudness_lufs(tx, album_id.0 as i64)?.is_none() {
                 self.push_task_album(*album_id);
                 continue 'albums
             }
 
             // If one of the tracks is not there, we also add the full album.
             for (track_id, _track) in index.get_album_tracks(*album_id) {
-                if db2::select_track_loudness_lufs(tx, track_id.0 as i64)?.is_none() {
+                if db::select_track_loudness_lufs(tx, track_id.0 as i64)?.is_none() {
                     self.push_task_album(*album_id);
                     continue 'albums
                 }
 
-                if db2::select_track_waveform(tx, track_id.0 as i64)?.is_none() {
+                if db::select_track_waveform(tx, track_id.0 as i64)?.is_none() {
                     self.push_task_album(*album_id);
                     continue 'albums
                 }

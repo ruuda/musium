@@ -14,9 +14,9 @@ use tiny_http::{Header, Request, Response, ResponseBox, Server};
 use tiny_http::Method::{Get, Post, Put, self};
 
 use crate::config::Config;
-use crate::database;
-use crate::db2::{Connection};
-use crate::db2;
+use crate::database_utils;
+use crate::database as db;
+use crate::database::Connection;
 use crate::mvar::Var;
 use crate::player::{Millibel, Player};
 use crate::prim::{ArtistId, AlbumId, TrackId};
@@ -162,7 +162,7 @@ impl MetaServer {
         let waveform = db
             .begin()
             .and_then(|mut tx| {
-                let result = db2::select_track_waveform(&mut tx, track_id.0 as i64)?;
+                let result = db::select_track_waveform(&mut tx, track_id.0 as i64)?;
                 tx.commit()?;
                 Ok(result)
             });
@@ -526,7 +526,7 @@ pub fn serve(bind: &str, service: Arc<MetaServer>) -> ! {
         let name = format!("http_server_{}", i);
         let builder = thread::Builder::new().name(name);
         let join_handle = builder.spawn(move || {
-            let connection = database::connect_readonly(service_i.config.db_path())
+            let connection = database_utils::connect_readonly(service_i.config.db_path())
                 .expect("Failed to connect to database.");
             let mut db = Connection::new(&connection);
             loop {

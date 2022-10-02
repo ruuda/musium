@@ -38,9 +38,9 @@ use std::sync::mpsc::{Receiver, SyncSender};
 use walkdir;
 
 use crate::config::Config;
-use crate::database;
-use crate::db2;
-use crate::db2::{Connection, Transaction};
+use crate::database_utils;
+use crate::database as db;
+use crate::database::{Connection, Transaction};
 use crate::error;
 use crate::loudness;
 use crate::mvar::{MVar, Var};
@@ -212,7 +212,7 @@ pub fn scan(
     library_path: &Path,
     status: &mut Status,
     status_sender: &mut SyncSender<Status>,
-) -> database::Result<()> {
+) -> db::Result<()> {
     let mut files_current = enumerate_flac_files(library_path, status_sender, status);
 
     status.stage = ScanStage::PreProcessingMetadata;
@@ -227,7 +227,7 @@ pub fn scan(
     let mut db = Connection::new(connection);
 
     let mut tx = db.begin()?;
-    db2::ensure_schema_exists(&mut tx)?;
+    db::ensure_schema_exists(&mut tx)?;
     tx.commit()?;
 
     let mut tx = db.begin()?;
@@ -247,7 +247,7 @@ pub fn scan(
 
     // Delete rows for outdated files, we will insert new rows below.
     for file_id in &rows_to_delete {
-        db2::delete_file_metadata(&mut tx, file_id.0)?;
+        db::delete_file_metadata(&mut tx, file_id.0)?;
     }
 
     // Format the current time, we store this in the `imported_at` column in the
@@ -351,9 +351,9 @@ fn get_updates(
     tx: &mut Transaction,
     rows_to_delete: &mut Vec<FileMetaId>,
     paths_to_scan: &mut Vec<(PathBuf, Mtime)>,
-) -> database::Result<()> {
+) -> db::Result<()> {
     let mut iter_curr = current_sorted.into_iter();
-    let mut iter_db = db2::iter_file_metadata_mtime(tx)?
+    let mut iter_db = db::iter_file_metadata_mtime(tx)?
         .map(|result|
             result.map(|row| (
                 FileMetaId(row.id),
@@ -419,7 +419,7 @@ pub fn insert_file_metadata_for_paths(
     now_str: &str,
     status_sender: &mut SyncSender<Status>,
     status: &mut Status,
-) -> database::Result<()> {
+) -> db::Result<()> {
     use std::sync::mpsc::sync_channel;
     // When we are IO bound, we need enough threads to keep the IO scheduler
     // queues fed, so it can schedule optimally and minimize seeks. Therefore,
@@ -527,7 +527,7 @@ fn insert_file_metadata(
     path: &Path,
     mtime: Mtime,
     flac_reader: FlacReader,
-) -> database::Result<()> {
+) -> db::Result<()> {
     let path_utf8 = match path.to_str() {
         Some(s) => s,
         None => {
@@ -539,7 +539,7 @@ fn insert_file_metadata(
     // Start with all fields that are known from the streaminfo, with tags
     // unfilled.
     let streaminfo = flac_reader.streaminfo();
-    let mut m = db2::InsertFileMetadata {
+    let mut m = db::InsertFileMetadata {
         filename: path_utf8,
         mtime: mtime.0,
         imported_at: now_str,
@@ -594,7 +594,7 @@ fn insert_file_metadata(
         }
     }
 
-    db2::insert_file_metadata(tx, m)
+    db::insert_file_metadata(tx, m)
 }
 
 pub fn run_scan_in_thread(
@@ -618,7 +618,7 @@ pub fn run_scan_in_thread(
         .spawn(move || {
             let mut status = Status::new();
 
-            let connection = database::connect_read_write(&db_path)?;
+            let connection = database_utils::connect_read_write(&db_path)?;
 
             // Scan all files, put the metadata in the database.
             scan(
@@ -821,13 +821,13 @@ impl BackgroundScanner {
 
 #[cfg(test)]
 mod test {
-    use crate::db2::Connection;
+    use crate::database::Connection;
     use super::{Mtime, FileMetaId, get_updates};
     use std::path::PathBuf;
 
     fn ensure_schema_exists(db: &mut Connection) {
         let mut tx = db.begin().unwrap();
-        crate::db2::ensure_schema_exists(&mut tx).unwrap();
+        crate::database::ensure_schema_exists(&mut tx).unwrap();
         tx.commit().unwrap();
     }
 
