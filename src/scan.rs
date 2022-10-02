@@ -225,6 +225,11 @@ pub fn scan(
     files_current.sort_by(|a, b| a.0.as_os_str().cmp(b.0.as_os_str()));
 
     let mut db = Connection::new(connection);
+
+    let mut tx = db.begin()?;
+    db2::ensure_schema_exists(&mut tx)?;
+    tx.commit()?;
+
     let mut tx = db.begin()?;
 
     let mut rows_to_delete = Vec::new();
