@@ -50,7 +50,8 @@ use crate::{MetaIndex, MemoryMetaIndex};
 
 type FlacReader = claxon::FlacReader<fs::File>;
 
-pub struct FileMetaId(i64);
+#[derive(Debug, Eq, PartialEq)]
+struct FileMetaId(i64);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum ScanStage {
@@ -345,7 +346,7 @@ pub fn enumerate_flac_files(
 /// removed and end up in `rows_to_delete`. Any files present currently, but
 /// not in the database, should be added and end up in `paths_to_scan`. Files
 /// that are present in both, but with a different mtime, end up in both.
-pub fn get_updates(
+fn get_updates(
     current_sorted: Vec<(PathBuf, Mtime)>,
     tx: &mut Transaction,
     rows_to_delete: &mut Vec<FileMetaId>,
@@ -821,8 +822,14 @@ impl BackgroundScanner {
 #[cfg(test)]
 mod test {
     use crate::db2::Connection;
-    use super::{Mtime, get_updates};
+    use super::{Mtime, FileMetaId, get_updates};
     use std::path::PathBuf;
+
+    fn ensure_schema_exists(db: &mut Connection) {
+        let mut tx = db.begin().unwrap();
+        crate::db2::ensure_schema_exists(&mut tx).unwrap();
+        tx.commit().unwrap();
+    }
 
     #[test]
     fn get_updates_empty_db() {
@@ -830,6 +837,7 @@ mod test {
         // so we expect all files to be scanned.
         let connection = sqlite::open(":memory:").unwrap();
         let mut db = Connection::new(&connection);
+        ensure_schema_exists(&mut db);
 
         let current_sorted = vec![
             (PathBuf::from("/foo/bar.flac"), Mtime(1)),
@@ -861,6 +869,7 @@ mod test {
         // database, so we expect no files to be scanned and no rows deleted.
         let connection = sqlite::open(":memory:").unwrap();
         let mut db = Connection::new(&connection);
+        ensure_schema_exists(&mut db);
         connection.execute(
             "
             insert into
@@ -902,6 +911,7 @@ mod test {
         // One file was added on the file system, one was deleted.
         let connection = sqlite::open(":memory:").unwrap();
         let mut db = Connection::new(&connection);
+        ensure_schema_exists(&mut db);
         connection.execute(
             "
             insert into
@@ -946,6 +956,7 @@ mod test {
         // differs.
         let connection = sqlite::open(":memory:").unwrap();
         let mut db = Connection::new(&connection);
+        ensure_schema_exists(&mut db);
         connection.execute(
             "
             insert into
@@ -985,6 +996,7 @@ mod test {
         // because it's not only ASCII.
         let connection = sqlite::open(":memory:").unwrap();
         let mut db = Connection::new(&connection);
+        ensure_schema_exists(&mut db);
         connection.execute(
             "
             insert into
@@ -1029,6 +1041,7 @@ mod test {
         // space, and getting the updates reaches a wrong conclusion.
         let connection = sqlite::open(":memory:").unwrap();
         let mut db = Connection::new(&connection);
+        ensure_schema_exists(&mut db);
         connection.execute(
             "
             insert into

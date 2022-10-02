@@ -125,12 +125,8 @@ create table if not exists listens
 -- NOTE: For this index, we need at least SQLite 3.20 (released 2017-08-01).
 -- Earlier versions prohibit "strftime" because it can be non-deterministic
 -- in some cases.
-connection.execute(
-    "
-    create unique index if not exists ix_listens_unique_second
-    on listens (cast(strftime('%s', started_at) as integer));
-    ",
-)?;
+create unique index if not exists ix_listens_unique_second
+on listens (cast(strftime('%s', started_at) as integer));
     "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
         Occupied(entry) => entry.into_mut(),
