@@ -28,11 +28,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1664734800,
-        "narHash": "sha256-7P2rP5EwfGVUYnNJGXVvaIl8NC3S43LRbfNQ7YenKFM=",
+        "lastModified": 1665245625,
+        "narHash": "sha256-c3xkWY6h/itTTWkPr2jIZbHBfneyfLo7lkIcybsVE/0=",
         "owner": "ruuda",
         "repo": "squiller",
-        "rev": "01d828de709b55e525c43162170ffc3cc43ece5f",
+        "rev": "5c674744342e9a684e37d57fc37a15ddd8f647cf",
         "type": "github"
       },
       "original": {
