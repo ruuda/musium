@@ -1,82 +1,82 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-         <loc>https://ruuda.github.io/musium/</loc>
+         <loc>https://docs.ruuda.nl/musium/</loc>
          <lastmod>2022-12-22</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://ruuda.github.io/musium/api/</loc>
+         <loc>https://docs.ruuda.nl/musium/api/</loc>
          <lastmod>2022-12-22</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://ruuda.github.io/musium/building/</loc>
+         <loc>https://docs.ruuda.nl/musium/building/</loc>
          <lastmod>2022-12-22</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://ruuda.github.io/musium/configuration/</loc>
+         <loc>https://docs.ruuda.nl/musium/configuration/</loc>
          <lastmod>2022-12-22</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://ruuda.github.io/musium/disks/</loc>
+         <loc>https://docs.ruuda.nl/musium/disks/</loc>
          <lastmod>2022-12-22</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://ruuda.github.io/musium/listenbrainz/</loc>
+         <loc>https://docs.ruuda.nl/musium/listenbrainz/</loc>
          <lastmod>2022-12-22</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://ruuda.github.io/musium/loudness/</loc>
+         <loc>https://docs.ruuda.nl/musium/loudness/</loc>
          <lastmod>2022-12-22</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://ruuda.github.io/musium/performance/</loc>
+         <loc>https://docs.ruuda.nl/musium/performance/</loc>
          <lastmod>2022-12-22</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://ruuda.github.io/musium/running/</loc>
+         <loc>https://docs.ruuda.nl/musium/running/</loc>
          <lastmod>2022-12-22</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://ruuda.github.io/musium/scrobbling/</loc>
+         <loc>https://docs.ruuda.nl/musium/scrobbling/</loc>
          <lastmod>2022-12-22</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://ruuda.github.io/musium/search/</loc>
+         <loc>https://docs.ruuda.nl/musium/search/</loc>
          <lastmod>2022-12-22</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://ruuda.github.io/musium/tagging/</loc>
+         <loc>https://docs.ruuda.nl/musium/tagging/</loc>
          <lastmod>2022-12-22</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://ruuda.github.io/musium/thumbnails/</loc>
+         <loc>https://docs.ruuda.nl/musium/thumbnails/</loc>
          <lastmod>2022-12-22</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://ruuda.github.io/musium/tradfri/</loc>
+         <loc>https://docs.ruuda.nl/musium/tradfri/</loc>
          <lastmod>2022-12-22</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://ruuda.github.io/musium/webinterface/</loc>
+         <loc>https://docs.ruuda.nl/musium/webinterface/</loc>
          <lastmod>2022-12-22</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://ruuda.github.io/musium/theme/</loc>
+         <loc>https://docs.ruuda.nl/musium/theme/</loc>
          <lastmod>2022-12-22</lastmod>
          <changefreq>daily</changefreq>
     </url>
