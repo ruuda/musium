@@ -52,9 +52,10 @@ storage medium. See also [the section on disks](disks.md) for more details.
 ### audio_device
 
 The <abbr>Alsa</abbr> card used for playback. When the configured card cannot
-be found, Musium will list all of the cards that are available. Musium uses the
-<abbr>Alsa</abbr> hardware device directly, there is no need nor support for
-PulseAudio.
+be found, Musium will list all of the cards that are available. You can also
+list cards manually with `aplay --list-devices`. The name of the device is
+listed between square brackets. Musium uses the <abbr>Alsa</abbr> hardware
+device directly, there is no need nor support for PulseAudio.
 
 ### audio_volume_control
 
