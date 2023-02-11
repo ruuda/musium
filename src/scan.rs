@@ -659,11 +659,13 @@ pub fn run_scan_in_thread(
 
             // TODO: Move issue reporting to a better place. Maybe take the builder and
             // index as an argument to this method.
-            eprintln!();
-            for issue in &builder.issues {
-                eprintln!("{}", issue);
+            if !builder.issues.is_empty() {
+                eprintln!();
+                for issue in &builder.issues {
+                    eprintln!("{}", issue);
+                }
+                eprintln!("\n\n\n");
             }
-            eprintln!("\n\n\n");
 
             {
                 status.stage = ScanStage::PreProcessingLoudness;
