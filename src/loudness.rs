@@ -218,7 +218,6 @@ fn process_inserts(
     // writing. Also vacuum the database to clean up any index pages that may
     // have become redundant.
     db.connection.execute("PRAGMA wal_checkpoint(TRUNCATE);")?;
-    db.connection.execute("VACUUM;")?;
 
     Ok(())
 }
