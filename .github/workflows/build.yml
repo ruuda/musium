@@ -12,11 +12,18 @@ jobs:
         with:
           submodules: true
 
+      - id: "nix-cache"
+        name: "Cache Nix"
+        uses: "actions/cache@v3.2.6"
+        with:
+          path: "/tmp/nixcache"
+          key: "nix-${{ hashFiles('flake.*') }}"
+
       - name: "Cache PureScript"
         uses: "actions/cache@v3.2.6"
         with:
           path: "app/.psc-package"
-          key: "psc-package-${{ hashFiles('app/psc-package.json', 'flake.lock', 'flake.nix') }}"
+          key: "psc-package-${{ hashFiles('app/psc-package.json', 'flake.*') }}"
           restore-keys: "psc-package-"
 
       - name: "Cache Rust"
@@ -29,13 +36,18 @@ jobs:
           # Rustup can be incompatible across versions, so if we update the
           # Nixpkgs snapshot and get a newer rustup, we should *not* reuse the
           # cache.
-          key: "rust-${{ hashFiles('flake.lock', 'flake.nix') }}-${{ hashFiles('Cargo.lock', 'rust-toolchain') }}"
-          restore-keys: "rust-${{ hashFiles('flake.lock', 'flake.nix') }}-"
+          key: "rust-${{ hashFiles('flake.*') }}-${{ hashFiles('Cargo.lock', 'rust-toolchain') }}"
+          restore-keys: "rust-${{ hashFiles('flake.*') }}-"
 
-      - uses: "cachix/install-nix-action@v19"
+      - name: "Install Nix"
+        uses: "cachix/install-nix-action@v19"
         with:
           nix_path: "nixpkgs=channel:nixos-unstable"
           install_url: "https://releases.nixos.org/nix/nix-2.13.2/install"
+
+      - name: "Import Nix store cache"
+        if: "steps.nix-cache.outputs.cache-hit == 'true'"
+        run: "nix-store --import < /tmp/nixcache"
 
       - name: "Install system dependencies"
         run: |
@@ -62,3 +74,7 @@ jobs:
 
       - name: "Build docs"
         run: "nix develop --command mkdocs build"
+
+      - name: "Export Nix store cache"
+        if: "steps.nix-cache.outputs.cache-hit != 'true'"
+        run: "nix-store --export $(find /nix/store -maxdepth 1 -name '*-*') > /tmp/nixcache"
