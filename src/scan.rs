@@ -611,7 +611,6 @@ pub fn run_scan_in_thread(
 
     let db_path = config.db_path.clone();
     let library_path = config.library_path.clone();
-    let covers_path = config.covers_path.clone();
 
     let scan_thread = std::thread::Builder::new()
         .name("scan".to_string())
@@ -673,7 +672,6 @@ pub fn run_scan_in_thread(
             crate::thumb_gen::generate_thumbnails(
                 &*index_arc,
                 &builder,
-                &covers_path,
                 &mut status,
                 &mut tx,
             )?;

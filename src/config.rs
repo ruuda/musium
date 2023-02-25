@@ -22,7 +22,6 @@ use crate::prim::Hertz;
 pub struct Config {
     pub listen: String,
     pub library_path: PathBuf,
-    pub covers_path: PathBuf,
     pub db_path: PathBuf,
     // TODO: Make this optional; pick the first one by default.
     pub audio_device: String,
@@ -37,7 +36,6 @@ impl fmt::Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "  listen                 = {}\n", self.listen)?;
         write!(f, "  library_path           = {}\n", self.library_path.to_string_lossy())?;
-        write!(f, "  covers_path            = {}\n", self.covers_path.to_string_lossy())?;
         write!(f, "  db_path                = {}\n", self.db_path.to_string_lossy())?;
         write!(f, "  audio_device           = {}\n", self.audio_device)?;
         write!(f, "  audio_volume_control   = {}\n", self.audio_volume_control)?;
@@ -64,7 +62,6 @@ impl Config {
     {
         let mut listen = None;
         let mut library_path = None;
-        let mut covers_path = None;
         let mut db_path = None;
         let mut audio_device = None;
         let mut audio_volume_control = None;
@@ -92,7 +89,6 @@ impl Config {
                 match key {
                     "listen" => listen = Some(String::from(value)),
                     "library_path" => library_path = Some(PathBuf::from(value)),
-                    "covers_path" => covers_path = Some(PathBuf::from(value)),
                     "db_path" => db_path = Some(PathBuf::from(value)),
                     "audio_device" => audio_device = Some(String::from(value)),
                     "audio_volume_control" => audio_volume_control = Some(String::from(value)),
@@ -130,12 +126,6 @@ impl Config {
                 Some(p) => p,
                 None => return Err(Error::IncompleteConfig(
                     "Library path not set. Expected 'library_path ='-line."
-                )),
-            },
-            covers_path: match covers_path {
-                Some(p) => p,
-                None => return Err(Error::IncompleteConfig(
-                    "Covers path not set. Expected 'covers_path ='-line."
                 )),
             },
             db_path: match db_path {
@@ -180,7 +170,6 @@ mod test {
             "# This is a comment.",
             "listen = localhost:8000",
             "library_path = /home/user/music",
-            "covers_path = /home/user/.cache/musium/covers",
             "db_path = /home/user/.local/share/musium/db.sqlite3",
             "",
             "audio_device = UCM404HD 192k",

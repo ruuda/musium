@@ -239,12 +239,12 @@ impl<'a> GenThumbs<'a> {
 pub fn generate_thumbnails(
     index: &MemoryMetaIndex,
     builder: &BuildMetaIndex,
-    thumb_dir: &Path,
     status: &mut Status,
     status_sender: &mut SyncSender<Status>,
 ) -> Result<()> {
     status.stage = ScanStage::PreProcessingThumbnails;
     status_sender.send(*status).unwrap();
+    let thumb_dir = todo!("Get rid of file system operations.");
 
     // Determine which albums need to have a new thumbnail extracted.
     let mut pending_tasks = Vec::new();

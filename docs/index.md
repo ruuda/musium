@@ -31,8 +31,7 @@ Follow the [building](building.md) chapter to build from source. Then write a
 
     listen = 0.0.0.0:8233
     library_path = /home/user/music
-    covers_path = /home/user/.cache/musium/covers
-    data_path = /home/user/.local/share/musium
+    db_path = /home/user/.config/musium.sqlite3
     audio_device = HDA Intel PCH
 
 Index the library and generate cover art thumbnails (requires Imagemagick and
