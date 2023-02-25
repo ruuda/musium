@@ -8,15 +8,13 @@
 //! Defines an in-memory thumbnail cache.
 
 use std::fmt;
-use std::fs;
-use std::io::Read;
-use std::io;
 use std::path::Path;
 
-use crate::{AlbumId, ArtistId};
+use crate::AlbumId;
 use crate::album_table::AlbumTable;
 use crate::database as db;
-use crate::database::{Transaction};
+use crate::database::Transaction;
+use crate::database_utils;
 
 /// References a single image in the larger concatenated array.
 #[derive(Copy, Clone, Debug)]
@@ -85,11 +83,23 @@ impl ThumbCache {
         }
     }
 
-    /// Read the cover art thumbnails into memory from the database.
+    /// Read cover art thumbnails from the database into memory.
+    ///
+    /// See also [`load_from_database`].
+    pub fn load_from_database_at(db_path: &Path) -> db::Result<ThumbCache> {
+        let inner = database_utils::connect_readonly(&db_path)?;
+        let mut conn = db::Connection::new(&inner);
+        let mut tx = conn.begin()?;
+        let result = ThumbCache::load_from_database(&mut tx)?;
+        tx.commit()?;
+        Ok(result)
+    }
+
+    /// Read the cover art thumbnails from the database into memory.
     ///
     /// The thumbnails are stored sequentially in an internal buffer in the
     /// order as returned by the database.
-    pub fn from_database(tx: &mut Transaction) -> db::Result<ThumbCache> {
+    pub fn load_from_database(tx: &mut Transaction) -> db::Result<ThumbCache> {
         let (count, total_size) = db::select_thumbnails_count_and_total_size(tx)?;
         let mut buffer = Vec::with_capacity(total_size as usize);
 
@@ -110,57 +120,11 @@ impl ThumbCache {
             references.insert(album_id, img_ref);
         }
 
-        let result = ThumbCache {
-            data: buffer.into_boxed_slice(),
-            references: references
-        };
-
-        Ok(result)
-    }
-
-    /// Read the cover art thumbnails for the given albums into memory.
-    ///
-    /// The thumbnails are stored sequentially in an internal buffer in the
-    /// order given. Therefore this function accepts a slice that includes the
-    /// album id, even though it is not used: this way the artist-sorted album
-    /// list from the index can be used as input, which means that covers by the
-    /// same artist end up adjacent in memory. It probably does not make a big
-    /// difference for performance, because thumbs are large relative to cache
-    /// lines, but it doesn’t hurt either.
-    pub fn new(albums: &[(ArtistId, AlbumId)], thumb_dir: &Path) -> io::Result<ThumbCache> {
-        use std::u32;
-        let mut fname = thumb_dir.to_path_buf();
-
-        // Make an conservative initial guess of 5 kB per image. We probably
-        // need more, but we can at least save the initial few relocations. We
-        // could do better by first stat-ing all files and computing exactly how
-        // much we need, but this happens only once during statup, so let's not
-        // worry about performance too much here.
-        let mut buffer = Vec::with_capacity(albums.len() * 5_000);
-
-        let dummy = ImageReference { begin: 0, end: 0 };
-        let mut references = AlbumTable::new(albums.len(), dummy);
-
-        for (_, album_id) in albums {
-            fname.push(format!("{}.jpg", album_id));
-            match fs::File::open(&fname) {
-                Ok(mut f) => {
-                    let begin = buffer.len() as u32;
-                    f.read_to_end(&mut buffer)?;
-                    assert!(
-                        buffer.len() < u32::MAX as usize,
-                        "Can't have more than 4 GiB of thumbnails.",
-                    );
-                    let end = buffer.len() as u32;
-                    let img_ref = ImageReference { begin, end };
-                    references.insert(*album_id, img_ref);
-                }
-                // If there is no thumb for this album, simply skip it.
-                Err(err) if err.kind() == io::ErrorKind::NotFound => {}
-                Err(err) => return Err(err),
-            };
-            fname.pop();
-        }
+        assert_eq!(
+            buffer.len(),
+            total_size as usize,
+            "We should have gotten as much data out of the database as expected.",
+        );
 
         let result = ThumbCache {
             data: buffer.into_boxed_slice(),
