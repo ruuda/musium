@@ -7,20 +7,19 @@
 
 //! Utilities for extracting thumbnails from flac files.
 
-use std::fs;
-use std::io::Write;
-use std::os::unix::fs::MetadataExt;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::process;
 use std::sync::Mutex;
 use std::sync::mpsc::SyncSender;
 
-use crate::build::BuildMetaIndex;
 use crate::error::{Error, Result};
-use crate::prim::{AlbumId, Mtime};
+use crate::prim::AlbumId;
 use crate::scan::{ScanStage, Status};
 use crate::{MetaIndex, MemoryMetaIndex};
+use crate::database::{Connection, Transaction};
+use crate::database;
 
 /// Tracks the process of generating a thumbnail.
 struct GenThumb<'a> {
@@ -35,61 +34,50 @@ enum GenThumbState<'a> {
     },
     Resizing {
         child: process::Child,
+        out_path: PathBuf,
     },
     Compressing {
         child: process::Child,
+        in_path: PathBuf,
     },
 }
 
-fn get_fname(thumb_dir: &Path, album_id: AlbumId, extension: &str) -> PathBuf {
-    let mut fname = PathBuf::from(thumb_dir);
-    fname.push(format!("{}{}", album_id, extension));
+/// Return the intermediate file path where we write the resized but uncompressed thumbnail.
+fn get_tmp_fname(album_id: AlbumId) -> PathBuf {
+    let mut fname = std::env::temp_dir();
+    fname.push(format!("musium-thumb-{}.png", album_id));
     fname
 }
 
 impl<'a> GenThumb<'a> {
     /// Create an extract-and-resize operation, if needed.
     ///
-    /// If no thumbnail exists for the item yet, or if it does, but its mtime is
-    /// older than the `album_mtime`, then this returns the task for generating
-    /// the thumbnail, in the [`GenThumb::Pending`] state.
+    /// If no thumbnail exists for the item yet, then this returns the task for
+    /// generating the thumbnail, in the [`GenThumb::Pending`] state.
     ///
-    /// If a thumnail exists, but it is outdated, this deletes the file before
-    /// returning the task to regenerate it.
+    /// TODO: In the database we should record the file id that the thumbnail
+    /// was generated from, and when it no longer matches, delete the thumbnail
+    /// so we can regenerate it.
     pub fn new(
-        thumb_dir: &Path,
+        tx: &mut Transaction,
         album_id: AlbumId,
         flac_filename: &'a Path,
-        album_mtime: Mtime,
     ) -> Result<Option<GenThumb<'a>>> {
         let task = GenThumb {
             album_id: album_id,
             state: GenThumbState::Pending { flac_filename },
         };
 
-        let out_fname_jpg = get_fname(thumb_dir, task.album_id, ".jpg");
-
-        // Early-out on existing files that are more recent than the album they
-        // are based on.
-        if let Ok(meta) = fs::metadata(&out_fname_jpg) {
-            if meta.mtime() > album_mtime.0 {
-                // The file exists and is up to date, nothing to be done here.
-                return Ok(None);
-            } else {
-                // The file exists but is potentially outdated, delete it.
-                fs::remove_file(&out_fname_jpg)?;
-            }
+        match database::select_thumbnail_exists(tx, album_id.0 as i64)? {
+            0 => Ok(Some(task)),
+            _ => Ok(None),
         }
-
-        Ok(Some(task))
     }
 
     /// From `Pending` state, read a picture, and start resizing it.
     ///
     /// Returns `None` if the input file does not contain any pictures.
-    fn start_resize(mut self, thumb_dir: &Path, flac_filename: &Path) -> Result<Option<GenThumb<'a>>> {
-        let out_fname_png = get_fname(thumb_dir, self.album_id, ".png");
-
+    fn start_resize(mut self, album_id: AlbumId, flac_filename: &Path) -> Result<Option<GenThumb<'a>>> {
         let opts = claxon::FlacReaderOptions {
             metadata_only: true,
             read_picture: claxon::ReadPicture::CoverAsVec,
@@ -102,6 +90,8 @@ impl<'a> GenThumb<'a> {
             Some(c) => c,
             None => return Ok(None),
         };
+
+        let out_path = get_tmp_fname(album_id);
 
         let mut convert = Command::new("convert")
             // Read from stdin.
@@ -140,9 +130,8 @@ impl<'a> GenThumb<'a> {
             .args(&["-strip"])
             // Write lossless, we will later compress to jpeg with Guetzli,
             // which has a better compressor.
-            .arg(&out_fname_png)
+            .arg(&out_path)
             .stdin(Stdio::piped())
-            .stdout(Stdio::inherit())
             .spawn()
             .map_err(|e| Error::CommandError("Failed to spawn ImageMagick's 'convert'.", e))?;
 
@@ -151,19 +140,20 @@ impl<'a> GenThumb<'a> {
             stdin.write_all(cover.data()).unwrap();
         }
 
-        self.state = GenThumbState::Resizing { child: convert };
+        self.state = GenThumbState::Resizing {
+            child: convert,
+            out_path: out_path,
+        };
 
         Ok(Some(self))
     }
 
     /// When in `Resizing` state, wait for that to complete, and start compressing.
-    fn start_compress(mut self, thumb_dir: &Path) -> Result<GenThumb<'a>> {
-        let mut convert = match self.state {
-            GenThumbState::Resizing { child } => child,
+    fn start_compress(mut self) -> Result<GenThumb<'a>> {
+        let (mut convert, out_path) = match self.state {
+            GenThumbState::Resizing { child, out_path } => (child, out_path),
             _ => panic!("Can only call start_compress in Resizing state."),
         };
-        let out_fname_png = get_fname(thumb_dir, self.album_id, ".png");
-        let out_fname_jpg = get_fname(thumb_dir, self.album_id, ".jpg");
 
         convert
             .wait()
@@ -171,14 +161,19 @@ impl<'a> GenThumb<'a> {
 
         let guetzli = Command::new("guetzli")
             .args(&["--quality", "97"])
-            .arg(&out_fname_png)
-            .arg(&out_fname_jpg)
+            // Input is the intermediate file.
+            .arg(&out_path)
+            // Output is stdout, but guetzli does not understand `-`.
+            .stdout(Stdio::piped())
+            .arg("/dev/fd/1")
             .spawn()
             .map_err(|e| Error::CommandError("Failed to spawn 'guetzli'.", e))?;
 
-        self.state = GenThumbState::Compressing { child: guetzli };
-
-        // TODO: Insert into the database instead of writing to a file.
+        self.state = GenThumbState::Compressing {
+            child: guetzli,
+            // Input file for this step is the output of the previous command.
+            in_path: out_path,
+        };
 
         Ok(self)
     }
@@ -189,22 +184,33 @@ impl<'a> GenThumb<'a> {
     /// need to advance once more in the future to conclude.
     ///
     /// When this returns `None`, thumbnail generation is complete.
-    fn advance(self, thumb_dir: &Path) -> Result<Option<GenThumb<'a>>> {
+    fn advance(self) -> Result<Option<GenThumb<'a>>> {
+        let album_id = self.album_id;
+
         match self.state {
             GenThumbState::Pending { flac_filename } => {
-                self.start_resize(thumb_dir, flac_filename)
+                self.start_resize(album_id, flac_filename)
             }
             GenThumbState::Resizing { .. } => {
-                self.start_compress(thumb_dir).map(Some)
+                self.start_compress().map(Some)
             }
-            GenThumbState::Compressing { mut child } => {
+            GenThumbState::Compressing { mut child, in_path } => {
                 child
                     .wait()
                     .map_err(|e| Error::CommandError("Guetzli failed.", e))?;
 
                 // Delete the intermediate png file.
-                let intermediate_file = get_fname(thumb_dir, self.album_id, ".png");
-                fs::remove_file(&intermediate_file)?;
+                std::fs::remove_file(&in_path)?;
+
+                let mut stdout = child
+                    .stdout
+                    .take()
+                    .expect("Stdout should be there, we piped it.");
+                let mut jpg_bytes = Vec::new();
+                stdout.read_to_end(&mut jpg_bytes)?;
+
+                // TODO: Insert into database.
+                eprintln!("\n{} compressed to {} bytes\n\n", self.album_id, jpg_bytes.len());
 
                 Ok(None)
             }
@@ -238,13 +244,14 @@ impl<'a> GenThumbs<'a> {
 
 pub fn generate_thumbnails(
     index: &MemoryMetaIndex,
-    builder: &BuildMetaIndex,
+    db: &mut Connection,
     status: &mut Status,
     status_sender: &mut SyncSender<Status>,
 ) -> Result<()> {
     status.stage = ScanStage::PreProcessingThumbnails;
     status_sender.send(*status).unwrap();
-    let thumb_dir = todo!("Get rid of file system operations.");
+
+    let mut tx = db.begin()?;
 
     // Determine which albums need to have a new thumbnail extracted.
     let mut pending_tasks = Vec::new();
@@ -252,8 +259,7 @@ pub fn generate_thumbnails(
     for &(_tid, ref track) in index.get_tracks() {
         if track.album_id != prev_album_id {
             let fname = index.get_filename(track.filename);
-            let mtime = builder.album_mtimes[&track.album_id];
-            for task in GenThumb::new(thumb_dir, track.album_id, fname.as_ref(), mtime)? {
+            for task in GenThumb::new(&mut tx, track.album_id, fname.as_ref())? {
                 pending_tasks.push(task);
                 status.files_to_process_thumbnails += 1;
 
@@ -264,6 +270,8 @@ pub fn generate_thumbnails(
             prev_album_id = track.album_id;
         }
     }
+
+    tx.commit()?;
 
     status.stage = ScanStage::GeneratingThumbnails;
     status_sender.send(*status).unwrap();
@@ -281,9 +289,9 @@ pub fn generate_thumbnails(
     // are CPU-bound, so this should keep the CPU busy. When thumbnailing many
     // albums with a cold page cache, IO to read the thumb from the file can be
     // a factor too, so add one additional thread to ensure we can keep the CPU
-    // busy.
+    // busy. Edit: Or not, usually it's not needed.
     crossbeam::scope(|scope| {
-        for i in 0..num_cpus::get() + 0 {
+        for i in 0..num_cpus::get() {
             let drain = move || {
                 while let Some(task) = {
                     // This has to be in a scope, otherwise the program deadlocks.
@@ -291,7 +299,7 @@ pub fn generate_thumbnails(
                     tasks.pop()
                 } {
                     let result = task
-                        .advance(thumb_dir)
+                        .advance()
                         // There is no simple way with the current version of
                         // Crossbeam to get a result out of the thread, so we
                         // just panic on error, it's what we would do elsewhere

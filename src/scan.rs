@@ -671,7 +671,7 @@ pub fn run_scan_in_thread(
             // those.
             crate::thumb_gen::generate_thumbnails(
                 &*index_arc,
-                &builder,
+                &mut Connection::new(&connection),
                 &mut status,
                 &mut tx,
             )?;

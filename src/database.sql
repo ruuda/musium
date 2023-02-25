@@ -288,3 +288,7 @@ select count(*), sum(length(data)) from thumbnails;
 
 -- @query iter_thumbnails() ->* Thumbnail
 select album_id /*: i64 */, data /* :bytes */ from thumbnails;
+
+-- Return whether a thumbnail for the album exists (1 if it does, 0 otherwise).
+-- @query select_thumbnail_exists(album_id: i64) ->1 i64
+select count(*) from thumbnails where album_id = :album_id;

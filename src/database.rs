@@ -798,6 +798,28 @@ select album_id, data from thumbnails;
     Ok(result)
 }
 
+/// Return whether a thumbnail for the album exists (1 if it does, 0 otherwise).
+pub fn select_thumbnail_exists(tx: &mut Transaction, album_id: i64) -> Result<i64> {
+    let sql = r#"
+select count(*) from thumbnails where album_id = :album_id;
+    "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    statement.bind(1, album_id)?;
+    let decode_row = |statement: &Statement| Ok(statement.read(0)?);
+    let result = match statement.next()? {
+        Row => decode_row(statement)?,
+        Done => panic!("Query 'select_thumbnail_exists' should return exactly one row."),
+    };
+    if statement.next()? != Done {
+        panic!("Query 'select_thumbnail_exists' should return exactly one row.");
+    }
+    Ok(result)
+}
+
 // A useless main function, included only to make the example compile with
 // Cargo’s default settings for examples.
 fn main() {
