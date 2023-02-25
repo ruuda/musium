@@ -178,6 +178,8 @@ impl<'a> GenThumb<'a> {
 
         self.state = GenThumbState::Compressing { child: guetzli };
 
+        // TODO: Insert into the database instead of writing to a file.
+
         Ok(self)
     }
 

@@ -15,6 +15,8 @@ use std::path::Path;
 
 use crate::{AlbumId, ArtistId};
 use crate::album_table::AlbumTable;
+use crate::database as db;
+use crate::database::{Transaction};
 
 /// References a single image in the larger concatenated array.
 #[derive(Copy, Clone, Debug)]
@@ -81,6 +83,39 @@ impl ThumbCache {
             data: Box::new([]),
             references: AlbumTable::new(0, ImageReference { begin: 0, end: 0 }),
         }
+    }
+
+    /// Read the cover art thumbnails into memory from the database.
+    ///
+    /// The thumbnails are stored sequentially in an internal buffer in the
+    /// order as returned by the database.
+    pub fn from_database(tx: &mut Transaction) -> db::Result<ThumbCache> {
+        let (count, total_size) = db::select_thumbnails_count_and_total_size(tx)?;
+        let mut buffer = Vec::with_capacity(total_size as usize);
+
+        let dummy = ImageReference { begin: 0, end: 0 };
+        let mut references = AlbumTable::new(count as usize, dummy);
+
+        for thumb_result in db::iter_thumbnails(tx)? {
+            let thumb = thumb_result?;
+            let begin = buffer.len() as u32;
+            buffer.extend_from_slice(&thumb.data);
+            assert!(
+                buffer.len() < u32::MAX as usize,
+                "Can't have more than 4 GiB of thumbnails.",
+            );
+            let end = buffer.len() as u32;
+            let img_ref = ImageReference { begin, end };
+            let album_id = AlbumId(thumb.album_id as u64);
+            references.insert(album_id, img_ref);
+        }
+
+        let result = ThumbCache {
+            data: buffer.into_boxed_slice(),
+            references: references
+        };
+
+        Ok(result)
     }
 
     /// Read the cover art thumbnails for the given albums into memory.
