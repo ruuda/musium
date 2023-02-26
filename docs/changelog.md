@@ -1,12 +1,24 @@
 # Changelog
 
-Musium does not currently tag particular releases, there is only the rolling
-`master` branch. This will change at some point when it will be feature-complete
-enough to warrant more stable releases. In the meantime though, there are
-notable changes that require manual intervention, so these are listed here.
+Musium follows a “rolling release” or “nightly” development process. I compile
+and run `master` shortly after I make changes. However, sometimes there are
+notable changes, and especially if they require manual intervention, it is
+useful to write them down in a changelog.
 
-TODO: I should make some tags retroactively, probably that's better than
-referencing random commits here.
+Musium only started tagging releases in February 2023. Versions prior to 0.11.0
+have been tagged as such retroactively to mark notable milestones. Those tags
+were not present at the time.
+
+## Versioning policy
+
+Musium versions are named `MAJOR.MINOR.PATCH`.
+
+ * The major version number is purely cosmetic and represents the author’s
+   sentiment about feature-completeness.
+ * The minor version is bumped when new features are added and when user
+   intervention is required to update (for example, a change in the config file,
+   or a migration of the database).
+ * The patch version is bumped for bugfixes and other small changes.
 
 ## Unreleased
 
