@@ -425,10 +425,10 @@ environment to be able to submit scrobbles.</p>
 <h2 id="running-manually">Running manually<a class="headerlink" href="#running-manually">&para;</a></h2>
 <p>With the environment variables set up, run the <code>scrobble</code> command in the
 repository:</p>
-<pre><code>tools/scrobble.py scrobble /data_path/musium.sqlite3
+<pre><code>tools/scrobble.py scrobble /db_path/musium.sqlite3
 </code></pre>
-<p>The data path is the <a href="../configuration/#data_path"><code>data_path</code> as configured</a>.
-Musium stores <code>musium.sqlite3</code> in that directory.</p>
+<p>The file to pass is the <a href="../configuration/#db_path"><code>db_path</code> as configured</a>;
+this is where Musium tracks listens.</p>
 <p>The script only scrobbles listens that originated from Musium itself, it does
 not scrobble imported listening history. Listens that were scrobbled
 successfully get marked as such in the database, so they are only scrobbled
@@ -520,6 +520,9 @@ systemctl start musium-scrobble.timer
             
             <li class="toc-chapter
               "><a href="../disks/">Disks</a></li>
+            
+            <li class="toc-chapter
+              "><a href="../changelog/">Changelog</a></li>
             <li class="toc-section"><a href="../api/">API Reference</a></li>
           <li class="toc-section
             "><a href="../search/">Internals</a></li>

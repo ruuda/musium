@@ -9,13 +9,13 @@
   -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Loudness normalization — Musium</title>
+  <title>Changelog — Musium</title>
   <!-- Out of the options of rsms.me + Google Fonts, self-hosting, and only
     Google Fonts, the latter is by far the fastest when the docs themselves are
     not on a CDN, even though it's two additional domains to connect to. -->
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:ital@0;1&display=swap" rel="stylesheet">
-  <link href="https://docs.ruuda.nl/musium/loudness/" rel="canonical">
+  <link href="https://docs.ruuda.nl/musium/changelog/" rel="canonical">
   <style>
   /* Inter font family, copyright Rasmus Andersson, licensed under SIL OFL 1.1,
      see https://rsms.me/inter and https://rsms.me/inter/inter.css. */
@@ -401,64 +401,175 @@
       <nav id="breadcrumbs">
         <a href="https://docs.ruuda.nl/musium/">Musium</a>
          › <a href="../building/">User Guide</a> 
-         › <a href="./">Loudness normalization</a> 
+         › <a href="./">Changelog</a> 
         <a id="repo-link" href="https://github.com/ruuda/musium/">GitHub</a>
       </nav>
       <article>
-        <h1 id="loudness-normalization">Loudness normalization<a class="headerlink" href="#loudness-normalization">&para;</a></h1>
-<p>Musium can normalize the perceptual playback loudness based on loudness
-information in flac tags.</p>
-<p>The volume slider in Musium treats 0 dB volume as 0 dB gain for the output
-device, but it does compensate for track or album loudness relative to a target
-loudness of -23 <abbr>LUFS</abbr>. When the Musium volume slider is set to 0 dB,
-this means that a track with a loudness of -23 <abbr>LUFS</abbr> will play back
-without volume adjustment (at maximum volume of the device), and a track with a
-loudness of -10 <abbr>LUFS</abbr> will play back with device volume at -13 dB.
-When the Musium volume slider is set to -5 dB, a track with a loudness of -10
-<abbr>LUFS</abbr> will play back with device volume at -18 dB.</p>
-<p>It is possible to set volumes beyond 0 dB in Musium, but this is only effective
-for inherently loud tracks: a track with a loudness of -23 <abbr>LUFS</abbr> is
-already playing at the maximum device volume, but a track with a loudness of
--13 <abbr>LUFS</abbr> has enough headroom to allow the volume to be set to 10 dB.</p>
-<h2 id="tags">Tags<a class="headerlink" href="#tags">&para;</a></h2>
-<p>Two tags affect loudness normalization:</p>
+        <h1 id="changelog">Changelog<a class="headerlink" href="#changelog">&para;</a></h1>
+<p>Musium follows a “rolling release” or “nightly” development process. I compile
+and run <code>master</code> shortly after I make changes. However, sometimes there are
+notable changes, and especially if they require manual intervention, it is
+useful to write them down in a changelog.</p>
+<p>Musium only started tagging releases in February 2023. Versions prior to 0.11.0
+have been tagged as such retroactively to mark notable milestones. Those tags
+were not present at the time.</p>
+<h2 id="versioning-policy">Versioning policy<a class="headerlink" href="#versioning-policy">&para;</a></h2>
+<p>Musium versions are named <code>MAJOR.MINOR.PATCH</code>.</p>
 <ul>
-<li><code>BS17704_TRACK_LOUDNESS</code></li>
-<li><code>BS17704_ALBUM_LOUDNESS</code></li>
+<li>The major version number is purely cosmetic and represents the author’s
+   sentiment about feature-completeness.</li>
+<li>The minor version is bumped when new features are added and when user
+   intervention is required to update (for example, a change in the config file,
+   or a migration of the database).</li>
+<li>The patch version is bumped for bugfixes and other small changes.</li>
 </ul>
-<p>The tags must store the integrated loudness as defined in
-<a href="https://www.itu.int/rec/R-REC-BS.1770-4-201510-I/en"><abbr>ITU-R BS.1770-4</abbr></a>, for the track, and the concatenation
-of all tracks respectively. The value must be a decimal number, followed by the
-suffix “<abbr>LUFS</abbr>” for Loudness Units Full Scale. For example,
-<code>-9.317 LUFS</code>. The value for album loudness must be consistent across all tracks
-in the album.</p>
-<h2 id="replaygain">ReplayGain<a class="headerlink" href="#replaygain">&para;</a></h2>
-<p>ReplayGain has been very influential for loudness normalization, and it is
-widely supported by both taggers and players, but unfortunately it has become
-ambiguous over time. ReplayGain does not store the loudness of the track
-directly, instead it stores the <em>gain</em> that is needed to bring the track to
-target loudness. The target loudness was initially well-defined, but tools
-started offering different options to accomodate to the reference loudness of
-different standards such as <abbr>EBU R-128</abbr>, <abbr>ATSC A/85</abbr>, and
-ReplayGain 2.0. This means that ReplayGain tags from different sources do not
-necessarily have the same meaning, which defeats the purpose of normalization.
-In practice this means that ReplayGain is only really useful if you can be
-certain that all tags were produced by the same program with the same settings.</p>
-<p>The <code>BS17704_*</code> tags used by Musium aim to sidestep this problem by storing the
-observed loudness, instead of the gain. The gain can easily be computed by the
-player, and the particular target loudness that is used is not important anyway
-for normalizing loudness in a collection of music. (It does matter when you want
-to match the loudness of your music to e.g. external streaming services.)
-Furthermore, by naming the tag after the revision of the standard, future
-revisions to <abbr>BS.1770</abbr> will not create ambiguities in the meaning of
-existing tags.</p>
-<h2 id="writing-bs1770-4-tags">Writing BS.1770-4 tags<a class="headerlink" href="#writing-bs1770-4-tags">&para;</a></h2>
-<p><a href="https://github.com/ruuda/bs1770#tagging-flac-files">The <abbr>BS1770</abbr> <code>flacgain</code> utility</a> can be used to analyze a
-collection of flac files, and to add <code>BS17704_*</code> tags.</p>
+<h2 id="unreleased">Unreleased<a class="headerlink" href="#unreleased">&para;</a></h2>
+<ul>
+<li><strong>Breaking:</strong> The <code>data_path</code> configuration option was renamed to <code>db_path</code>,
+   Musium was not storing anything in the data path aside from the database
+   anyway. Unlike <code>data_path</code>, <code>db_path</code> should include the file name.</li>
+<li><strong>Breaking:</strong> Cover art thumbnails are now stored in the database. The
+   <code>covers_path</code> configuration option has been removed. There is a script
+   <code>tools/migrate_thumbnails.py</code> to import existing thumbnails into the
+   database, so they do not have to be re-generated.</li>
+<li>The Nix-based development environment that was using a Nix 2.3-compatible
+   <code>default.nix</code> has been replaced with a Flake that requires Nix 2.10 or later.</li>
+<li>Database boilerplate is now generated by <a href="https://docs.ruuda.nl/squiller/">Squiller</a>.</li>
+</ul>
+<h2 id="0101">0.10.1<a class="headerlink" href="#0101">&para;</a></h2>
+<p>Authored 2023-02-18, but tagged retroactively on 2023-02-26.</p>
+<ul>
+<li><strong>Breaking:</strong> Requires Rust 1.57.0 to build.</li>
+<li>Make the webinterface more responsive.</li>
+<li>Increase the priority of the playback thread to reduce the probability
+   of a buffer underrun when the system is under load.</li>
+<li>Update dependencies, small improvements and fixes.</li>
+</ul>
+<h2 id="0100">0.10.0<a class="headerlink" href="#0100">&para;</a></h2>
+<p>Authored 2022-03-06, but tagged retroactively on 2023-02-26.</p>
+<ul>
+<li>Add support for a pre-playback and post-idle command. This can be used to
+   e.g. power speakers on and off. See also the included instructions for
+   <a href="../tradfri/">controlling Ikea Trådfri wireless control outlets</a>.</li>
+<li>Display a “waveform” of the track on the <em>now playing</em> pane. The shape is
+   technically not the sound wave, instead it represents loudness over time.</li>
+<li>To power this new feature, compute loudness information during scanning, and
+   store it in the database. Album and track loudness is also computed, although
+   at this point this data is unused and Musium still relies on loudness
+   metadata in tags.</li>
+</ul>
+<p>Note: In November 2021 Linux 5.15 was released. This kernel contains a
+regression in the <abbr>ALSA</abbr> subsystem that breaks Musium when switching
+between different sample rates or bit depths. Linux 5.10.94 is the last version
+without this regression.</p>
+<h2 id="090">0.9.0<a class="headerlink" href="#090">&para;</a></h2>
+<p>Authored 2021-10-16, but tagged retroactively on 2023-02-26.</p>
+<ul>
+<li>Add an <em>About</em> pane on the webinterface that shows statistics about the
+   library.</li>
+<li>Add the ability to trigger a scan from the webinterface without having to
+   restart the process.</li>
+</ul>
+<h2 id="080">0.8.0<a class="headerlink" href="#080">&para;</a></h2>
+<p>Authored 2021-08-01, but tagged retroactively on 2023-02-26.</p>
+<ul>
+<li>Add a high-pass filter to make playback of bass-heavy albums more pleasant
+   when the room acoustics are suboptimal. (Or just for when you are afraid that
+   turning up the volume would disturb the neighbors.)</li>
+<li>Fix a rare hang during playback.</li>
+</ul>
+<h2 id="070">0.7.0<a class="headerlink" href="#070">&para;</a></h2>
+<p>Authored 2021-06-19, but tagged retroactively on 2023-02-26.</p>
+<ul>
+<li>Add queue size indicator on the queue tab in the webinterface.</li>
+<li>Cache file metadata in the SQLite database to improve startup performance.
+   Musium no longer scans the metadata of all files at startup, instead it loads
+   metadata from the database, and a separate <code>scan</code> command updates the
+   database.</li>
+</ul>
+<h2 id="060">0.6.0<a class="headerlink" href="#060">&para;</a></h2>
+<p>Authored 2021-05-29, but tagged retroactively on 2023-02-26.</p>
+<ul>
+<li>Add an “enqueue” button for enqueueing entire albums.</li>
+<li>Reduce stutter in webinterface animations.</li>
+<li>Open the <em>now playing</em> page on first load if a track is playing.</li>
+<li>Add keyboard shortcut for opening the search pane.</li>
+<li>Make loudness normalization contextual. If multiple tracks from the same
+   album play consecutively, we use the album loudness, to ensure that the album
+   plays back exactly as it was mastered. When tracks from multiple albums are
+   mixed in the play queue, use track loudness, to get more accurate loudness
+   normalization.</li>
+<li>Add support for notifying systemd of startup progress.</li>
+<li>Move all <abbr>API</abbr> endpoints behind the <code>/api</code> path in the webserver,
+   so <abbr>API</abbr> urls do not clash with app urls.</li>
+</ul>
+<h2 id="050">0.5.0<a class="headerlink" href="#050">&para;</a></h2>
+<p>Authored 2021-04-03, but tagged retroactively on 2023-02-26.</p>
+<ul>
+<li>List albums in reverse chronological order, instead of chronological.</li>
+<li>Show a spinner in the webinterface when the track is buffering.</li>
+<li>Enable opening the artist pane at first load if a track is playing.</li>
+<li>Make more things clickable in the webinterface.</li>
+<li>Fix display issues with non-square cover art.</li>
+</ul>
+<h2 id="040">0.4.0<a class="headerlink" href="#040">&para;</a></h2>
+<p>Authored 2021-01-23, but tagged retroactively on 2023-02-26.</p>
+<ul>
+<li>Split the library and album view.</li>
+<li>Add navigation buttons in the webinterface.</li>
+<li>Add support for submitting listens to ListenBrainz, in addition to Last.fm.</li>
+<li>Handle an audio buffer underrun that could occur in some situations.</li>
+</ul>
+<h2 id="031">0.3.1<a class="headerlink" href="#031">&para;</a></h2>
+<p>Authored 2020-11-27, but tagged retroactively on 2023-02-26.</p>
+<ul>
+<li>Small tweaks to the <em>now playing</em> and search results pages.</li>
+<li>Keep all thumbnails in memory, so no disk access is required to serve most of
+   the webinterface.</li>
+<li>Internal improvements to search, to better enable matching external listening
+   history from ListenBrainz. The script to import listening history is still a
+   work in progress.</li>
+</ul>
+<h2 id="030">0.3.0<a class="headerlink" href="#030">&para;</a></h2>
+<p>Authored 2020-10-04, but tagged retroactively on 2023-02-26.</p>
+<ul>
+<li>Improvements to the webinterface, with multiple panes and animations.</li>
+<li>Add the listens database, and a script to scrobble listens to Last.fm.
+   Initially the script acted on the json play log, but the play log was quickly
+   superseded by a SQLite database. At this point the database was not used for
+   anything else, Musium would re-scan all files at startup.</li>
+</ul>
+<h2 id="020">0.2.0<a class="headerlink" href="#020">&para;</a></h2>
+<p>Authored 2020-08-28, but tagged retroactively on 2023-02-26.</p>
+<ul>
+<li>Add support for loudness normalization, through <code>bs17704_track_loudness</code> and
+   <code>bs17704_album_loudness</code> tags. These tags can be written by an external
+   utility, <a href="https://github.com/ruuda/bs1770#tagging-flac-files"><code>flacgain</code> in the BS1770 library</a>.</li>
+<li>Volume control in the webinterface.</li>
+</ul>
+<h2 id="010">0.1.0<a class="headerlink" href="#010">&para;</a></h2>
+<p>Authored 2020-08-22, but tagged retroactively on 2023-02-26.</p>
+<p>Musium has been an evolving project. It started out as an attempt to index
+metadata about a collection of flac files, and expose that (and the files
+themselves) over http to enable Chromecast playback. Later it pivoted to being
+a music player with a webinterface but local playback, essentially a music
+playback server.</p>
+<p>Until February 2023, Musium did not tag releases, I just ran <code>master</code> locally,
+rebuilding and restarting it after every change. Essentially there was only the
+“nightly” version. But now that I do want to start tracking changes, this
+particular version makes sense as the initial release, as it marks the point
+where I started using Musium personally.</p>
+<p>Features included:</p>
+<ul>
+<li>Fast indexing.</li>
+<li>A webinterface to browse the library and start tracks.</li>
+<li>Logging of listens to a file as <abbr>JSON</abbr>.</li>
+<li>Advanced search.</li>
+</ul>
       </article>
       <nav id="nav-prev-next">
-        <a id="nav-prev" href="../tagging/" title="Tagging">Previous</a>
-        <a id="nav-next" href="../scrobbling/" title="Scrobbling to Last.fm">Next</a>
+        <a id="nav-prev" href="../disks/" title="Disks">Previous</a>
+        <a id="nav-next" href="../api/" title="API Reference">Next</a>
         </nav>
       </div>
     <aside>
@@ -484,13 +595,8 @@ collection of flac files, and to add <code>BS17704_*</code> tags.</p>
               "><a href="../tagging/">Tagging</a></li>
             
             <li class="toc-chapter
-               current"><a href="./">Loudness normalization</a></li>
-            <li><ul>
-                <li class="toc-heading"><a href="#tags">Tags</a></li>
-                <li class="toc-heading"><a href="#replaygain">ReplayGain</a></li>
-                <li class="toc-heading"><a href="#writing-bs1770-4-tags">Writing BS.1770-4 tags</a></li>
-                </ul></li>
-               
+              "><a href="../loudness/">Loudness normalization</a></li>
+            
             <li class="toc-chapter
               "><a href="../scrobbling/">Scrobbling to Last.fm</a></li>
             
@@ -504,8 +610,24 @@ collection of flac files, and to add <code>BS17704_*</code> tags.</p>
               "><a href="../disks/">Disks</a></li>
             
             <li class="toc-chapter
-              "><a href="../changelog/">Changelog</a></li>
-            <li class="toc-section"><a href="../api/">API Reference</a></li>
+               current"><a href="./">Changelog</a></li>
+            <li><ul>
+                <li class="toc-heading"><a href="#versioning-policy">Versioning policy</a></li>
+                <li class="toc-heading"><a href="#unreleased">Unreleased</a></li>
+                <li class="toc-heading"><a href="#0101">0.10.1</a></li>
+                <li class="toc-heading"><a href="#0100">0.10.0</a></li>
+                <li class="toc-heading"><a href="#090">0.9.0</a></li>
+                <li class="toc-heading"><a href="#080">0.8.0</a></li>
+                <li class="toc-heading"><a href="#070">0.7.0</a></li>
+                <li class="toc-heading"><a href="#060">0.6.0</a></li>
+                <li class="toc-heading"><a href="#050">0.5.0</a></li>
+                <li class="toc-heading"><a href="#040">0.4.0</a></li>
+                <li class="toc-heading"><a href="#031">0.3.1</a></li>
+                <li class="toc-heading"><a href="#030">0.3.0</a></li>
+                <li class="toc-heading"><a href="#020">0.2.0</a></li>
+                <li class="toc-heading"><a href="#010">0.1.0</a></li>
+                </ul></li>
+               <li class="toc-section"><a href="../api/">API Reference</a></li>
           <li class="toc-section
             "><a href="../search/">Internals</a></li>
           

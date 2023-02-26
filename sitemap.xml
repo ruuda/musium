@@ -2,82 +2,87 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://docs.ruuda.nl/musium/</loc>
-         <lastmod>2023-02-11</lastmod>
+         <lastmod>1980-01-01</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://docs.ruuda.nl/musium/api/</loc>
-         <lastmod>2023-02-11</lastmod>
+         <lastmod>1980-01-01</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://docs.ruuda.nl/musium/building/</loc>
-         <lastmod>2023-02-11</lastmod>
+         <lastmod>1980-01-01</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://docs.ruuda.nl/musium/changelog/</loc>
+         <lastmod>1980-01-01</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://docs.ruuda.nl/musium/configuration/</loc>
-         <lastmod>2023-02-11</lastmod>
+         <lastmod>1980-01-01</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://docs.ruuda.nl/musium/disks/</loc>
-         <lastmod>2023-02-11</lastmod>
+         <lastmod>1980-01-01</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://docs.ruuda.nl/musium/listenbrainz/</loc>
-         <lastmod>2023-02-11</lastmod>
+         <lastmod>1980-01-01</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://docs.ruuda.nl/musium/loudness/</loc>
-         <lastmod>2023-02-11</lastmod>
+         <lastmod>1980-01-01</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://docs.ruuda.nl/musium/performance/</loc>
-         <lastmod>2023-02-11</lastmod>
+         <lastmod>1980-01-01</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://docs.ruuda.nl/musium/running/</loc>
-         <lastmod>2023-02-11</lastmod>
+         <lastmod>1980-01-01</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://docs.ruuda.nl/musium/scrobbling/</loc>
-         <lastmod>2023-02-11</lastmod>
+         <lastmod>1980-01-01</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://docs.ruuda.nl/musium/search/</loc>
-         <lastmod>2023-02-11</lastmod>
+         <lastmod>1980-01-01</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://docs.ruuda.nl/musium/tagging/</loc>
-         <lastmod>2023-02-11</lastmod>
+         <lastmod>1980-01-01</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://docs.ruuda.nl/musium/thumbnails/</loc>
-         <lastmod>2023-02-11</lastmod>
+         <lastmod>1980-01-01</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://docs.ruuda.nl/musium/tradfri/</loc>
-         <lastmod>2023-02-11</lastmod>
+         <lastmod>1980-01-01</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://docs.ruuda.nl/musium/webinterface/</loc>
-         <lastmod>2023-02-11</lastmod>
+         <lastmod>1980-01-01</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://docs.ruuda.nl/musium/theme/</loc>
-         <lastmod>2023-02-11</lastmod>
+         <lastmod>1980-01-01</lastmod>
          <changefreq>daily</changefreq>
     </url>
 </urlset>

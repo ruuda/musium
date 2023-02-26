@@ -419,10 +419,10 @@ available in the <code>LISTENBRAINZ_USER_TOKEN</code> environment variable, for 
 </code></pre>
 <p>With this set up, we can run the submission script located in the <code>tools</code>
 directory of the repository:</p>
-<pre><code>tools/scrobble.py submit-listens /data_path/musium.sqlite3
+<pre><code>tools/scrobble.py submit-listens /db_path/musium.sqlite3
 </code></pre>
-<p>The data path is the <a href="../configuration/#data_path"><code>data_path</code> as configured</a>.
-Musium stores <code>musium.sqlite3</code> in that directory.</p>
+<p>The file to pass is the <a href="../configuration/#db_path"><code>db_path</code> as configured</a>;
+this is where Musium tracks listens.</p>
 <p>The script only submits listens that originated from Musium itself, it does
 not submit imported listening history. Listens that were submitted successfully
 get marked as such in the database, so they are only submitted once.</p>
@@ -481,6 +481,9 @@ small differences:</p>
             
             <li class="toc-chapter
               "><a href="../disks/">Disks</a></li>
+            
+            <li class="toc-chapter
+              "><a href="../changelog/">Changelog</a></li>
             <li class="toc-section"><a href="../api/">API Reference</a></li>
           <li class="toc-section
             "><a href="../search/">Internals</a></li>
