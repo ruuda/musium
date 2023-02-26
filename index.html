@@ -419,14 +419,15 @@ such as the ability to pause playback.</em></p>
 <li>Optimized to run in resource-constrained environments, such as a Raspberry Pi.</li>
 <li>Responsive design, supports both mobile and desktop.</li>
 <li>Logarithmic volume control and loudness normalization.</li>
-<li>Last.fm and Listenbrainz scrobbling.</li>
+<li>Last.fm and ListenBrainz scrobbling.</li>
 </ul>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations">&para;</a></h2>
 <ul>
 <li>Musium is not a tagger, it expects your files to be tagged correctly already.</li>
 <li>Supports only flac, with no intention to support other audio formats.</li>
 <li>Requires Linux, with no intention to become cross-platform.</li>
-<li>Uses raw Alsa, with no intention to support PulseAudio.</li>
+<li>Uses raw <abbr>ALSA</abbr>, with no intention to support PulseAudio or
+   PipeWire.</li>
 </ul>
 <h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started">&para;</a></h2>
 <p>Follow the <a href="building/">building</a> chapter to build from source. Then write a
@@ -436,17 +437,16 @@ library_path = /home/user/music
 db_path = /home/user/.config/musium.sqlite3
 audio_device = HDA Intel PCH
 </code></pre>
-<p>Index the library and generate cover art thumbnails (requires Imagemagick and
-Guetzli). Generating thumbnails can take a long time, but you can already
-continue and start the server when <code>musium scan</code> is still generating thumbnails.</p>
-<pre><code>mkdir -p /home/user/.cache/musium/covers
-mkdir -p /home/user/.local/share/musium
-target/release/musium scan musium.conf
+<p>Index the library, compute loudness, and generate cover art thumbnails (requires
+Imagemagick and Guetzli). Computing loudness and generating thumbnails can take
+a long time, but you can already continue and start the server when
+<code>musium scan</code> is past the indexing stage.</p>
+<pre><code>target/release/musium scan musium.conf
 </code></pre>
 <p>Start the server:</p>
 <pre><code>target/release/musium serve musium.conf
 </code></pre>
-<p>You can now open the library browser at http://localhost:8233. See the
+<p>You can now open the library browser at <a href="http://localhost:8233">http://localhost:8233</a>. See the
 <a href="webinterface/">webinterface chapter</a> for how to use it.</p>
 <p>Musium expects files to be tagged in a particular way, see the
 <a href="tagging/">tagging chapter</a> for more information.</p>
