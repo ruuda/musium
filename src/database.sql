@@ -108,6 +108,13 @@ create table if not exists waveforms
 ( track_id integer primary key
 , data     blob not null
 );
+
+create table if not exists thumbnails
+( album_id integer primary key
+  -- TODO: Would like to reference the files table too, so we can invalidate
+  -- when needed.
+, data     blob not null
+);
 -- @end ensure_schema_exists
 
 -- @query insert_file_metadata(metadata: InsertFileMetadata)
@@ -198,6 +205,11 @@ from
 order by
   filename asc;
 
+-- @query insert_album_thumbnail(album_id: i64, data: bytes)
+INSERT INTO thumbnails (album_id, data)
+VALUES (:album_id, :data)
+ON CONFLICT (album_id) DO UPDATE SET data = :data;
+
 -- @query insert_album_loudness(album_id: i64, loudness: f64)
 INSERT INTO album_loudness (album_id, bs17704_loudness_lufs)
 VALUES (:album_id, :loudness)
@@ -269,3 +281,14 @@ select bs17704_loudness_lufs from track_loudness where track_id = :track_id;
 
 -- @query select_track_waveform(track_id: i64) ->? bytes
 select data from waveforms where track_id = :track_id;
+
+-- Return the sum of the sizes (in bytes) of all thumbnails.
+-- @query select_thumbnails_count_and_total_size() ->1 (i64, i64)
+select count(*), sum(length(data)) from thumbnails;
+
+-- @query iter_thumbnails() ->* Thumbnail
+select album_id /*: i64 */, data /* :bytes */ from thumbnails;
+
+-- Return whether a thumbnail for the album exists (1 if it does, 0 otherwise).
+-- @query select_thumbnail_exists(album_id: i64) ->1 i64
+select count(*) from thumbnails where album_id = :album_id;

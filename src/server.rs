@@ -526,7 +526,7 @@ pub fn serve(bind: &str, service: Arc<MetaServer>) -> ! {
         let name = format!("http_server_{}", i);
         let builder = thread::Builder::new().name(name);
         let join_handle = builder.spawn(move || {
-            let connection = database_utils::connect_readonly(service_i.config.db_path())
+            let connection = database_utils::connect_readonly(&service_i.config.db_path)
                 .expect("Failed to connect to database.");
             let mut db = Connection::new(&connection);
             loop {

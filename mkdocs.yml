@@ -25,6 +25,7 @@ nav:
     - Submitting to Listenbrainz: listenbrainz.md
     - Trådfri control: tradfri.md
     - Disks: disks.md
+    - Changelog: changelog.md
   - API Reference: api.md
   - Internals:
     - Search: search.md

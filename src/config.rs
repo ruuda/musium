@@ -22,8 +22,7 @@ use crate::prim::Hertz;
 pub struct Config {
     pub listen: String,
     pub library_path: PathBuf,
-    pub covers_path: PathBuf,
-    pub data_path: PathBuf,
+    pub db_path: PathBuf,
     // TODO: Make this optional; pick the first one by default.
     pub audio_device: String,
     pub audio_volume_control: String,
@@ -37,8 +36,7 @@ impl fmt::Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "  listen                 = {}\n", self.listen)?;
         write!(f, "  library_path           = {}\n", self.library_path.to_string_lossy())?;
-        write!(f, "  covers_path            = {}\n", self.covers_path.to_string_lossy())?;
-        write!(f, "  data_path              = {}\n", self.data_path.to_string_lossy())?;
+        write!(f, "  db_path                = {}\n", self.db_path.to_string_lossy())?;
         write!(f, "  audio_device           = {}\n", self.audio_device)?;
         write!(f, "  audio_volume_control   = {}\n", self.audio_volume_control)?;
         write!(f, "  high_pass_cutoff       = {}\n", self.high_pass_cutoff)?;
@@ -64,8 +62,7 @@ impl Config {
     {
         let mut listen = None;
         let mut library_path = None;
-        let mut covers_path = None;
-        let mut data_path = None;
+        let mut db_path = None;
         let mut audio_device = None;
         let mut audio_volume_control = None;
         let mut high_pass_cutoff = None;
@@ -92,8 +89,7 @@ impl Config {
                 match key {
                     "listen" => listen = Some(String::from(value)),
                     "library_path" => library_path = Some(PathBuf::from(value)),
-                    "covers_path" => covers_path = Some(PathBuf::from(value)),
-                    "data_path" => data_path = Some(PathBuf::from(value)),
+                    "db_path" => db_path = Some(PathBuf::from(value)),
                     "audio_device" => audio_device = Some(String::from(value)),
                     "audio_volume_control" => audio_volume_control = Some(String::from(value)),
                     "high_pass_cutoff" => match Hertz::from_str(value) {
@@ -132,16 +128,10 @@ impl Config {
                     "Library path not set. Expected 'library_path ='-line."
                 )),
             },
-            covers_path: match covers_path {
+            db_path: match db_path {
                 Some(p) => p,
                 None => return Err(Error::IncompleteConfig(
-                    "Covers path not set. Expected 'covers_path ='-line."
-                )),
-            },
-            data_path: match data_path {
-                Some(p) => p,
-                None => return Err(Error::IncompleteConfig(
-                    "Data path not set. Expected 'data_path ='-line."
+                    "Database path not set. Expected 'db_path ='-line."
                 )),
             },
             audio_device: match audio_device {
@@ -167,12 +157,6 @@ impl Config {
 
         Ok(config)
     }
-
-    pub fn db_path(&self) -> PathBuf {
-        let mut db_path = self.data_path.clone();
-        db_path.push("musium.sqlite3");
-        db_path
-    }
 }
 
 #[cfg(test)]
@@ -186,8 +170,7 @@ mod test {
             "# This is a comment.",
             "listen = localhost:8000",
             "library_path = /home/user/music",
-            "covers_path = /home/user/.cache/musium/covers",
-            "data_path = /home/user/.local/share/musium",
+            "db_path = /home/user/.local/share/musium/db.sqlite3",
             "",
             "audio_device = UCM404HD 192k",
             "audio_volume_control = UMC404HD 192k Output",
@@ -196,8 +179,7 @@ mod test {
         let config = Config::parse(&config_lines).unwrap();
         assert_eq!(&config.listen[..], "localhost:8000");
         assert_eq!(config.library_path.as_path(), Path::new("/home/user/music"));
-        assert_eq!(config.covers_path.as_path(), Path::new("/home/user/.cache/musium/covers"));
-        assert_eq!(config.data_path.as_path(), Path::new("/home/user/.local/share/musium"));
+        assert_eq!(config.db_path.as_path(), Path::new("/home/user/.local/share/musium/db.sqlite3"));
         assert_eq!(&config.audio_device[..], "UCM404HD 192k");
         assert_eq!(&config.audio_volume_control[..], "UMC404HD 192k Output");
         assert_eq!(config.high_pass_cutoff, Hertz(50));

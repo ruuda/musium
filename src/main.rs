@@ -274,16 +274,14 @@ fn main() -> Result<()> {
     match &cmd[..] {
         "serve" => {
             let config_clone = config.clone();
-            let index = make_index(&config.db_path())?;
+            let index = make_index(&config.db_path)?;
             let arc_index = Arc::new(index);
             let index_var = Arc::new(MVar::new(arc_index.clone()));
             println!("Indexing complete.");
 
             println!("Loading cover art thumbnails ...");
-            let thumb_cache = ThumbCache::new(
-                arc_index.get_album_ids_ordered_by_artist(),
-                &config.covers_path,
-            ).expect("Failed to load cover art thumbnails.");
+            let thumb_cache = ThumbCache::load_from_database_at(&config.db_path)
+                .expect("Failed to load cover art thumbnails.");
             println!("Thumb cache size: {}", thumb_cache.size());
             let arc_thumb_cache = Arc::new(thumb_cache);
             let thumb_cache_var = Arc::new(MVar::new(arc_thumb_cache));

@@ -235,6 +235,24 @@ create table if not exists waveforms
         Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
     };
     statement.reset()?;
+    match statement.next()? {
+        Row => panic!("Query 'ensure_schema_exists' unexpectedly returned a row."),
+        Done => {}
+    }
+
+    let sql = r#"
+create table if not exists thumbnails
+( album_id integer primary key
+  -- TODO: Would like to reference the files table too, so we can invalidate
+  -- when needed.
+, data     blob not null
+);
+    "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
     let result = match statement.next()? {
         Row => panic!("Query 'ensure_schema_exists' unexpectedly returned a row."),
         Done => (),
@@ -479,6 +497,26 @@ order by
     Ok(result)
 }
 
+pub fn insert_album_thumbnail(tx: &mut Transaction, album_id: i64, data: &[u8]) -> Result<()> {
+    let sql = r#"
+INSERT INTO thumbnails (album_id, data)
+VALUES (:album_id, :data)
+ON CONFLICT (album_id) DO UPDATE SET data = :data;
+    "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    statement.bind(1, album_id)?;
+    statement.bind(2, data)?;
+    let result = match statement.next()? {
+        Row => panic!("Query 'insert_album_thumbnail' unexpectedly returned a row."),
+        Done => (),
+    };
+    Ok(result)
+}
+
 pub fn insert_album_loudness(tx: &mut Transaction, album_id: i64, loudness: f64) -> Result<()> {
     let sql = r#"
 INSERT INTO album_loudness (album_id, bs17704_loudness_lufs)
@@ -709,6 +747,75 @@ select data from waveforms where track_id = :track_id;
         if statement.next()? != Done {
             panic!("Query 'select_track_waveform' should return at most one row.");
         }
+    }
+    Ok(result)
+}
+
+/// Return the sum of the sizes (in bytes) of all thumbnails.
+pub fn select_thumbnails_count_and_total_size(tx: &mut Transaction) -> Result<(i64, i64)> {
+    let sql = r#"
+select count(*), sum(length(data)) from thumbnails;
+    "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    let decode_row = |statement: &Statement| Ok((
+        statement.read(0)?,
+        statement.read(1)?,
+));
+    let result = match statement.next()? {
+        Row => decode_row(statement)?,
+        Done => panic!("Query 'select_thumbnails_count_and_total_size' should return exactly one row."),
+    };
+    if statement.next()? != Done {
+        panic!("Query 'select_thumbnails_count_and_total_size' should return exactly one row.");
+    }
+    Ok(result)
+}
+
+#[derive(Debug)]
+pub struct Thumbnail {
+    pub album_id: i64,
+    pub data: Vec<u8>,
+}
+
+pub fn iter_thumbnails<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<Iter<'i, 'a, Thumbnail>> {
+    let sql = r#"
+select album_id, data from thumbnails;
+    "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    let decode_row = |statement: &Statement| Ok(Thumbnail {
+        album_id: statement.read(0)?,
+        data: statement.read(1)?,
+    });
+    let result = Iter { statement, decode_row };
+    Ok(result)
+}
+
+/// Return whether a thumbnail for the album exists (1 if it does, 0 otherwise).
+pub fn select_thumbnail_exists(tx: &mut Transaction, album_id: i64) -> Result<i64> {
+    let sql = r#"
+select count(*) from thumbnails where album_id = :album_id;
+    "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    statement.bind(1, album_id)?;
+    let decode_row = |statement: &Statement| Ok(statement.read(0)?);
+    let result = match statement.next()? {
+        Row => decode_row(statement)?,
+        Done => panic!("Query 'select_thumbnail_exists' should return exactly one row."),
+    };
+    if statement.next()? != Done {
+        panic!("Query 'select_thumbnail_exists' should return exactly one row.");
     }
     Ok(result)
 }

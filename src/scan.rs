@@ -46,7 +46,7 @@ use crate::loudness;
 use crate::mvar::{MVar, Var};
 use crate::prim::Mtime;
 use crate::thumb_cache::ThumbCache;
-use crate::{MetaIndex, MemoryMetaIndex};
+use crate::MemoryMetaIndex;
 
 type FlacReader = claxon::FlacReader<fs::File>;
 
@@ -609,9 +609,8 @@ pub fn run_scan_in_thread(
     // a small buffer for them.
     let (mut tx, rx) = std::sync::mpsc::sync_channel(15);
 
-    let db_path = config.db_path();
+    let db_path = config.db_path.clone();
     let library_path = config.library_path.clone();
-    let covers_path = config.covers_path.clone();
 
     let scan_thread = std::thread::Builder::new()
         .name("scan".to_string())
@@ -672,8 +671,7 @@ pub fn run_scan_in_thread(
             // those.
             crate::thumb_gen::generate_thumbnails(
                 &*index_arc,
-                &builder,
-                &covers_path,
+                &db_path,
                 &mut status,
                 &mut tx,
             )?;
@@ -682,12 +680,14 @@ pub fn run_scan_in_thread(
             tx.send(status).unwrap();
 
             // Load the new set of thumbnails, publish them to the webinterface.
-            let thumb_cache = ThumbCache::new(
-                index_arc.get_album_ids_ordered_by_artist(),
-                &covers_path,
-            )?;
-            let thumb_cache_arc = Arc::new(thumb_cache);
-            thumb_cache_var.set(thumb_cache_arc);
+            {
+                let mut db = Connection::new(&connection);
+                let mut tx = db.begin()?;
+                let thumb_cache = ThumbCache::load_from_database(&mut tx)?;
+                tx.commit()?;
+                let thumb_cache_arc = Arc::new(thumb_cache);
+                thumb_cache_var.set(thumb_cache_arc);
+            }
 
             status.stage = ScanStage::Done;
             tx.send(status).unwrap();
