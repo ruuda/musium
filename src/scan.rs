@@ -38,8 +38,9 @@ use std::sync::mpsc::{Receiver, SyncSender};
 use walkdir;
 
 use crate::config::Config;
-use crate::database::{Database, FileMetadataInsert, FileMetaId};
-use crate::database;
+use crate::database_utils;
+use crate::database as db;
+use crate::database::{Connection, Transaction};
 use crate::error;
 use crate::loudness;
 use crate::mvar::{MVar, Var};
@@ -48,6 +49,9 @@ use crate::thumb_cache::ThumbCache;
 use crate::{MetaIndex, MemoryMetaIndex};
 
 type FlacReader = claxon::FlacReader<fs::File>;
+
+#[derive(Debug, Eq, PartialEq)]
+struct FileMetaId(i64);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum ScanStage {
@@ -208,9 +212,7 @@ pub fn scan(
     library_path: &Path,
     status: &mut Status,
     status_sender: &mut SyncSender<Status>,
-) -> database::Result<()> {
-    let mut db = Database::new(&connection)?;
-
+) -> db::Result<()> {
     let mut files_current = enumerate_flac_files(library_path, status_sender, status);
 
     status.stage = ScanStage::PreProcessingMetadata;
@@ -222,11 +224,19 @@ pub fn scan(
     // default string ordering.
     files_current.sort_by(|a, b| a.0.as_os_str().cmp(b.0.as_os_str()));
 
+    let mut db = Connection::new(connection);
+
+    let mut tx = db.begin()?;
+    db::ensure_schema_exists(&mut tx)?;
+    tx.commit()?;
+
+    let mut tx = db.begin()?;
+
     let mut rows_to_delete = Vec::new();
     let mut paths_to_scan = Vec::new();
     get_updates(
         files_current,
-        &mut db,
+        &mut tx,
         &mut rows_to_delete,
         &mut paths_to_scan,
     )?;
@@ -236,7 +246,9 @@ pub fn scan(
     status_sender.send(*status).unwrap();
 
     // Delete rows for outdated files, we will insert new rows below.
-    delete_outdated_file_metadata(&mut db, &rows_to_delete)?;
+    for file_id in &rows_to_delete {
+        db::delete_file_metadata(&mut tx, file_id.0)?;
+    }
 
     // Format the current time, we store this in the `imported_at` column in the
     // `file_metadata` table.
@@ -245,12 +257,14 @@ pub fn scan(
     let now_str = now.to_rfc3339_opts(chrono::SecondsFormat::Millis, use_zulu_suffix);
 
     insert_file_metadata_for_paths(
-        &mut db,
+        &mut tx,
         &paths_to_scan[..],
         &now_str,
         status_sender,
         status,
     )?;
+
+    tx.commit()?;
 
     // If we deleted anything vacuum the database to ensure it's packed tightly
     // again. Deletes are expected to be infrequent and the database is expected
@@ -259,7 +273,7 @@ pub fn scan(
     // a few dozen megabytes. But still, it should be fine to vacuum after a
     // scan.
     if rows_to_delete.len() > 0 {
-        db.connection.execute("VACUUM")?;
+        connection.execute("VACUUM")?;
     }
 
     Ok(())
@@ -332,15 +346,14 @@ pub fn enumerate_flac_files(
 /// removed and end up in `rows_to_delete`. Any files present currently, but
 /// not in the database, should be added and end up in `paths_to_scan`. Files
 /// that are present in both, but with a different mtime, end up in both.
-pub fn get_updates(
+fn get_updates(
     current_sorted: Vec<(PathBuf, Mtime)>,
-    db: &mut Database,
+    tx: &mut Transaction,
     rows_to_delete: &mut Vec<FileMetaId>,
     paths_to_scan: &mut Vec<(PathBuf, Mtime)>,
-) -> database::Result<()> {
+) -> db::Result<()> {
     let mut iter_curr = current_sorted.into_iter();
-    let mut iter_db = db
-        .iter_file_metadata_filename_mtime()?
+    let mut iter_db = db::iter_file_metadata_mtime(tx)?
         .map(|result|
             result.map(|row| (
                 FileMetaId(row.id),
@@ -400,26 +413,13 @@ pub fn get_updates(
     Ok(())
 }
 
-pub fn delete_outdated_file_metadata(
-    db: &mut Database,
-    rows_to_delete: &[FileMetaId],
-) -> database::Result<()> {
-    db.connection.execute("BEGIN")?;
-
-    for row in rows_to_delete {
-        db.delete_file_metadata(*row)?;
-    }
-
-    db.connection.execute("COMMIT")
-}
-
 pub fn insert_file_metadata_for_paths(
-    db: &mut Database,
+    tx: &mut Transaction,
     paths_to_scan: &[(PathBuf, Mtime)],
     now_str: &str,
     status_sender: &mut SyncSender<Status>,
     status: &mut Status,
-) -> database::Result<()> {
+) -> db::Result<()> {
     use std::sync::mpsc::sync_channel;
     // When we are IO bound, we need enough threads to keep the IO scheduler
     // queues fed, so it can schedule optimally and minimize seeks. Therefore,
@@ -463,25 +463,9 @@ pub fn insert_file_metadata_for_paths(
         // receiving side.
         std::mem::drop(tx_file);
 
-        // Do all inserts inside a transaction for better insert performance.
-        // Previously I also did COMMIT and BEGIN periodically inside the loop,
-        // to ensure that less work is wasted if you kill scanning half-way.
-        // However, the commit triggers IO that goes in the queue with dozens of
-        // reads, so it can take a long time to finish (multiple seconds on a
-        // spinning disk). This then makes progress reporting very choppy: it is
-        // stuck at the last number reported before commit, then after this
-        // thread unblocks, it races through all data that has been buffered
-        // since the last commit, and it blocks again. I don't like this choppy
-        // progress while scanning proceeds smoothly in the background, so don't
-        // do intermediate commits, just put everything in a single transaction.
-        // Scanning does not take *that* long anyway, for me it takes a few
-        // minutes for 17k files on a spinning disk, so if you kill it early,
-        // just restart from scratch, the loss is not that big.
-        db.connection.execute("BEGIN")?;
-
         for (i, flac_reader) in rx_file.iter() {
             let (ref path, mtime) = paths_to_scan[i];
-            insert_file_metadata(db, now_str, &path, mtime, flac_reader)?;
+            insert_file_metadata(tx, now_str, &path, mtime, flac_reader)?;
 
             // Keep the status up to date, and send it once in a while. We send
             // it more often here than when enumerating files, because reading
@@ -498,8 +482,6 @@ pub fn insert_file_metadata_for_paths(
         // incremented once without sending, and we have one increment per
         // processed file for files that did get processed.
         assert_eq!(counter.load(Ordering::SeqCst), paths_to_scan.len() + num_threads);
-
-        db.connection.execute("COMMIT")?;
 
         // Send the final discovery status, we may have processed some files
         // since the last update.
@@ -540,12 +522,12 @@ fn read_files(
 
 /// Insert a row in the `file_metadata` table for the given flac file.
 fn insert_file_metadata(
-    db: &mut Database,
+    tx: &mut Transaction,
     now_str: &str,
     path: &Path,
     mtime: Mtime,
     flac_reader: FlacReader,
-) -> database::Result<()> {
+) -> db::Result<()> {
     let path_utf8 = match path.to_str() {
         Some(s) => s,
         None => {
@@ -557,7 +539,7 @@ fn insert_file_metadata(
     // Start with all fields that are known from the streaminfo, with tags
     // unfilled.
     let streaminfo = flac_reader.streaminfo();
-    let mut m = FileMetadataInsert {
+    let mut m = db::InsertFileMetadata {
         filename: path_utf8,
         mtime: mtime.0,
         imported_at: now_str,
@@ -612,7 +594,7 @@ fn insert_file_metadata(
         }
     }
 
-    db.insert_file_metadata(m)
+    db::insert_file_metadata(tx, m)
 }
 
 pub fn run_scan_in_thread(
@@ -636,7 +618,7 @@ pub fn run_scan_in_thread(
         .spawn(move || {
             let mut status = Status::new();
 
-            let connection = database::connect_read_write(&db_path)?;
+            let connection = database_utils::connect_read_write(&db_path)?;
 
             // Scan all files, put the metadata in the database.
             scan(
@@ -676,8 +658,10 @@ pub fn run_scan_in_thread(
                     &mut status,
                     &mut tx,
                 );
-                let mut db = Database::new(&connection)?;
-                loudness_tasks.push_tasks_missing(&mut db)?;
+                let mut db = Connection::new(&connection);
+                let mut tx = db.begin()?;
+                loudness_tasks.push_tasks_missing(&mut tx)?;
+                tx.commit()?;
                 loudness_tasks.status.stage = ScanStage::AnalyzingLoudness;
                 loudness_tasks.status_sender.send(*loudness_tasks.status).unwrap();
 
@@ -837,16 +821,23 @@ impl BackgroundScanner {
 
 #[cfg(test)]
 mod test {
-    use crate::database::{Database, FileMetaId};
-    use super::{Mtime, get_updates};
+    use crate::database::Connection;
+    use super::{Mtime, FileMetaId, get_updates};
     use std::path::PathBuf;
+
+    fn ensure_schema_exists(db: &mut Connection) {
+        let mut tx = db.begin().unwrap();
+        crate::database::ensure_schema_exists(&mut tx).unwrap();
+        tx.commit().unwrap();
+    }
 
     #[test]
     fn get_updates_empty_db() {
         // In this case we have an empty database but a non-empty file system,
         // so we expect all files to be scanned.
         let connection = sqlite::open(":memory:").unwrap();
-        let mut db = Database::new(&connection).unwrap();
+        let mut db = Connection::new(&connection);
+        ensure_schema_exists(&mut db);
 
         let current_sorted = vec![
             (PathBuf::from("/foo/bar.flac"), Mtime(1)),
@@ -857,7 +848,7 @@ mod test {
 
         get_updates(
             current_sorted,
-            &mut db,
+            &mut db.begin().unwrap(),
             &mut rows_to_delete,
             &mut paths_to_scan,
         ).unwrap();
@@ -877,8 +868,9 @@ mod test {
         // In this case nothing changed on the file system with respect to the
         // database, so we expect no files to be scanned and no rows deleted.
         let connection = sqlite::open(":memory:").unwrap();
-        let mut db = Database::new(&connection).unwrap();
-        db.connection.execute(
+        let mut db = Connection::new(&connection);
+        ensure_schema_exists(&mut db);
+        connection.execute(
             "
             insert into
               file_metadata
@@ -905,7 +897,7 @@ mod test {
 
         get_updates(
             current_sorted,
-            &mut db,
+            &mut db.begin().unwrap(),
             &mut rows_to_delete,
             &mut paths_to_scan,
         ).unwrap();
@@ -918,8 +910,9 @@ mod test {
     fn get_updates_add_remove() {
         // One file was added on the file system, one was deleted.
         let connection = sqlite::open(":memory:").unwrap();
-        let mut db = Database::new(&connection).unwrap();
-        db.connection.execute(
+        let mut db = Connection::new(&connection);
+        ensure_schema_exists(&mut db);
+        connection.execute(
             "
             insert into
               file_metadata
@@ -948,7 +941,7 @@ mod test {
 
         get_updates(
             current_sorted,
-            &mut db,
+            &mut db.begin().unwrap(),
             &mut rows_to_delete,
             &mut paths_to_scan,
         ).unwrap();
@@ -962,8 +955,9 @@ mod test {
         // A file is present in both the file system and database, but the mtime
         // differs.
         let connection = sqlite::open(":memory:").unwrap();
-        let mut db = Database::new(&connection).unwrap();
-        db.connection.execute(
+        let mut db = Connection::new(&connection);
+        ensure_schema_exists(&mut db);
+        connection.execute(
             "
             insert into
               file_metadata
@@ -987,7 +981,7 @@ mod test {
 
         get_updates(
             current_sorted,
-            &mut db,
+            &mut db.begin().unwrap(),
             &mut rows_to_delete,
             &mut paths_to_scan,
         ).unwrap();
@@ -1001,8 +995,9 @@ mod test {
         // The difference should be empty, but the sort order is not trivial
         // because it's not only ASCII.
         let connection = sqlite::open(":memory:").unwrap();
-        let mut db = Database::new(&connection).unwrap();
-        db.connection.execute(
+        let mut db = Connection::new(&connection);
+        ensure_schema_exists(&mut db);
+        connection.execute(
             "
             insert into
               file_metadata
@@ -1030,7 +1025,7 @@ mod test {
 
         get_updates(
             current_sorted,
-            &mut db,
+            &mut db.begin().unwrap(),
             &mut rows_to_delete,
             &mut paths_to_scan,
         ).unwrap();
@@ -1045,8 +1040,9 @@ mod test {
         // component order. When we compare path order, a slash comes before a
         // space, and getting the updates reaches a wrong conclusion.
         let connection = sqlite::open(":memory:").unwrap();
-        let mut db = Database::new(&connection).unwrap();
-        db.connection.execute(
+        let mut db = Connection::new(&connection);
+        ensure_schema_exists(&mut db);
+        connection.execute(
             "
             insert into
               file_metadata
@@ -1071,7 +1067,7 @@ mod test {
 
         get_updates(
             current_sorted,
-            &mut db,
+            &mut db.begin().unwrap(),
             &mut rows_to_delete,
             &mut paths_to_scan,
         ).unwrap();

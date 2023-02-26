@@ -1,0 +1,47 @@
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1661628722,
+        "narHash": "sha256-D3VuWLdnLmAXIkooWAtbTGSQI9Fc1lkvAr94wTxhnTU=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "48d63e924a2666baf37f4f14a18f19347fbd54a2",
+        "type": "github"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "ref": "nixos-unstable",
+        "type": "indirect"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "squiller": "squiller"
+      }
+    },
+    "squiller": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1665245625,
+        "narHash": "sha256-c3xkWY6h/itTTWkPr2jIZbHBfneyfLo7lkIcybsVE/0=",
+        "owner": "ruuda",
+        "repo": "squiller",
+        "rev": "5c674744342e9a684e37d57fc37a15ddd8f647cf",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ruuda",
+        "repo": "squiller",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

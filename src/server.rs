@@ -14,8 +14,9 @@ use tiny_http::{Header, Request, Response, ResponseBox, Server};
 use tiny_http::Method::{Get, Post, Put, self};
 
 use crate::config::Config;
-use crate::database::Database;
-use crate::database;
+use crate::database_utils;
+use crate::database as db;
+use crate::database::Connection;
 use crate::mvar::Var;
 use crate::player::{Millibel, Player};
 use crate::prim::{ArtistId, AlbumId, TrackId};
@@ -149,7 +150,7 @@ impl MetaServer {
             .boxed()
     }
 
-    fn handle_waveform(&self, db: &mut Database, id: &str) -> ResponseBox {
+    fn handle_waveform(&self, db: &mut Connection, id: &str) -> ResponseBox {
         use crate::waveform::Waveform;
 
         // TODO: DRY this track id parsing and loading part.
@@ -158,7 +159,15 @@ impl MetaServer {
             None => return self.handle_bad_request("Invalid track id."),
         };
 
-        let waveform = match db.select_track_waveform(track_id) {
+        let waveform = db
+            .begin()
+            .and_then(|mut tx| {
+                let result = db::select_track_waveform(&mut tx, track_id.0 as i64)?;
+                tx.commit()?;
+                Ok(result)
+            });
+
+        let waveform = match waveform {
             Ok(Some(data)) => Waveform::from_bytes(data),
             Ok(None) => return self.handle_not_found(),
             Err(err) => {
@@ -410,7 +419,7 @@ impl MetaServer {
     /// Router function for all /api/«endpoint» calls.
     fn handle_api_request(
         &self,
-        db: &mut Database,
+        db: &mut Connection,
         method: &Method,
         endpoint: &str,
         arg: Option<&str>,
@@ -445,7 +454,7 @@ impl MetaServer {
         }
     }
 
-    fn handle_request(&self, db: &mut Database, request: Request) {
+    fn handle_request(&self, db: &mut Connection, request: Request) {
         // Break url into the part before the ? and the part after. The part
         // before we split on slashes.
         let mut url_iter = request.url().splitn(2, '?');
@@ -517,10 +526,9 @@ pub fn serve(bind: &str, service: Arc<MetaServer>) -> ! {
         let name = format!("http_server_{}", i);
         let builder = thread::Builder::new().name(name);
         let join_handle = builder.spawn(move || {
-            let connection = database::connect_readonly(service_i.config.db_path())
+            let connection = database_utils::connect_readonly(service_i.config.db_path())
                 .expect("Failed to connect to database.");
-            let mut db = Database::new(&connection)
-                .expect("Failed to initialize database.");
+            let mut db = Connection::new(&connection);
             loop {
                 let request = match server_i.recv() {
                     Ok(rq) => rq,

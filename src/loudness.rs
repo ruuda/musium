@@ -15,8 +15,9 @@ use bs1770::{ChannelLoudnessMeter};
 use claxon::FlacReader;
 use claxon;
 
-use crate::database::Database;
-use crate::database;
+use crate::database_utils;
+use crate::database as db;
+use crate::database::Transaction;
 use crate::error;
 use crate::prim::{AlbumId, TrackId};
 use crate::scan::Status;
@@ -181,43 +182,43 @@ enum Insert {
 fn process_inserts(
     db_path: &Path,
     inserts: Receiver<Insert>,
-) -> database::Result<()> {
-    let connection = database::connect_read_write(db_path)?;
-    let mut db = Database::new(&connection)?;
+) -> db::Result<()> {
+    let connection = database_utils::connect_read_write(db_path)?;
 
     // Reduce the number of fsyncs (and thereby improve performance), at the
     // cost of losing durability (but not consistency). This is fine, if we lose
     // power and some work is lost, we can re-do it. But more likely we kill the
     // process because it takes a long time or because it crashed, and then we
     // still have the progress.
-    db.connection.execute("PRAGMA synchronous = NORMAL;")?;
+    connection.execute("PRAGMA synchronous = NORMAL;")?;
 
     // We commit after every album, instead of at every single write, to reduce
     // the number of syncs. This makes a big difference for disk utilisation
     // when the disk to read from and the disk that contain the database are the
     // same disk.
-    db.connection.execute("BEGIN")?;
+    let mut db = db::Connection::new(&connection);
+    let mut tx = db.begin()?;
 
     for insert in inserts {
         match insert {
             Insert::Track { track_id, loudness, waveform } => {
-                db.insert_track_loudness(track_id, loudness.loudness_lkfs() as f64)?;
-                db.insert_track_waveform(track_id, waveform.as_bytes())?;
+                db::insert_track_loudness(&mut tx, track_id.0 as i64, loudness.loudness_lkfs() as f64)?;
+                db::insert_track_waveform(&mut tx, track_id.0 as i64, waveform.as_bytes())?;
             }
             Insert::Album { album_id, loudness } => {
-                db.insert_album_loudness(album_id, loudness.loudness_lkfs() as f64)?;
-                db.connection.execute("COMMIT")?;
-                db.connection.execute("BEGIN")?;
+                db::insert_album_loudness(&mut tx, album_id.0 as i64, loudness.loudness_lkfs() as f64)?;
+                tx.commit()?;
+                tx = db.begin()?;
             }
         }
     }
 
-    db.connection.execute("COMMIT")?;
+    tx.commit()?;
 
     // Integrate the WAL into the rest of the database, now that we are done
     // writing. Also vacuum the database to clean up any index pages that may
     // have become redundant.
-    db.connection.execute("PRAGMA wal_checkpoint(TRUNCATE);")?;
+    connection.execute("PRAGMA wal_checkpoint(TRUNCATE);")?;
 
     Ok(())
 }
@@ -289,7 +290,7 @@ impl<'a> TaskQueue<'a> {
     /// in the database. Note, this is a somewhat expensive query, since we
     /// check the existence of every album and track. It's better to rely on
     /// incremental building, but this can be used to backfill an old database.
-    pub fn push_tasks_missing(&mut self, db: &mut Database) -> database::Result<()> {
+    pub fn push_tasks_missing(&mut self, tx: &mut Transaction) -> db::Result<()> {
         let index = self.index.clone();
 
         // Note, this is not the most efficient index query, because we have to
@@ -304,19 +305,19 @@ impl<'a> TaskQueue<'a> {
         // row in the database for that.
         'albums: for (album_id, _album) in index.get_albums() {
             // If the album is not there, we need to add it.
-            if db.select_album_loudness(*album_id)?.is_none() {
+            if db::select_album_loudness_lufs(tx, album_id.0 as i64)?.is_none() {
                 self.push_task_album(*album_id);
                 continue 'albums
             }
 
             // If one of the tracks is not there, we also add the full album.
             for (track_id, _track) in index.get_album_tracks(*album_id) {
-                if db.select_track_loudness(*track_id)?.is_none() {
+                if db::select_track_loudness_lufs(tx, track_id.0 as i64)?.is_none() {
                     self.push_task_album(*album_id);
                     continue 'albums
                 }
 
-                if db.select_track_waveform(*track_id)?.is_none() {
+                if db::select_track_waveform(tx, track_id.0 as i64)?.is_none() {
                     self.push_task_album(*album_id);
                     continue 'albums
                 }

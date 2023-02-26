@@ -6,21 +6,28 @@ jobs:
   build:
     # We deliberate use a somewhat older version here to ensure compatibility
     # with it. But also not too old that we have to use ancient software.
-    runs-on: "ubuntu-20.04"
+    runs-on: "ubuntu-22.04"
     steps:
-      - uses: "actions/checkout@v2"
+      - uses: "actions/checkout@v3.3.0"
         with:
           submodules: true
 
+      - id: "nix-cache"
+        name: "Cache Nix"
+        uses: "actions/cache@v3.2.6"
+        with:
+          path: "/tmp/nixcache"
+          key: "nix-${{ hashFiles('flake.*') }}"
+
       - name: "Cache PureScript"
-        uses: "actions/cache@v2.1.6"
+        uses: "actions/cache@v3.2.6"
         with:
           path: "app/.psc-package"
-          key: "psc-package-${{ hashFiles('app/psc-package.json', 'nixpkgs-pinned.nix') }}"
+          key: "psc-package-${{ hashFiles('app/psc-package.json', 'flake.*') }}"
           restore-keys: "psc-package-"
 
       - name: "Cache Rust"
-        uses: "actions/cache@v2.1.6"
+        uses: "actions/cache@v3.2.6"
         with:
           path: |
             target
@@ -29,13 +36,18 @@ jobs:
           # Rustup can be incompatible across versions, so if we update the
           # Nixpkgs snapshot and get a newer rustup, we should *not* reuse the
           # cache.
-          key: "rust-${{ hashFiles('nixpkgs-pinned.nix') }}-${{ hashFiles('Cargo.lock', 'rust-toolchain') }}"
-          restore-keys: "rust-${{ hashFiles('nixpkgs-pinned.nix') }}-"
+          key: "rust-${{ hashFiles('flake.*') }}-${{ hashFiles('Cargo.lock', 'rust-toolchain') }}"
+          restore-keys: "rust-${{ hashFiles('flake.*') }}-"
 
-      - uses: "cachix/install-nix-action@v13"
+      - name: "Install Nix"
+        uses: "cachix/install-nix-action@v19"
         with:
           nix_path: "nixpkgs=channel:nixos-unstable"
-          install_url: "https://releases.nixos.org/nix/nix-2.3.15/install"
+          install_url: "https://releases.nixos.org/nix/nix-2.13.2/install"
+
+      - name: "Import Nix store cache"
+        if: "steps.nix-cache.outputs.cache-hit == 'true'"
+        run: "nix-store --import < /tmp/nixcache"
 
       - name: "Install system dependencies"
         run: |
@@ -49,16 +61,20 @@ jobs:
           sudo apt install libasound2-dev libsystemd-dev
 
           # Trigger Rustup to download and install the Rust toolchain.
-          nix run -c cargo --version
+          nix develop --command cargo --version
 
       - name: "Build server"
-        run: "nix run -c cargo build"
+        run: "nix develop --command cargo build"
 
       - name: "Test server"
-        run: "nix run -c cargo test"
+        run: "nix develop --command cargo test"
 
       - name: "Build app"
-        run: "nix run -c make -C app"
+        run: "nix develop --command make -C app"
 
       - name: "Build docs"
-        run: "nix run -c mkdocs build"
+        run: "nix develop --command mkdocs build"
+
+      - name: "Export Nix store cache"
+        if: "steps.nix-cache.outputs.cache-hit != 'true'"
+        run: "nix-store --export $(find /nix/store -maxdepth 1 -name '*-*') > /tmp/nixcache"
