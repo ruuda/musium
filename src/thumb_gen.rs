@@ -9,18 +9,18 @@
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::process;
-use std::sync::Mutex;
+use std::process::{Command, Stdio};
 use std::sync::mpsc::SyncSender;
+use std::sync::Mutex;
 
+use crate::database;
+use crate::database::{Connection, Transaction};
+use crate::database_utils;
 use crate::error::{Error, Result};
 use crate::prim::AlbumId;
 use crate::scan::{ScanStage, Status};
-use crate::{MetaIndex, MemoryMetaIndex};
-use crate::database::{Connection, Transaction};
-use crate::database;
-use crate::database_utils;
+use crate::{MemoryMetaIndex, MetaIndex};
 
 /// Tracks the process of generating a thumbnail.
 struct GenThumb<'a> {
@@ -78,7 +78,11 @@ impl<'a> GenThumb<'a> {
     /// From `Pending` state, read a picture, and start resizing it.
     ///
     /// Returns `None` if the input file does not contain any pictures.
-    fn start_resize(mut self, album_id: AlbumId, flac_filename: &Path) -> Result<Option<GenThumb<'a>>> {
+    fn start_resize(
+        mut self,
+        album_id: AlbumId,
+        flac_filename: &Path,
+    ) -> Result<Option<GenThumb<'a>>> {
         let opts = claxon::FlacReaderOptions {
             metadata_only: true,
             read_picture: claxon::ReadPicture::CoverAsVec,
@@ -106,12 +110,10 @@ impl<'a> GenThumb<'a> {
             // thumbnail become darker, which is especially noticeable for
             // covers with white edges, and also shows up as a "pop" in the
             // album view when the full-resolution image loads.
-            .args(&[
-                "-background", "black",
-                "-alpha", "remove",
-                "-alpha", "off",
-                "-flatten"
-            ])
+            .args(&["-background", "black"])
+            .args(&["-alpha", "remove"])
+            .args(&["-alpha", "off"])
+            .args(&["-flatten"])
             // Resize in a linear color space, sRGB is not suitable for it
             // because it is nonlinear. "RGB" in ImageMagick is linear.
             .args(&["-colorspace", "RGB"])
@@ -137,7 +139,10 @@ impl<'a> GenThumb<'a> {
             .map_err(|e| Error::CommandError("Failed to spawn ImageMagick's 'convert'.", e))?;
 
         {
-            let stdin = convert.stdin.as_mut().expect("Stdin should be there, we piped it.");
+            let stdin = convert
+                .stdin
+                .as_mut()
+                .expect("Stdin should be there, we piped it.");
             stdin.write_all(cover.data()).unwrap();
         }
 
@@ -189,12 +194,8 @@ impl<'a> GenThumb<'a> {
         let album_id = self.album_id;
 
         match self.state {
-            GenThumbState::Pending { flac_filename } => {
-                self.start_resize(album_id, flac_filename)
-            }
-            GenThumbState::Resizing { .. } => {
-                self.start_compress().map(Some)
-            }
+            GenThumbState::Pending { flac_filename } => self.start_resize(album_id, flac_filename),
+            GenThumbState::Resizing { .. } => self.start_compress().map(Some),
             GenThumbState::Compressing { mut child, in_path } => {
                 child
                     .wait()
@@ -212,11 +213,7 @@ impl<'a> GenThumb<'a> {
 
                 {
                     let mut tx = db.begin()?;
-                    database::insert_album_thumbnail(
-                        &mut tx,
-                        album_id.0 as i64,
-                        &jpeg_bytes[..],
-                    )?;
+                    database::insert_album_thumbnail(&mut tx, album_id.0 as i64, &jpeg_bytes[..])?;
                     tx.commit()?;
                 }
 
@@ -304,8 +301,7 @@ pub fn generate_thumbnails(
     // busy. Edit: Or not, usually it's not needed.
     crossbeam::scope::<_, Result<()>>(|scope| {
         let n_threads = num_cpus::get();
-        let mut threads:
-            Vec<crossbeam::ScopedJoinHandle<Result<()>>> =
+        let mut threads: Vec<crossbeam::ScopedJoinHandle<Result<()>>> =
             Vec::with_capacity(n_threads);
 
         for i in 0..n_threads {
