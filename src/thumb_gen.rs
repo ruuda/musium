@@ -20,6 +20,7 @@ use crate::scan::{ScanStage, Status};
 use crate::{MetaIndex, MemoryMetaIndex};
 use crate::database::{Connection, Transaction};
 use crate::database;
+use crate::database_utils;
 
 /// Tracks the process of generating a thumbnail.
 struct GenThumb<'a> {
@@ -184,7 +185,7 @@ impl<'a> GenThumb<'a> {
     /// need to advance once more in the future to conclude.
     ///
     /// When this returns `None`, thumbnail generation is complete.
-    fn advance(self) -> Result<Option<GenThumb<'a>>> {
+    fn advance(self, db: &mut Connection) -> Result<Option<GenThumb<'a>>> {
         let album_id = self.album_id;
 
         match self.state {
@@ -206,11 +207,18 @@ impl<'a> GenThumb<'a> {
                     .stdout
                     .take()
                     .expect("Stdout should be there, we piped it.");
-                let mut jpg_bytes = Vec::new();
-                stdout.read_to_end(&mut jpg_bytes)?;
+                let mut jpeg_bytes = Vec::new();
+                stdout.read_to_end(&mut jpeg_bytes)?;
 
-                // TODO: Insert into database.
-                eprintln!("\n{} compressed to {} bytes\n\n", self.album_id, jpg_bytes.len());
+                {
+                    let mut tx = db.begin()?;
+                    database::insert_album_thumbnail(
+                        &mut tx,
+                        album_id.0 as i64,
+                        &jpeg_bytes[..],
+                    )?;
+                    tx.commit()?;
+                }
 
                 Ok(None)
             }
@@ -244,14 +252,16 @@ impl<'a> GenThumbs<'a> {
 
 pub fn generate_thumbnails(
     index: &MemoryMetaIndex,
-    db: &mut Connection,
+    db_path: &Path,
     status: &mut Status,
     status_sender: &mut SyncSender<Status>,
 ) -> Result<()> {
     status.stage = ScanStage::PreProcessingThumbnails;
     status_sender.send(*status).unwrap();
 
-    let mut tx = db.begin()?;
+    let raw_conn = database_utils::connect_readonly(db_path)?;
+    let mut conn = Connection::new(&raw_conn);
+    let mut tx = conn.begin()?;
 
     // Determine which albums need to have a new thumbnail extracted.
     let mut pending_tasks = Vec::new();
@@ -272,6 +282,8 @@ pub fn generate_thumbnails(
     }
 
     tx.commit()?;
+    drop(conn);
+    drop(raw_conn);
 
     status.stage = ScanStage::GeneratingThumbnails;
     status_sender.send(*status).unwrap();
@@ -290,16 +302,25 @@ pub fn generate_thumbnails(
     // albums with a cold page cache, IO to read the thumb from the file can be
     // a factor too, so add one additional thread to ensure we can keep the CPU
     // busy. Edit: Or not, usually it's not needed.
-    crossbeam::scope(|scope| {
-        for i in 0..num_cpus::get() {
+    crossbeam::scope::<_, Result<()>>(|scope| {
+        let n_threads = num_cpus::get();
+        let mut threads:
+            Vec<crossbeam::ScopedJoinHandle<Result<()>>> =
+            Vec::with_capacity(n_threads);
+
+        for i in 0..n_threads {
+            let db_path_ref = db_path.clone();
             let drain = move || {
+                let raw_conn = database_utils::connect_read_write(db_path_ref)?;
+                let mut conn = Connection::new(&raw_conn);
+
                 while let Some(task) = {
                     // This has to be in a scope, otherwise the program deadlocks.
                     let mut tasks = mutex_ref.lock().unwrap();
                     tasks.pop()
                 } {
                     let result = task
-                        .advance()
+                        .advance(&mut conn)
                         // There is no simple way with the current version of
                         // Crossbeam to get a result out of the thread, so we
                         // just panic on error, it's what we would do elsewhere
@@ -308,15 +329,24 @@ pub fn generate_thumbnails(
 
                     mutex_ref.lock().unwrap().put(result);
                 }
+
+                Ok(())
             };
 
-            scope
+            let join_handle = scope
                 .builder()
                 .name(format!("Thumbnail generation thread {}", i))
                 .spawn(drain)
                 .expect("Failed to spawn OS thread.");
+            threads.push(join_handle);
         }
-    });
 
-    Ok(())
+        for join_handle in threads.drain(..) {
+            // The first unwrap is on joining, that should not fail because we
+            // set panic=abort. The ? then propagates any errors that might have
+            // happened in the thread.
+            join_handle.join()?;
+        }
+        Ok(())
+    })
 }
