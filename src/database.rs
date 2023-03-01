@@ -139,12 +139,7 @@ on listens (cast(strftime('%s', started_at) as integer));
     }
 
     let sql = r#"
--- Next is the table with tag data. This is the raw data extracted from
--- Vorbis comments; it is not indexed, so it is not guaranteed to be
--- sensible. We store the raw data and index it when we load it, because
--- indexing itself is pretty fast; it's disk access to the first few bytes
--- of tens of thousands of files what makes indexing slow.
-create table if not exists file_metadata
+create table if not exists files
 -- First an id, and properties about the file, but not its contents.
 -- We can use this to see if a file needs to be re-scanned. The mtime
 -- is the raw time_t value returned by 'stat'.
@@ -152,30 +147,31 @@ create table if not exists file_metadata
 , filename                       string  not null unique
 , mtime                          integer not null
 -- ISO-8601 timestamp at which we added the file.
-, imported_at                    string not null
+, imported_at                    string  not null
 
 -- The next columns come from the streaminfo block.
 , streaminfo_channels            integer not null
 , streaminfo_bits_per_sample     integer not null
-, streaminfo_num_samples         integer null
+, streaminfo_num_samples         integer     null
 , streaminfo_sample_rate         integer not null
+);
+    "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    match statement.next()? {
+        Row => panic!("Query 'ensure_schema_exists' unexpectedly returned a row."),
+        Done => {}
+    }
 
--- The remaining columns are all tags. They are all nullable,
--- because no tag is guaranteed to be present.
-, tag_album                      string null
-, tag_albumartist                string null
-, tag_albumartistsort            string null
-, tag_artist                     string null
-, tag_musicbrainz_albumartistid  string null
-, tag_musicbrainz_albumid        string null
-, tag_musicbrainz_trackid        string null
-, tag_discnumber                 string null
-, tag_tracknumber                string null
-, tag_originaldate               string null
-, tag_date                       string null
-, tag_title                      string null
-, tag_bs17704_track_loudness     string null
-, tag_bs17704_album_loudness     string null
+    let sql = r#"
+create table if not exists tags
+( id         integer primary key
+, file_id    integer not null references files (id)
+, field_name string  not null
+, value      string  not null
 );
     "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
@@ -192,7 +188,8 @@ create table if not exists file_metadata
 -- BS1770.4 integrated loudness over the track, in LUFS.
 create table if not exists track_loudness
 ( track_id              integer primary key
-, bs17704_loudness_lufs real not null
+, file_id               integer not null references files (id)
+, bs17704_loudness_lufs real    not null
 );
     "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
@@ -227,7 +224,8 @@ create table if not exists album_loudness
 -- See waveform.rs for the data format.
 create table if not exists waveforms
 ( track_id integer primary key
-, data     blob not null
+, file_id  integer not null references files (id)
+, data     blob    not null
 );
     "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
@@ -243,9 +241,8 @@ create table if not exists waveforms
     let sql = r#"
 create table if not exists thumbnails
 ( album_id integer primary key
-  -- TODO: Would like to reference the files table too, so we can invalidate
-  -- when needed.
-, data     blob not null
+, file_id  integer not null references files (id)
+, data     blob    not null
 );
     "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
