@@ -58,6 +58,7 @@ create table if not exists files
 ( id                             integer primary key
 , filename                       string  not null unique
 , mtime                          integer not null
+
 -- ISO-8601 timestamp at which we added the file.
 , imported_at                    string  not null
 
@@ -102,6 +103,27 @@ create table if not exists thumbnails
 , data     blob    not null
 );
 -- @end ensure_schema_exists
+
+-- @query insert_file(metadata: InsertFile) ->1 i64
+insert into files
+( filename
+, mtime
+, imported_at
+, streaminfo_channels
+, streaminfo_bits_per_sample
+, streaminfo_num_samples
+, streaminfo_sample_rate
+)
+values
+( :filename                   -- :str
+, :mtime                      -- :i64
+, :imported_at                -- :str
+, :streaminfo_channels        -- :i64
+, :streaminfo_bits_per_sample -- :i64
+, :streaminfo_num_samples     -- :i64?
+, :streaminfo_sample_rate     -- :i64
+)
+returning id;
 
 -- @query insert_file_metadata(metadata: InsertFileMetadata)
 insert into
