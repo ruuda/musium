@@ -337,7 +337,7 @@ pub fn insert_tag(tx: &mut Transaction, file_id: i64, field_name: &str, value: &
 
 pub fn delete_file(tx: &mut Transaction, file_id: i64) -> Result<()> {
     let sql = r#"
-        delete from file_metadata where id = :file_id cascade;
+        delete from file_metadata where id = :file_id;
         "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
         Occupied(entry) => entry.into_mut(),

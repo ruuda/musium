@@ -131,7 +131,7 @@ insert into
   values (:file_id, :field_name, :value);
 
 -- @query delete_file(file_id: i64)
-delete from file_metadata where id = :file_id cascade;
+delete from file_metadata where id = :file_id;
 
 -- TODO: Find a replacement for this.
 -- @query iter_file_metadata() ->* FileMetadata
