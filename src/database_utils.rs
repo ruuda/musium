@@ -30,9 +30,11 @@ fn connect_internal<P: AsRef<Path>>(
 }
 
 pub fn connect_readonly<P: AsRef<Path>>(path: P) -> Result<sqlite::Connection> {
-    connect_internal(path, sqlite::OpenFlags::new().set_read_only())
+    let flags = sqlite::OpenFlags::new().set_read_only();
+    connect_internal(path, flags)
 }
 
 pub fn connect_read_write<P: AsRef<Path>>(path: P) -> Result<sqlite::Connection> {
-    connect_internal(path, sqlite::OpenFlags::new().set_read_write())
+    let flags = sqlite::OpenFlags::new().set_read_write().set_create();
+    connect_internal(path, flags)
 }
