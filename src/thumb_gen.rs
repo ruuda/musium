@@ -18,7 +18,7 @@ use crate::database;
 use crate::database::{Connection, Transaction};
 use crate::database_utils;
 use crate::error::{Error, Result};
-use crate::prim::AlbumId;
+use crate::prim::{AlbumId, FileId};
 use crate::scan::{ScanStage, Status};
 use crate::{MemoryMetaIndex, MetaIndex};
 
@@ -31,13 +31,16 @@ struct GenThumb<'a> {
 /// The state of generating a single thumbnail.
 enum GenThumbState<'a> {
     Pending {
+        file_id: FileId,
         flac_filename: &'a Path,
     },
     Resizing {
+        file_id: FileId,
         child: process::Child,
         out_path: PathBuf,
     },
     Compressing {
+        file_id: FileId,
         child: process::Child,
         in_path: PathBuf,
     },
@@ -62,11 +65,12 @@ impl<'a> GenThumb<'a> {
     pub fn new(
         tx: &mut Transaction,
         album_id: AlbumId,
+        file_id: FileId,
         flac_filename: &'a Path,
     ) -> Result<Option<GenThumb<'a>>> {
         let task = GenThumb {
             album_id: album_id,
-            state: GenThumbState::Pending { flac_filename },
+            state: GenThumbState::Pending { flac_filename, file_id },
         };
 
         match database::select_thumbnail_exists(tx, album_id.0 as i64)? {
@@ -81,6 +85,7 @@ impl<'a> GenThumb<'a> {
     fn start_resize(
         mut self,
         album_id: AlbumId,
+        file_id: FileId,
         flac_filename: &Path,
     ) -> Result<Option<GenThumb<'a>>> {
         let opts = claxon::FlacReaderOptions {
@@ -147,6 +152,7 @@ impl<'a> GenThumb<'a> {
         }
 
         self.state = GenThumbState::Resizing {
+            file_id: file_id,
             child: convert,
             out_path: out_path,
         };
@@ -156,8 +162,8 @@ impl<'a> GenThumb<'a> {
 
     /// When in `Resizing` state, wait for that to complete, and start compressing.
     fn start_compress(mut self) -> Result<GenThumb<'a>> {
-        let (mut convert, out_path) = match self.state {
-            GenThumbState::Resizing { child, out_path } => (child, out_path),
+        let (mut convert, file_id, out_path) = match self.state {
+            GenThumbState::Resizing { file_id, child, out_path } => (child, file_id, out_path),
             _ => panic!("Can only call start_compress in Resizing state."),
         };
 
@@ -176,6 +182,7 @@ impl<'a> GenThumb<'a> {
             .map_err(|e| Error::CommandError("Failed to spawn 'guetzli'.", e))?;
 
         self.state = GenThumbState::Compressing {
+            file_id: file_id,
             child: guetzli,
             // Input file for this step is the output of the previous command.
             in_path: out_path,
@@ -194,9 +201,12 @@ impl<'a> GenThumb<'a> {
         let album_id = self.album_id;
 
         match self.state {
-            GenThumbState::Pending { flac_filename } => self.start_resize(album_id, flac_filename),
+            GenThumbState::Pending {
+                file_id,
+                flac_filename,
+            } => self.start_resize(album_id, file_id, flac_filename),
             GenThumbState::Resizing { .. } => self.start_compress().map(Some),
-            GenThumbState::Compressing { mut child, in_path } => {
+            GenThumbState::Compressing { mut child, file_id, in_path } => {
                 child
                     .wait()
                     .map_err(|e| Error::CommandError("Guetzli failed.", e))?;
@@ -213,7 +223,7 @@ impl<'a> GenThumb<'a> {
 
                 {
                     let mut tx = db.begin()?;
-                    database::insert_album_thumbnail(&mut tx, album_id.0 as i64, &jpeg_bytes[..])?;
+                    database::insert_album_thumbnail(&mut tx, album_id.0 as i64, file_id.0 as i64, &jpeg_bytes[..])?;
                     tx.commit()?;
                 }
 
@@ -266,7 +276,7 @@ pub fn generate_thumbnails(
     for &(_tid, ref track) in index.get_tracks() {
         if track.album_id != prev_album_id {
             let fname = index.get_filename(track.filename);
-            for task in GenThumb::new(&mut tx, track.album_id, fname.as_ref())? {
+            for task in GenThumb::new(&mut tx, track.album_id, track.file_id, fname.as_ref())? {
                 pending_tasks.push(task);
                 status.files_to_process_thumbnails += 1;
 

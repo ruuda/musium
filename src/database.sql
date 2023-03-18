@@ -130,8 +130,11 @@ insert into
   tags (file_id, field_name, value)
   values (:file_id, :field_name, :value);
 
+-- Delete a file and everything referencing it (cascade to tags, waveforms, etc.)
+--
+-- Note that album loudness is not deleted, it is not based on any single file.
 -- @query delete_file(file_id: i64)
-delete from file_metadata where id = :file_id;
+delete from files where id = :file_id;
 
 -- TODO: Find a replacement for this.
 -- @query iter_file_metadata() ->* FileMetadata
@@ -170,25 +173,22 @@ from
 order by
   filename asc;
 
--- @query insert_album_thumbnail(album_id: i64, data: bytes)
-INSERT INTO thumbnails (album_id, data)
-VALUES (:album_id, :data)
-ON CONFLICT (album_id) DO UPDATE SET data = :data;
+-- @query insert_album_thumbnail(album_id: i64, file_id: i64, data: bytes)
+insert into thumbnails (album_id, file_id, data)
+values (:album_id, :file_id, :data);
 
 -- @query insert_album_loudness(album_id: i64, loudness: f64)
-INSERT INTO album_loudness (album_id, bs17704_loudness_lufs)
-VALUES (:album_id, :loudness)
-ON CONFLICT (album_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
+insert into album_loudness (album_id, bs17704_loudness_lufs)
+values (:album_id, :loudness)
+on conflict (album_id) do update set bs17704_loudness_lufs = :loudness;
 
--- @query insert_track_loudness(track_id: i64, loudness: f64)
-INSERT INTO track_loudness (track_id, bs17704_loudness_lufs)
-VALUES (:track_id, :loudness)
-ON CONFLICT (track_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
+-- @query insert_track_loudness(track_id: i64, file_id: i64, loudness: f64)
+insert into track_loudness (track_id, file_id, bs17704_loudness_lufs)
+values (:track_id, :file_id, :loudness);
 
--- @query insert_track_waveform(track_id: i64, data: bytes)
-INSERT INTO waveforms (track_id, data)
-VALUES (:track_id, :data)
-ON CONFLICT (track_id) DO UPDATE SET data = :data;
+-- @query insert_track_waveform(track_id: i64, file_id: i64, data: bytes)
+insert into waveforms (track_id, file_id, data)
+values (:track_id, :file_id, :data);
 
 -- @query insert_listen_started(listen: Listen) ->1 i64
 insert into

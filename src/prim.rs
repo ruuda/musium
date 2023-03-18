@@ -48,6 +48,9 @@ use std::str::FromStr;
 // with is 48 bits.
 
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct FileId(pub u64);
+
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct TrackId(pub u64);
 
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -205,6 +208,8 @@ pub struct Track {
     // save this, because `album_id` could be removed if we make the album id a
     // prefix of the track id.
     pub loudness: Option<Lufs>,
+
+    pub file_id: FileId,
 }
 
 #[repr(C)]

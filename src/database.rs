@@ -335,9 +335,12 @@ pub fn insert_tag(tx: &mut Transaction, file_id: i64, field_name: &str, value: &
     Ok(result)
 }
 
+/// Delete a file and everything referencing it (cascade to tags, waveforms, etc.)
+///
+/// Note that album loudness is not deleted, it is not based on any single file.
 pub fn delete_file(tx: &mut Transaction, file_id: i64) -> Result<()> {
     let sql = r#"
-        delete from file_metadata where id = :file_id;
+        delete from files where id = :file_id;
         "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
         Occupied(entry) => entry.into_mut(),
@@ -465,11 +468,10 @@ pub fn iter_file_mtime<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<It
     Ok(result)
 }
 
-pub fn insert_album_thumbnail(tx: &mut Transaction, album_id: i64, data: &[u8]) -> Result<()> {
+pub fn insert_album_thumbnail(tx: &mut Transaction, album_id: i64, file_id: i64, data: &[u8]) -> Result<()> {
     let sql = r#"
-        INSERT INTO thumbnails (album_id, data)
-        VALUES (:album_id, :data)
-        ON CONFLICT (album_id) DO UPDATE SET data = :data;
+        insert into thumbnails (album_id, file_id, data)
+        values (:album_id, :file_id, :data);
         "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
         Occupied(entry) => entry.into_mut(),
@@ -477,7 +479,8 @@ pub fn insert_album_thumbnail(tx: &mut Transaction, album_id: i64, data: &[u8]) 
     };
     statement.reset()?;
     statement.bind(1, album_id)?;
-    statement.bind(2, data)?;
+    statement.bind(2, file_id)?;
+    statement.bind(3, data)?;
     let result = match statement.next()? {
         Row => panic!("Query 'insert_album_thumbnail' unexpectedly returned a row."),
         Done => (),
@@ -487,9 +490,9 @@ pub fn insert_album_thumbnail(tx: &mut Transaction, album_id: i64, data: &[u8]) 
 
 pub fn insert_album_loudness(tx: &mut Transaction, album_id: i64, loudness: f64) -> Result<()> {
     let sql = r#"
-        INSERT INTO album_loudness (album_id, bs17704_loudness_lufs)
-        VALUES (:album_id, :loudness)
-        ON CONFLICT (album_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
+        insert into album_loudness (album_id, bs17704_loudness_lufs)
+        values (:album_id, :loudness)
+        on conflict (album_id) do update set bs17704_loudness_lufs = :loudness;
         "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
         Occupied(entry) => entry.into_mut(),
@@ -505,11 +508,10 @@ pub fn insert_album_loudness(tx: &mut Transaction, album_id: i64, loudness: f64)
     Ok(result)
 }
 
-pub fn insert_track_loudness(tx: &mut Transaction, track_id: i64, loudness: f64) -> Result<()> {
+pub fn insert_track_loudness(tx: &mut Transaction, track_id: i64, file_id: i64, loudness: f64) -> Result<()> {
     let sql = r#"
-        INSERT INTO track_loudness (track_id, bs17704_loudness_lufs)
-        VALUES (:track_id, :loudness)
-        ON CONFLICT (track_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
+        insert into track_loudness (track_id, file_id, bs17704_loudness_lufs)
+        values (:track_id, :file_id, :loudness);
         "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
         Occupied(entry) => entry.into_mut(),
@@ -517,7 +519,8 @@ pub fn insert_track_loudness(tx: &mut Transaction, track_id: i64, loudness: f64)
     };
     statement.reset()?;
     statement.bind(1, track_id)?;
-    statement.bind(2, loudness)?;
+    statement.bind(2, file_id)?;
+    statement.bind(3, loudness)?;
     let result = match statement.next()? {
         Row => panic!("Query 'insert_track_loudness' unexpectedly returned a row."),
         Done => (),
@@ -525,11 +528,10 @@ pub fn insert_track_loudness(tx: &mut Transaction, track_id: i64, loudness: f64)
     Ok(result)
 }
 
-pub fn insert_track_waveform(tx: &mut Transaction, track_id: i64, data: &[u8]) -> Result<()> {
+pub fn insert_track_waveform(tx: &mut Transaction, track_id: i64, file_id: i64, data: &[u8]) -> Result<()> {
     let sql = r#"
-        INSERT INTO waveforms (track_id, data)
-        VALUES (:track_id, :data)
-        ON CONFLICT (track_id) DO UPDATE SET data = :data;
+        insert into waveforms (track_id, file_id, data)
+        values (:track_id, :file_id, :data);
         "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
         Occupied(entry) => entry.into_mut(),
@@ -537,7 +539,8 @@ pub fn insert_track_waveform(tx: &mut Transaction, track_id: i64, data: &[u8]) -
     };
     statement.reset()?;
     statement.bind(1, track_id)?;
-    statement.bind(2, data)?;
+    statement.bind(2, file_id)?;
+    statement.bind(3, data)?;
     let result = match statement.next()? {
         Row => panic!("Query 'insert_track_waveform' unexpectedly returned a row."),
         Done => (),

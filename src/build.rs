@@ -10,7 +10,7 @@ use std::fmt;
 use std::str::FromStr;
 use std::u16;
 
-use crate::prim::{AlbumId, Album, ArtistId, Artist, Mtime, TrackId, Track, Date, Lufs, FilenameRef, StringRef, get_track_id};
+use crate::prim::{AlbumId, Album, ArtistId, Artist, FileId, Mtime, TrackId, Track, Date, Lufs, FilenameRef, StringRef, get_track_id};
 use crate::string_utils::{StringDeduper, normalize_words};
 use crate::word_index::{WordMeta};
 use crate::database::FileMetadata;
@@ -379,6 +379,8 @@ impl BuildMetaIndex {
         &mut self,
         file: FileMetadata,
     ) -> Option<()> {
+        // TODO: Include file id in this data.
+        let file_id = FileId(0);
         let filename_id = self.filenames.len() as u32;
         self.current_filename = Some(file.filename);
 
@@ -561,6 +563,7 @@ impl BuildMetaIndex {
         }
 
         let track = Track {
+            file_id: file_id,
             album_id: album_id,
             disc_number: disc_number,
             track_number: track_number,

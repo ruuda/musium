@@ -19,7 +19,7 @@ use crate::database_utils;
 use crate::database as db;
 use crate::database::Transaction;
 use crate::error;
-use crate::prim::{AlbumId, TrackId};
+use crate::prim::{AlbumId, FileId, TrackId};
 use crate::scan::Status;
 use crate::waveform::Waveform;
 use crate::{MetaIndex, MemoryMetaIndex};
@@ -83,6 +83,7 @@ struct TrackResult {
 struct TrackTask {
     album_id: AlbumId,
     track_id: TrackId,
+    file_id: FileId,
     path: PathBuf,
 }
 
@@ -139,6 +140,7 @@ impl TrackTask {
 
         inserts.send(Insert::Track {
             track_id: self.track_id,
+            file_id: self.file_id,
             loudness: bs1770::gated_mean(zipped.as_ref()),
             waveform: Waveform::from_meters(&meters),
         }).unwrap();
@@ -170,6 +172,7 @@ enum TaskResult {
 enum Insert {
     Track {
         track_id: TrackId,
+        file_id: FileId,
         loudness: bs1770::Power,
         waveform: Waveform,
     },
@@ -201,9 +204,9 @@ fn process_inserts(
 
     for insert in inserts {
         match insert {
-            Insert::Track { track_id, loudness, waveform } => {
-                db::insert_track_loudness(&mut tx, track_id.0 as i64, loudness.loudness_lkfs() as f64)?;
-                db::insert_track_waveform(&mut tx, track_id.0 as i64, waveform.as_bytes())?;
+            Insert::Track { track_id, file_id, loudness, waveform } => {
+                db::insert_track_loudness(&mut tx, track_id.0 as i64, file_id.0 as i64, loudness.loudness_lkfs() as f64)?;
+                db::insert_track_waveform(&mut tx, track_id.0 as i64, file_id.0 as i64, waveform.as_bytes())?;
             }
             Insert::Album { album_id, loudness } => {
                 db::insert_album_loudness(&mut tx, album_id.0 as i64, loudness.loudness_lkfs() as f64)?;
@@ -300,9 +303,6 @@ impl<'a> TaskQueue<'a> {
         // should be dwarfed by the SQLite call anyway.
         // TODO: Instead, enumerate both the index and the database in
         // parallel, and do a merge-diff.
-        // TODO: This will not invalidate loudness after replacing the
-        // tracks. We would need to store an mtime, or the id of the file
-        // row in the database for that.
         'albums: for (album_id, _album) in index.get_albums() {
             // If the album is not there, we need to add it.
             if db::select_album_loudness_lufs(tx, album_id.0 as i64)?.is_none() {
@@ -379,6 +379,7 @@ impl<'a> TaskQueue<'a> {
             let task = TrackTask {
                 album_id: album_task.album_id,
                 track_id: track_id,
+                file_id: track.file_id,
                 path: PathBuf::from(fname),
             };
             return Some(Task::AnalyzeTrack(task));
