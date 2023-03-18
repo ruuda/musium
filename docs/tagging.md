@@ -5,11 +5,10 @@ those to its internal schema. Musium expects files to be tagged properly, and it
 expects the tags to be consistent across files.
 
 Because Musium uses internal ids based on MusicBrainz ids of albums and artists,
-MusicBrainz ids are required.
-
-Files tagged with [MusicBrainz Picard][picard] are fine in most cases, although
-for albums credited to multiple artist, additional configuration is needed, see
-the [section about multiple album artists](#multiple-album-artists) below.
+MusicBrainz ids are required. Files tagged with [MusicBrainz Picard][picard] are
+fine in most cases, although for albums credited to multiple artists, additional
+configuration might be needed, see the [section about multiple album
+artists](#multiple-album-artists) below.
 
 [picard]: https://picard.musicbrainz.org/
 
@@ -31,7 +30,7 @@ For artists, albums, and tracks, Musium stores the following attributes:
 
  * Title
  * Original release date
- * Artist or artists, in the case of a collaboration
+ * Artist name as credited
 
 ### Track
 
@@ -58,6 +57,7 @@ all tags are mandatory and must occur exactly once.
     artist. See also
     [the section on multiple album artists](#multiple-album-artists) below.
  * `albumartistsort`: Sort name of the album artist (e.g. name without articles).
+   Defaults to the value of `albumartist` when not provided.
  * `albumartistssort`: Optionally, the sort name of each album artist
     separately, to match `albumartists`. Defaults to the values in
     `albumartists` when not provided.
