@@ -223,7 +223,7 @@ impl<'a> GenThumb<'a> {
 
                 {
                     let mut tx = db.begin()?;
-                    database::insert_album_thumbnail(&mut tx, album_id.0 as i64, file_id.0 as i64, &jpeg_bytes[..])?;
+                    database::insert_album_thumbnail(&mut tx, album_id.0 as i64, file_id.0, &jpeg_bytes[..])?;
                     tx.commit()?;
                 }
 

@@ -218,8 +218,14 @@ pub fn ensure_schema_exists(tx: &mut Transaction) -> Result<()> {
 
     let sql = r#"
         -- BS1770.4 integrated loudness over the album, in LUFS.
+        -- For the file id, we track the maximum file id of all the files in the album.
+        -- If any of the files change, it will get a new file id, higher than any pre-
+        -- existing file, so if the maximum file id for an album is greater than the
+        -- file id stored with the loudness here, then we know we need to recompute the
+        -- album loudness.
         create table if not exists album_loudness
         ( album_id              integer primary key
+        , file_id               integer not null references files (id) on delete cascade
         , bs17704_loudness_lufs real not null
         );
         "#;
@@ -369,87 +375,6 @@ pub fn delete_file(tx: &mut Transaction, file_id: i64) -> Result<()> {
 }
 
 #[derive(Debug)]
-pub struct FileMetadata {
-    pub filename: String,
-    pub mtime: i64,
-    pub streaminfo_channels: i64,
-    pub streaminfo_bits_per_sample: i64,
-    pub streaminfo_num_samples: Option<i64>,
-    pub streaminfo_sample_rate: i64,
-    pub tag_album: Option<String>,
-    pub tag_albumartist: Option<String>,
-    pub tag_albumartistsort: Option<String>,
-    pub tag_artist: Option<String>,
-    pub tag_musicbrainz_albumartistid: Option<String>,
-    pub tag_musicbrainz_albumid: Option<String>,
-    pub tag_discnumber: Option<String>,
-    pub tag_tracknumber: Option<String>,
-    pub tag_originaldate: Option<String>,
-    pub tag_date: Option<String>,
-    pub tag_title: Option<String>,
-    pub tag_bs17704_track_loudness: Option<String>,
-    pub tag_bs17704_album_loudness: Option<String>,
-}
-
-/// TODO: Find a replacement for this.
-pub fn iter_file_metadata<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<Iter<'i, 'a, FileMetadata>> {
-    let sql = r#"
-        select
-          filename,
-          mtime,
-          streaminfo_channels,
-          streaminfo_bits_per_sample,
-          streaminfo_num_samples,
-          streaminfo_sample_rate,
-          tag_album,
-          tag_albumartist,
-          tag_albumartistsort,
-          tag_artist,
-          tag_musicbrainz_albumartistid,
-          tag_musicbrainz_albumid,
-          tag_discnumber,
-          tag_tracknumber,
-          tag_originaldate,
-          tag_date,
-          tag_title,
-          tag_bs17704_track_loudness,
-          tag_bs17704_album_loudness
-        from
-          file_metadata
-        order by
-          filename asc;
-        "#;
-    let statement = match tx.statements.entry(sql.as_ptr()) {
-        Occupied(entry) => entry.into_mut(),
-        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
-    };
-    statement.reset()?;
-    let decode_row = |statement: &Statement| Ok(FileMetadata {
-        filename: statement.read(0)?,
-        mtime: statement.read(1)?,
-        streaminfo_channels: statement.read(2)?,
-        streaminfo_bits_per_sample: statement.read(3)?,
-        streaminfo_num_samples: statement.read(4)?,
-        streaminfo_sample_rate: statement.read(5)?,
-        tag_album: statement.read(6)?,
-        tag_albumartist: statement.read(7)?,
-        tag_albumartistsort: statement.read(8)?,
-        tag_artist: statement.read(9)?,
-        tag_musicbrainz_albumartistid: statement.read(10)?,
-        tag_musicbrainz_albumid: statement.read(11)?,
-        tag_discnumber: statement.read(12)?,
-        tag_tracknumber: statement.read(13)?,
-        tag_originaldate: statement.read(14)?,
-        tag_date: statement.read(15)?,
-        tag_title: statement.read(16)?,
-        tag_bs17704_track_loudness: statement.read(17)?,
-        tag_bs17704_album_loudness: statement.read(18)?,
-    });
-    let result = Iter { statement, decode_row };
-    Ok(result)
-}
-
-#[derive(Debug)]
 pub struct FileMetadataSimple {
     pub id: i64,
     pub filename: String,
@@ -481,10 +406,84 @@ pub fn iter_file_mtime<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<It
     Ok(result)
 }
 
+#[derive(Debug)]
+pub struct FileMetadata {
+    pub id: i64,
+    pub filename: String,
+    pub mtime: i64,
+    pub streaminfo_channels: i64,
+    pub streaminfo_bits_per_sample: i64,
+    pub streaminfo_num_samples: Option<i64>,
+    pub streaminfo_sample_rate: i64,
+}
+
+pub fn iter_files<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<Iter<'i, 'a, FileMetadata>> {
+    let sql = r#"
+        select
+            id
+          , filename
+          , mtime
+          , streaminfo_channels
+          , streaminfo_bits_per_sample
+          , streaminfo_num_samples
+          , streaminfo_sample_rate
+        from
+          files
+        order by
+          filename asc;
+        "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    let decode_row = |statement: &Statement| Ok(FileMetadata {
+        id: statement.read(0)?,
+        filename: statement.read(1)?,
+        mtime: statement.read(2)?,
+        streaminfo_channels: statement.read(3)?,
+        streaminfo_bits_per_sample: statement.read(4)?,
+        streaminfo_num_samples: statement.read(5)?,
+        streaminfo_sample_rate: statement.read(6)?,
+    });
+    let result = Iter { statement, decode_row };
+    Ok(result)
+}
+
+/// Iterate all `(field_name, value)` pairs for the given file.
+pub fn iter_file_tags<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>, file_id: i64) -> Result<Iter<'i, 'a, (String, String)>> {
+    let sql = r#"
+        select
+          field_name, value
+        from
+          tags
+        where
+          file_id = :file_id
+        order by
+          -- We have to order by id, which is increasing with insert order, because some
+          -- tags can occur multiple times, and we have to preserve the order in which
+          -- we found them in the file.
+          id asc;
+        "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    statement.bind(1, file_id)?;
+    let decode_row = |statement: &Statement| Ok((
+        statement.read(0)?,
+        statement.read(1)?,
+));
+    let result = Iter { statement, decode_row };
+    Ok(result)
+}
+
 pub fn insert_album_thumbnail(tx: &mut Transaction, album_id: i64, file_id: i64, data: &[u8]) -> Result<()> {
     let sql = r#"
         insert into thumbnails (album_id, file_id, data)
-        values (:album_id, :file_id, :data);
+        values (:album_id, :file_id, :data)
+        on conflict (album_id) do update set data = :data;
         "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
         Occupied(entry) => entry.into_mut(),
@@ -501,10 +500,10 @@ pub fn insert_album_thumbnail(tx: &mut Transaction, album_id: i64, file_id: i64,
     Ok(result)
 }
 
-pub fn insert_album_loudness(tx: &mut Transaction, album_id: i64, loudness: f64) -> Result<()> {
+pub fn insert_album_loudness(tx: &mut Transaction, album_id: i64, file_id: i64, loudness: f64) -> Result<()> {
     let sql = r#"
-        insert into album_loudness (album_id, bs17704_loudness_lufs)
-        values (:album_id, :loudness)
+        insert into album_loudness (album_id, file_id, bs17704_loudness_lufs)
+        values (:album_id, :file_id, :loudness)
         on conflict (album_id) do update set bs17704_loudness_lufs = :loudness;
         "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
@@ -513,7 +512,8 @@ pub fn insert_album_loudness(tx: &mut Transaction, album_id: i64, loudness: f64)
     };
     statement.reset()?;
     statement.bind(1, album_id)?;
-    statement.bind(2, loudness)?;
+    statement.bind(2, file_id)?;
+    statement.bind(3, loudness)?;
     let result = match statement.next()? {
         Row => panic!("Query 'insert_album_loudness' unexpectedly returned a row."),
         Done => (),
@@ -524,7 +524,8 @@ pub fn insert_album_loudness(tx: &mut Transaction, album_id: i64, loudness: f64)
 pub fn insert_track_loudness(tx: &mut Transaction, track_id: i64, file_id: i64, loudness: f64) -> Result<()> {
     let sql = r#"
         insert into track_loudness (track_id, file_id, bs17704_loudness_lufs)
-        values (:track_id, :file_id, :loudness);
+        values (:track_id, :file_id, :loudness)
+        on conflict (track_id) do update set bs17704_loudness_lufs = :loudness;
         "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
         Occupied(entry) => entry.into_mut(),
@@ -544,7 +545,8 @@ pub fn insert_track_loudness(tx: &mut Transaction, track_id: i64, file_id: i64, 
 pub fn insert_track_waveform(tx: &mut Transaction, track_id: i64, file_id: i64, data: &[u8]) -> Result<()> {
     let sql = r#"
         insert into waveforms (track_id, file_id, data)
-        values (:track_id, :file_id, :data);
+        values (:track_id, :file_id, :data)
+        on conflict (track_id) do update set data = :data;
         "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
         Occupied(entry) => entry.into_mut(),

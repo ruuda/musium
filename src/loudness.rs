@@ -28,6 +28,9 @@ use crate::{MetaIndex, MemoryMetaIndex};
 struct AlbumTask {
     album_id: AlbumId,
 
+    /// Maximum file id of the files in the album.
+    file_id: FileId,
+
     /// Track ids of the tracks that we haven't started analyzing.
     tracks_pending: Vec<TrackId>,
 
@@ -69,6 +72,7 @@ impl AlbumTask {
 
         inserts.send(Insert::Album {
             album_id: self.album_id,
+            file_id: self.file_id,
             loudness: bs1770::gated_mean(channel0.as_ref()),
         }).unwrap();
     }
@@ -178,6 +182,7 @@ enum Insert {
     },
     Album {
         album_id: AlbumId,
+        file_id: FileId,
         loudness: bs1770::Power,
     }
 }
@@ -205,11 +210,11 @@ fn process_inserts(
     for insert in inserts {
         match insert {
             Insert::Track { track_id, file_id, loudness, waveform } => {
-                db::insert_track_loudness(&mut tx, track_id.0 as i64, file_id.0 as i64, loudness.loudness_lkfs() as f64)?;
-                db::insert_track_waveform(&mut tx, track_id.0 as i64, file_id.0 as i64, waveform.as_bytes())?;
+                db::insert_track_loudness(&mut tx, track_id.0 as i64, file_id.0, loudness.loudness_lkfs() as f64)?;
+                db::insert_track_waveform(&mut tx, track_id.0 as i64, file_id.0, waveform.as_bytes())?;
             }
-            Insert::Album { album_id, loudness } => {
-                db::insert_album_loudness(&mut tx, album_id.0 as i64, loudness.loudness_lkfs() as f64)?;
+            Insert::Album { album_id, file_id, loudness } => {
+                db::insert_album_loudness(&mut tx, album_id.0 as i64, file_id.0, loudness.loudness_lkfs() as f64)?;
                 tx.commit()?;
                 tx = db.begin()?;
             }
@@ -278,6 +283,11 @@ impl<'a> TaskQueue<'a> {
         let tracks = self.index.get_album_tracks(album_id);
         let task = AlbumTask {
             album_id: album_id,
+            file_id: tracks
+                .iter()
+                .map(|(_id, f)| f.file_id)
+                .max()
+                .expect("Album contains at least one track."),
             tracks_pending: tracks.iter().map(|(id, _)| *id).collect(),
             tracks_done: Vec::with_capacity(tracks.len()),
             num_tracks: tracks.len(),

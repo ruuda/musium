@@ -86,8 +86,14 @@ create table if not exists track_loudness
 );
 
 -- BS1770.4 integrated loudness over the album, in LUFS.
+-- For the file id, we track the maximum file id of all the files in the album.
+-- If any of the files change, it will get a new file id, higher than any pre-
+-- existing file, so if the maximum file id for an album is greater than the
+-- file id stored with the loudness here, then we know we need to recompute the
+-- album loudness.
 create table if not exists album_loudness
 ( album_id              integer primary key
+, file_id               integer not null references files (id) on delete cascade
 , bs17704_loudness_lufs real not null
 );
 
@@ -138,33 +144,6 @@ insert into
 -- @query delete_file(file_id: i64)
 delete from files where id = :file_id;
 
--- TODO: Find a replacement for this.
--- @query iter_file_metadata() ->* FileMetadata
-select
-  filename                      /* :str  */,
-  mtime                         /* :i64  */,
-  streaminfo_channels           /* :i64  */,
-  streaminfo_bits_per_sample    /* :i64  */,
-  streaminfo_num_samples        /* :i64? */,
-  streaminfo_sample_rate        /* :i64  */,
-  tag_album                     /* :str? */,
-  tag_albumartist               /* :str? */,
-  tag_albumartistsort           /* :str? */,
-  tag_artist                    /* :str? */,
-  tag_musicbrainz_albumartistid /* :str? */,
-  tag_musicbrainz_albumid       /* :str? */,
-  tag_discnumber                /* :str? */,
-  tag_tracknumber               /* :str? */,
-  tag_originaldate              /* :str? */,
-  tag_date                      /* :str? */,
-  tag_title                     /* :str? */,
-  tag_bs17704_track_loudness    /* :str? */,
-  tag_bs17704_album_loudness    /* :str? */
-from
-  file_metadata
-order by
-  filename asc;
-
 -- @query iter_file_mtime() ->* FileMetadataSimple
 select
     id       -- :i64
@@ -175,22 +154,53 @@ from
 order by
   filename asc;
 
+-- @query iter_files() ->* FileMetadata
+select
+    id                         -- :i64
+  , filename                   -- :str
+  , mtime                      -- :i64
+  , streaminfo_channels        -- :i64
+  , streaminfo_bits_per_sample -- :i64
+  , streaminfo_num_samples     -- :i64?
+  , streaminfo_sample_rate     -- :i64
+from
+  files
+order by
+  filename asc;
+
+-- Iterate all `(field_name, value)` pairs for the given file.
+-- @query iter_file_tags(file_id: i64) ->* (str, str)
+select
+  field_name, value
+from
+  tags
+where
+  file_id = :file_id
+order by
+  -- We have to order by id, which is increasing with insert order, because some
+  -- tags can occur multiple times, and we have to preserve the order in which
+  -- we found them in the file.
+  id asc;
+
 -- @query insert_album_thumbnail(album_id: i64, file_id: i64, data: bytes)
 insert into thumbnails (album_id, file_id, data)
-values (:album_id, :file_id, :data);
+values (:album_id, :file_id, :data)
+on conflict (album_id) do update set data = :data;
 
--- @query insert_album_loudness(album_id: i64, loudness: f64)
-insert into album_loudness (album_id, bs17704_loudness_lufs)
-values (:album_id, :loudness)
+-- @query insert_album_loudness(album_id: i64, file_id: i64, loudness: f64)
+insert into album_loudness (album_id, file_id, bs17704_loudness_lufs)
+values (:album_id, :file_id, :loudness)
 on conflict (album_id) do update set bs17704_loudness_lufs = :loudness;
 
 -- @query insert_track_loudness(track_id: i64, file_id: i64, loudness: f64)
 insert into track_loudness (track_id, file_id, bs17704_loudness_lufs)
-values (:track_id, :file_id, :loudness);
+values (:track_id, :file_id, :loudness)
+on conflict (track_id) do update set bs17704_loudness_lufs = :loudness;
 
 -- @query insert_track_waveform(track_id: i64, file_id: i64, data: bytes)
 insert into waveforms (track_id, file_id, data)
-values (:track_id, :file_id, :data);
+values (:track_id, :file_id, :data)
+on conflict (track_id) do update set data = :data;
 
 -- @query insert_listen_started(listen: Listen) ->1 i64
 insert into

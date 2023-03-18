@@ -48,7 +48,7 @@ use std::str::FromStr;
 // with is 48 bits.
 
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct FileId(pub u64);
+pub struct FileId(pub i64);
 
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct TrackId(pub u64);

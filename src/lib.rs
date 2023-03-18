@@ -43,8 +43,8 @@ use std::path::Path;
 use std::u32;
 use std::u64;
 
-use crate::build::BuildMetaIndex;
-use crate::error::Result;
+use crate::build::{BuildMetaIndex, BuildError};
+use crate::error::{Error, Result};
 use crate::prim::{ArtistId, Artist, AlbumId, Album, TrackId, Track, Lufs, StringRef, FilenameRef, get_track_id};
 use crate::string_utils::StringDeduper;
 use crate::word_index::MemoryWordIndex;
@@ -320,9 +320,22 @@ impl MemoryMetaIndex {
         let mut tx = db.begin()?;
 
         let mut builder = BuildMetaIndex::new();
+        let mut tasks = Vec::new();
 
-        for file in database::iter_file_metadata(&mut tx)? {
-            builder.insert(file?);
+        for file in database::iter_files(&mut tx)? {
+            match builder.insert_meta(file?) {
+                Ok(task) => tasks.push(task),
+                Err(BuildError::DbError(err)) => return Err(Error::from(err)),
+                Err(BuildError::FileFailed) => continue,
+            }
+        }
+
+        for task in tasks {
+            match builder.insert_full(&mut tx, task) {
+                Ok(()) => continue,
+                Err(BuildError::DbError(err)) => return Err(Error::from(err)),
+                Err(BuildError::FileFailed) => continue,
+            }
         }
 
         let memory_index = MemoryMetaIndex::new(&builder);

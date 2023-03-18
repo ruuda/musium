@@ -10,18 +10,34 @@ use std::fmt;
 use std::str::FromStr;
 use std::u16;
 
-use crate::prim::{AlbumId, Album, ArtistId, Artist, FileId, Mtime, TrackId, Track, Date, Lufs, FilenameRef, StringRef, get_track_id};
+use crate::prim::{AlbumId, Album, ArtistId, Artist, FileId, TrackId, Track, Date, Lufs, FilenameRef, StringRef, get_track_id};
 use crate::string_utils::{StringDeduper, normalize_words};
 use crate::word_index::{WordMeta};
-use crate::database::FileMetadata;
+use crate::database::{FileMetadata, Transaction, self as db};
+
+pub enum BuildError {
+    /// Something went wrong interacting with the database.
+    DbError(sqlite::Error),
+
+    /// The file was not inserted.
+    ///
+    /// The actual error is reported separately as `Issue` in the
+    /// `BuildMetaIndex`.
+    FileFailed,
+}
+
+type Result<T> = std::result::Result<T, BuildError>;
+
+impl From<sqlite::Error> for BuildError {
+    fn from(err: sqlite::Error) -> BuildError {
+        BuildError::DbError(err)
+    }
+}
 
 #[derive(Clone, Debug)]
 pub enum IssueDetail {
     /// A required metadata field is missing. Contains the field name.
     FieldMissingError(&'static str),
-
-    /// A recommended metadata field is missing. Contains the field name.
-    FieldMissingWarning(&'static str),
 
     /// A metadata field could be parsed. Contains the field name.
     FieldParseFailedError(&'static str),
@@ -62,9 +78,9 @@ pub enum IssueDetail {
 }
 
 impl IssueDetail {
-    pub fn for_file(self, filename: String) -> Issue {
+    pub fn for_file(self, filename: &str) -> Issue {
         Issue {
-            filename: filename,
+            filename: filename.to_string(),
             detail: self,
         }
     }
@@ -82,8 +98,6 @@ impl fmt::Display for Issue {
         match self.detail {
             IssueDetail::FieldMissingError(field) =>
                 write!(f, "error: field '{}' missing.", field),
-            IssueDetail::FieldMissingWarning(field) =>
-                write!(f, "warning: field '{}' missing.", field),
             IssueDetail::FieldParseFailedError(field) =>
                 write!(f, "error: failed to parse field '{}'.", field),
             IssueDetail::TrackTitleContainsFeat =>
@@ -256,20 +270,26 @@ pub struct BuildMetaIndex {
     pub words_album: BTreeSet<(String, AlbumId, WordMeta)>,
     pub words_track: BTreeSet<(String, TrackId, WordMeta)>,
 
-    /// The highest mtime of all files in the album.
+    /// The maximum file id of all files in the album.
     ///
-    /// This is used to invalidate any existing album art thumbnails, in case a
+    /// This is used to invalidate any existing album loudness, in case a
     /// file in the album gets updated.
-    pub album_mtimes: HashMap<AlbumId, Mtime>,
+    pub album_file_ids: HashMap<AlbumId, FileId>,
 
     /// File name of the file currently being inserted.
     ///
     /// This is used to simplify helper methods for error reporting, to ensure
     /// that we don't have to pass the file name around everywhere.
-    pub current_filename: Option<String>,
+    pub current_filename: Option<FilenameRef>,
 
     /// Issues collected while inserting into the builder.
     pub issues: Vec<Issue>,
+}
+
+pub struct FileTask {
+  file_id: FileId,
+  filename: FilenameRef,
+  duration_seconds: u16,
 }
 
 impl BuildMetaIndex {
@@ -280,7 +300,7 @@ impl BuildMetaIndex {
             tracks: BTreeMap::new(),
             strings: StringDeduper::new(),
             filenames: Vec::new(),
-            album_mtimes: HashMap::new(),
+            album_file_ids: HashMap::new(),
             words_artist: BTreeSet::new(),
             words_album: BTreeSet::new(),
             words_track: BTreeSet::new(),
@@ -289,41 +309,43 @@ impl BuildMetaIndex {
         }
     }
 
-    /// Push an issue, then return none.
-    ///
-    /// Returning none is useful for chaining with ?.
-    fn issue<T>(&mut self, detail: IssueDetail) -> Option<T> {
-        let filename = self
-            .current_filename
-            .as_ref()
-            .expect("Must set current_filename before reporting issue.")
-            .clone();
-        let issue = detail.for_file(filename);
-        self.issues.push(issue);
-        None
+    fn get_current_filename(&self) -> Option<&str> {
+        match self.current_filename {
+            None => None,
+            Some(r) => Some(&self.filenames[r.0 as usize]),
+        }
     }
 
-    fn error_missing_field<T>(&mut self, field: &'static str) -> Option<T> {
+    /// Push an issue, then return none.
+    ///
+    /// Returning a `Result` is useful for chaining with ? so we can early out.
+    fn issue<T>(&mut self, detail: IssueDetail) -> Result<T> {
+        let filename = match self.current_filename {
+            None => panic!("Must set current_filename before reporting issue."),
+            Some(r) => &self.filenames[r.0 as usize],
+        };
+        let issue = detail.for_file(filename);
+        self.issues.push(issue);
+        Err(BuildError::FileFailed)
+    }
+
+    fn error_missing_field<T>(&mut self, field: &'static str) -> Result<T> {
         self.issue(IssueDetail::FieldMissingError(field))
     }
 
-    fn warning_missing_field(&mut self, field: &'static str) {
-        self.issue::<()>(IssueDetail::FieldMissingWarning(field));
-    }
-
     fn warning_track_title_contains_feat(&mut self) {
-        self.issue::<()>(IssueDetail::TrackTitleContainsFeat);
+        let _ = self.issue::<()>(IssueDetail::TrackTitleContainsFeat);
     }
 
-    fn error_parse_failed<T>(&mut self, field: &'static str) -> Option<T> {
+    fn error_parse_failed<T>(&mut self, field: &'static str) -> Result<T> {
         self.issue(IssueDetail::FieldParseFailedError(field))
     }
 
-    fn error_not_stereo<T>(&mut self) -> Option<T> {
+    fn error_not_stereo<T>(&mut self) -> Result<T> {
         self.issue(IssueDetail::NotStereo)
     }
 
-    fn error_unsupported_bit_depth<T>(&mut self, bits: u32) -> Option<T> {
+    fn error_unsupported_bit_depth<T>(&mut self, bits: u32) -> Result<T> {
         self.issue(IssueDetail::UnsupportedBitDepth(bits))
     }
 
@@ -337,13 +359,13 @@ impl BuildMetaIndex {
         field: &'static str,
         value: Option<String>,
         parse: F,
-    ) -> Option<Option<T>> {
+    ) -> Result<Option<T>> {
         match value {
             Some(v) => match parse(v) {
-                Some(result) => Some(Some(result)),
+                Some(result) => Ok(Some(result)),
                 None => self.error_parse_failed(field)
             }
-            None => Some(None)
+            None => Ok(None)
         }
     }
 
@@ -354,10 +376,11 @@ impl BuildMetaIndex {
         field: &'static str,
         value: Option<String>,
         parse: F,
-    ) -> Option<T> {
-        self
-            .parse(field, value, parse)?
-            .or_else(|| self.error_missing_field(field))
+    ) -> Result<T> {
+        match self.parse(field, value, parse)? {
+            Some(v) => Ok(v),
+            None => self.error_missing_field(field),
+        }
     }
 
     /// Deduplicate the string and get a string ref, if the value is present.
@@ -366,23 +389,24 @@ impl BuildMetaIndex {
         &mut self,
         field: &'static str,
         value: Option<String>,
-    ) -> Option<u32> {
+    ) -> Result<u32> {
         match value {
             // TODO: We could potentially make `strings` take the `String`
             // rather than the ref, now that we have this owned data.
-            Some(v) => Some(self.strings.insert(&v)),
+            Some(v) => Ok(self.strings.insert(&v)),
             None => self.error_missing_field(field)
         }
     }
 
-    pub fn insert(
+    /// Perform the first step of insertion, based on only the information from
+    /// the `files` table, not yet joined with other tables.
+    pub fn insert_meta(
         &mut self,
         file: FileMetadata,
-    ) -> Option<()> {
-        // TODO: Include file id in this data.
-        let file_id = FileId(0);
-        let filename_id = self.filenames.len() as u32;
-        self.current_filename = Some(file.filename);
+    ) -> Result<FileTask> {
+        let filename_id = FilenameRef(self.filenames.len() as u32);
+        self.filenames.push(file.filename);
+        self.current_filename = Some(filename_id);
 
         // It simplifies many things for playback if I can assume that all files
         // are stereo, so reject any non-stereo files. At the time of writing,
@@ -398,14 +422,86 @@ impl BuildMetaIndex {
             n => return self.error_unsupported_bit_depth(n as u32),
         }
 
+        let samples = match file.streaminfo_num_samples {
+            Some(s) => s as u64,
+            // TODO: Add a proper error for this, if it occurs in practice.
+            None => panic!("Streaminfo does not contain duration."),
+        };
+        let samples_per_sec = file.streaminfo_sample_rate as u64;
+        // Compute the duration in seconds. Add half the denominator in order to
+        // round properly.
+        let seconds = (samples + samples_per_sec / 2) / samples_per_sec;
+
+        if seconds > u16::MAX as u64 {
+            // TODO: Add a proper error for this, if it occurs in practice.
+            panic!("Track is longer than {} seconds.", u16::MAX);
+        }
+
+        let result = FileTask {
+            file_id: FileId(file.id),
+            filename: filename_id,
+            duration_seconds: seconds as u16,
+        };
+
+        Ok(result)
+    }
+
+    /// Complete inserting a file, now consulting the additional tables to get
+    /// tags and loudness information.
+    pub fn insert_full(
+        &mut self,
+        tx: &mut Transaction,
+        file: FileTask,
+    ) -> Result<()> {
+        self.current_filename = Some(file.filename);
+        let file_id = file.file_id;
+
+        let mut tag_date = None;
+        let mut tag_discnumber = None;
+        let mut tag_musicbrainz_albumid = None;
+        let mut tag_musicbrainz_albumartistid = Vec::new();
+        let mut tag_originaldate = None;
+        let mut tag_tracknumber = None;
+        let mut tag_title = None;
+        let mut tag_artist = None;
+        let mut tag_album = None;
+        let mut tag_albumartist = None;
+        let mut tag_albumartistsort = None;
+        let mut tag_albumartists = Vec::new();
+        let mut tag_albumartistssort = Vec::new();
+
+        for opt_pair in db::iter_file_tags(tx, file.file_id.0)? {
+            let (field_name, value) = opt_pair?;
+            // Note, we lowercase field names when inserting into the database,
+            // so we only have to match on the lowercase ones here.
+            match &field_name[..] {
+                "album" => tag_album = Some(value),
+                "albumartist" => tag_albumartist = Some(value),
+                "albumartists" => tag_albumartists.push(value),
+                "albumartistsort" => tag_albumartistsort = Some(value),
+                "albumartistssort" => tag_albumartistssort.push(value),
+                "artist" => tag_artist = Some(value),
+                "artists" => continue, // Currently unused.
+                "date" => tag_date = Some(value),
+                "discnumber" => tag_discnumber = Some(value),
+                "musicbrainz_albumartistid" => tag_musicbrainz_albumartistid.push(value),
+                "musicbrainz_albumid" => tag_musicbrainz_albumid = Some(value),
+                "musicbrainz_trackid" => continue, // Currently unused.
+                "originaldate" => tag_originaldate = Some(value),
+                "title" => tag_title = Some(value),
+                "tracknumber" => tag_tracknumber = Some(value),
+                other => panic!("Found unsupported tag in database: {}", other),
+            }
+        }
+
         let track_number = self.require_and_parse(
             "tracknumber",
-            file.tag_tracknumber,
+            tag_tracknumber,
             |v| u8::from_str(&v).ok(),
         )?;
         let disc_number = self.parse(
             "discnumber",
-            file.tag_discnumber,
+            tag_discnumber,
             |v| u8::from_str(&v).ok(),
         )?;
         // If the disc number is not set, assume disc 1.
@@ -413,17 +509,18 @@ impl BuildMetaIndex {
 
         let mbid_artist = self.require_and_parse(
             "musicbrainz_albumartistid",
-            file.tag_musicbrainz_albumartistid,
+            // TODO: Handle multiple artists.
+            tag_musicbrainz_albumartistid.pop(),
             |v| parse_uuid(&v)
         )?;
         let mbid_album = self.require_and_parse(
             "musicbrainz_albumid",
-            file.tag_musicbrainz_albumid,
+            tag_musicbrainz_albumid,
             |v| parse_uuid(&v)
         )?;
 
-        let original_date = self.parse("originaldate", file.tag_originaldate, |v| parse_date(&v))?;
-        let date = self.parse("date", file.tag_date, |v| parse_date(&v))?;
+        let original_date = self.parse("originaldate", tag_originaldate, |v| parse_date(&v))?;
+        let date = self.parse("date", tag_date, |v| parse_date(&v))?;
 
         // Use the 'originaldate' field, fall back to 'date' if it is not set.
         let date = match original_date.or(date) {
@@ -431,31 +528,10 @@ impl BuildMetaIndex {
             None => return self.error_missing_field("originaldate"),
         };
 
-        let track_loudness = self.parse(
-            "bs17704_track_loudness",
-            file.tag_bs17704_track_loudness,
-            |v| Lufs::from_str(&v).ok(),
-        )?;
-        let album_loudness = self.parse(
-            "bs17704_album_loudness",
-            file.tag_bs17704_album_loudness,
-            |v| Lufs::from_str(&v).ok(),
-        )?;
-
-        let title = self.require_and_insert_string("title", file.tag_title)?;
-        let track_artist = self.require_and_insert_string("artist", file.tag_artist)?;
-        let album = self.require_and_insert_string("album", file.tag_album)?;
-        let album_artist = self.require_and_insert_string("albumartist", file.tag_albumartist)?;
-
-        // Emit a warning when loudness is not present. Emit only one of the two
-        // warnings, because it is likely that both are absent, and then you get
-        // two warnings per file, which is extremely noisy.
-        if track_loudness.is_none() {
-            self.warning_missing_field("bs17704_track_loudness");
-        }
-        else if album_loudness.is_none() {
-            self.warning_missing_field("bs17704_album_loudness");
-        }
+        let title = self.require_and_insert_string("title", tag_title)?;
+        let track_artist = self.require_and_insert_string("artist", tag_artist)?;
+        let album = self.require_and_insert_string("album", tag_album)?;
+        let album_artist = self.require_and_insert_string("albumartist", tag_albumartist)?;
 
         // Warn about track titles containing "(feat. ", these should probably
         // be in the artist metadata instead.
@@ -470,12 +546,12 @@ impl BuildMetaIndex {
         let album_id = AlbumId(mbid_album);
         let track_id = get_track_id(album_id, disc_number, track_number);
 
-        // Record the most recently changed (highest mtime) per album.
-        let mtime = Mtime(file.mtime);
-        self.album_mtimes
+        // Record the maximum file id per album, so we can use it to invalidate
+        // per-album data later.
+        self.album_file_ids
             .entry(album_id)
-            .and_modify(|m| *m = mtime.max(*m))
-            .or_insert(mtime);
+            .and_modify(|k| *k = file_id.max(*k))
+            .or_insert(file_id);
 
         // Split the title, album, and album artist, on words, and add those to
         // the indexes, to allow finding the track/album/artist later by word.
@@ -536,8 +612,7 @@ impl BuildMetaIndex {
         // characters into the lowercase ascii character that looks most like
         // it, then sort by that.
         normalize_words(
-            file
-                .tag_albumartistsort
+            tag_albumartistsort
                 .as_ref()
                 .map(|s| &s[..])
                 .unwrap_or(self.strings.get(album_artist)),
@@ -547,20 +622,10 @@ impl BuildMetaIndex {
         let album_artist_for_sort = self.strings.insert(&sort_artist);
         words.clear();
 
-        let samples = match file.streaminfo_num_samples {
-            Some(s) => s as u64,
-            // TODO: Add a proper error for this, if it occurs in practice.
-            None => panic!("Streaminfo does not contain duration."),
-        };
-        let samples_per_sec = file.streaminfo_sample_rate as u64;
-        // Compute the duration in seconds. Add half the denominator in order to
-        // round properly.
-        let seconds = (samples + samples_per_sec / 2) / samples_per_sec;
-
-        if seconds > u16::MAX as u64 {
-            // TODO: Add a proper error for this, if it occurs in practice.
-            panic!("Track is longer than {} seconds.", u16::MAX);
-        }
+        // TODO: It's inefficient to query the database once per track for the
+        // album loudness.
+        let track_loudness = db::select_track_loudness_lufs(tx, track_id.0 as i64)?.map(Lufs::from_f64);
+        let album_loudness = db::select_album_loudness_lufs(tx, album_id.0 as i64)?.map(Lufs::from_f64);
 
         let track = Track {
             file_id: file_id,
@@ -569,14 +634,16 @@ impl BuildMetaIndex {
             track_number: track_number,
             title: StringRef(title),
             artist: StringRef(track_artist),
-            duration_seconds: seconds as u16,
-            filename: FilenameRef(filename_id),
+            duration_seconds: file.duration_seconds as u16,
+            filename: file.filename,
+            // TODO: Replace the option with a default loudness.
             loudness: track_loudness,
         };
         let album = Album {
             artist_id: artist_id,
             title: StringRef(album),
             original_release_date: date,
+            // TODO: Replace the option with a default loudness.
             loudness: album_loudness,
         };
         let artist = Artist {
@@ -587,37 +654,29 @@ impl BuildMetaIndex {
         let mut add_album = true;
         let mut add_artist = true;
 
-        // During this method, we put the file name in current_filename for
-        // more ergonomic error reporting, but now we will need to actually
-        // process the file name, so we take it back.
-        let filename = self
-            .current_filename
-            .take()
-            .expect("We set current_filename at the start of the method, it should still be there.");
-
         // Check for consistency if duplicates occur.
         if self.tracks.get(&track_id).is_some() {
             // TODO: This should report an `Issue`, not panic.
+            let filename = self
+                .get_current_filename()
+                .expect("We set the current file at the start of this method, it should still be there.");
             panic!("Duplicate track {}, file {}.", track_id, filename);
         }
 
         if let Some(existing_album) = self.albums.get(&album_id) {
             if let Some(detail) = albums_different(&self.strings, album_id, existing_album, &album) {
-                let issue = detail.for_file(filename.clone());
-                self.issues.push(issue);
+                let _ = self.issue::<()>(detail);
             }
             add_album = false;
         }
 
         if let Some(existing_artist) = self.artists.get(&artist_id) {
             if let Some(detail) = artists_different(&self.strings, artist_id, existing_artist, &artist) {
-                let issue = detail.for_file(filename.clone());
-                self.issues.push(issue);
+                let _ = self.issue::<()>(detail);
             }
             add_artist = false;
         }
 
-        self.filenames.push(filename);
         self.tracks.insert(track_id, track);
 
         if add_album {
@@ -628,7 +687,7 @@ impl BuildMetaIndex {
             self.artists.insert(artist_id, artist);
         }
 
-        Some(())
+        Ok(())
     }
 }
 
