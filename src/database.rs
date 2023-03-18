@@ -186,6 +186,19 @@ pub fn ensure_schema_exists(tx: &mut Transaction) -> Result<()> {
     }
 
     let sql = r#"
+        create index if not exists ix_tags_file_id on tags (file_id);
+        "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    match statement.next()? {
+        Row => panic!("Query 'ensure_schema_exists' unexpectedly returned a row."),
+        Done => {}
+    }
+
+    let sql = r#"
         -- BS1770.4 integrated loudness over the track, in LUFS.
         create table if not exists track_loudness
         ( track_id              integer primary key

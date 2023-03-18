@@ -76,6 +76,8 @@ create table if not exists tags
 , value      string  not null
 );
 
+create index if not exists ix_tags_file_id on tags (file_id);
+
 -- BS1770.4 integrated loudness over the track, in LUFS.
 create table if not exists track_loudness
 ( track_id              integer primary key
