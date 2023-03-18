@@ -43,51 +43,89 @@ For artists, albums, and tracks, Musium stores the following attributes:
 ## Tags
 
 Musium reads metadata from the following tags. Unless specified otherwise,
-all tags are mandatory and must occur exactly once.
+all tags are mandatory and must occur exactly once. Note that duration is not
+read from the metadata, it is determined from the flac header instead.
 
- * `discnumber`: Disc number, a non-negative integer less than 256.
-   Defaults to 1 if not provided.
- * `tracknumber`: Track number, a non-negative integer less than 256.
- * `title`: Track title.
- * `artist`: Track artist.
- * `album`: Title of the album.
- * `albumartist`: Name of the album artist.
- * `albumartists`: Optionally, for a collaboration album, the names of each
-    artist separately. This tag should then occur multiple times, once per
-    artist. See also
-    [the section on multiple album artists](#multiple-album-artists) below.
- * `albumartistsort`: Sort name of the album artist (e.g. name without articles).
-   Defaults to the value of `albumartist` when not provided.
- * `albumartistssort`: Optionally, the sort name of each album artist
-    separately, to match `albumartists`. Defaults to the values in
-    `albumartists` when not provided.
- * `originaldate`: Original release date of the album in <abbr>YYYY-MM-DD</abbr> format.
-   If an exact date is not known, <abbr>YYYY-MM</abbr> and <abbr>YYYY</abbr> can
-   be used instead.
- * `date`: If `originaldate` is not provided, this field is used instead.
- * `musicbrainz_albumartistid`: MusicBrainz id to group albums under. This can
-    occur multiple times, see also
-    [the section on multiple album artists](#multiple-album-artists) below.
- * `musicbrainz_albumid`: MusicBrainz id to group tracks under.
+### discnumber
 
-Note that duration is not read from the metadata. It is determined from the flac
-header instead.
+Disc number, a non-negative integer less than 16. Defaults to 1 if not provided.
+
+### tracknumber
+
+Track number, a non-negative integer less than 256.
+
+### title
+
+Track title.
+
+### artist
+
+Track artist.
+
+### album
+
+Title of the album.
+
+### albumartist
+
+Name of the album artist.
+
+### albumartists
+
+Optionally, for a collaboration album, the names of each artist separately. This
+tag should then occur multiple times, once per artist. See also [the section on
+multiple album artists](#multiple-album-artists) below. When `albumartists` are
+provided, `albumartist` should contain the joined name. For example, if
+`albumartists` is provided twice, once with value _John Legend_ and once with
+_The Roots_, `albumartist` might be set to _John Ledgend & The Roots_.
+
+### albumartistsort
+
+Sort name of the album artist (e.g. name without articles). Defaults to the
+value of `albumartist` when not provided. For an album with multiple artists
+this tag is ignored, use `albumartistssort` (note the double s) instead for
+collaboration albums.
+
+### albumartistssort
+
+Optionally, the sort name of each album artist separately, to match
+`albumartists`. Defaults to the values in `albumartists` when not provided.
+
+### originaldate
+
+Original release date of the album in <abbr>YYYY-MM-DD</abbr> format.
+If an exact date is not known, <abbr>YYYY-MM</abbr> and <abbr>YYYY</abbr>
+can be used instead.
+
+### date
+
+If `originaldate` is not provided, this field is used instead.
+
+### musicbrainz_albumartistid
+
+MusicBrainz id to group albums under. This can occur multiple times, see also
+[the section on multiple album artists](#multiple-album-artists) below.
+
+### musicbrainz_albumid
+
+MusicBrainz id to group tracks under.
 
 ## Consistency
 
 Tags contain redundant information, which must be consistent. For example, all
 tracks on the same album should have the same album artist and album title.
 
-Musium uses the MusicBrainz album id, to determine what album a track belongs to,
+Musium uses the MusicBrainz album id to determine what album a track belongs to,
 and the MusicBrainz album artist id to determine which artist an album belongs
-to. If there is an inconsistency, Musium reports it, and it will then make an
-arbitrary choice about what version to keep.
+to. The directory structure of the files is irrelevant. If there is an
+inconsistency, Musium reports it, and it will then make an arbitrary choice
+about what version to keep.
 
 ## Multiple album artists
 
 Collaboration albums are sometimes credited to multiple artists. (As opposed to
 compliation albums, which are usually credited to a single special artist named
-_Various Artists_.) There are different to represent this with tags:
+_Various Artists_.) There are different ways to represent this with tags:
 
  1. Treat every combination of existing artists as a new artist, with a unique
     `musicbrainz_albumartistid`.
@@ -102,8 +140,9 @@ artist. For example, if you tag [_Wake Up!_][wakeup] by _John Legend & The Roots
 with only _John Legend_ as the album artist, then it will not show up in the
 album list of _The Roots_, and if you tag it with _John Legend & The Roots_ as
 album artist, then it will neither show up under _John Legend_ nor under _The
-Roots_. If the individual tracks are credited to all artists, Musium is still
-able to find those tracks individually in search.
+Roots_. If the track artist of individual tracks lists all artists, Musium is
+still able to find those tracks individually in search by searching for any of
+the artists.
 
 Before Musium version **TODO**, albums in Musium belonged to exactly one artist,
 so option **1** and **2** were the only ways of tagging a collaboration album.
@@ -123,7 +162,8 @@ write by default. Musium needs:
    as many times as `albumartists`, and list artists in the same order.
 
 To make Picard write the `albumartists` tags you need the [Additional Artist
-Variables plugin][plugin]. In the Picard settings:
+Variables plugin][plugin], which is distributed with Picard, but not enabled by
+default. In the Picard settings:
 
  * Enable _Additional Artist Variables_ under _Plugins_.
  * In _Scripting_, create a new tagger script.
