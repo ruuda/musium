@@ -71,7 +71,7 @@ create table if not exists files
 
 create table if not exists tags
 ( id         integer primary key
-, file_id    integer not null references files (id)
+, file_id    integer not null references files (id) on delete cascade
 , field_name string  not null
 , value      string  not null
 );
@@ -79,7 +79,7 @@ create table if not exists tags
 -- BS1770.4 integrated loudness over the track, in LUFS.
 create table if not exists track_loudness
 ( track_id              integer primary key
-, file_id               integer not null references files (id)
+, file_id               integer not null references files (id) on delete cascade
 , bs17704_loudness_lufs real    not null
 );
 
@@ -93,13 +93,13 @@ create table if not exists album_loudness
 -- See waveform.rs for the data format.
 create table if not exists waveforms
 ( track_id integer primary key
-, file_id  integer not null references files (id)
+, file_id  integer not null references files (id) on delete cascade
 , data     blob    not null
 );
 
 create table if not exists thumbnails
 ( album_id integer primary key
-, file_id  integer not null references files (id)
+, file_id  integer not null references files (id) on delete cascade
 , data     blob    not null
 );
 -- @end ensure_schema_exists
@@ -125,58 +125,15 @@ values
 )
 returning id;
 
--- @query insert_file_metadata(metadata: InsertFileMetadata)
+-- @query insert_tag(file_id: i64, field_name: str, value: str)
 insert into
-  file_metadata
-  ( filename
-  , mtime
-  , imported_at
-  , streaminfo_channels
-  , streaminfo_bits_per_sample
-  , streaminfo_num_samples
-  , streaminfo_sample_rate
-  , tag_album
-  , tag_albumartist
-  , tag_albumartistsort
-  , tag_artist
-  , tag_musicbrainz_albumartistid
-  , tag_musicbrainz_albumid
-  , tag_musicbrainz_trackid
-  , tag_discnumber
-  , tag_tracknumber
-  , tag_originaldate
-  , tag_date
-  , tag_title
-  , tag_bs17704_track_loudness
-  , tag_bs17704_album_loudness
-  )
-values
-  ( :filename                      -- :str
-  , :mtime                         -- :i64
-  , :imported_at                   -- :str
-  , :streaminfo_channels           -- :i64
-  , :streaminfo_bits_per_sample    -- :i64
-  , :streaminfo_num_samples        -- :i64?
-  , :streaminfo_sample_rate        -- :i64
-  , :tag_album                     -- :str?
-  , :tag_albumartist               -- :str?
-  , :tag_albumartistsort           -- :str?
-  , :tag_artist                    -- :str?
-  , :tag_musicbrainz_albumartistid -- :str?
-  , :tag_musicbrainz_albumid       -- :str?
-  , :tag_musicbrainz_trackid       -- :str?
-  , :tag_discnumber                -- :str?
-  , :tag_tracknumber               -- :str?
-  , :tag_originaldate              -- :str?
-  , :tag_date                      -- :str?
-  , :tag_title                     -- :str?
-  , :tag_bs17704_track_loudness    -- :str?
-  , :tag_bs17704_album_loudness    -- :str?
-);
+  tags (file_id, field_name, value)
+  values (:file_id, :field_name, :value);
 
--- @query delete_file_metadata(file_id: i64)
-delete from file_metadata where id = :file_id;
+-- @query delete_file(file_id: i64)
+delete from file_metadata where id = :file_id cascade;
 
+-- TODO: Find a replacement for this.
 -- @query iter_file_metadata() ->* FileMetadata
 select
   filename                      /* :str  */,
@@ -203,13 +160,13 @@ from
 order by
   filename asc;
 
--- @query iter_file_metadata_mtime() ->* FileMetadataSimple
+-- @query iter_file_mtime() ->* FileMetadataSimple
 select
     id       -- :i64
   , filename -- :str
   , mtime    -- :i64
 from
-  file_metadata
+  files
 order by
   filename asc;
 

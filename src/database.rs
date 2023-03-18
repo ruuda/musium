@@ -170,7 +170,7 @@ pub fn ensure_schema_exists(tx: &mut Transaction) -> Result<()> {
     let sql = r#"
         create table if not exists tags
         ( id         integer primary key
-        , file_id    integer not null references files (id)
+        , file_id    integer not null references files (id) on delete cascade
         , field_name string  not null
         , value      string  not null
         );
@@ -189,7 +189,7 @@ pub fn ensure_schema_exists(tx: &mut Transaction) -> Result<()> {
         -- BS1770.4 integrated loudness over the track, in LUFS.
         create table if not exists track_loudness
         ( track_id              integer primary key
-        , file_id               integer not null references files (id)
+        , file_id               integer not null references files (id) on delete cascade
         , bs17704_loudness_lufs real    not null
         );
         "#;
@@ -225,7 +225,7 @@ pub fn ensure_schema_exists(tx: &mut Transaction) -> Result<()> {
         -- See waveform.rs for the data format.
         create table if not exists waveforms
         ( track_id integer primary key
-        , file_id  integer not null references files (id)
+        , file_id  integer not null references files (id) on delete cascade
         , data     blob    not null
         );
         "#;
@@ -242,7 +242,7 @@ pub fn ensure_schema_exists(tx: &mut Transaction) -> Result<()> {
     let sql = r#"
         create table if not exists thumbnails
         ( album_id integer primary key
-        , file_id  integer not null references files (id)
+        , file_id  integer not null references files (id) on delete cascade
         , data     blob    not null
         );
         "#;
@@ -314,117 +314,30 @@ pub fn insert_file(tx: &mut Transaction, metadata: InsertFile) -> Result<i64> {
     Ok(result)
 }
 
-#[derive(Debug)]
-pub struct InsertFileMetadata<'a> {
-    pub filename: &'a str,
-    pub mtime: i64,
-    pub imported_at: &'a str,
-    pub streaminfo_channels: i64,
-    pub streaminfo_bits_per_sample: i64,
-    pub streaminfo_num_samples: Option<i64>,
-    pub streaminfo_sample_rate: i64,
-    pub tag_album: Option<&'a str>,
-    pub tag_albumartist: Option<&'a str>,
-    pub tag_albumartistsort: Option<&'a str>,
-    pub tag_artist: Option<&'a str>,
-    pub tag_musicbrainz_albumartistid: Option<&'a str>,
-    pub tag_musicbrainz_albumid: Option<&'a str>,
-    pub tag_musicbrainz_trackid: Option<&'a str>,
-    pub tag_discnumber: Option<&'a str>,
-    pub tag_tracknumber: Option<&'a str>,
-    pub tag_originaldate: Option<&'a str>,
-    pub tag_date: Option<&'a str>,
-    pub tag_title: Option<&'a str>,
-    pub tag_bs17704_track_loudness: Option<&'a str>,
-    pub tag_bs17704_album_loudness: Option<&'a str>,
-}
-
-pub fn insert_file_metadata(tx: &mut Transaction, metadata: InsertFileMetadata) -> Result<()> {
+pub fn insert_tag(tx: &mut Transaction, file_id: i64, field_name: &str, value: &str) -> Result<()> {
     let sql = r#"
         insert into
-          file_metadata
-          ( filename
-          , mtime
-          , imported_at
-          , streaminfo_channels
-          , streaminfo_bits_per_sample
-          , streaminfo_num_samples
-          , streaminfo_sample_rate
-          , tag_album
-          , tag_albumartist
-          , tag_albumartistsort
-          , tag_artist
-          , tag_musicbrainz_albumartistid
-          , tag_musicbrainz_albumid
-          , tag_musicbrainz_trackid
-          , tag_discnumber
-          , tag_tracknumber
-          , tag_originaldate
-          , tag_date
-          , tag_title
-          , tag_bs17704_track_loudness
-          , tag_bs17704_album_loudness
-          )
-        values
-          ( :filename
-          , :mtime
-          , :imported_at
-          , :streaminfo_channels
-          , :streaminfo_bits_per_sample
-          , :streaminfo_num_samples
-          , :streaminfo_sample_rate
-          , :tag_album
-          , :tag_albumartist
-          , :tag_albumartistsort
-          , :tag_artist
-          , :tag_musicbrainz_albumartistid
-          , :tag_musicbrainz_albumid
-          , :tag_musicbrainz_trackid
-          , :tag_discnumber
-          , :tag_tracknumber
-          , :tag_originaldate
-          , :tag_date
-          , :tag_title
-          , :tag_bs17704_track_loudness
-          , :tag_bs17704_album_loudness
-        );
+          tags (file_id, field_name, value)
+          values (:file_id, :field_name, :value);
         "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
         Occupied(entry) => entry.into_mut(),
         Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
     };
     statement.reset()?;
-    statement.bind(1, metadata.filename)?;
-    statement.bind(2, metadata.mtime)?;
-    statement.bind(3, metadata.imported_at)?;
-    statement.bind(4, metadata.streaminfo_channels)?;
-    statement.bind(5, metadata.streaminfo_bits_per_sample)?;
-    statement.bind(6, metadata.streaminfo_num_samples)?;
-    statement.bind(7, metadata.streaminfo_sample_rate)?;
-    statement.bind(8, metadata.tag_album)?;
-    statement.bind(9, metadata.tag_albumartist)?;
-    statement.bind(10, metadata.tag_albumartistsort)?;
-    statement.bind(11, metadata.tag_artist)?;
-    statement.bind(12, metadata.tag_musicbrainz_albumartistid)?;
-    statement.bind(13, metadata.tag_musicbrainz_albumid)?;
-    statement.bind(14, metadata.tag_musicbrainz_trackid)?;
-    statement.bind(15, metadata.tag_discnumber)?;
-    statement.bind(16, metadata.tag_tracknumber)?;
-    statement.bind(17, metadata.tag_originaldate)?;
-    statement.bind(18, metadata.tag_date)?;
-    statement.bind(19, metadata.tag_title)?;
-    statement.bind(20, metadata.tag_bs17704_track_loudness)?;
-    statement.bind(21, metadata.tag_bs17704_album_loudness)?;
+    statement.bind(1, file_id)?;
+    statement.bind(2, field_name)?;
+    statement.bind(3, value)?;
     let result = match statement.next()? {
-        Row => panic!("Query 'insert_file_metadata' unexpectedly returned a row."),
+        Row => panic!("Query 'insert_tag' unexpectedly returned a row."),
         Done => (),
     };
     Ok(result)
 }
 
-pub fn delete_file_metadata(tx: &mut Transaction, file_id: i64) -> Result<()> {
+pub fn delete_file(tx: &mut Transaction, file_id: i64) -> Result<()> {
     let sql = r#"
-        delete from file_metadata where id = :file_id;
+        delete from file_metadata where id = :file_id cascade;
         "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
         Occupied(entry) => entry.into_mut(),
@@ -433,7 +346,7 @@ pub fn delete_file_metadata(tx: &mut Transaction, file_id: i64) -> Result<()> {
     statement.reset()?;
     statement.bind(1, file_id)?;
     let result = match statement.next()? {
-        Row => panic!("Query 'delete_file_metadata' unexpectedly returned a row."),
+        Row => panic!("Query 'delete_file' unexpectedly returned a row."),
         Done => (),
     };
     Ok(result)
@@ -462,6 +375,7 @@ pub struct FileMetadata {
     pub tag_bs17704_album_loudness: Option<String>,
 }
 
+/// TODO: Find a replacement for this.
 pub fn iter_file_metadata<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<Iter<'i, 'a, FileMetadata>> {
     let sql = r#"
         select
@@ -526,14 +440,14 @@ pub struct FileMetadataSimple {
     pub mtime: i64,
 }
 
-pub fn iter_file_metadata_mtime<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<Iter<'i, 'a, FileMetadataSimple>> {
+pub fn iter_file_mtime<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<Iter<'i, 'a, FileMetadataSimple>> {
     let sql = r#"
         select
             id
           , filename
           , mtime
         from
-          file_metadata
+          files
         order by
           filename asc;
         "#;
