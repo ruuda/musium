@@ -130,8 +130,8 @@ Variables plugin][plugin]. In the Picard settings:
  * Add the following expression:
 
 ```
-$setmulti(ALBUMARTISTS,%_artists_album_all_std_multi%)
-$setmulti(ALBUMARTISTSSORT,%_artists_album_all_sort_multi%)
+$setmulti(albumartists,%_artists_album_all_std_multi%)
+$setmulti(albumartistssort,%_artists_album_all_sort_multi%)
 ```
 
 This should be sufficient to make Musium handle the collaboration albums.
