@@ -7,9 +7,9 @@ Musium is an album-centered music player. It is designed to run as a daemon on
 an always-on device connected to speakers. Playback can be controlled from
 anywhere on the local network through a webinterface.
 
- * [Overview and getting started guide](https://ruuda.github.io/musium/)
- * [Building](https://ruuda.github.io/musium/building/)
- * [Running](https://ruuda.github.io/musium/running/)
+ * [Overview and getting started guide](https://docs.ruuda.nl/musium/)
+ * [Building](https://docs.ruuda.nl/musium/building/)
+ * [Running](https://docs.ruuda.nl/musium/running/)
 
 <p align="center"><a href="https://github.com/ruuda/musium/tree/master/screenshots">
   <!-- The png is the rasterized version of the svg. -->
