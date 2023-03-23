@@ -552,7 +552,7 @@ fn insert_file_metadata(
 
     let file_id = db::insert_file(tx, f)?;
 
-    // Then walk all tags, and set the corresponding column if we find a known one.
+    // Then walk all tags and insert the interesting ones into the database.
     for (tag, value) in flac_reader.tags() {
         let tag_lower = &tag.to_ascii_lowercase()[..];
         let is_interesting_tag = matches!(
