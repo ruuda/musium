@@ -77,7 +77,7 @@ tag should then occur multiple times, once per artist. See also [the section on
 multiple album artists](#multiple-album-artists) below. When `albumartists` are
 provided, `albumartist` should contain the joined name. For example, if
 `albumartists` is provided twice, once with value _John Legend_ and once with
-_The Roots_, `albumartist` might be set to _John Ledgend & The Roots_.
+_The Roots_, `albumartist` might be set to _John Legend & The Roots_.
 
 ### albumartistsort
 
