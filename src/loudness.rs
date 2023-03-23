@@ -436,8 +436,9 @@ impl<'a> TaskQueue<'a> {
             // thread would have its own database connection and they would all
             // write, but this lead to contention and "database is locked"
             // errors. So instead we let all threads send their inserts to this
-            // channel, and one thread will serialize all writes.
-            let (insert_sender, insert_receiver) = sync_channel(32);
+            // channel, and one thread will serialize all writes. Use plenty of
+            // buffer to ensure we are not IO-bound on commits.
+            let (insert_sender, insert_receiver) = sync_channel(128);
 
             for i in 0..n_threads {
                 let task_queue_i = task_queue.clone();
@@ -475,7 +476,12 @@ impl<'a> TaskQueue<'a> {
             // returns when all senders have closed their channel, which happens
             // after all threads exit.
             std::mem::drop(insert_sender);
-            process_inserts(db_path, insert_receiver)?;
+
+            // We could propagate the error here, but if the thread that has the
+            // receiver leaves, then the sending threads will panic anyway, so
+            // we might as well panic here.
+            process_inserts(db_path, insert_receiver)
+                .expect("Failed to process database insert.");
 
             for join_handle in threads.drain(..) {
                 // The first unwrap is on joining, that should not fail because we
