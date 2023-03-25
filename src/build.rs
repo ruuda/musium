@@ -10,7 +10,7 @@ use std::fmt;
 use std::str::FromStr;
 use std::u16;
 
-use crate::prim::{AlbumId, Album, ArtistId, Artist, FileId, TrackId, Track, Date, Lufs, FilenameRef, StringRef, get_track_id};
+use crate::prim::{AlbumId, Album, AlbumArtistsRef, ArtistId, Artist, FileId, TrackId, Track, Date, Lufs, FilenameRef, StringRef, get_track_id};
 use crate::string_utils::{StringDeduper, normalize_words};
 use crate::word_index::{WordMeta};
 use crate::database::{FileMetadata, Transaction, self as db};
@@ -263,6 +263,8 @@ pub struct BuildMetaIndex {
     pub artists: BTreeMap<ArtistId, Artist>,
     pub albums: BTreeMap<AlbumId, Album>,
     pub tracks: BTreeMap<TrackId, Track>,
+    pub album_artists: Vec<ArtistId>,
+
     pub strings: StringDeduper,
     pub filenames: Vec<String>,
 
@@ -298,6 +300,7 @@ impl BuildMetaIndex {
             artists: BTreeMap::new(),
             albums: BTreeMap::new(),
             tracks: BTreeMap::new(),
+            album_artists: Vec::new(),
             strings: StringDeduper::new(),
             filenames: Vec::new(),
             album_file_ids: HashMap::new(),
@@ -354,10 +357,10 @@ impl BuildMetaIndex {
     /// When the outer option is none, there was a fatal parse error. When the
     /// inner option is none, the value was absent.
     #[inline(always)]
-    fn parse<T, F: FnOnce(String) -> Option<T>>(
+    fn parse<T, F: FnOnce(&String) -> Option<T>>(
         &mut self,
         field: &'static str,
-        value: Option<String>,
+        value: Option<&String>,
         parse: F,
     ) -> Result<Option<T>> {
         match value {
@@ -371,10 +374,10 @@ impl BuildMetaIndex {
 
     /// Parse the value, report an issue if it is absent, or parse failed.
     #[inline(always)]
-    fn require_and_parse<T, F: FnOnce(String) -> Option<T>>(
+    fn require_and_parse<T, F: FnOnce(&String) -> Option<T>>(
         &mut self,
         field: &'static str,
-        value: Option<String>,
+        value: Option<&String>,
         parse: F,
     ) -> Result<T> {
         match self.parse(field, value, parse)? {
@@ -496,31 +499,33 @@ impl BuildMetaIndex {
 
         let track_number = self.require_and_parse(
             "tracknumber",
-            tag_tracknumber,
+            tag_tracknumber.as_ref(),
             |v| u8::from_str(&v).ok(),
         )?;
         let disc_number = self.parse(
             "discnumber",
-            tag_discnumber,
+            tag_discnumber.as_ref(),
             |v| u8::from_str(&v).ok(),
         )?;
         // If the disc number is not set, assume disc 1.
         let disc_number = disc_number.unwrap_or(1);
 
-        let mbid_artist = self.require_and_parse(
-            "musicbrainz_albumartistid",
-            // TODO: Handle multiple artists.
-            tag_musicbrainz_albumartistid.pop(),
-            |v| parse_uuid(&v)
-        )?;
         let mbid_album = self.require_and_parse(
             "musicbrainz_albumid",
-            tag_musicbrainz_albumid,
+            tag_musicbrainz_albumid.as_ref(),
             |v| parse_uuid(&v)
         )?;
 
-        let original_date = self.parse("originaldate", tag_originaldate, |v| parse_date(&v))?;
-        let date = self.parse("date", tag_date, |v| parse_date(&v))?;
+        let original_date = self.parse(
+            "originaldate",
+            tag_originaldate.as_ref(),
+            |v| parse_date(&v),
+        )?;
+        let date = self.parse(
+            "date",
+            tag_date.as_ref(),
+            |v| parse_date(&v),
+        )?;
 
         // Use the 'originaldate' field, fall back to 'date' if it is not set.
         let date = match original_date.or(date) {
@@ -533,6 +538,45 @@ impl BuildMetaIndex {
         let album = self.require_and_insert_string("album", tag_album)?;
         let album_artist = self.require_and_insert_string("albumartist", tag_albumartist)?;
 
+        // The "albumartists" tag is optional, when it is not provided, we
+        // default to the single album artist.
+        if tag_albumartists.is_empty() {
+            tag_albumartists.push(self.strings.get(album_artist).to_string());
+        }
+
+        // The album artist sort name can be omitted, in that case we default
+        // to the album artist name. When it's not omitted, it must be provided
+        // for every artist.
+        let tag_albumartistssort = match tag_albumartistssort.len() {
+            0 => match (tag_albumartists.len(), &tag_albumartistsort) {
+                (1, Some(aa_sort)) => vec![aa_sort.clone()],
+                _ => tag_albumartists.clone(),
+            }
+            _ => tag_albumartistssort,
+        };
+
+        // Album artist id, name, and sort name.
+        let mut album_artists: Vec<(ArtistId, StringRef, StringRef)> = Vec::new();
+        for ((tag_aa_mbid, tag_aa_name), tag_aa_name_sort) in tag_musicbrainz_albumartistid
+            .iter()
+            .zip(tag_albumartists)
+            .zip(tag_albumartistssort) {
+            let mbid_artist = self.require_and_parse(
+                "musicbrainz_albumartistid",
+                Some(tag_aa_mbid),
+                |v| parse_uuid(&v),
+            )?;
+            let aa_name = self.strings.insert(&tag_aa_name);
+            let aa_name_sort = self.strings.insert(&tag_aa_name_sort);
+            album_artists.push(
+                (
+                    ArtistId(mbid_artist),
+                    StringRef(aa_name),
+                    StringRef(aa_name_sort),
+                )
+            );
+        }
+
         // Warn about track titles containing "(feat. ", these should probably
         // be in the artist metadata instead.
         {
@@ -542,7 +586,6 @@ impl BuildMetaIndex {
             }
         }
 
-        let artist_id = ArtistId(mbid_artist);
         let album_id = AlbumId(mbid_album);
         let track_id = get_track_id(album_id, disc_number, track_number);
 
@@ -557,25 +600,58 @@ impl BuildMetaIndex {
         // the indexes, to allow finding the track/album/artist later by word.
         let mut words = Vec::new();
         let mut words_album_artist = Vec::new();
+        let mut all_words_album_artist = Vec::new();
 
         {
+            // First we process all album artists individually.
+            for &(artist_id, album_artist_i, _) in &album_artists {
+                let album_artist_name = &self.strings.get(album_artist_i.0);
+                // Fill the indexes with the words that occur in the name.
+                // The artist is also present in the album and track indexes,
+                // but with rank 0, such that including the artist in the search
+                // terms would not make the intersection empty.
+                words_album_artist.clear();
+                normalize_words(album_artist_name, &mut words_album_artist);
+                for (i, w) in words_album_artist.drain(..).enumerate() {
+                    let meta_rank_2 = WordMeta::new(w.len(), album_artist_name.len(), i, 2);
+                    let meta_rank_0 = WordMeta::new(w.len(), album_artist_name.len(), i, 0);
+                    self.words_artist.insert((w.clone(), artist_id, meta_rank_2));
+                    self.words_album.insert((w.clone(),  album_id,  meta_rank_0));
+                    self.words_track.insert((w.clone(),  track_id,  meta_rank_0));
+                    all_words_album_artist.push(w);
+                }
+            }
+
+            // If the album has multiple artists, then the album artist as
+            // credited may differ from the individual artists. For example,
+            // the album artist can be "John Leged and The Roots" and the
+            // individual album artists are "John Legend" and "The Roots". Then
+            // the word "and" occurs in the album artist, but not in the
+            // individual album artist names. We should insert the additional
+            // word into the album and track list indexes, so that adding that
+            // word to the search query does not exclude the album. And even
+            // when there is a single artist, sometimes I prefer to to merge
+            // multiple artists (e.g. "Robert Glasper" and "The Robert Glasper
+            // Experiment") under the same mbid, but we can preserve the name as
+            // credited on the album and make it searchable.
+            let album_artist_full = self.strings.get(album_artist);
+            normalize_words(album_artist_full, &mut words);
+            for (i, w) in words.iter().enumerate() {
+                if !all_words_album_artist.contains(&w) {
+                    let meta_rank_0 = WordMeta::new(w.len(), album_artist_full.len(), i, 0);
+                    self.words_album.insert((w.clone(), album_id, meta_rank_0));
+                    self.words_track.insert((w.clone(), track_id, meta_rank_0));
+                }
+            }
+            // Add the words to the all collection only afterwards; if it
+            // occurs twice in the album artist then it should be in the
+            // index twice.
+            all_words_album_artist.extend(words.drain(..));
+
             let track_title = &self.strings.get(title);
             let album_title = &self.strings.get(album);
-            let album_artist = &self.strings.get(album_artist);
             let track_artist = &self.strings.get(track_artist);
 
-            // Fill the indexes with the words that occur in the titles. The artist
-            // is also present in the album and track indexes, but with rank 0, such
-            // that including the artist in the search terms would not make the
-            // intersection empty.
-            normalize_words(album_artist, &mut words_album_artist);
-            for (i, w) in words_album_artist.iter().enumerate() {
-                let meta_rank_2 = WordMeta::new(w.len(), album_artist.len(), i, 2);
-                let meta_rank_0 = WordMeta::new(w.len(), album_artist.len(), i, 0);
-                self.words_artist.insert((w.clone(), artist_id, meta_rank_2));
-                self.words_album.insert((w.clone(),  album_id,  meta_rank_0));
-                self.words_track.insert((w.clone(),  track_id,  meta_rank_0));
-            }
             normalize_words(album_title, &mut words);
             for (i, w) in words.drain(..).enumerate() {
                 let meta_rank_2 = WordMeta::new(w.len(), album_title.len(), i, 2);
@@ -589,9 +665,9 @@ impl BuildMetaIndex {
 
             // Extend the track index with the words that occur uniquely in the
             // track artist, and not in the album artist. For example, feat.
-            // artists, but also the full artist on complication albums. These get
-            // rank 1 to set them apart from album artist words (rank 0) and title
-            // words (rank 2).
+            // artists, but also the full artist on compilation albums. These
+            // get rank 1 to set them apart from album artist words (rank 0) and
+            // title words (rank 2).
             normalize_words(track_artist, &mut words);
             for (i, w) in words.drain(..).enumerate() {
                 if !words_album_artist.contains(&w) {
@@ -618,14 +694,44 @@ impl BuildMetaIndex {
                 .unwrap_or(self.strings.get(album_artist)),
             &mut words,
         );
+        // TODO: Restore this treatment of the sort artist.
         let sort_artist = words.join(" ");
-        let album_artist_for_sort = self.strings.insert(&sort_artist);
+        let _ = self.strings.insert(&sort_artist);
         words.clear();
 
         // TODO: It's inefficient to query the database once per track for the
         // album loudness.
         let track_loudness = db::select_track_loudness_lufs(tx, track_id.0 as i64)?.map(Lufs::from_f64);
         let album_loudness = db::select_album_loudness_lufs(tx, album_id.0 as i64)?.map(Lufs::from_f64);
+
+        // Insert all the album artists if no artist with the given id existed
+        // yet. If one did exist, verify consistency. Also fill the vector of
+        // album artists so the album can refer to this.
+        let mut album_artists_ref = AlbumArtistsRef {
+            begin: self.album_artists.len() as u32,
+            end: 0,
+        };
+        for (artist_id, aa_name, aa_name_sort) in album_artists {
+            let artist = Artist {
+                name: aa_name,
+                name_for_sort: aa_name_sort,
+            };
+            match self.artists.get(&artist_id) {
+                Some(existing_artist) => if let Some(detail) = artists_different(
+                    &self.strings,
+                    artist_id,
+                    existing_artist,
+                    &artist,
+                ) {
+                    let _ = self.issue::<()>(detail);
+                }
+                None => {
+                    self.artists.insert(artist_id, artist);
+                }
+            }
+            self.album_artists.push(artist_id);
+        };
+        album_artists_ref.end = self.album_artists.len() as u32;
 
         let track = Track {
             file_id: file_id,
@@ -636,23 +742,19 @@ impl BuildMetaIndex {
             artist: StringRef(track_artist),
             duration_seconds: file.duration_seconds as u16,
             filename: file.filename,
-            // TODO: Replace the option with a default loudness.
             loudness: track_loudness,
         };
         let album = Album {
-            artist_id: artist_id,
+            // TODO: Remove this once multiple artists are available everywhere.
+            artist_id: self.album_artists[album_artists_ref.begin as usize],
+            artist: StringRef(album_artist),
+            artists: album_artists_ref,
             title: StringRef(album),
             original_release_date: date,
-            // TODO: Replace the option with a default loudness.
             loudness: album_loudness,
-        };
-        let artist = Artist {
-            name: StringRef(album_artist),
-            name_for_sort: StringRef(album_artist_for_sort),
         };
 
         let mut add_album = true;
-        let mut add_artist = true;
 
         // Check for consistency if duplicates occur.
         if self.tracks.get(&track_id).is_some() {
@@ -670,21 +772,10 @@ impl BuildMetaIndex {
             add_album = false;
         }
 
-        if let Some(existing_artist) = self.artists.get(&artist_id) {
-            if let Some(detail) = artists_different(&self.strings, artist_id, existing_artist, &artist) {
-                let _ = self.issue::<()>(detail);
-            }
-            add_artist = false;
-        }
-
         self.tracks.insert(track_id, track);
 
         if add_album {
             self.albums.insert(album_id, album);
-        }
-
-        if add_artist {
-            self.artists.insert(artist_id, artist);
         }
 
         Ok(())
