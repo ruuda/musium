@@ -609,14 +609,19 @@ impl BuildMetaIndex {
                 // Fill the indexes with the words that occur in the name.
                 // The artist is also present in the album and track indexes,
                 // but with rank 0, such that including the artist in the search
-                // terms would not make the intersection empty.
+                // terms would not make the intersection empty. For albums by
+                // multiple artists, we make an exception and bump the rank,
+                // such that you can still find the album by searching only for
+                // the name of one of the artists.
+                let k = if album_artists.len() == 1 { 0 } else { 1 };
                 words_album_artist.clear();
                 normalize_words(album_artist_name, &mut words_album_artist);
                 for (i, w) in words_album_artist.drain(..).enumerate() {
                     let meta_rank_2 = WordMeta::new(w.len(), album_artist_name.len(), i, 2);
+                    let meta_rank_k = WordMeta::new(w.len(), album_artist_name.len(), i, k);
                     let meta_rank_0 = WordMeta::new(w.len(), album_artist_name.len(), i, 0);
                     self.words_artist.insert((w.clone(), artist_id, meta_rank_2));
-                    self.words_album.insert((w.clone(),  album_id,  meta_rank_0));
+                    self.words_album.insert((w.clone(),  album_id,  meta_rank_k));
                     self.words_track.insert((w.clone(),  track_id,  meta_rank_0));
                     all_words_album_artist.push(w);
                 }
