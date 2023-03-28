@@ -164,11 +164,10 @@ pub fn write_search_artist_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: A
 
 pub fn write_search_album_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: AlbumId) -> io::Result<()> {
     let album = index.get_album(id).unwrap();
-    let artist = index.get_artist(album.artist_id).unwrap();
     write!(w, r#"{{"id":"{}","title":"#, id)?;
     serde_json::to_writer(&mut w, index.get_string(album.title))?;
     write!(w, r#","artist":"#)?;
-    serde_json::to_writer(&mut w, index.get_string(artist.name))?;
+    serde_json::to_writer(&mut w, index.get_string(album.artist))?;
     write!(w, r#","date":"{}"}}"#, album.original_release_date)
 }
 
