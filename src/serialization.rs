@@ -32,8 +32,16 @@ pub fn write_brief_album_json<W: Write>(
 
     write!(w, r#"{{"id":"{}","title":"#, album_id)?;
     serde_json::to_writer(&mut w, index.get_string(album.title))?;
-    write!(w, r#","artist_id":"{}","artist":"#, album.artist_id)?;
-    serde_json::to_writer(&mut w, index.get_string(artist.name))?;
+    write!(w, r#","artist_ids":["#)?;
+    let mut first = true;
+    for artist_id in index.get_album_artists(album.artist_ids) {
+        if !first { write!(w, ",")?; }
+        write!(w, r#""{}""#, artist_id)?;
+        first = false;
+    }
+    write!(w, r#"],"artist_id":"{}","artist":"#, album.artist_id)?;
+    serde_json::to_writer(&mut w, index.get_string(album.artist))?;
+    // TODO: Delete this, it has no place here any more.
     write!(w, r#","sort_artist":"#)?;
     serde_json::to_writer(&mut w, index.get_string(artist.name_for_sort))?;
     write!(w, r#","date":"{}"}}"#, album.original_release_date)?;
@@ -92,6 +100,8 @@ pub fn write_artist_json<W: Write>(
 ) -> io::Result<()> {
     write!(w, r#"{{"name":"#)?;
     serde_json::to_writer(&mut w, index.get_string(artist.name))?;
+    write!(w, r#","sort_name":"#)?;
+    serde_json::to_writer(&mut w, index.get_string(artist.name_for_sort))?;
     write!(w, r#","albums":["#)?;
     let mut first = true;
     for &(_, album_id) in albums {

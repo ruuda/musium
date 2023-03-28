@@ -747,8 +747,8 @@ impl BuildMetaIndex {
         let album = Album {
             // TODO: Remove this once multiple artists are available everywhere.
             artist_id: self.album_artists[album_artists_ref.begin as usize],
+            artist_ids: album_artists_ref,
             artist: StringRef(album_artist),
-            artists: album_artists_ref,
             title: StringRef(album),
             original_release_date: date,
             loudness: album_loudness,

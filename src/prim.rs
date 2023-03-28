@@ -238,7 +238,7 @@ impl Date {
 
 /// Indices of the album artist in the album artist array.
 #[repr(C)]
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct AlbumArtistsRef {
     /// Index of the first album artist.
     pub begin: u32,
@@ -249,7 +249,7 @@ pub struct AlbumArtistsRef {
 #[repr(C)]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Album {
-    pub artists: AlbumArtistsRef,
+    pub artist_ids: AlbumArtistsRef,
     // TODO: Delete this field, we have the reverse index instead.
     pub artist_id: ArtistId,
     pub artist: StringRef,

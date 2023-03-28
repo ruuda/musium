@@ -208,8 +208,8 @@ fn build_albums_by_artist_index(
     let mut entries_with_date = Vec::with_capacity(albums.len() * 40 / 32);
 
     for &(album_id, ref album) in albums {
-        let i = album.artists.begin as usize;
-        let j = album.artists.end as usize;
+        let i = album.artist_ids.begin as usize;
+        let j = album.artist_ids.end as usize;
         for album_artist_id in &album_artists[i..j] {
             entries_with_date.push((
                 *album_artist_id,
@@ -264,6 +264,9 @@ impl MemoryMetaIndex {
             album.title = StringRef(
                 strings.insert(builder.strings.get(album.title.0))
             );
+            album.artist = StringRef(
+                strings.insert(builder.strings.get(album.artist.0))
+            );
 
             // We could simply copy the album artists vec from the builder, and
             // use the indices unmodified, but then the entries would be in
@@ -271,14 +274,14 @@ impl MemoryMetaIndex {
             // same order as the albums, so if you iterate the albums, this is
             // more cache efficient.
             let begin = album_artists.len() as u32;
-            let i = album.artists.begin as usize;
-            let j = album.artists.end as usize;
+            let i = album.artist_ids.begin as usize;
+            let j = album.artist_ids.end as usize;
             for artist_id in &builder.album_artists[i..j] {
                 album_artists.push(*artist_id);
             }
             let end = album_artists.len() as u32;
-            album.artists.begin = begin;
-            album.artists.end = end;
+            album.artist_ids.begin = begin;
+            album.artist_ids.end = end;
 
             albums.push((id, album));
         }
