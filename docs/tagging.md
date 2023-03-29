@@ -185,7 +185,7 @@ artist. On the other hand, drum ’n bass artists [_Sub Focus_][sf] and
 [_Wilkinson_][wn] did release [a collaboration album][portals] that is credited
 to both of the existing artists, the collaboration is not considered a new
 artist. When artists collaborate under a new name (for example,
-[_Kaskade_][kaskade] and [_Deadmau5_][mau5] as [Kx5][kx5]), this is generally
+[_Kaskade_][kaskade] and [_Deadmau5_][mau5] as [_Kx5_][kx5]), this is generally
 represented as a new artist, instead of a collaboration. The line can be blurry,
 it’s up to you how you prefer to tag your files.
 
