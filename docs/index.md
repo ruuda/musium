@@ -10,6 +10,7 @@ such as the ability to pause playback.*
 ## Features
 
  * Respects album artist and original release date metadata.
+ * Supports collaboration albums with multiple album artists.
  * Designed to scale to hundreds of thousands of tracks.
  * User interface responds quickly, and indexing is fast.
  * Optimized to run in resource-constrained environments, such as a Raspberry Pi.
@@ -21,7 +22,7 @@ such as the ability to pause playback.*
 
  * Musium is not a tagger, it expects your files to be tagged correctly already.
  * Supports only flac, with no intention to support other audio formats.
- * Requires Linux, with no intention to become cross-platform.
+ * Runs on Linux, with no intention to become cross-platform.
  * Uses raw <abbr>ALSA</abbr>, with no intention to support PulseAudio or
    PipeWire.
 
