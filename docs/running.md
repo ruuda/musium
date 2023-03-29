@@ -38,10 +38,12 @@ An example unit file:
     # priority of the audio playback thread.
     AmbientCapabilities=CAP_SYS_NICE
 
+    # Wen running as a non-root user, CAP_NET_BIND_SERVICE is needed to bind
+    # to ports below 1024.
+    AmbientCapabilities=CAP_NET_BIND_SERVICE
+
     [Install]
     WantedBy=default.target
-
-    # TODO: Enable some hardening options.
 
 This assumes that you have a [release binary](building.md) in `/usr/local/bin`,
 and a [configuration file](configuration.md) at `/etc/musium.conf`. Write the
