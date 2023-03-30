@@ -43,7 +43,7 @@ use std::path::Path;
 use std::u32;
 use std::u64;
 
-use crate::build::{BuildMetaIndex, BuildError};
+use crate::build::{AlbumArtistsDeduper, BuildMetaIndex, BuildError};
 use crate::error::{Error, Result};
 use crate::prim::{ArtistId, Artist, AlbumArtistsRef, AlbumId, Album, TrackId, Track, Lufs, StringRef, FilenameRef, get_track_id};
 use crate::string_utils::StringDeduper;
@@ -201,16 +201,14 @@ pub struct MemoryMetaIndex {
 /// date.
 fn build_albums_by_artist_index(
     albums: &[(AlbumId, Album)],
-    album_artists: &[ArtistId],
+    album_artists: &AlbumArtistsDeduper,
 ) -> Vec<(ArtistId, AlbumId)> {
     // Add a bit of headroom, most albums have one artist, but some albums have
     // multiple.
     let mut entries_with_date = Vec::with_capacity(albums.len() * 40 / 32);
 
     for &(album_id, ref album) in albums {
-        let i = album.artist_ids.begin as usize;
-        let j = album.artist_ids.end as usize;
-        for album_artist_id in &album_artists[i..j] {
+        for album_artist_id in album_artists.get(album.artist_ids) {
             entries_with_date.push((
                 *album_artist_id,
                 album_id,
@@ -238,9 +236,7 @@ impl MemoryMetaIndex {
         let mut artists: Vec<(ArtistId, Artist)> = Vec::with_capacity(builder.artists.len());
         let mut albums: Vec<(AlbumId, Album)> = Vec::with_capacity(builder.albums.len());
         let mut tracks: Vec<(TrackId, Track)> = Vec::with_capacity(builder.tracks.len());
-        // The size of the array in the builder is no good hint, because far too
-        // many albums get added there. TODO: Use a deduper there too.
-        let mut album_artists: Vec<ArtistId> = Vec::with_capacity(builder.albums.len() * 40 / 32);
+        let mut album_artists = AlbumArtistsDeduper::new();
         let mut strings = StringDeduper::new();
         let mut filenames = Vec::new();
 
@@ -275,15 +271,13 @@ impl MemoryMetaIndex {
             // arbitrary order. We remap them here such that the data is in the
             // same order as the albums, so if you iterate the albums, this is
             // more cache efficient.
-            let begin = album_artists.len() as u32;
-            let i = album.artist_ids.begin as usize;
-            let j = album.artist_ids.end as usize;
-            for artist_id in &builder.album_artists[i..j] {
-                album_artists.push(*artist_id);
-            }
-            let end = album_artists.len() as u32;
-            album.artist_ids.begin = begin;
-            album.artist_ids.end = end;
+            album.artist_ids = album_artists.insert(
+                builder
+                    .album_artists
+                    .get(album.artist_ids)
+                    .iter()
+                    .cloned()
+            );
 
             albums.push((id, album));
         }
@@ -306,7 +300,7 @@ impl MemoryMetaIndex {
         // Build the reverse mapping from
         let albums_by_artist = build_albums_by_artist_index(
             &albums[..],
-            &album_artists[..],
+            &album_artists,
         );
 
         MemoryMetaIndex {
@@ -320,7 +314,7 @@ impl MemoryMetaIndex {
             albums_by_artist: albums_by_artist,
             strings: strings.into_vec(),
             filenames: filenames,
-            album_artists: album_artists,
+            album_artists: album_artists.into_vec(),
             words_artist: MemoryWordIndex::new(&builder.words_artist),
             words_album: MemoryWordIndex::new(&builder.words_album),
             words_track: MemoryWordIndex::new(&builder.words_track),

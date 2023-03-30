@@ -190,7 +190,7 @@ fn parse_uuid(uuid: &str) -> Option<u64> {
 /// Return an issue if the two albums are not equal.
 pub fn albums_different(
     strings: &StringDeduper,
-    album_artists: &[ArtistId],
+    album_artists: &AlbumArtistsDeduper,
     id: AlbumId,
     a: &Album,
     b: &Album)
@@ -223,10 +223,8 @@ pub fn albums_different(
         ));
     }
 
-    let (i, j) = (a.artist_ids.begin as usize, a.artist_ids.end as usize);
-    let a_artists = &album_artists[i..j];
-    let (i, j) = (b.artist_ids.begin as usize, b.artist_ids.end as usize);
-    let b_artists = &album_artists[i..j];
+    let a_artists = album_artists.get(a.artist_ids);
+    let b_artists = album_artists.get(b.artist_ids);
 
     if a_artists.len() != b_artists.len() {
         return Some(IssueDetail::AlbumArtistCountMismatch(
@@ -281,13 +279,100 @@ pub fn artists_different(
     None
 }
 
+pub struct AlbumArtistsDeduper {
+    pub artists: Vec<ArtistId>,
+    pub refs: HashMap<u64, AlbumArtistsRef>,
+}
+
+impl AlbumArtistsDeduper {
+    pub fn new() -> Self {
+        AlbumArtistsDeduper {
+            artists: Vec::new(),
+            refs: HashMap::new(),
+        }
+    }
+
+    pub fn insert<I: IntoIterator<Item = ArtistId>>(&mut self, ids: I) -> AlbumArtistsRef {
+        use std::collections::hash_map::Entry::{Occupied, Vacant};
+
+        // Store all the artist ids in the backing vector and keep track of the
+        // new range. Later we might undo this. Also while iterating, compute a
+        // hash of all ids. Artist ids are already random (taken from a uuid)
+        // and uniformly distributed, so a simple xor should suffice.
+        let mut h = 0;
+        let begin = self.artists.len();
+        for id in ids {
+            h = h ^ id.0;
+            self.artists.push(id);
+        }
+        let end = self.artists.len();
+
+        let range = AlbumArtistsRef {
+            begin: begin as u32,
+            end: end as u32,
+        };
+
+        match self.refs.entry(h) {
+            Occupied(existing) => {
+                let e = *existing.get();
+                if &self.artists[e.begin as usize..e.end as usize] == &self.artists[begin..end] {
+                    // We found an existing range, and it's the same. We don't need
+                    // the one we just inserted, they were already there.
+                    self.artists.truncate(begin);
+                    *existing.get()
+                } else {
+                    // We have a collision, the wrong id is at this index. Then
+                    // we'll just duplicate the entry, and have it backed twice.
+                    range
+                }
+            }
+            Vacant(vacancy) => *vacancy.insert(range),
+        }
+    }
+
+    /// Return the underlying vector, destroying the deduplicator.
+    pub fn into_vec(self) -> Vec<ArtistId> {
+        self.artists
+    }
+
+    /// Return the artists with the given index.
+    pub fn get(&self, ids: AlbumArtistsRef) -> &[ArtistId] {
+        &self.artists[ids.begin as usize..ids.end as usize]
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{ArtistId, AlbumArtistsDeduper};
+
+    #[test]
+    fn album_artists_deduper_works() {
+        let mut dup = AlbumArtistsDeduper::new();
+        let a = ArtistId(1);
+        let b = ArtistId(2);
+        let c = ArtistId(4);
+
+        let a1 = dup.insert([a]);
+        let a2 = dup.insert([a]);
+        assert_eq!(a1, a2);
+
+        let b1 = dup.insert([b]);
+        assert_ne!(a1, b1);
+
+        let ab1 = dup.insert([a, b]);
+        let ac1 = dup.insert([a, c]);
+        let ab2 = dup.insert([a, b]);
+        let ac2 = dup.insert([a, c]);
+        assert_eq!(ab1, ab2);
+        assert_eq!(ac1, ac2);
+    }
+}
+
 pub struct BuildMetaIndex {
     pub artists: BTreeMap<ArtistId, Artist>,
     pub albums: BTreeMap<AlbumId, Album>,
     pub tracks: BTreeMap<TrackId, Track>,
-    // TODO: We could have a deduper for this too, most albums can share the
-    // index into this array!
-    pub album_artists: Vec<ArtistId>,
+    pub album_artists: AlbumArtistsDeduper,
 
     pub strings: StringDeduper,
     pub filenames: Vec<String>,
@@ -324,7 +409,7 @@ impl BuildMetaIndex {
             artists: BTreeMap::new(),
             albums: BTreeMap::new(),
             tracks: BTreeMap::new(),
-            album_artists: Vec::new(),
+            album_artists: AlbumArtistsDeduper::new(),
             strings: StringDeduper::new(),
             filenames: Vec::new(),
             album_file_ids: HashMap::new(),
@@ -731,10 +816,8 @@ impl BuildMetaIndex {
         // Insert all the album artists if no artist with the given id existed
         // yet. If one did exist, verify consistency. Also fill the vector of
         // album artists so the album can refer to this.
-        let mut album_artists_ref = AlbumArtistsRef {
-            begin: self.album_artists.len() as u32,
-            end: 0,
-        };
+        let album_artists_ref = self.album_artists.insert(album_artists.iter().map(|tuple| tuple.0));
+
         for (artist_id, aa_name, aa_name_sort) in album_artists {
             let artist = Artist {
                 name: aa_name,
@@ -753,9 +836,7 @@ impl BuildMetaIndex {
                     self.artists.insert(artist_id, artist);
                 }
             }
-            self.album_artists.push(artist_id);
         };
-        album_artists_ref.end = self.album_artists.len() as u32;
 
         let track = Track {
             file_id: file_id,
@@ -790,7 +871,7 @@ impl BuildMetaIndex {
         if let Some(existing_album) = self.albums.get(&album_id) {
             if let Some(detail) = albums_different(
                 &self.strings,
-                &self.album_artists[..],
+                &self.album_artists,
                 album_id,
                 existing_album,
                 &album,
