@@ -16,7 +16,14 @@ create table if not exists listens
 -- NULL if the track is still playing.
 , completed_at     string  null     check (started_at < completed_at)
 
--- Musium ids.
+-- References a file from the files table, but there is no foreign key. We want
+-- to keep the listen around even when the file disappears. Also, this needs to
+-- be nullable because in the past we did not record it, so historical listens
+-- may not have it.
+, file_id          integer null
+
+-- Musium ids. The album artist id is the first album artist, in case there are
+-- multiple.
 , queue_id         integer null
 , track_id         integer not null
 , album_id         integer not null
@@ -206,6 +213,7 @@ on conflict (track_id) do update set data = :data;
 insert into
   listens
   ( started_at
+  , file_id
   , queue_id
   , track_id
   , album_id
@@ -221,6 +229,7 @@ insert into
   )
 values
   ( :started_at       -- :str
+  , :file_id          -- :i64
   , :queue_id         -- :i64
   , :track_id         -- :i64
   , :album_id         -- :i64

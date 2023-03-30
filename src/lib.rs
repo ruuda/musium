@@ -238,7 +238,9 @@ impl MemoryMetaIndex {
         let mut artists: Vec<(ArtistId, Artist)> = Vec::with_capacity(builder.artists.len());
         let mut albums: Vec<(AlbumId, Album)> = Vec::with_capacity(builder.albums.len());
         let mut tracks: Vec<(TrackId, Track)> = Vec::with_capacity(builder.tracks.len());
-        let mut album_artists: Vec<ArtistId> = Vec::with_capacity(builder.album_artists.len());
+        // The size of the array in the builder is no good hint, because far too
+        // many albums get added there. TODO: Use a deduper there too.
+        let mut album_artists: Vec<ArtistId> = Vec::with_capacity(builder.albums.len() * 40 / 32);
         let mut strings = StringDeduper::new();
         let mut filenames = Vec::new();
 

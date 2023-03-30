@@ -54,6 +54,10 @@ pub enum IssueDetail {
     /// Contains the date used, and the discarded alternative.
     AlbumReleaseDateMismatch(AlbumId, Date, Date),
 
+    /// For two albums with the same mbid, a different number of artists was
+    /// encountered. Contains the number used, and the discarded alternative.
+    AlbumArtistCountMismatch(AlbumId, usize, usize),
+
     /// Two different artists were found for albums with the same mbid.
     /// Contains the artist used, and the discarded alternative.
     AlbumArtistMismatch(AlbumId, ArtistId, ArtistId),
@@ -110,6 +114,8 @@ impl fmt::Display for Issue {
                 write!(f, "warning: discarded inconsistent album title '{}' in favour of '{}'.", alt, title),
             IssueDetail::AlbumReleaseDateMismatch(_id, ref date, ref alt) =>
                 write!(f, "warning: discarded inconsistent album release date {} in favour of {}.", alt, date),
+            IssueDetail::AlbumArtistCountMismatch(_id, n, m) =>
+                write!(f, "warning: discarded inconsistent album artists of length {} in favour of length {}.", m, n),
             IssueDetail::AlbumArtistMismatch(_id, ref artist, ref alt) =>
                 write!(f, "warning: discarded inconsistent album artist '{}' in favour of '{}'.", alt, artist),
             IssueDetail::ArtistNameMismatch(_id, ref name, ref alt) =>
@@ -184,6 +190,7 @@ fn parse_uuid(uuid: &str) -> Option<u64> {
 /// Return an issue if the two albums are not equal.
 pub fn albums_different(
     strings: &StringDeduper,
+    album_artists: &[ArtistId],
     id: AlbumId,
     a: &Album,
     b: &Album)
@@ -216,12 +223,27 @@ pub fn albums_different(
         ));
     }
 
-    if a.artist_id != b.artist_id {
-        return Some(IssueDetail::AlbumArtistMismatch(
-            id,
-            a.artist_id,
-            b.artist_id,
+    let (i, j) = (a.artist_ids.begin as usize, a.artist_ids.end as usize);
+    let a_artists = &album_artists[i..j];
+    let (i, j) = (b.artist_ids.begin as usize, b.artist_ids.end as usize);
+    let b_artists = &album_artists[i..j];
+
+    if a_artists.len() != b_artists.len() {
+        return Some(IssueDetail::AlbumArtistCountMismatch(
+                id,
+                a_artists.len(),
+                b_artists.len(),
         ));
+    }
+
+    for (a_artist_id, b_artist_id) in a_artists.iter().zip(b_artists) {
+        if a_artist_id != b_artist_id {
+            return Some(IssueDetail::AlbumArtistMismatch(
+                id,
+                *a_artist_id,
+                *b_artist_id,
+            ));
+        }
     }
 
     None
@@ -263,6 +285,8 @@ pub struct BuildMetaIndex {
     pub artists: BTreeMap<ArtistId, Artist>,
     pub albums: BTreeMap<AlbumId, Album>,
     pub tracks: BTreeMap<TrackId, Track>,
+    // TODO: We could have a deduper for this too, most albums can share the
+    // index into this array!
     pub album_artists: Vec<ArtistId>,
 
     pub strings: StringDeduper,
@@ -745,8 +769,6 @@ impl BuildMetaIndex {
             loudness: track_loudness,
         };
         let album = Album {
-            // TODO: Remove this once multiple artists are available everywhere.
-            artist_id: self.album_artists[album_artists_ref.begin as usize],
             artist_ids: album_artists_ref,
             artist: StringRef(album_artist),
             title: StringRef(album),
@@ -766,7 +788,13 @@ impl BuildMetaIndex {
         }
 
         if let Some(existing_album) = self.albums.get(&album_id) {
-            if let Some(detail) = albums_different(&self.strings, album_id, existing_album, &album) {
+            if let Some(detail) = albums_different(
+                &self.strings,
+                &self.album_artists[..],
+                album_id,
+                existing_album,
+                &album,
+            ) {
                 let _ = self.issue::<()>(detail);
             }
             add_album = false;

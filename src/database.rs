@@ -82,7 +82,14 @@ pub fn ensure_schema_exists(tx: &mut Transaction) -> Result<()> {
         -- NULL if the track is still playing.
         , completed_at     string  null     check (started_at < completed_at)
         
-        -- Musium ids.
+        -- References a file from the files table, but there is no foreign key. We want
+        -- to keep the listen around even when the file disappears. Also, this needs to
+        -- be nullable because in the past we did not record it, so historical listens
+        -- may not have it.
+        , file_id          integer null
+        
+        -- Musium ids. The album artist id is the first album artist, in case there are
+        -- multiple.
         , queue_id         integer null
         , track_id         integer not null
         , album_id         integer not null
@@ -566,6 +573,7 @@ pub fn insert_track_waveform(tx: &mut Transaction, track_id: i64, file_id: i64, 
 #[derive(Debug)]
 pub struct Listen<'a> {
     pub started_at: &'a str,
+    pub file_id: i64,
     pub queue_id: i64,
     pub track_id: i64,
     pub album_id: i64,
@@ -584,6 +592,7 @@ pub fn insert_listen_started(tx: &mut Transaction, listen: Listen) -> Result<i64
         insert into
           listens
           ( started_at
+          , file_id
           , queue_id
           , track_id
           , album_id
@@ -599,6 +608,7 @@ pub fn insert_listen_started(tx: &mut Transaction, listen: Listen) -> Result<i64
           )
         values
           ( :started_at
+          , :file_id
           , :queue_id
           , :track_id
           , :album_id
@@ -621,17 +631,18 @@ pub fn insert_listen_started(tx: &mut Transaction, listen: Listen) -> Result<i64
     };
     statement.reset()?;
     statement.bind(1, listen.started_at)?;
-    statement.bind(2, listen.queue_id)?;
-    statement.bind(3, listen.track_id)?;
-    statement.bind(4, listen.album_id)?;
-    statement.bind(5, listen.album_artist_id)?;
-    statement.bind(6, listen.track_title)?;
-    statement.bind(7, listen.track_artist)?;
-    statement.bind(8, listen.album_title)?;
-    statement.bind(9, listen.album_artist)?;
-    statement.bind(10, listen.duration_seconds)?;
-    statement.bind(11, listen.track_number)?;
-    statement.bind(12, listen.disc_number)?;
+    statement.bind(2, listen.file_id)?;
+    statement.bind(3, listen.queue_id)?;
+    statement.bind(4, listen.track_id)?;
+    statement.bind(5, listen.album_id)?;
+    statement.bind(6, listen.album_artist_id)?;
+    statement.bind(7, listen.track_title)?;
+    statement.bind(8, listen.track_artist)?;
+    statement.bind(9, listen.album_title)?;
+    statement.bind(10, listen.album_artist)?;
+    statement.bind(11, listen.duration_seconds)?;
+    statement.bind(12, listen.track_number)?;
+    statement.bind(13, listen.disc_number)?;
     let decode_row = |statement: &Statement| Ok(statement.read(0)?);
     let result = match statement.next()? {
         Row => decode_row(statement)?,
