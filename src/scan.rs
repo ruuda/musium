@@ -856,7 +856,7 @@ mod test {
         connection.execute(
             "
             insert into
-              file_metadata
+              files
                 ( filename
                 , mtime
                 , imported_at
@@ -898,7 +898,7 @@ mod test {
         connection.execute(
             "
             insert into
-              file_metadata
+              files
                 ( id
                 , filename
                 , mtime
@@ -943,7 +943,7 @@ mod test {
         connection.execute(
             "
             insert into
-              file_metadata
+              files
                 ( id
                 , filename
                 , mtime
@@ -983,7 +983,7 @@ mod test {
         connection.execute(
             "
             insert into
-              file_metadata
+              files
                 ( id
                 , filename
                 , mtime
@@ -1028,7 +1028,7 @@ mod test {
         connection.execute(
             "
             insert into
-              file_metadata
+              files
                 ( filename
                 , mtime
                 , imported_at
