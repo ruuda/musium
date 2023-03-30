@@ -201,10 +201,16 @@ fn write_queued_track_json<W: Write>(
     serde_json::to_writer(&mut w, index.get_string(track.title))?;
     write!(
         w,
-        r#","album_id":"{}","album_artist_id":"{}","album":"#,
+        r#","album_id":"{}","album_artist_ids":["#,
         track.album_id,
-        album.artist_id,
     )?;
+    let mut first = true;
+    for artist_id in index.get_album_artists(album.artist_ids) {
+        if !first { write!(w, ",")?; }
+        write!(w, r#""{}""#, artist_id)?;
+        first = false;
+    }
+    write!(w, r#"],"album":"#)?;
     serde_json::to_writer(&mut w, index.get_string(album.title))?;
     write!(w, r#","artist":"#)?;
     serde_json::to_writer(&mut w, index.get_string(track.artist))?;

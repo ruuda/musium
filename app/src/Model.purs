@@ -54,12 +54,14 @@ import Control.Monad.Error.Class (class MonadThrow, throwError)
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (decodeJson, getField) as Json
 import Data.Argonaut.Decode.Class (class DecodeJson)
-import Data.Argonaut.Decode.Error (JsonDecodeError (UnexpectedValue), printJsonDecodeError)
+import Data.Argonaut.Decode.Error (JsonDecodeError (AtKey, UnexpectedValue, MissingValue), printJsonDecodeError)
 import Data.Array (reverse, sortWith)
+import Data.Array.NonEmpty (NonEmptyArray)
+import Data.Array.NonEmpty as NonEmptyArray
 import Data.Either (Either (..))
 import Data.Int (rem)
 import Data.Int as Int
-import Data.Maybe (Maybe (Nothing))
+import Data.Maybe (Maybe (Just, Nothing))
 import Data.String as String
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
@@ -118,9 +120,8 @@ trackUrl (TrackId id) = "/api/track/" <> id <> ".flac"
 newtype Album = Album
   { id :: AlbumId
   , title :: String
-  , artistId :: ArtistId
   , artist :: String
-  , sortArtist :: String
+  , artistIds :: NonEmptyArray ArtistId
   , date :: String
   }
 
@@ -129,11 +130,13 @@ instance decodeJsonAlbum :: DecodeJson Album where
     obj        <- Json.decodeJson json
     id         <- map AlbumId $ Json.getField obj "id"
     title      <- Json.getField obj "title"
-    artistId   <- map ArtistId $ Json.getField obj "artist_id"
+    artistIdsM <- map (map ArtistId) $ Json.getField obj "artist_ids"
+    artistIds  <- case NonEmptyArray.fromArray artistIdsM of
+      Just xs -> pure xs
+      Nothing -> Left $ AtKey "artist_ids" MissingValue
     artist     <- Json.getField obj "artist"
-    sortArtist <- Json.getField obj "sort_artist"
     date       <- Json.getField obj "date"
-    pure $ Album { id, title, artist, artistId, sortArtist, date }
+    pure $ Album { id, title, artist, artistIds, date }
 
 getAlbums :: Aff (Array Album)
 getAlbums = do
@@ -415,7 +418,7 @@ newtype QueuedTrackRaw = QueuedTrackRaw
   , artist :: String
   , album :: String
   , albumId :: AlbumId
-  , albumArtistId :: ArtistId
+  , albumArtistIds :: NonEmptyArray ArtistId
   , date :: String
   , durationSeconds :: Int
   , positionSeconds :: Number
@@ -430,7 +433,7 @@ newtype QueuedTrack = QueuedTrack
   , artist :: String
   , album :: String
   , albumId :: AlbumId
-  , albumArtistId :: ArtistId
+  , albumArtistIds :: NonEmptyArray ArtistId
   , date :: String
   , durationSeconds :: Int
   , positionSeconds :: Number
@@ -457,7 +460,10 @@ instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
     artist          <- Json.getField obj "artist"
     album           <- Json.getField obj "album"
     albumId         <- map AlbumId $ Json.getField obj "album_id"
-    albumArtistId   <- map ArtistId $ Json.getField obj "album_artist_id"
+    albumArtistIdsM <- map (map ArtistId) $ Json.getField obj "album_artist_ids"
+    albumArtistIds  <- case NonEmptyArray.fromArray albumArtistIdsM of
+      Just xs -> pure xs
+      Nothing -> Left $ AtKey "album_artist_ids" MissingValue
     date            <- Json.getField obj "date"
     durationSeconds <- Json.getField obj "duration_seconds"
     positionSeconds <- Json.getField obj "position_seconds"
@@ -470,7 +476,7 @@ instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
       , artist
       , album
       , albumId
-      , albumArtistId
+      , albumArtistIds
       , date
       , durationSeconds
       , positionSeconds
@@ -496,7 +502,7 @@ getQueue = do
       , artist: track.artist
       , album: track.album
       , albumId: track.albumId
-      , albumArtistId: track.albumArtistId
+      , albumArtistIds: track.albumArtistIds
       , date: track.date
       , durationSeconds: track.durationSeconds
       , positionSeconds: track.positionSeconds

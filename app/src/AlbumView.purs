@@ -126,7 +126,11 @@ renderAlbumInit postEvent (Album album) = do
           Html.addClass "artist"
           Html.text album.artist
           Html.onClick $ launchAff_ $
-            postEvent $ Event.NavigateTo (Navigation.Artist album.artistId) Event.RecordHistory
+            -- TODO: How to handle this navigation? Maybe we should support
+            -- multiple artists in the artist view, and treat it as a
+            -- disjunction?
+            let artistId = NonEmptyArray.head album.artistIds
+            in postEvent $ Event.NavigateTo (Navigation.Artist artistId) Event.RecordHistory
         Html.text " ⋅ "
         Html.span $ do
           Html.addClass "date"
@@ -300,7 +304,7 @@ enqueueTrack postEvent (Album album) (Track track) trackElement = do
     , artist: track.artist
     , album: album.title
     , albumId: album.id
-    , albumArtistId: album.artistId
+    , albumArtistIds: album.artistIds
     , date: album.date
     , durationSeconds: track.durationSeconds
     , positionSeconds: 0.0

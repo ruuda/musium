@@ -15,6 +15,7 @@ module State
 import Control.Monad.Error.Class (class MonadThrow, throwError)
 import Control.Monad.Reader.Class (ask)
 import Data.Array as Array
+import Data.Array.NonEmpty as NonEmptyArray
 import Data.Maybe (Maybe (Just, Nothing))
 import Data.Time.Duration (Milliseconds (..))
 import Data.Tuple (Tuple (..))
@@ -89,7 +90,7 @@ type AppState =
   , navBar :: NavBarState
   , statusBar :: StatusBarState
   , location :: Location
-  , lastArtist :: Maybe ArtistId
+  , lastArtists :: Array ArtistId
   , lastAlbum :: Maybe AlbumId
   , currentTrack :: Maybe QueueId
   , prefetchedThumb :: Maybe QueueId
@@ -203,7 +204,7 @@ new bus = do
     , navBar: navBar
     , statusBar: statusBar
     , location: Navigation.Library
-    , lastArtist: Nothing
+    , lastArtists: []
     , lastAlbum: Nothing
     , currentTrack: Nothing
     , prefetchedThumb: Nothing
@@ -422,7 +423,7 @@ handleEvent event state = case event of
     navigateTo location mode $ state
       { currentArtist = Just artist
       , elements = state.elements { artistBrowser = albumView }
-      , lastArtist = Just artistId
+      , lastArtists = [artistId]
       }
 
   Event.NavigateTo location@(Navigation.Album albumId) mode -> do
@@ -442,12 +443,12 @@ handleEvent event state = case event of
 
     navigateTo location mode $ state
       { lastAlbum = Just albumId
-      , lastArtist = Just albumDetails.artistId
+      , lastArtists = NonEmptyArray.toArray albumDetails.artistIds
       , albumView = Just albumViewState
       }
 
   Event.NavigateToArtist -> case state.location of
-    -- If we are already at an artist page, then lastArtist must be the artist
+    -- If we are already at an artist page, then lastArtists must be the artist
     -- that we are currently viewing, so it makes no sense to navigate again.
     Navigation.Artist _ -> pure state
     _notArtist ->
@@ -456,12 +457,12 @@ handleEvent event state = case event of
           (Event.NavigateTo (Navigation.Artist target) Event.RecordHistory)
           state
       in
-        case state.lastArtist of
+        case Array.head state.lastArtists of
           Just artistId -> go artistId
           -- If there is no previously visited page, but something is playing,
           -- use that instead.
           Nothing -> case Array.head state.queue of
-            Just (QueuedTrack qt) -> go qt.albumArtistId
+            Just (QueuedTrack qt) -> go $ NonEmptyArray.head qt.albumArtistIds
             Nothing -> pure state
 
   Event.NavigateToAlbum -> case state.location of
