@@ -692,17 +692,12 @@ impl BuildMetaIndex {
         // ordering depends on locale. I am going to ignore all of that and turn
         // characters into the lowercase ascii character that looks most like
         // it, then sort by that.
-        normalize_words(
-            tag_albumartistsort
-                .as_ref()
-                .map(|s| &s[..])
-                .unwrap_or(self.strings.get(album_artist)),
-            &mut words,
-        );
-        // TODO: Restore this treatment of the sort artist.
-        let sort_artist = words.join(" ");
-        let _ = self.strings.insert(&sort_artist);
-        words.clear();
+        for (_, _, ref mut aa_name_sort) in album_artists.iter_mut() {
+            normalize_words(self.strings.get(aa_name_sort.0), &mut words);
+            let sort_artist = words.join(" ");
+            aa_name_sort.0 = self.strings.insert(&sort_artist);
+            words.clear();
+        }
 
         // TODO: It's inefficient to query the database once per track for the
         // album loudness.
