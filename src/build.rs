@@ -385,6 +385,9 @@ pub struct BuildMetaIndex {
     ///
     /// This is used to invalidate any existing album loudness, in case a
     /// file in the album gets updated.
+    /// TODO: This is not actually used yet, invalidate the loudness based on
+    /// it in the `loudness` module. Probably we could return the file id when
+    /// we select the loudness.
     pub album_file_ids: HashMap<AlbumId, FileId>,
 
     /// File name of the file currently being inserted.
