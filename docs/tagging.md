@@ -134,7 +134,7 @@ _Various Artists_.) There are different ways to represent this with tags:
     `musicbrainz_albumartistid` tags, and multiple `albumartists` tags in
     addition to the standard `albumartist` tag.
 
-Option **1** and **2** are more widely supported across music players, but their
+Option 1 and 2 are more widely supported across music players, but their
 downside is that the album will not show up in the discography of every credited
 artist. For example, if you tag [_Wake Up!_][wakeup] by _John Legend & The Roots_
 with only _John Legend_ as the album artist, then it will not show up in the
@@ -145,9 +145,9 @@ still able to find those tracks individually in search by searching for any of
 the artists.
 
 Before Musium version **TODO**, albums in Musium belonged to exactly one artist,
-so option **1** and **2** were the only ways of tagging a collaboration album.
+so option 1 and 2 were the only ways of tagging a collaboration album.
 Since Musium **TODO**, Musium supports multiple artists per album, and option
-**3** is possible. However, this requires an additional tag that Picard does not
+3 is possible. However, this requires an additional tag that Picard does not
 write by default. Musium needs:
 
  * The name of the collaboration that the album is credited to in the
@@ -158,8 +158,8 @@ write by default. Musium needs:
  * The names of the individual artists in the `albumartists` tag. This tag
    should occur multiple times, once per artist, and in the same order as the
    ids.
- * Optionally, `albumartistssort`. If this tag is present at all, it must occur
-   as many times as `albumartists`, and list artists in the same order.
+ * Optionally, `albumartistssort`. If this tag is present, it must occur as many
+   times as `albumartists`, and list artists in the same order.
 
 To make Picard write the `albumartists` tags you need the [Additional Artist
 Variables plugin][plugin], which is distributed with Picard, but not enabled by
