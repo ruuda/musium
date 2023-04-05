@@ -54,13 +54,9 @@ pub enum IssueDetail {
     /// Contains the date used, and the discarded alternative.
     AlbumReleaseDateMismatch(AlbumId, Date, Date),
 
-    /// For two albums with the same mbid, a different number of artists was
-    /// encountered. Contains the number used, and the discarded alternative.
-    AlbumArtistCountMismatch(AlbumId, usize, usize),
-
     /// Two different artists were found for albums with the same mbid.
     /// Contains the artist used, and the discarded alternative.
-    AlbumArtistMismatch(AlbumId, ArtistId, ArtistId),
+    AlbumArtistMismatch(AlbumId, Option<ArtistId>, Option<ArtistId>),
 
     /// Two different album loudnesses were found for albums with the same mbid.
     /// Contains the loudness used, and the discarded alternative.
@@ -114,10 +110,14 @@ impl fmt::Display for Issue {
                 write!(f, "warning: discarded inconsistent album title '{}' in favour of '{}'.", alt, title),
             IssueDetail::AlbumReleaseDateMismatch(_id, ref date, ref alt) =>
                 write!(f, "warning: discarded inconsistent album release date {} in favour of {}.", alt, date),
-            IssueDetail::AlbumArtistCountMismatch(_id, n, m) =>
-                write!(f, "warning: discarded inconsistent album artists of length {} in favour of length {}.", m, n),
-            IssueDetail::AlbumArtistMismatch(_id, ref artist, ref alt) =>
+            IssueDetail::AlbumArtistMismatch(_id, Some(ref artist), Some(ref alt)) =>
                 write!(f, "warning: discarded inconsistent album artist '{}' in favour of '{}'.", alt, artist),
+            IssueDetail::AlbumArtistMismatch(_id, Some(ref artist), None) =>
+                write!(f, "warning: album artist '{}' is not consistently present.", artist),
+            IssueDetail::AlbumArtistMismatch(_id, None, Some(ref alt)) =>
+                write!(f, "warning: discarded excess album artist '{}'.", alt),
+            IssueDetail::AlbumArtistMismatch(_id, None, None) =>
+                panic!("This error case should not be generated."),
             IssueDetail::ArtistNameMismatch(_id, ref name, ref alt) =>
                 write!(f, "warning: discarded inconsistent artist name '{}' in favour of '{}'.", alt, name),
             IssueDetail::ArtistSortNameMismatch(_id, ref sort_name, ref alt) =>
@@ -223,24 +223,20 @@ pub fn albums_different(
         ));
     }
 
-    let a_artists = album_artists.get(a.artist_ids);
-    let b_artists = album_artists.get(b.artist_ids);
+    let mut a_artists = album_artists.get(a.artist_ids).iter();
+    let mut b_artists = album_artists.get(b.artist_ids).iter();
 
-    if a_artists.len() != b_artists.len() {
-        return Some(IssueDetail::AlbumArtistCountMismatch(
-                id,
-                a_artists.len(),
-                b_artists.len(),
-        ));
-    }
-
-    for (a_artist_id, b_artist_id) in a_artists.iter().zip(b_artists) {
-        if a_artist_id != b_artist_id {
-            return Some(IssueDetail::AlbumArtistMismatch(
-                id,
-                *a_artist_id,
-                *b_artist_id,
-            ));
+    loop {
+        match (a_artists.next(), b_artists.next()) {
+            (Some(a_aid), Some(b_aid)) if *a_aid == *b_aid => continue,
+            (None, None) => break,
+            (opt_a_id, opt_b_id) => return Some(
+                IssueDetail::AlbumArtistMismatch(
+                    id,
+                    opt_a_id.cloned(),
+                    opt_b_id.cloned(),
+                )
+            ),
         }
     }
 
