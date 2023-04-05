@@ -426,7 +426,7 @@ impl BuildMetaIndex {
         &self.filenames[self.current_filename.0 as usize]
     }
 
-    /// Push an issue, then return none.
+    /// Push an issue, then return `Err`.
     ///
     /// Returning a `Result` is useful for chaining with ? so we can early out.
     fn issue<T>(&mut self, detail: IssueDetail) -> Result<T> {
