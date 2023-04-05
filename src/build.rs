@@ -390,7 +390,7 @@ pub struct BuildMetaIndex {
     ///
     /// This is used to simplify helper methods for error reporting, to ensure
     /// that we don't have to pass the file name around everywhere.
-    pub current_filename: Option<FilenameRef>,
+    pub current_filename: FilenameRef,
 
     /// Issues collected while inserting into the builder.
     pub issues: Vec<Issue>,
@@ -415,27 +415,22 @@ impl BuildMetaIndex {
             words_artist: BTreeSet::new(),
             words_album: BTreeSet::new(),
             words_track: BTreeSet::new(),
-            current_filename: None,
+            // Initially we set this to a sentinel value even though we don't
+            // have a backing file yet; dereferencing this should not happen.
+            current_filename: FilenameRef(0),
             issues: Vec::new(),
         }
     }
 
-    fn get_current_filename(&self) -> Option<&str> {
-        match self.current_filename {
-            None => None,
-            Some(r) => Some(&self.filenames[r.0 as usize]),
-        }
+    fn get_current_filename(&self) -> &str {
+        &self.filenames[self.current_filename.0 as usize]
     }
 
     /// Push an issue, then return none.
     ///
     /// Returning a `Result` is useful for chaining with ? so we can early out.
     fn issue<T>(&mut self, detail: IssueDetail) -> Result<T> {
-        let filename = match self.current_filename {
-            None => panic!("Must set current_filename before reporting issue."),
-            Some(r) => &self.filenames[r.0 as usize],
-        };
-        let issue = detail.for_file(filename);
+        let issue = detail.for_file(self.get_current_filename());
         self.issues.push(issue);
         Err(BuildError::FileFailed)
     }
@@ -517,7 +512,7 @@ impl BuildMetaIndex {
     ) -> Result<FileTask> {
         let filename_id = FilenameRef(self.filenames.len() as u32);
         self.filenames.push(file.filename);
-        self.current_filename = Some(filename_id);
+        self.current_filename = filename_id;
 
         // It simplifies many things for playback if I can assume that all files
         // are stereo, so reject any non-stereo files. At the time of writing,
@@ -564,7 +559,7 @@ impl BuildMetaIndex {
         tx: &mut Transaction,
         file: FileTask,
     ) -> Result<()> {
-        self.current_filename = Some(file.filename);
+        self.current_filename = file.filename;
         let file_id = file.file_id;
 
         let mut tag_date = None;
@@ -861,9 +856,7 @@ impl BuildMetaIndex {
         // Check for consistency if duplicates occur.
         if self.tracks.get(&track_id).is_some() {
             // TODO: This should report an `Issue`, not panic.
-            let filename = self
-                .get_current_filename()
-                .expect("We set the current file at the start of this method, it should still be there.");
+            let filename = self.get_current_filename();
             panic!("Duplicate track {}, file {}.", track_id, filename);
         }
 
