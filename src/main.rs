@@ -86,13 +86,13 @@ fn make_index(db_path: &Path) -> Result<MemoryMetaIndex> {
         println!(
             "\nSoftest album: {} by {} at {}.",
             index.get_string(index.get_album(album_loud_min.1).unwrap().title),
-            index.get_string(index.get_artist(index.get_album(album_loud_min.1).unwrap().artist_id).unwrap().name),
+            index.get_string(index.get_album(album_loud_min.1).unwrap().artist),
             album_loud_min.0,
         );
         println!(
             "Loudest album: {} by {} at {}.",
             index.get_string(index.get_album(album_loud_max.1).unwrap().title),
-            index.get_string(index.get_artist(index.get_album(album_loud_max.1).unwrap().artist_id).unwrap().name),
+            index.get_string(index.get_album(album_loud_max.1).unwrap().artist),
             album_loud_max.0,
         );
         println!(

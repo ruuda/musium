@@ -64,10 +64,6 @@ type Split =
   , residue :: Array Element
   }
 
--- An empty album list state with 'begin' set to the given index.
-emptyAt :: Int -> ScrollState
-emptyAt i = { elements: [], begin: i, end: i }
-
 -- Split the state into a shared part that intersects the target, and a residue
 -- that can be reused.
 split3 :: Slice -> ScrollState -> Split
@@ -214,7 +210,7 @@ updateViewport state = do
   -- need to have at least one already. If we don't, then we take a slice of
   -- a single item to start with, and enqueue an event to update again after
   -- this update.
-  { target, index, redo } <- case Array.head state.scrollState.elements of
+  { target, index: _, redo } <- case Array.head state.scrollState.elements of
     Nothing -> do
       pure
         { target: { begin: 0, end: min 1 (Array.length state.albums) }

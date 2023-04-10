@@ -48,6 +48,9 @@ use std::str::FromStr;
 // with is 48 bits.
 
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct FileId(pub i64);
+
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct TrackId(pub u64);
 
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -186,7 +189,10 @@ pub struct Mtime(pub i64);
 #[repr(C)]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Track {
+    // TODO: We might make the album id a true prefix of the track id, then we
+    // don't need to store the track id. Just make the album id 52 bits.
     pub album_id: AlbumId,
+    pub file_id: FileId,
     pub title: StringRef,
     pub artist: StringRef,
     pub filename: FilenameRef,
@@ -200,10 +206,6 @@ pub struct Track {
     pub duration_seconds: u16,
     pub disc_number: u8,
     pub track_number: u8,
-
-    // TODO: Because of this field, the `Track` type becomes too big. But we can
-    // save this, because `album_id` could be removed if we make the album id a
-    // prefix of the track id.
     pub loudness: Option<Lufs>,
 }
 
@@ -231,10 +233,21 @@ impl Date {
     }
 }
 
+/// Indices of the album artist in the album artist array.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct AlbumArtistsRef {
+    /// Index of the first album artist.
+    pub begin: u32,
+    /// Index past the last album artist.
+    pub end: u32,
+}
+
 #[repr(C)]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Album {
-    pub artist_id: ArtistId,
+    pub artist_ids: AlbumArtistsRef,
+    pub artist: StringRef,
     pub title: StringRef,
     pub original_release_date: Date,
     pub loudness: Option<Lufs>,
@@ -299,14 +312,12 @@ pub fn get_track_id(album_id: AlbumId,
 #[test]
 fn struct_sizes_are_as_expected() {
     use std::mem;
-    // TODO: Enable these again once I sort out how to fit the loudness in and
-    // still keep a (TrackId, Track) 32 bytes.
-    // assert_eq!(mem::size_of::<Track>(), 24);
-    // assert_eq!(mem::size_of::<Album>(), 16);
+    assert_eq!(mem::size_of::<Track>(), 40);
+    assert_eq!(mem::size_of::<Album>(), 24);
     assert_eq!(mem::size_of::<Artist>(), 8);
-    // assert_eq!(mem::size_of::<(TrackId, Track)>(), 32);
+    assert_eq!(mem::size_of::<(TrackId, Track)>(), 48);
 
     assert_eq!(mem::align_of::<Track>(), 8);
-    assert_eq!(mem::align_of::<Album>(), 8);
+    assert_eq!(mem::align_of::<Album>(), 4);
     assert_eq!(mem::align_of::<Artist>(), 4);
 }

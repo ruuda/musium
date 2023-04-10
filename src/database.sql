@@ -16,7 +16,14 @@ create table if not exists listens
 -- NULL if the track is still playing.
 , completed_at     string  null     check (started_at < completed_at)
 
--- Musium ids.
+-- References a file from the files table, but there is no foreign key. We want
+-- to keep the listen around even when the file disappears. Also, this needs to
+-- be nullable because in the past we did not record it, so historical listens
+-- may not have it.
+, file_id          integer null
+
+-- Musium ids. The album artist id is the first album artist, in case there are
+-- multiple.
 , queue_id         integer null
 , track_id         integer not null
 , album_id         integer not null
@@ -51,54 +58,49 @@ create table if not exists listens
 create unique index if not exists ix_listens_unique_second
 on listens (cast(strftime('%s', started_at) as integer));
 
--- Next is the table with tag data. This is the raw data extracted from
--- Vorbis comments; it is not indexed, so it is not guaranteed to be
--- sensible. We store the raw data and index it when we load it, because
--- indexing itself is pretty fast; it's disk access to the first few bytes
--- of tens of thousands of files what makes indexing slow.
-create table if not exists file_metadata
+create table if not exists files
 -- First an id, and properties about the file, but not its contents.
 -- We can use this to see if a file needs to be re-scanned. The mtime
 -- is the raw time_t value returned by 'stat'.
 ( id                             integer primary key
 , filename                       string  not null unique
 , mtime                          integer not null
+
 -- ISO-8601 timestamp at which we added the file.
-, imported_at                    string not null
+, imported_at                    string  not null
 
 -- The next columns come from the streaminfo block.
 , streaminfo_channels            integer not null
 , streaminfo_bits_per_sample     integer not null
-, streaminfo_num_samples         integer null
+, streaminfo_num_samples         integer     null
 , streaminfo_sample_rate         integer not null
-
--- The remaining columns are all tags. They are all nullable,
--- because no tag is guaranteed to be present.
-, tag_album                      string null
-, tag_albumartist                string null
-, tag_albumartistsort            string null
-, tag_artist                     string null
-, tag_musicbrainz_albumartistid  string null
-, tag_musicbrainz_albumid        string null
-, tag_musicbrainz_trackid        string null
-, tag_discnumber                 string null
-, tag_tracknumber                string null
-, tag_originaldate               string null
-, tag_date                       string null
-, tag_title                      string null
-, tag_bs17704_track_loudness     string null
-, tag_bs17704_album_loudness     string null
 );
+
+create table if not exists tags
+( id         integer primary key
+, file_id    integer not null references files (id) on delete cascade
+, field_name string  not null
+, value      string  not null
+);
+
+create index if not exists ix_tags_file_id on tags (file_id);
 
 -- BS1770.4 integrated loudness over the track, in LUFS.
 create table if not exists track_loudness
 ( track_id              integer primary key
-, bs17704_loudness_lufs real not null
+, file_id               integer not null references files (id) on delete cascade
+, bs17704_loudness_lufs real    not null
 );
 
 -- BS1770.4 integrated loudness over the album, in LUFS.
+-- For the file id, we track the maximum file id of all the files in the album.
+-- If any of the files change, it will get a new file id, higher than any pre-
+-- existing file, so if the maximum file id for an album is greater than the
+-- file id stored with the loudness here, then we know we need to recompute the
+-- album loudness.
 create table if not exists album_loudness
 ( album_id              integer primary key
+, file_id               integer not null references files (id) on delete cascade
 , bs17704_loudness_lufs real not null
 );
 
@@ -106,129 +108,112 @@ create table if not exists album_loudness
 -- See waveform.rs for the data format.
 create table if not exists waveforms
 ( track_id integer primary key
-, data     blob not null
+, file_id  integer not null references files (id) on delete cascade
+, data     blob    not null
 );
 
 create table if not exists thumbnails
 ( album_id integer primary key
-  -- TODO: Would like to reference the files table too, so we can invalidate
-  -- when needed.
-, data     blob not null
+, file_id  integer not null references files (id) on delete cascade
+, data     blob    not null
 );
 -- @end ensure_schema_exists
 
--- @query insert_file_metadata(metadata: InsertFileMetadata)
-insert into
-  file_metadata
-  ( filename
-  , mtime
-  , imported_at
-  , streaminfo_channels
-  , streaminfo_bits_per_sample
-  , streaminfo_num_samples
-  , streaminfo_sample_rate
-  , tag_album
-  , tag_albumartist
-  , tag_albumartistsort
-  , tag_artist
-  , tag_musicbrainz_albumartistid
-  , tag_musicbrainz_albumid
-  , tag_musicbrainz_trackid
-  , tag_discnumber
-  , tag_tracknumber
-  , tag_originaldate
-  , tag_date
-  , tag_title
-  , tag_bs17704_track_loudness
-  , tag_bs17704_album_loudness
-  )
+-- @query insert_file(metadata: InsertFile) ->1 i64
+insert into files
+( filename
+, mtime
+, imported_at
+, streaminfo_channels
+, streaminfo_bits_per_sample
+, streaminfo_num_samples
+, streaminfo_sample_rate
+)
 values
-  ( :filename                      -- :str
-  , :mtime                         -- :i64
-  , :imported_at                   -- :str
-  , :streaminfo_channels           -- :i64
-  , :streaminfo_bits_per_sample    -- :i64
-  , :streaminfo_num_samples        -- :i64?
-  , :streaminfo_sample_rate        -- :i64
-  , :tag_album                     -- :str?
-  , :tag_albumartist               -- :str?
-  , :tag_albumartistsort           -- :str?
-  , :tag_artist                    -- :str?
-  , :tag_musicbrainz_albumartistid -- :str?
-  , :tag_musicbrainz_albumid       -- :str?
-  , :tag_musicbrainz_trackid       -- :str?
-  , :tag_discnumber                -- :str?
-  , :tag_tracknumber               -- :str?
-  , :tag_originaldate              -- :str?
-  , :tag_date                      -- :str?
-  , :tag_title                     -- :str?
-  , :tag_bs17704_track_loudness    -- :str?
-  , :tag_bs17704_album_loudness    -- :str?
-);
+( :filename                   -- :str
+, :mtime                      -- :i64
+, :imported_at                -- :str
+, :streaminfo_channels        -- :i64
+, :streaminfo_bits_per_sample -- :i64
+, :streaminfo_num_samples     -- :i64?
+, :streaminfo_sample_rate     -- :i64
+)
+returning id;
 
--- @query delete_file_metadata(file_id: i64)
-delete from file_metadata where id = :file_id;
+-- @query insert_tag(file_id: i64, field_name: str, value: str)
+insert into
+  tags (file_id, field_name, value)
+  values (:file_id, :field_name, :value);
 
--- @query iter_file_metadata() ->* FileMetadata
-select
-  filename                      /* :str  */,
-  mtime                         /* :i64  */,
-  streaminfo_channels           /* :i64  */,
-  streaminfo_bits_per_sample    /* :i64  */,
-  streaminfo_num_samples        /* :i64? */,
-  streaminfo_sample_rate        /* :i64  */,
-  tag_album                     /* :str? */,
-  tag_albumartist               /* :str? */,
-  tag_albumartistsort           /* :str? */,
-  tag_artist                    /* :str? */,
-  tag_musicbrainz_albumartistid /* :str? */,
-  tag_musicbrainz_albumid       /* :str? */,
-  tag_discnumber                /* :str? */,
-  tag_tracknumber               /* :str? */,
-  tag_originaldate              /* :str? */,
-  tag_date                      /* :str? */,
-  tag_title                     /* :str? */,
-  tag_bs17704_track_loudness    /* :str? */,
-  tag_bs17704_album_loudness    /* :str? */
-from
-  file_metadata
-order by
-  filename asc;
+-- Delete a file and everything referencing it (cascade to tags, waveforms, etc.)
+--
+-- Note that album loudness is not deleted, it is not based on any single file.
+-- @query delete_file(file_id: i64)
+delete from files where id = :file_id;
 
--- @query iter_file_metadata_mtime() ->* FileMetadataSimple
+-- @query iter_file_mtime() ->* FileMetadataSimple
 select
     id       -- :i64
   , filename -- :str
   , mtime    -- :i64
 from
-  file_metadata
+  files
 order by
   filename asc;
 
--- @query insert_album_thumbnail(album_id: i64, data: bytes)
-INSERT INTO thumbnails (album_id, data)
-VALUES (:album_id, :data)
-ON CONFLICT (album_id) DO UPDATE SET data = :data;
+-- @query iter_files() ->* FileMetadata
+select
+    id                         -- :i64
+  , filename                   -- :str
+  , mtime                      -- :i64
+  , streaminfo_channels        -- :i64
+  , streaminfo_bits_per_sample -- :i64
+  , streaminfo_num_samples     -- :i64?
+  , streaminfo_sample_rate     -- :i64
+from
+  files
+order by
+  filename asc;
 
--- @query insert_album_loudness(album_id: i64, loudness: f64)
-INSERT INTO album_loudness (album_id, bs17704_loudness_lufs)
-VALUES (:album_id, :loudness)
-ON CONFLICT (album_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
+-- Iterate all `(field_name, value)` pairs for the given file.
+-- @query iter_file_tags(file_id: i64) ->* (str, str)
+select
+  field_name, value
+from
+  tags
+where
+  file_id = :file_id
+order by
+  -- We have to order by id, which is increasing with insert order, because some
+  -- tags can occur multiple times, and we have to preserve the order in which
+  -- we found them in the file.
+  id asc;
 
--- @query insert_track_loudness(track_id: i64, loudness: f64)
-INSERT INTO track_loudness (track_id, bs17704_loudness_lufs)
-VALUES (:track_id, :loudness)
-ON CONFLICT (track_id) DO UPDATE SET bs17704_loudness_lufs = :loudness;
+-- @query insert_album_thumbnail(album_id: i64, file_id: i64, data: bytes)
+insert into thumbnails (album_id, file_id, data)
+values (:album_id, :file_id, :data)
+on conflict (album_id) do update set data = :data;
 
--- @query insert_track_waveform(track_id: i64, data: bytes)
-INSERT INTO waveforms (track_id, data)
-VALUES (:track_id, :data)
-ON CONFLICT (track_id) DO UPDATE SET data = :data;
+-- @query insert_album_loudness(album_id: i64, file_id: i64, loudness: f64)
+insert into album_loudness (album_id, file_id, bs17704_loudness_lufs)
+values (:album_id, :file_id, :loudness)
+on conflict (album_id) do update set bs17704_loudness_lufs = :loudness;
+
+-- @query insert_track_loudness(track_id: i64, file_id: i64, loudness: f64)
+insert into track_loudness (track_id, file_id, bs17704_loudness_lufs)
+values (:track_id, :file_id, :loudness)
+on conflict (track_id) do update set bs17704_loudness_lufs = :loudness;
+
+-- @query insert_track_waveform(track_id: i64, file_id: i64, data: bytes)
+insert into waveforms (track_id, file_id, data)
+values (:track_id, :file_id, :data)
+on conflict (track_id) do update set data = :data;
 
 -- @query insert_listen_started(listen: Listen) ->1 i64
 insert into
   listens
   ( started_at
+  , file_id
   , queue_id
   , track_id
   , album_id
@@ -244,6 +229,7 @@ insert into
   )
 values
   ( :started_at       -- :str
+  , :file_id          -- :i64
   , :queue_id         -- :i64
   , :track_id         -- :i64
   , :album_id         -- :i64

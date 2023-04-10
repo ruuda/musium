@@ -14,6 +14,7 @@ module NowPlaying
   ) where
 
 import Control.Monad.Reader.Class (ask)
+import Data.Array.NonEmpty as NonEmptyArray
 import Effect.Aff (Aff, launchAff_)
 import Effect (Effect)
 import Effect.Class (liftEffect)
@@ -103,7 +104,8 @@ nowPlayingInfo postEvent (QueuedTrack track) = Html.div $ do
       Html.h2 $ do
         Html.addClass "artist"
         Html.text track.artist
-        onClickGoTo $ Navigation.Artist track.albumArtistId
+        -- TODO: Figure out a way to navigate in case of multiple album artists.
+        onClickGoTo $ Navigation.Artist $ NonEmptyArray.head track.albumArtistIds
       Html.h2 $ do
         Html.span $ do
           Html.addClass "album-title"

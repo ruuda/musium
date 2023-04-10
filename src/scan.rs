@@ -247,7 +247,7 @@ pub fn scan(
 
     // Delete rows for outdated files, we will insert new rows below.
     for file_id in &rows_to_delete {
-        db::delete_file_metadata(&mut tx, file_id.0)?;
+        db::delete_file(&mut tx, file_id.0)?;
     }
 
     // Format the current time, we store this in the `imported_at` column in the
@@ -353,7 +353,7 @@ fn get_updates(
     paths_to_scan: &mut Vec<(PathBuf, Mtime)>,
 ) -> db::Result<()> {
     let mut iter_curr = current_sorted.into_iter();
-    let mut iter_db = db::iter_file_metadata_mtime(tx)?
+    let mut iter_db = db::iter_file_mtime(tx)?
         .map(|result|
             result.map(|row| (
                 FileMetaId(row.id),
@@ -536,10 +536,10 @@ fn insert_file_metadata(
         }
     };
 
-    // Start with all fields that are known from the streaminfo, with tags
-    // unfilled.
     let streaminfo = flac_reader.streaminfo();
-    let mut m = db::InsertFileMetadata {
+
+    // Insert the basic details about the file, and its tags.
+    let f = db::InsertFile {
         filename: path_utf8,
         mtime: mtime.0,
         imported_at: now_str,
@@ -548,53 +548,36 @@ fn insert_file_metadata(
         streaminfo_bits_per_sample: streaminfo.bits_per_sample as i64,
         streaminfo_num_samples: streaminfo.samples.map(|x| x as i64),
         streaminfo_sample_rate: streaminfo.sample_rate as i64,
-
-        tag_album: None,
-        tag_albumartist: None,
-        tag_albumartistsort: None,
-        tag_artist: None,
-        tag_musicbrainz_albumartistid: None,
-        tag_musicbrainz_albumid: None,
-        tag_musicbrainz_trackid: None,
-        tag_discnumber: None,
-        tag_tracknumber: None,
-        tag_originaldate: None,
-        tag_date: None,
-        tag_title: None,
-        tag_bs17704_track_loudness: None,
-        tag_bs17704_album_loudness: None
     };
 
-    // Then walk all tags, and set the corresponding column if we find a known one.
+    let file_id = db::insert_file(tx, f)?;
+
+    // Then walk all tags and insert the interesting ones into the database.
     for (tag, value) in flac_reader.tags() {
-        match &tag.to_ascii_lowercase()[..] {
-            "album"                     => m.tag_album = Some(value),
-            "albumartist"               => m.tag_albumartist = Some(value),
-            "albumartistsort"           => m.tag_albumartistsort = Some(value),
-            "artist"                    => m.tag_artist = Some(value),
-            "discnumber"                => m.tag_discnumber = Some(value),
-            "musicbrainz_albumartistid" => {
-                // At the moment we do not support albums with multiple artists
-                // in the data model, so warn about this.
-                if m.tag_musicbrainz_albumartistid.is_some() {
-                    // TODO: Propagate this warning more properly.
-                    eprintln!("Warning: {:?} contains multiple album artists.", path);
-                }
-                m.tag_musicbrainz_albumartistid = Some(value);
-            }
-            "musicbrainz_albumid"       => m.tag_musicbrainz_albumid = Some(value),
-            "musicbrainz_trackid"       => m.tag_musicbrainz_trackid = Some(value),
-            "originaldate"              => m.tag_originaldate = Some(value),
-            "date"                      => m.tag_date = Some(value),
-            "title"                     => m.tag_title = Some(value),
-            "tracknumber"               => m.tag_tracknumber = Some(value),
-            "bs17704_track_loudness"    => m.tag_bs17704_track_loudness = Some(value),
-            "bs17704_album_loudness"    => m.tag_bs17704_album_loudness = Some(value),
-            _ => {}
+        let tag_lower = &tag.to_ascii_lowercase()[..];
+        let is_interesting_tag = matches!(
+            tag_lower,
+            "album"
+            | "albumartist"
+            | "albumartists"
+            | "albumartistsort"
+            | "albumartistssort"
+            | "artist"
+            | "date"
+            | "discnumber"
+            | "musicbrainz_albumartistid"
+            | "musicbrainz_albumid"
+            | "musicbrainz_trackid"
+            | "originaldate"
+            | "title"
+            | "tracknumber"
+        );
+        if is_interesting_tag {
+            db::insert_tag(tx, file_id, tag_lower, value)?;
         }
     }
 
-    db::insert_file_metadata(tx, m)
+    Ok(())
 }
 
 pub fn run_scan_in_thread(
@@ -873,7 +856,7 @@ mod test {
         connection.execute(
             "
             insert into
-              file_metadata
+              files
                 ( filename
                 , mtime
                 , imported_at
@@ -915,7 +898,7 @@ mod test {
         connection.execute(
             "
             insert into
-              file_metadata
+              files
                 ( id
                 , filename
                 , mtime
@@ -960,7 +943,7 @@ mod test {
         connection.execute(
             "
             insert into
-              file_metadata
+              files
                 ( id
                 , filename
                 , mtime
@@ -1000,7 +983,7 @@ mod test {
         connection.execute(
             "
             insert into
-              file_metadata
+              files
                 ( id
                 , filename
                 , mtime
@@ -1045,7 +1028,7 @@ mod test {
         connection.execute(
             "
             insert into
-              file_metadata
+              files
                 ( filename
                 , mtime
                 , imported_at

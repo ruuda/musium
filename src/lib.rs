@@ -43,9 +43,9 @@ use std::path::Path;
 use std::u32;
 use std::u64;
 
-use crate::build::BuildMetaIndex;
-use crate::error::Result;
-use crate::prim::{ArtistId, Artist, AlbumId, Album, TrackId, Track, Lufs, StringRef, FilenameRef, get_track_id};
+use crate::build::{AlbumArtistsDeduper, BuildMetaIndex, BuildError};
+use crate::error::{Error, Result};
+use crate::prim::{ArtistId, Artist, AlbumArtistsRef, AlbumId, Album, TrackId, Track, Lufs, StringRef, FilenameRef, get_track_id};
 use crate::string_utils::StringDeduper;
 use crate::word_index::MemoryWordIndex;
 
@@ -69,6 +69,9 @@ pub trait MetaIndex {
 
     /// Return album metadata.
     fn get_album(&self, id: AlbumId) -> Option<&Album>;
+
+    /// Return all the artists of a given album.
+    fn get_album_artists(&self, range: AlbumArtistsRef) -> &[ArtistId];
 
     /// Return all tracks that are part of the album.
     fn get_album_tracks(&self, id: AlbumId) -> &[(TrackId, Track)];
@@ -168,10 +171,10 @@ impl Bookmarks {
 }
 
 pub struct MemoryMetaIndex {
-    // TODO: Use an mmappable data structure. For now this will suffice.
     artists: Vec<(ArtistId, Artist)>,
     albums: Vec<(AlbumId, Album)>,
     tracks: Vec<(TrackId, Track)>,
+
     // Per artist, all albums, ordered by ascending release date.
     albums_by_artist: Vec<(ArtistId, AlbumId)>,
 
@@ -183,6 +186,7 @@ pub struct MemoryMetaIndex {
 
     strings: Vec<String>,
     filenames: Vec<String>,
+    album_artists: Vec<ArtistId>,
 
     // TODO: Don't make these pub, this is just for debug printing stats.
     pub words_artist: MemoryWordIndex<ArtistId>,
@@ -195,17 +199,29 @@ pub struct MemoryMetaIndex {
 /// Entries are sorted by artist id first, so we can use bookmarks and do a
 /// binary search. Albums for a single artist are ordered by ascending release
 /// date.
-fn build_albums_by_artist_index(albums: &[(AlbumId, Album)]) -> Vec<(ArtistId, AlbumId)> {
-    let mut entries_with_date = Vec::with_capacity(albums.len());
-    let mut entries = Vec::with_capacity(albums.len());
+fn build_albums_by_artist_index(
+    albums: &[(AlbumId, Album)],
+    album_artists: &AlbumArtistsDeduper,
+) -> Vec<(ArtistId, AlbumId)> {
+    // Add a bit of headroom, most albums have one artist, but some albums have
+    // multiple.
+    let mut entries_with_date = Vec::with_capacity(albums.len() * 40 / 32);
 
     for &(album_id, ref album) in albums {
-        entries_with_date.push((album.artist_id, album_id, album.original_release_date));
+        for album_artist_id in album_artists.get(album.artist_ids) {
+            entries_with_date.push((
+                *album_artist_id,
+                album_id,
+                album.original_release_date,
+            ));
+        }
     }
 
     entries_with_date.sort_by_key(|&(artist_id, album_id, release_date)|
         (artist_id, release_date, album_id)
     );
+
+    let mut entries = Vec::with_capacity(entries_with_date.len());
 
     for (artist_id, album_id, _release_date) in entries_with_date {
         entries.push((artist_id, album_id));
@@ -217,9 +233,10 @@ fn build_albums_by_artist_index(albums: &[(AlbumId, Album)]) -> Vec<(ArtistId, A
 impl MemoryMetaIndex {
     /// Convert the builder into a memory-backed index.
     fn new(builder: &BuildMetaIndex) -> MemoryMetaIndex {
-        let mut artists: Vec<(ArtistId, Artist)> = Vec::new();
-        let mut albums: Vec<(AlbumId, Album)> = Vec::new();
-        let mut tracks: Vec<(TrackId, Track)> = Vec::new();
+        let mut artists: Vec<(ArtistId, Artist)> = Vec::with_capacity(builder.artists.len());
+        let mut albums: Vec<(AlbumId, Album)> = Vec::with_capacity(builder.albums.len());
+        let mut tracks: Vec<(TrackId, Track)> = Vec::with_capacity(builder.tracks.len());
+        let mut album_artists = AlbumArtistsDeduper::new();
         let mut strings = StringDeduper::new();
         let mut filenames = Vec::new();
 
@@ -245,6 +262,22 @@ impl MemoryMetaIndex {
             album.title = StringRef(
                 strings.insert(builder.strings.get(album.title.0))
             );
+            album.artist = StringRef(
+                strings.insert(builder.strings.get(album.artist.0))
+            );
+
+            // We could simply copy the album artists vec from the builder, and
+            // use the indices unmodified, but then the entries would be in
+            // arbitrary order. We remap them here such that the data is in the
+            // same order as the albums, so if you iterate the albums, this is
+            // more cache efficient.
+            album.artist_ids = album_artists.insert(
+                builder
+                    .album_artists
+                    .get(album.artist_ids)
+                    .iter()
+                    .cloned()
+            );
 
             albums.push((id, album));
         }
@@ -264,11 +297,10 @@ impl MemoryMetaIndex {
 
         strings.upgrade_quotes();
 
-        // Albums know their artist; build the reverse mapping so we can look up
-        // albums by a given artist. We could build it incrementally and merge
-        // it, but instead of doing that and having to worry about duplicates,
-        // we can just build it once at the end.
-        let albums_by_artist = build_albums_by_artist_index(&albums[..]);
+        let albums_by_artist = build_albums_by_artist_index(
+            &albums[..],
+            &album_artists,
+        );
 
         MemoryMetaIndex {
             artist_bookmarks: Bookmarks::new(artists.iter().map(|p| (p.0).0)),
@@ -281,6 +313,7 @@ impl MemoryMetaIndex {
             albums_by_artist: albums_by_artist,
             strings: strings.into_vec(),
             filenames: filenames,
+            album_artists: album_artists.into_vec(),
             words_artist: MemoryWordIndex::new(&builder.words_artist),
             words_album: MemoryWordIndex::new(&builder.words_album),
             words_track: MemoryWordIndex::new(&builder.words_track),
@@ -301,6 +334,7 @@ impl MemoryMetaIndex {
             albums: Vec::new(),
             tracks: Vec::new(),
             albums_by_artist: Vec::new(),
+            album_artists: Vec::new(),
             strings: Vec::new(),
             filenames: Vec::new(),
             words_artist: MemoryWordIndex::new(std::iter::empty()),
@@ -320,9 +354,22 @@ impl MemoryMetaIndex {
         let mut tx = db.begin()?;
 
         let mut builder = BuildMetaIndex::new();
+        let mut tasks = Vec::new();
 
-        for file in database::iter_file_metadata(&mut tx)? {
-            builder.insert(file?);
+        for file in database::iter_files(&mut tx)? {
+            match builder.insert_meta(file?) {
+                Ok(task) => tasks.push(task),
+                Err(BuildError::DbError(err)) => return Err(Error::from(err)),
+                Err(BuildError::FileFailed) => continue,
+            }
+        }
+
+        for task in tasks {
+            match builder.insert_full(&mut tx, task) {
+                Ok(()) => continue,
+                Err(BuildError::DbError(err)) => return Err(Error::from(err)),
+                Err(BuildError::FileFailed) => continue,
+            }
         }
 
         let memory_index = MemoryMetaIndex::new(&builder);
@@ -365,6 +412,11 @@ impl MetaIndex for MemoryMetaIndex {
             .ok()
             // TODO: Remove bounds check.
             .map(|idx| &slice[idx].1)
+    }
+
+    #[inline]
+    fn get_album_artists(&self, range: AlbumArtistsRef) -> &[ArtistId] {
+        &self.album_artists[range.begin as usize..range.end as usize]
     }
 
     #[inline]

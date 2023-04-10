@@ -25,17 +25,17 @@ pub fn write_brief_album_json<W: Write>(
     album_id: AlbumId,
     album: &Album,
 ) -> io::Result<()> {
-    // The unwrap is safe here, in the sense that if the index is
-    // well-formed, it will never fail. The id is provided by the index
-    // itself, not user input, so the artist should be present.
-    let artist = index.get_artist(album.artist_id).unwrap();
-
     write!(w, r#"{{"id":"{}","title":"#, album_id)?;
     serde_json::to_writer(&mut w, index.get_string(album.title))?;
-    write!(w, r#","artist_id":"{}","artist":"#, album.artist_id)?;
-    serde_json::to_writer(&mut w, index.get_string(artist.name))?;
-    write!(w, r#","sort_artist":"#)?;
-    serde_json::to_writer(&mut w, index.get_string(artist.name_for_sort))?;
+    write!(w, r#","artist_ids":["#)?;
+    let mut first = true;
+    for artist_id in index.get_album_artists(album.artist_ids) {
+        if !first { write!(w, ",")?; }
+        write!(w, r#""{}""#, artist_id)?;
+        first = false;
+    }
+    write!(w, r#"],"artist":"#)?;
+    serde_json::to_writer(&mut w, index.get_string(album.artist))?;
     write!(w, r#","date":"{}"}}"#, album.original_release_date)?;
     Ok(())
 }
@@ -57,17 +57,17 @@ pub fn write_albums_json<W: Write>(index: &dyn MetaIndex, mut w: W) -> io::Resul
 /// The album is expected to come from this index, so the artists and
 /// strings it references are valid.
 pub fn write_album_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: AlbumId, album: &Album) -> io::Result<()> {
-    // The unwrap is safe here, in the sense that if the index is
-    // well-formed, it will never fail. The id is provided by the index
-    // itself, not user input, so the artist should be present.
-    let artist = index.get_artist(album.artist_id).unwrap();
-
     write!(w, r#"{{"title":"#)?;
     serde_json::to_writer(&mut w, index.get_string(album.title))?;
-    write!(w, r#","artist":"#)?;
-    serde_json::to_writer(&mut w, index.get_string(artist.name))?;
-    write!(w, r#","sort_artist":"#)?;
-    serde_json::to_writer(&mut w, index.get_string(artist.name_for_sort))?;
+    write!(w, r#","artist_ids":["#)?;
+    let mut first = true;
+    for artist_id in index.get_album_artists(album.artist_ids) {
+        if !first { write!(w, ",")?; }
+        write!(w, r#""{}""#, artist_id)?;
+        first = false;
+    }
+    write!(w, r#"],"artist":"#)?;
+    serde_json::to_writer(&mut w, index.get_string(album.artist))?;
     write!(w, r#","date":"{}","tracks":["#, album.original_release_date)?;
     let mut first = true;
     for &(ref tid, ref track) in index.get_album_tracks(id) {
@@ -92,6 +92,8 @@ pub fn write_artist_json<W: Write>(
 ) -> io::Result<()> {
     write!(w, r#"{{"name":"#)?;
     serde_json::to_writer(&mut w, index.get_string(artist.name))?;
+    write!(w, r#","sort_name":"#)?;
+    serde_json::to_writer(&mut w, index.get_string(artist.name_for_sort))?;
     write!(w, r#","albums":["#)?;
     let mut first = true;
     for &(_, album_id) in albums {
@@ -154,11 +156,10 @@ pub fn write_search_artist_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: A
 
 pub fn write_search_album_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: AlbumId) -> io::Result<()> {
     let album = index.get_album(id).unwrap();
-    let artist = index.get_artist(album.artist_id).unwrap();
     write!(w, r#"{{"id":"{}","title":"#, id)?;
     serde_json::to_writer(&mut w, index.get_string(album.title))?;
     write!(w, r#","artist":"#)?;
-    serde_json::to_writer(&mut w, index.get_string(artist.name))?;
+    serde_json::to_writer(&mut w, index.get_string(album.artist))?;
     write!(w, r#","date":"{}"}}"#, album.original_release_date)
 }
 
@@ -192,10 +193,16 @@ fn write_queued_track_json<W: Write>(
     serde_json::to_writer(&mut w, index.get_string(track.title))?;
     write!(
         w,
-        r#","album_id":"{}","album_artist_id":"{}","album":"#,
+        r#","album_id":"{}","album_artist_ids":["#,
         track.album_id,
-        album.artist_id,
     )?;
+    let mut first = true;
+    for artist_id in index.get_album_artists(album.artist_ids) {
+        if !first { write!(w, ",")?; }
+        write!(w, r#""{}""#, artist_id)?;
+        first = false;
+    }
+    write!(w, r#"],"album":"#)?;
     serde_json::to_writer(&mut w, index.get_string(album.title))?;
     write!(w, r#","artist":"#)?;
     serde_json::to_writer(&mut w, index.get_string(track.artist))?;

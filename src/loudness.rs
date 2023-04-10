@@ -19,7 +19,7 @@ use crate::database_utils;
 use crate::database as db;
 use crate::database::Transaction;
 use crate::error;
-use crate::prim::{AlbumId, TrackId};
+use crate::prim::{AlbumId, FileId, TrackId};
 use crate::scan::Status;
 use crate::waveform::Waveform;
 use crate::{MetaIndex, MemoryMetaIndex};
@@ -27,6 +27,9 @@ use crate::{MetaIndex, MemoryMetaIndex};
 /// Tracks the state of loudness analysis for one album.
 struct AlbumTask {
     album_id: AlbumId,
+
+    /// Maximum file id of the files in the album.
+    file_id: FileId,
 
     /// Track ids of the tracks that we haven't started analyzing.
     tracks_pending: Vec<TrackId>,
@@ -69,6 +72,7 @@ impl AlbumTask {
 
         inserts.send(Insert::Album {
             album_id: self.album_id,
+            file_id: self.file_id,
             loudness: bs1770::gated_mean(channel0.as_ref()),
         }).unwrap();
     }
@@ -83,6 +87,7 @@ struct TrackResult {
 struct TrackTask {
     album_id: AlbumId,
     track_id: TrackId,
+    file_id: FileId,
     path: PathBuf,
 }
 
@@ -139,6 +144,7 @@ impl TrackTask {
 
         inserts.send(Insert::Track {
             track_id: self.track_id,
+            file_id: self.file_id,
             loudness: bs1770::gated_mean(zipped.as_ref()),
             waveform: Waveform::from_meters(&meters),
         }).unwrap();
@@ -170,11 +176,13 @@ enum TaskResult {
 enum Insert {
     Track {
         track_id: TrackId,
+        file_id: FileId,
         loudness: bs1770::Power,
         waveform: Waveform,
     },
     Album {
         album_id: AlbumId,
+        file_id: FileId,
         loudness: bs1770::Power,
     }
 }
@@ -201,12 +209,12 @@ fn process_inserts(
 
     for insert in inserts {
         match insert {
-            Insert::Track { track_id, loudness, waveform } => {
-                db::insert_track_loudness(&mut tx, track_id.0 as i64, loudness.loudness_lkfs() as f64)?;
-                db::insert_track_waveform(&mut tx, track_id.0 as i64, waveform.as_bytes())?;
+            Insert::Track { track_id, file_id, loudness, waveform } => {
+                db::insert_track_loudness(&mut tx, track_id.0 as i64, file_id.0, loudness.loudness_lkfs() as f64)?;
+                db::insert_track_waveform(&mut tx, track_id.0 as i64, file_id.0, waveform.as_bytes())?;
             }
-            Insert::Album { album_id, loudness } => {
-                db::insert_album_loudness(&mut tx, album_id.0 as i64, loudness.loudness_lkfs() as f64)?;
+            Insert::Album { album_id, file_id, loudness } => {
+                db::insert_album_loudness(&mut tx, album_id.0 as i64, file_id.0, loudness.loudness_lkfs() as f64)?;
                 tx.commit()?;
                 tx = db.begin()?;
             }
@@ -275,6 +283,11 @@ impl<'a> TaskQueue<'a> {
         let tracks = self.index.get_album_tracks(album_id);
         let task = AlbumTask {
             album_id: album_id,
+            file_id: tracks
+                .iter()
+                .map(|(_id, f)| f.file_id)
+                .max()
+                .expect("Album contains at least one track."),
             tracks_pending: tracks.iter().map(|(id, _)| *id).collect(),
             tracks_done: Vec::with_capacity(tracks.len()),
             num_tracks: tracks.len(),
@@ -300,9 +313,6 @@ impl<'a> TaskQueue<'a> {
         // should be dwarfed by the SQLite call anyway.
         // TODO: Instead, enumerate both the index and the database in
         // parallel, and do a merge-diff.
-        // TODO: This will not invalidate loudness after replacing the
-        // tracks. We would need to store an mtime, or the id of the file
-        // row in the database for that.
         'albums: for (album_id, _album) in index.get_albums() {
             // If the album is not there, we need to add it.
             if db::select_album_loudness_lufs(tx, album_id.0 as i64)?.is_none() {
@@ -379,6 +389,7 @@ impl<'a> TaskQueue<'a> {
             let task = TrackTask {
                 album_id: album_task.album_id,
                 track_id: track_id,
+                file_id: track.file_id,
                 path: PathBuf::from(fname),
             };
             return Some(Task::AnalyzeTrack(task));
@@ -425,8 +436,9 @@ impl<'a> TaskQueue<'a> {
             // thread would have its own database connection and they would all
             // write, but this lead to contention and "database is locked"
             // errors. So instead we let all threads send their inserts to this
-            // channel, and one thread will serialize all writes.
-            let (insert_sender, insert_receiver) = sync_channel(32);
+            // channel, and one thread will serialize all writes. Use plenty of
+            // buffer to ensure we are not IO-bound on commits.
+            let (insert_sender, insert_receiver) = sync_channel(128);
 
             for i in 0..n_threads {
                 let task_queue_i = task_queue.clone();
@@ -464,7 +476,12 @@ impl<'a> TaskQueue<'a> {
             // returns when all senders have closed their channel, which happens
             // after all threads exit.
             std::mem::drop(insert_sender);
-            process_inserts(db_path, insert_receiver)?;
+
+            // We could propagate the error here, but if the thread that has the
+            // receiver leaves, then the sending threads will panic anyway, so
+            // we might as well panic here.
+            process_inserts(db_path, insert_receiver)
+                .expect("Failed to process database insert.");
 
             for join_handle in threads.drain(..) {
                 // The first unwrap is on joining, that should not fail because we
