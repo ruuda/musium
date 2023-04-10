@@ -297,7 +297,6 @@ impl MemoryMetaIndex {
 
         strings.upgrade_quotes();
 
-        // Build the reverse mapping from
         let albums_by_artist = build_albums_by_artist_index(
             &albums[..],
             &album_artists,
