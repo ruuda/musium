@@ -12,9 +12,11 @@ migrate_0.11.0.py -- Migrate database from 0.10.1 to 0.11.0.
 
 To migrate the database, back up the old database to a safe location, and ensure
 that no file exists at the configured location. Then run "musium scan" with the
-new version. This will create the database and populate it with files. Once it
-starts loudness analysis, you can kill the process -- we can start the migration
-then. Afterwards, run "musium scan" again to complete loudness analysis.
+new version. This will create the database and populate it with files. Let the
+loudness analysis and cover art scanning finish. (This is a bit unfortunate, but
+letting this run for a few hours in the background is easier than sorting out
+the migration.) Once the new scan is complete, run this script to migrate
+listens and import times.
 
 USAGE
 
@@ -45,6 +47,58 @@ def main(old_path: str, new_path: str) -> None:
                   imported_at = ?
                 where
                   filename = ? and mtime = ?;
+                """,
+                data,
+            )
+            conn_new.commit()
+
+            # Migrate the listens.
+            co.execute(
+                """
+                select
+                    started_at
+                  , completed_at
+                  , queue_id
+                  , track_id
+                  , album_id
+                  , album_artist_id
+                  , track_title
+                  , album_title
+                  , track_artist
+                  , album_artist
+                  , duration_seconds
+                  , track_number
+                  , disc_number
+                  , source
+                  , scrobbled_at
+                from
+                  listens
+                order by
+                  id asc;
+                """
+            )
+            data = co.fetchall()
+            cn.executemany(
+                """
+                insert into listens
+                  ( started_at
+                  , completed_at
+                  , queue_id
+                  , track_id
+                  , album_id
+                  , album_artist_id
+                  , track_title
+                  , album_title
+                  , track_artist
+                  , album_artist
+                  , duration_seconds
+                  , track_number
+                  , disc_number
+                  , source
+                  , scrobbled_at
+                  )
+                values
+                  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 data,
             )
