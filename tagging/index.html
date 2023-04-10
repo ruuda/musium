@@ -407,13 +407,15 @@
 those to its internal schema. Musium expects files to be tagged properly, and it
 expects the tags to be consistent across files.</p>
 <p>Because Musium uses internal ids based on MusicBrainz ids of albums and artists,
-MusicBrainz ids are required.</p>
-<p>Files tagged with <a href="https://picard.musicbrainz.org/">MusicBrainz Picard</a> should be fine.</p>
+MusicBrainz ids are required. Files tagged with <a href="https://picard.musicbrainz.org/">MusicBrainz Picard</a> are
+fine in most cases, although for albums credited to multiple artists, additional
+configuration might be needed, see the <a href="#multiple-album-artists">section about multiple album
+artists</a> below.</p>
 <h2 id="schema">Schema<a class="headerlink" href="#schema">&para;</a></h2>
-<p>Musium follows a tree-like data model. The library is a collection of artists.
-Every artist has one or more albums, and every album has one or more
-tracks. The track artist can differ from the album artist (for example, to
-accomodate feat. artists), but an album belongs to exactly one artist.</p>
+<p>The Musium library consists of a collection of albums. Every album belongs to
+one or more artists, and every artist has one or more albums. Every album has
+one or more tracks. The track artist can differ from the album artist (for
+example, to accomodate feat. artists).</p>
 <p>For artists, albums, and tracks, Musium stores the following attributes:</p>
 <h3 id="artist">Artist<a class="headerlink" href="#artist">&para;</a></h3>
 <ul>
@@ -424,6 +426,7 @@ accomodate feat. artists), but an album belongs to exactly one artist.</p>
 <ul>
 <li>Title</li>
 <li>Original release date</li>
+<li>Artist name as credited</li>
 </ul>
 <h3 id="track">Track<a class="headerlink" href="#track">&para;</a></h3>
 <ul>
@@ -435,36 +438,116 @@ accomodate feat. artists), but an album belongs to exactly one artist.</p>
 </ul>
 <h2 id="tags">Tags<a class="headerlink" href="#tags">&para;</a></h2>
 <p>Musium reads metadata from the following tags. Unless specified otherwise,
-all tags are mandatory.</p>
-<ul>
-<li><code>discnumber</code>: Disc number, a non-negative integer less than 256.
-   Defaults to 1 if not provided.</li>
-<li><code>tracknumber</code>: Track number, a non-negative integer less than 256.</li>
-<li><code>title</code>: Track title.</li>
-<li><code>artist</code>: Track artist.</li>
-<li><code>album</code>: Title of the album.</li>
-<li><code>albumartist</code>: Name of the album artist.</li>
-<li><code>albumartistsort</code>: Sort name of the album artist (e.g. name without articles).</li>
-<li><code>originaldate</code>: Original release date of the album in <abbr>YYYY-MM-DD</abbr> format.
-   If an exact date is not known, <abbr>YYYY-MM</abbr> and <abbr>YYYY</abbr> can
-   be used instead.</li>
-<li><code>date</code>: If <code>originaldate</code> is not provided, this field is used instead.</li>
-<li><code>musicbrainz_albumartistid</code>: MusicBrainz id to group albums under.</li>
-<li><code>musicbrainz_albumid</code>: MusicBrainz id to group tracks under.</li>
-<li><code>bs17704_track_loudness</code>: Optional track loudness, see
-   <a href="../loudness/">loudness normalization</a>.</li>
-<li><code>bs17704_album_loudness</code>: Optional album loudness, see
-   <a href="../loudness/">loudness normalization</a>.</li>
-</ul>
-<p>Note that duration is not read from the metadata. It is determined from the flac
-header instead.</p>
+all tags are mandatory and must occur exactly once. Note that duration is not
+read from the metadata, it is determined from the flac header instead.</p>
+<h3 id="discnumber">discnumber<a class="headerlink" href="#discnumber">&para;</a></h3>
+<p>Disc number, a non-negative integer less than 16. Defaults to 1 if not provided.</p>
+<h3 id="tracknumber">tracknumber<a class="headerlink" href="#tracknumber">&para;</a></h3>
+<p>Track number, a non-negative integer less than 256.</p>
+<h3 id="title">title<a class="headerlink" href="#title">&para;</a></h3>
+<p>Track title.</p>
+<h3 id="artist_1">artist<a class="headerlink" href="#artist_1">&para;</a></h3>
+<p>Track artist.</p>
+<h3 id="album_1">album<a class="headerlink" href="#album_1">&para;</a></h3>
+<p>Title of the album.</p>
+<h3 id="albumartist">albumartist<a class="headerlink" href="#albumartist">&para;</a></h3>
+<p>Name of the album artist.</p>
+<h3 id="albumartists">albumartists<a class="headerlink" href="#albumartists">&para;</a></h3>
+<p>Optionally, for a collaboration album, the names of each artist separately. This
+tag should then occur multiple times, once per artist. See also <a href="#multiple-album-artists">the section on
+multiple album artists</a> below. When <code>albumartists</code> are
+provided, <code>albumartist</code> should contain the joined name. For example, if
+<code>albumartists</code> is provided twice, once with value <em>John Legend</em> and once with
+<em>The Roots</em>, <code>albumartist</code> might be set to <em>John Legend &amp; The Roots</em>.</p>
+<h3 id="albumartistsort">albumartistsort<a class="headerlink" href="#albumartistsort">&para;</a></h3>
+<p>Sort name of the album artist (e.g. name without articles). Defaults to the
+value of <code>albumartist</code> when not provided. For an album with multiple artists
+this tag is ignored, use <code>albumartistssort</code> (note the double s) instead for
+collaboration albums.</p>
+<h3 id="albumartistssort">albumartistssort<a class="headerlink" href="#albumartistssort">&para;</a></h3>
+<p>Optionally, the sort name of each album artist separately, to match
+<code>albumartists</code>. Defaults to the values in <code>albumartists</code> when not provided.</p>
+<h3 id="originaldate">originaldate<a class="headerlink" href="#originaldate">&para;</a></h3>
+<p>Original release date of the album in <abbr>YYYY-MM-DD</abbr> format.
+If an exact date is not known, <abbr>YYYY-MM</abbr> and <abbr>YYYY</abbr>
+can be used instead.</p>
+<h3 id="date">date<a class="headerlink" href="#date">&para;</a></h3>
+<p>If <code>originaldate</code> is not provided, this field is used instead.</p>
+<h3 id="musicbrainz_albumartistid">musicbrainz_albumartistid<a class="headerlink" href="#musicbrainz_albumartistid">&para;</a></h3>
+<p>MusicBrainz id to group albums under. This can occur multiple times, see also
+<a href="#multiple-album-artists">the section on multiple album artists</a> below.</p>
+<h3 id="musicbrainz_albumid">musicbrainz_albumid<a class="headerlink" href="#musicbrainz_albumid">&para;</a></h3>
+<p>MusicBrainz id to group tracks under.</p>
 <h2 id="consistency">Consistency<a class="headerlink" href="#consistency">&para;</a></h2>
 <p>Tags contain redundant information, which must be consistent. For example, all
 tracks on the same album should have the same album artist and album title.</p>
-<p>Musium uses the MusicBrainz album id, to determine what album a track belongs to,
+<p>Musium uses the MusicBrainz album id to determine what album a track belongs to,
 and the MusicBrainz album artist id to determine which artist an album belongs
-to. If there is an inconsistency, Musium reports it, and it will then make an
-arbitrary choice about what version to keep.</p>
+to. The directory structure of the files is irrelevant. If there is an
+inconsistency, Musium reports it, and it will then make an arbitrary choice
+about what version to keep.</p>
+<h2 id="multiple-album-artists">Multiple album artists<a class="headerlink" href="#multiple-album-artists">&para;</a></h2>
+<p>Collaboration albums are sometimes credited to multiple artists. (As opposed to
+compliation albums, which are usually credited to a single special artist named
+<em>Various Artists</em>.) There are different ways to represent this with tags:</p>
+<ol>
+<li>Treat every combination of existing artists as a new artist, with a unique
+    <code>musicbrainz_albumartistid</code>.</li>
+<li>Credit the album only to a single primary artist.</li>
+<li>Credit the album to multiple artists, with multiple
+    <code>musicbrainz_albumartistid</code> tags, and multiple <code>albumartists</code> tags in
+    addition to the standard <code>albumartist</code> tag.</li>
+</ol>
+<p>Option 1 and 2 are more widely supported across music players, but their
+downside is that the album will not show up in the discography of every credited
+artist. For example, if you tag <a href="https://musicbrainz.org/release-group/563d758b-aa16-4e35-8986-6d402ea3cef8"><em>Wake Up!</em></a> by <em>John Legend &amp; The Roots</em>
+with only <em>John Legend</em> as the album artist, then it will not show up in the
+album list of <em>The Roots</em>, and if you tag it with <em>John Legend &amp; The Roots</em> as
+album artist, then it will neither show up under <em>John Legend</em> nor under <em>The
+Roots</em>. If the track artist of individual tracks lists all artists, Musium is
+still able to find those tracks individually in search by searching for any of
+the artists.</p>
+<p>Before Musium version 0.11.0, albums in Musium belonged to exactly one artist,
+so option 1 and 2 were the only ways of tagging a collaboration album.
+Since Musium 0.11.0, Musium supports multiple artists per album, and option
+3 is possible. However, this requires an additional tag that Picard does not
+write by default. Musium needs:</p>
+<ul>
+<li>The name of the collaboration that the album is credited to in the
+   <code>albumartist</code> tag. This tag should occur exactly once.</li>
+<li>The MusicBrainz ids of the individual artists in the
+   <code>musicbrainz_albumartistid</code> tag. This tag should occur multiple times, once
+   per artist.</li>
+<li>The names of the individual artists in the <code>albumartists</code> tag. This tag
+   should occur multiple times, once per artist, and in the same order as the
+   ids.</li>
+<li>Optionally, <code>albumartistssort</code>. If this tag is present, it must occur as many
+   times as <code>albumartists</code>, and list artists in the same order.</li>
+</ul>
+<p>To make Picard write the <code>albumartists</code> tags you need the <a href="https://github.com/rdswift/picard-plugins/blob/430ecb4cfdf77c97a463a2a69b2e7d690ff8d282/plugins/additional_artists_variables/docs/README.md">Additional Artist
+Variables plugin</a>, which is distributed with Picard, but not enabled by
+default. In the Picard settings:</p>
+<ul>
+<li>Enable <em>Additional Artist Variables</em> under <em>Plugins</em>.</li>
+<li>In <em>Scripting</em>, create a new tagger script.</li>
+<li>Add the following expression:</li>
+</ul>
+<pre><code>$setmulti(albumartists,%_artists_album_all_std_multi%)
+$setmulti(albumartistssort,%_artists_album_all_sort_multi%)
+</code></pre>
+<p>This should be sufficient to make Musium handle the collaboration albums.</p>
+<p>Note, in some cases it is not so clear what constitutes a collaboration. For
+example, after releasing multiple albums together, the members of drum ’n bass
+duo <a href="https://musicbrainz.org/artist/d01d66ae-be95-42c3-86c4-fff502690a33"><em>Fred V &amp; Grafix</em></a> each released solo albums under the names <a href="https://musicbrainz.org/artist/d5259aab-5a5d-42a8-a0b8-fb1bcd6b7ac9"><em>Fred
+V</em></a> and <a href="https://musicbrainz.org/artist/c02a5966-b5c4-483a-8326-483edcf3680e"><em>Grafix</em></a>, and their earlier albums are not considered
+collaborations (at least in MusicBrainz), <em>Fred V &amp; Grafix</em> is its own separate
+artist. On the other hand, drum ’n bass artists <a href="https://musicbrainz.org/artist/8cf49f40-b8fe-4a63-b4ea-f922d6145bb4"><em>Sub Focus</em></a> and
+<a href="https://musicbrainz.org/artist/c9fa114f-8426-4286-a289-9f16c8e092b5"><em>Wilkinson</em></a> did release <a href="https://musicbrainz.org/release-group/7ffd3bc6-a53c-4e7d-bf87-98e5738c1e48">a collaboration album</a> that is credited
+to both of the existing artists, the collaboration is not considered a new
+artist. When artists collaborate under a new name (for example,
+<a href="https://musicbrainz.org/artist/29ed4a49-fb99-4a5c-8713-609cabe6f34a"><em>Kaskade</em></a> and <a href="https://musicbrainz.org/artist/4a00ec9d-c635-463a-8cd4-eb61725f0c60"><em>Deadmau5</em></a> as <a href="https://musicbrainz.org/artist/9c57432d-484f-4181-b73d-f78dbb7a63be"><em>Kx5</em></a>), this is generally
+represented as a new artist, instead of a collaboration. The line can be blurry,
+it’s up to you how you prefer to tag your files.</p>
       </article>
       <nav id="nav-prev-next">
         <a id="nav-prev" href="../webinterface/" title="Webinterface">Previous</a>
@@ -496,6 +579,7 @@ arbitrary choice about what version to keep.</p>
                 <li class="toc-heading"><a href="#schema">Schema</a></li>
                 <li class="toc-heading"><a href="#tags">Tags</a></li>
                 <li class="toc-heading"><a href="#consistency">Consistency</a></li>
+                <li class="toc-heading"><a href="#multiple-album-artists">Multiple album artists</a></li>
                 </ul></li>
                
             <li class="toc-chapter
