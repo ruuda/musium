@@ -144,9 +144,9 @@ Roots_. If the track artist of individual tracks lists all artists, Musium is
 still able to find those tracks individually in search by searching for any of
 the artists.
 
-Before Musium version **TODO**, albums in Musium belonged to exactly one artist,
+Before Musium version 0.11.0, albums in Musium belonged to exactly one artist,
 so option 1 and 2 were the only ways of tagging a collaboration album.
-Since Musium **TODO**, Musium supports multiple artists per album, and option
+Since Musium 0.11.0, Musium supports multiple artists per album, and option
 3 is possible. However, this requires an additional tag that Picard does not
 write by default. Musium needs:
 
