@@ -20,12 +20,13 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
    or a migration of the database).
  * The patch version is bumped for bugfixes and other small changes.
 
-## Unreleased
+## 0.12.0
 
- * Sorting can now be controlled in the library browser. For now the sort
-   options are _release date_, the original release date, and _first seen_,
-   based on the age (mtime) or first listen of the files in the album (whichever
-   is earlier).
+Released 2023-05-06.
+
+ * Sorting can now be controlled in the library browser. The sort options are
+   _release date_ — the original release date, and _first seen_ — based on the
+   age (mtime) or first listen of the files in the album (whichever is earlier).
 
 ## 0.11.0
 
