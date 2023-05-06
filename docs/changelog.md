@@ -24,7 +24,8 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
 
  * Sorting can now be controlled in the library browser. For now the sort
    options are _release date_, the original release date, and _first seen_,
-   based on the age (mtime) of the files in the album.
+   based on the age (mtime) or first listen of the files in the album (whichever
+   is earlier).
 
 ## 0.11.0
 

@@ -817,6 +817,34 @@ pub fn select_thumbnail_exists(tx: &mut Transaction, album_id: i64) -> Result<i6
     Ok(result)
 }
 
+/// For every album, return the earliest listen in the listens table.
+///
+/// Yields tuples `(album_id, started_at_iso8601)`.
+pub fn iter_album_first_listens<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<Iter<'i, 'a, (i64, String)>> {
+    let sql = r#"
+        select
+          -- We rely on the fact here that asciibetical sorting of ISO-8601 strings
+          -- with the same time zone offset is also chronological, and our listens all
+          -- have Z suffix (+00 UTC offset).
+          album_id, min(started_at)
+        from
+          listens
+        group by
+          album_id;
+        "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    let decode_row = |statement: &Statement| Ok((
+        statement.read(0)?,
+        statement.read(1)?,
+));
+    let result = Iter { statement, decode_row };
+    Ok(result)
+}
+
 // A useless main function, included only to make the example compile with
 // Cargo’s default settings for examples.
 fn main() {

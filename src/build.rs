@@ -386,6 +386,9 @@ pub struct BuildMetaIndex {
     /// we select the loudness.
     pub album_file_ids: HashMap<AlbumId, FileId>,
 
+    /// The first (oldest) recorded listen for the albums in this map.
+    pub album_first_listens: HashMap<AlbumId, Instant>,
+
     /// File name of the file currently being inserted.
     ///
     /// This is used to simplify helper methods for error reporting, to ensure
@@ -413,6 +416,7 @@ impl BuildMetaIndex {
             strings: StringDeduper::new(),
             filenames: Vec::new(),
             album_file_ids: HashMap::new(),
+            album_first_listens: HashMap::new(),
             words_artist: BTreeSet::new(),
             words_album: BTreeSet::new(),
             words_track: BTreeSet::new(),
@@ -887,6 +891,25 @@ impl BuildMetaIndex {
 
         if add_album {
             self.albums.insert(album_id, album);
+        }
+
+        Ok(())
+    }
+
+    /// Load the album's first listens from the `listens` table.
+    pub fn insert_first_listens(&mut self, tx: &mut Transaction) -> db::Result<()> {
+        // This does do a full table scan over all listens. But since I don't
+        // import listening history yet, that's not so bad, on my laptop with a
+        // cold cache it takes about 70ms to do 20k listens, on the Raspberry Pi
+        // it will likely be slower, but still acceptable at startup.
+        for row in db::iter_album_first_listens(tx)? {
+            let (album_id_i64, started_at_iso8601) = row?;
+            let album_id = AlbumId(album_id_i64 as u64);
+            let started_at = match Instant::from_iso8601(&started_at_iso8601) {
+                Some(t) => t,
+                None => panic!("Encountered invalid started_at timestamp: {:?}", started_at_iso8601),
+            };
+            self.album_first_listens.insert(album_id, started_at);
         }
 
         Ok(())

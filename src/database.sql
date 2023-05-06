@@ -278,3 +278,17 @@ select album_id /*: i64 */, data /* :bytes */ from thumbnails;
 -- Return whether a thumbnail for the album exists (1 if it does, 0 otherwise).
 -- @query select_thumbnail_exists(album_id: i64) ->1 i64
 select count(*) from thumbnails where album_id = :album_id;
+
+-- For every album, return the earliest listen in the listens table.
+--
+-- Yields tuples `(album_id, started_at_iso8601)`.
+-- @query iter_album_first_listens() ->* (i64, str)
+select
+  -- We rely on the fact here that asciibetical sorting of ISO-8601 strings
+  -- with the same time zone offset is also chronological, and our listens all
+  -- have Z suffix (+00 UTC offset).
+  album_id, min(started_at)
+from
+  listens
+group by
+  album_id;

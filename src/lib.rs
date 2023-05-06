@@ -279,6 +279,15 @@ impl MemoryMetaIndex {
                     .cloned()
             );
 
+            // We may have edited a file after listening to it (for example to
+            // fix some tags). In that case the mtime will be recent, and that
+            // will mess with the “first seen” field. But if we have listens for
+            // this album that are older, then we can use those to correct the
+            // first seen time.
+            if let Some(first_listen) = builder.album_first_listens.get(&id) {
+                album.first_seen = album.first_seen.min(*first_listen);
+            }
+
             albums.push((id, album));
         }
 
@@ -371,6 +380,8 @@ impl MemoryMetaIndex {
                 Err(BuildError::FileFailed) => continue,
             }
         }
+
+        builder.insert_first_listens(&mut tx)?;
 
         let memory_index = MemoryMetaIndex::new(&builder);
 

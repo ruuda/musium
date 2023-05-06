@@ -241,6 +241,12 @@ pub struct Instant {
 }
 
 impl Instant {
+    pub fn from_iso8601(t: &str) -> Option<Instant> {
+        let dt = DateTime::parse_from_rfc3339(t).ok()?;
+        let result = Instant { posix_seconds_utc: dt.timestamp() };
+        Some(result)
+    }
+
     pub fn to_datetime(&self) -> DateTime<Utc> {
         use chrono::NaiveDateTime;
         let secs = self.posix_seconds_utc;
