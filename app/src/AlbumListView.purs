@@ -260,7 +260,7 @@ updateViewport state = do
       pure
         { target: { begin: 0, end: min 1 (Array.length state.albums) }
         , index: 0
-        , redo: true
+        , redo: Array.length state.albums > 0
         }
     Just elem -> do
       entryHeight <- Dom.getOffsetHeight elem
@@ -269,6 +269,7 @@ updateViewport state = do
       let
         headroom = 20
         i = Int.floor $ y / entryHeight
+        -- This may be an overestimate due to the sort options, but that's okay.
         albumsVisible = Int.ceil $ viewportHeight / entryHeight
       pure
         { target:

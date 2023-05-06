@@ -442,7 +442,9 @@ handleEvent event state = case event of
   Event.NavigateTo location@(Navigation.Artist artistId) mode -> do
     artist <- Model.getArtist artistId
     albumView <- liftEffect $
-      AlbumListView.setAlbums artist.albums state.elements.artistBrowser
+      AlbumListView.setAlbums
+        (sortAlbums state.sort artist.albums)
+        state.elements.artistBrowser
     -- TODO Html.setScrollTop 0.0
     navigateTo location mode $ state
       { currentArtist = Just artist
@@ -525,13 +527,21 @@ handleEvent event state = case event of
     in
       liftEffect $ do
         AlbumListView.setSortMode newSort state.elements.libraryBrowser
-        AlbumListView.setSortMode newSort state.elements.artistBrowser
         libraryBrowser <- AlbumListView.setAlbums
           (sortAlbums newSort state.albums)
           state.elements.libraryBrowser
+
+        AlbumListView.setSortMode newSort state.elements.artistBrowser
+        artistBrowser <- AlbumListView.setAlbums
+          (sortAlbums newSort state.elements.artistBrowser.albums)
+          state.elements.artistBrowser
+
         pure $ state
           { sort = newSort
-          , elements = state.elements { libraryBrowser = libraryBrowser }
+          , elements = state.elements
+            { artistBrowser = artistBrowser
+            , libraryBrowser = libraryBrowser
+            }
           }
 
   Event.EnqueueTrack queuedTrack ->
