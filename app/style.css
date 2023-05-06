@@ -464,7 +464,7 @@ img.thumb
   position: absolute;
   width: 100%;
   /* Stretch covers to be square, if need be. */
-  height: 100%;
+  aspect-ratio: 1/1;
   top: 0;
   left: 0;
   border-radius: 0.15rem;
