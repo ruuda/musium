@@ -36,7 +36,12 @@ pub fn write_brief_album_json<W: Write>(
     }
     write!(w, r#"],"artist":"#)?;
     serde_json::to_writer(&mut w, index.get_string(album.artist))?;
-    write!(w, r#","date":"{}"}}"#, album.original_release_date)?;
+    write!(
+        w,
+        r#","release_date":"{}","import_date":"{}"}}"#,
+        album.original_release_date,
+        album.import_date,
+    )?;
     Ok(())
 }
 
@@ -68,7 +73,7 @@ pub fn write_album_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: AlbumId, 
     }
     write!(w, r#"],"artist":"#)?;
     serde_json::to_writer(&mut w, index.get_string(album.artist))?;
-    write!(w, r#","date":"{}","tracks":["#, album.original_release_date)?;
+    write!(w, r#","release_date":"{}","tracks":["#, album.original_release_date)?;
     let mut first = true;
     for &(ref tid, ref track) in index.get_album_tracks(id) {
         if !first { write!(w, ",")?; }
@@ -160,7 +165,7 @@ pub fn write_search_album_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: Al
     serde_json::to_writer(&mut w, index.get_string(album.title))?;
     write!(w, r#","artist":"#)?;
     serde_json::to_writer(&mut w, index.get_string(album.artist))?;
-    write!(w, r#","date":"{}"}}"#, album.original_release_date)
+    write!(w, r#","release_date":"{}"}}"#, album.original_release_date)
 }
 
 pub fn write_search_track_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: TrackId) -> io::Result<()> {
@@ -208,7 +213,7 @@ fn write_queued_track_json<W: Write>(
     serde_json::to_writer(&mut w, index.get_string(track.artist))?;
     write!(
         w,
-        r#","date":"{}","duration_seconds":{}"#,
+        r#","release_date":"{}","duration_seconds":{}"#,
         album.original_release_date,
         track.duration_seconds,
     )?;

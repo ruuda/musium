@@ -122,7 +122,8 @@ newtype Album = Album
   , title :: String
   , artist :: String
   , artistIds :: NonEmptyArray ArtistId
-  , date :: String
+  , releaseDate :: String
+  , importDate :: String
   }
 
 instance decodeJsonAlbum :: DecodeJson Album where
@@ -134,9 +135,10 @@ instance decodeJsonAlbum :: DecodeJson Album where
     artistIds  <- case NonEmptyArray.fromArray artistIdsM of
       Just xs -> pure xs
       Nothing -> Left $ AtKey "artist_ids" MissingValue
-    artist     <- Json.getField obj "artist"
-    date       <- Json.getField obj "date"
-    pure $ Album { id, title, artist, artistIds, date }
+    artist      <- Json.getField obj "artist"
+    releaseDate <- Json.getField obj "release_date"
+    importDate  <- Json.getFeeld obj "import_date"
+    pure $ Album { id, title, artist, artistIds, releaseDate, importDate }
 
 getAlbums :: Aff (Array Album)
 getAlbums = do
@@ -145,7 +147,7 @@ getAlbums = do
     Left err -> fatal $ "Failed to retrieve albums: " <> Http.printError err
     Right response -> case Json.decodeJson response.body of
       Left err -> fatal $ "Failed to parse albums: " <> printJsonDecodeError err
-      Right albums -> pure $ reverse $ sortWith (\(Album a) -> a.date) albums
+      Right albums -> pure $ reverse $ sortWith (\(Album a) -> a.releaseDate) albums
 
 newtype ArtistJson = ArtistJson
   { name :: String
@@ -350,7 +352,7 @@ newtype SearchAlbum = SearchAlbum
   { id :: AlbumId
   , title :: String
   , artist :: String
-  , date :: String
+  , releaseDate :: String
   }
 
 newtype SearchTrack = SearchTrack
@@ -377,12 +379,12 @@ instance decodeJsonSearchArtist :: DecodeJson SearchArtist where
 
 instance decodeJsonSearchAlbum :: DecodeJson SearchAlbum where
   decodeJson json = do
-    obj        <- Json.decodeJson json
-    id         <- map AlbumId $ Json.getField obj "id"
-    title      <- Json.getField obj "title"
-    artist     <- Json.getField obj "artist"
-    date       <- Json.getField obj "date"
-    pure $ SearchAlbum { id, title, artist, date }
+    obj         <- Json.decodeJson json
+    id          <- map AlbumId $ Json.getField obj "id"
+    title       <- Json.getField obj "title"
+    artist      <- Json.getField obj "artist"
+    releaseDate <- Json.getField obj "release_date"
+    pure $ SearchAlbum { id, title, artist, releaseDate }
 
 instance decodeJsonSearchTrack :: DecodeJson SearchTrack where
   decodeJson json = do
@@ -419,7 +421,7 @@ newtype QueuedTrackRaw = QueuedTrackRaw
   , album :: String
   , albumId :: AlbumId
   , albumArtistIds :: NonEmptyArray ArtistId
-  , date :: String
+  , releaseDate :: String
   , durationSeconds :: Int
   , positionSeconds :: Number
   , bufferedSeconds :: Number
@@ -434,7 +436,7 @@ newtype QueuedTrack = QueuedTrack
   , album :: String
   , albumId :: AlbumId
   , albumArtistIds :: NonEmptyArray ArtistId
-  , date :: String
+  , releaseDate :: String
   , durationSeconds :: Int
   , positionSeconds :: Number
   , bufferedSeconds :: Number
@@ -464,7 +466,7 @@ instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
     albumArtistIds  <- case NonEmptyArray.fromArray albumArtistIdsM of
       Just xs -> pure xs
       Nothing -> Left $ AtKey "album_artist_ids" MissingValue
-    date            <- Json.getField obj "date"
+    releaseDate     <- Json.getField obj "release_date"
     durationSeconds <- Json.getField obj "duration_seconds"
     positionSeconds <- Json.getField obj "position_seconds"
     bufferedSeconds <- Json.getField obj "buffered_seconds"
@@ -477,7 +479,7 @@ instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
       , album
       , albumId
       , albumArtistIds
-      , date
+      , releaseDate
       , durationSeconds
       , positionSeconds
       , bufferedSeconds
@@ -503,7 +505,7 @@ getQueue = do
       , album: track.album
       , albumId: track.albumId
       , albumArtistIds: track.albumArtistIds
-      , date: track.date
+      , releaseDate: track.releaseDate
       , durationSeconds: track.durationSeconds
       , positionSeconds: track.positionSeconds
       , bufferedSeconds: track.bufferedSeconds
@@ -578,7 +580,7 @@ formatDurationSeconds dtSeconds =
       else                      show  minutes <> ":" <> show2 seconds
 
 originalReleaseYear :: Album -> String
-originalReleaseYear (Album album) = String.take 4 album.date
+originalReleaseYear (Album album) = String.take 4 album.releaseDate
 
 -- Load a path, return the body as string.
 getString :: String -> Aff String
