@@ -231,6 +231,22 @@ impl Date {
             day,
         }
     }
+
+    /// Get the date, in UTC, from a POSIX timestamp (assumed to be in UTC).
+    ///
+    /// Take a timestamp in seconds, which is assumed to be a POSIX timestamp in
+    /// UTC timezone, and convert it to YYYY-MM-DD notation in UTC.
+    pub fn utc_from_posix_time(timestamp: i64) -> Date {
+        use chrono::{Datelike, DateTime, NaiveDateTime, Utc};
+        let secs = timestamp;
+        let nsecs = 0;
+        let dt = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(secs, nsecs), Utc);
+        Date {
+            year: dt.year() as u16,
+            month: dt.month() as u8,
+            day: dt.day() as u8,
+        }
+    }
 }
 
 /// Indices of the album artist in the album artist array.
@@ -250,6 +266,7 @@ pub struct Album {
     pub artist: StringRef,
     pub title: StringRef,
     pub original_release_date: Date,
+    pub import_date: Date,
     pub loudness: Option<Lufs>,
 }
 

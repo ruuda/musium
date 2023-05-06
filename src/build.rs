@@ -399,6 +399,7 @@ pub struct BuildMetaIndex {
 pub struct FileTask {
   file_id: FileId,
   filename: FilenameRef,
+  mtime_posix_seconds: i64,
   duration_seconds: u16,
 }
 
@@ -546,6 +547,7 @@ impl BuildMetaIndex {
         let result = FileTask {
             file_id: FileId(file.id),
             filename: filename_id,
+            mtime_posix_seconds: file.mtime,
             duration_seconds: seconds as u16,
         };
 
@@ -631,10 +633,14 @@ impl BuildMetaIndex {
         )?;
 
         // Use the 'originaldate' field, fall back to 'date' if it is not set.
-        let date = match original_date.or(date) {
+        let release_date = match original_date.or(date) {
             Some(d) => d,
             None => return self.error_missing_field("originaldate"),
         };
+
+        // TODO: Should we round this to a date, or do we keep the mtime in
+        // seconds? Also, do we use the mtime or import timestamp?
+        let import_date = Date::utc_from_posix_time(file.mtime_posix_seconds);
 
         let title = self.require_and_insert_string("title", tag_title)?;
         let track_artist = self.require_and_insert_string("artist", tag_artist)?;
@@ -696,7 +702,7 @@ impl BuildMetaIndex {
         // per-album data later.
         self.album_file_ids
             .entry(album_id)
-            .and_modify(|k| *k = file_id.max(*k))
+            .and_modify(|v| *v = file_id.max(*v))
             .or_insert(file_id);
 
         // Split the title, album, and album artist, on words, and add those to
@@ -843,11 +849,12 @@ impl BuildMetaIndex {
             filename: file.filename,
             loudness: track_loudness,
         };
-        let album = Album {
+        let mut album = Album {
             artist_ids: album_artists_ref,
             artist: StringRef(album_artist),
             title: StringRef(album),
-            original_release_date: date,
+            original_release_date: release_date,
+            import_date: import_date,
             loudness: album_loudness,
         };
 
@@ -860,7 +867,14 @@ impl BuildMetaIndex {
             panic!("Duplicate track {}, file {}.", track_id, filename);
         }
 
-        if let Some(existing_album) = self.albums.get(&album_id) {
+        if let Some(existing_album) = self.albums.get_mut(&album_id) {
+            // If we have an existing album, take the max import date over all
+            // files in that album. This is not a material difference for the
+            // difference check below.
+            let max_import_date = import_date.max(existing_album.import_date);
+            existing_album.import_date = max_import_date;
+            album.import_date = max_import_date;
+
             if let Some(detail) = albums_different(
                 &self.strings,
                 &self.album_artists,
