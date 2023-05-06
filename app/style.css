@@ -71,12 +71,11 @@ body {
   grid-auto-flow: column;
 }
 
-.nav-tab {
+.nav-tab, .config-option {
   color: #999;
   padding: 0.5em;
   transition: color 0.1s ease-out, border-color 0.1s ease-out;
   border-bottom: 0.2rem solid transparent;
-
   text-align: center;
   font-size: 0.75rem;
 }
@@ -98,6 +97,34 @@ body {
 
 #queue-size.queue-empty {
   display: none;
+}
+
+.list-config {
+  padding-left: 0.25em;
+  padding-right: 0.25em;
+  margin-bottom: -1em;
+}
+
+.list-config .config-option {
+  display: inline-block;
+  padding: 1em;
+  padding-bottom: 0;
+  padding-top: 0;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+.list-config .config-option + .config-option {
+  border-left: 1pt solid #eee;
+}
+.list-config .config-option.active {
+  color: #555;
+  font-weight: 500;
+}
+.list-config .config-option.decreasing::before {
+  content: '▾ ';
+}
+.list-config .config-option.increasing::before {
+  content: '▴ ';
 }
 
 .pane {

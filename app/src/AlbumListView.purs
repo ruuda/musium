@@ -190,6 +190,17 @@ setAlbums albums state = do
   -- TODO: Add a way to select a particular scroll position.
   runway <- Html.withElement state.albumListView $ do
     Html.clear
+    Html.div $ do
+      Html.addClass "list-config"
+      Html.div $ do
+        Html.addClass "config-option"
+        Html.addClass "increasing"
+        Html.addClass "active"
+        Html.text "Release Date"
+      Html.div $ do
+        Html.addClass "config-option"
+        Html.text "First Seen"
+
     renderAlbumListRunway $ Array.length albums
 
   updateViewport $ state
