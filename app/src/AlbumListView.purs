@@ -11,6 +11,7 @@ module AlbumListView
   , Slice
   , new
   , setAlbums
+  , setSortMode
   , updateViewport
   ) where
 
@@ -28,7 +29,7 @@ import Test.Assert (assert', assertEqual')
 
 import Dom (Element)
 import Dom as Dom
-import Event (Event, HistoryMode (RecordHistory))
+import Event (Event, HistoryMode (RecordHistory), SortField (..), SortDirection (..), SortMode)
 import Event as Event
 import Html (Html)
 import Html as Html
@@ -38,13 +39,11 @@ import Navigation as Navigation
 
 -- Render the "runway" in which albums can sroll, but put no contents in it.
 -- The contents are added later by 'updateViewport'.
-renderAlbumListRunway :: Int -> Html Element
+renderAlbumListRunway :: Int -> Html Unit
 renderAlbumListRunway numAlbums = do
-  Html.ul $ do
-    Html.setId "album-list"
-    -- An album entry is 4em tall.
-    Html.setHeight $ (show $ 4 * numAlbums) <> "em"
-    ask
+  Html.setId "album-list"
+  -- An album entry is 4em tall.
+  Html.setHeight $ (show $ 4 * numAlbums) <> "em"
 
 -- A slice of the albums array, with inclusive begin and exclusive end indices.
 type Slice =
@@ -165,18 +164,26 @@ type AlbumListView =
   , albumListView :: Element
   , albumListRunway :: Element
   , postEvent :: Event -> Aff Unit
+  , getOption :: SortField -> Element
   }
 
 new :: (Event -> Aff Unit) -> Html AlbumListView
 new postEvent = Html.div $ do
   Html.addClass "album-list-view"
   Html.onScroll $ Aff.launchAff_ $ postEvent $ Event.ChangeViewport
-  albumListRunway <- Html.div $ ask
+
+  getOption <- renderSortOptions postEvent
+
+  albumListRunway <- Html.ul $ do
+    renderAlbumListRunway 0
+    ask
+
   albumListView <- ask
   pure
     { albumListView
     , albumListRunway
     , postEvent
+    , getOption: getOption
     , albums: []
     , scrollState:
       { elements: []
@@ -185,27 +192,54 @@ new postEvent = Html.div $ do
       }
     }
 
+renderSortOptions :: (Event -> Aff Unit) -> Html (SortField -> Element)
+renderSortOptions postEvent = Html.div $ do
+  Html.addClass "list-config"
+  let onClickPost field = Html.onClick $ void $ launchAff $ postEvent $ Event.SetSortField field
+  optReleaseDate <- Html.div $ do
+    Html.addClass "config-option"
+    Html.text "Release Date"
+    onClickPost SortReleaseDate
+    ask
+  optFirstSeen <- Html.div $ do
+    Html.addClass "config-option"
+    Html.text "First Seen"
+    onClickPost SortFirstSeen
+    ask
+
+  pure $ case _ of
+    SortReleaseDate -> optReleaseDate
+    SortFirstSeen   -> optFirstSeen
+
+setSortMode :: SortMode -> AlbumListView -> Effect Unit
+setSortMode { field, direction } state =
+  let
+    allFields = [SortReleaseDate, SortFirstSeen]
+    unsort = do
+      Html.removeClass "increasing"
+      Html.removeClass "decreasing"
+  in
+    for_ allFields $ \toInspect -> Html.withElement (state.getOption toInspect) $
+      if toInspect == field
+        then do
+          Html.addClass "active"
+          unsort
+          Html.addClass $ case direction of
+            SortIncreasing -> "increasing"
+            SortDecreasing -> "decreasing"
+        else do
+          Html.removeClass "active"
+          unsort
+
 setAlbums :: Array Album -> AlbumListView -> Effect AlbumListView
 setAlbums albums state = do
   -- TODO: Add a way to select a particular scroll position.
-  runway <- Html.withElement state.albumListView $ do
+  Html.withElement state.albumListRunway $ do
     Html.clear
-    Html.div $ do
-      Html.addClass "list-config"
-      Html.div $ do
-        Html.addClass "config-option"
-        Html.addClass "increasing"
-        Html.addClass "active"
-        Html.text "Release Date"
-      Html.div $ do
-        Html.addClass "config-option"
-        Html.text "First Seen"
-
     renderAlbumListRunway $ Array.length albums
 
   updateViewport $ state
     { albums = albums
-    , albumListRunway = runway
     , scrollState =
       { elements: []
       , begin: 0

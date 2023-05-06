@@ -120,10 +120,12 @@ body {
   color: #555;
   font-weight: 500;
 }
-.list-config .config-option.decreasing::before {
+.list-config .config-option.increasing::before {
+  /* As we go down the list, the field value is increasing. */
   content: '▾ ';
 }
-.list-config .config-option.increasing::before {
+.list-config .config-option.decreasing::before {
+  /* As we go down the list, the field value is decreasing. */
   content: '▴ ';
 }
 

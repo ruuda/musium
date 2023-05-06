@@ -8,9 +8,6 @@
 module State
   ( AppState (..)
   , Elements (..)
-  , SortDirection (..)
-  , SortField (..)
-  , SortMode
   , handleEvent
   , new
   ) where
@@ -43,7 +40,7 @@ import AlbumView (AlbumViewState)
 import AlbumView as AlbumView
 import Dom (Element)
 import Dom as Dom
-import Event (Event, HistoryMode)
+import Event (Event, HistoryMode, SortMode, SortField (..), SortDirection (..))
 import Event as Event
 import History as History
 import Html as Html
@@ -82,16 +79,6 @@ type Elements =
   , paneSearch :: Element
   , paneAbout :: Element
   }
-
-data SortDirection
-  = SortIncreasing
-  | SortDecreasing
-
-data SortField
-  = SortReleaseDate
-  | SortFirstSeen
-
-type SortMode = { field :: SortField, direction :: SortDirection }
 
 type AppState =
   { albums :: Array Album
@@ -324,6 +311,11 @@ sortAlbums {field, direction} albums =
   in
     applyDir $ Array.sortWith getField albums
 
+toggleSortDirection :: SortDirection -> SortDirection
+toggleSortDirection = case _ of
+  SortIncreasing -> SortDecreasing
+  SortDecreasing -> SortIncreasing
+
 handleEvent :: Event -> AppState -> Aff AppState
 handleEvent event state = case event of
   Event.Initialize albums queue -> do
@@ -333,10 +325,11 @@ handleEvent event state = case event of
       albumsById = Object.fromFoldable $ map withId albums
       albumsSorted = sortAlbums state.sort albums
 
-    libraryBrowser <- liftEffect $
-      AlbumListView.setAlbums
-      albumsSorted
-      state.elements.libraryBrowser
+    libraryBrowser <- liftEffect $ do
+      AlbumListView.setSortMode state.sort state.elements.libraryBrowser
+      AlbumListView.setSortMode state.sort state.elements.artistBrowser
+      AlbumListView.setAlbums albumsSorted state.elements.libraryBrowser
+
     let
       state' = state
         { albums = albumsSorted
@@ -523,6 +516,23 @@ handleEvent event state = case event of
         view <- AlbumListView.updateViewport state.elements.artistBrowser
         pure $ state { elements = state.elements { artistBrowser = view } }
       _ -> pure state
+
+  Event.SetSortField sortOnField ->
+    let
+      newSort = if state.sort.field == sortOnField
+        then state.sort { direction = toggleSortDirection state.sort.direction }
+        else { field: sortOnField, direction: SortDecreasing }
+    in
+      liftEffect $ do
+        AlbumListView.setSortMode newSort state.elements.libraryBrowser
+        AlbumListView.setSortMode newSort state.elements.artistBrowser
+        libraryBrowser <- AlbumListView.setAlbums
+          (sortAlbums newSort state.albums)
+          state.elements.libraryBrowser
+        pure $ state
+          { sort = newSort
+          , elements = state.elements { libraryBrowser = libraryBrowser }
+          }
 
   Event.EnqueueTrack queuedTrack ->
     -- This is an internal update, after we enqueue a track. It allows updating
