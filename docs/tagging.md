@@ -31,6 +31,7 @@ For artists, albums, and tracks, Musium stores the following attributes:
  * Title
  * Original release date
  * Artist name as credited
+ * First seen (import time or time of first play)
 
 ### Track
 

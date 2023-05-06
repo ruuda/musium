@@ -123,7 +123,7 @@ newtype Album = Album
   , artist :: String
   , artistIds :: NonEmptyArray ArtistId
   , releaseDate :: String
-  , importDate :: String
+  , firstSeen :: String
   }
 
 instance decodeJsonAlbum :: DecodeJson Album where
@@ -137,8 +137,8 @@ instance decodeJsonAlbum :: DecodeJson Album where
       Nothing -> Left $ AtKey "artist_ids" MissingValue
     artist      <- Json.getField obj "artist"
     releaseDate <- Json.getField obj "release_date"
-    importDate  <- Json.getFeeld obj "import_date"
-    pure $ Album { id, title, artist, artistIds, releaseDate, importDate }
+    firstSeen   <- Json.getFeeld obj "first_seen"
+    pure $ Album { id, title, artist, artistIds, releaseDate, firstSeen }
 
 getAlbums :: Aff (Array Album)
 getAlbums = do

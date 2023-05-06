@@ -10,7 +10,7 @@ use std::fmt;
 use std::str::FromStr;
 use std::u16;
 
-use crate::prim::{AlbumId, Album, AlbumArtistsRef, ArtistId, Artist, FileId, TrackId, Track, Date, Lufs, FilenameRef, StringRef, get_track_id};
+use crate::prim::{AlbumId, Album, AlbumArtistsRef, ArtistId, Artist, FileId, Instant, TrackId, Track, Date, Lufs, FilenameRef, StringRef, get_track_id};
 use crate::string_utils::{StringDeduper, normalize_words};
 use crate::word_index::{WordMeta};
 use crate::database::{FileMetadata, Transaction, self as db};
@@ -399,7 +399,7 @@ pub struct BuildMetaIndex {
 pub struct FileTask {
   file_id: FileId,
   filename: FilenameRef,
-  mtime_posix_seconds: i64,
+  mtime: Instant,
   duration_seconds: u16,
 }
 
@@ -547,7 +547,7 @@ impl BuildMetaIndex {
         let result = FileTask {
             file_id: FileId(file.id),
             filename: filename_id,
-            mtime_posix_seconds: file.mtime,
+            mtime: Instant { posix_seconds_utc: file.mtime },
             duration_seconds: seconds as u16,
         };
 
@@ -637,10 +637,6 @@ impl BuildMetaIndex {
             Some(d) => d,
             None => return self.error_missing_field("originaldate"),
         };
-
-        // TODO: Should we round this to a date, or do we keep the mtime in
-        // seconds? Also, do we use the mtime or import timestamp?
-        let import_date = Date::utc_from_posix_time(file.mtime_posix_seconds);
 
         let title = self.require_and_insert_string("title", tag_title)?;
         let track_artist = self.require_and_insert_string("artist", tag_artist)?;
@@ -854,7 +850,7 @@ impl BuildMetaIndex {
             artist: StringRef(album_artist),
             title: StringRef(album),
             original_release_date: release_date,
-            import_date: import_date,
+            first_seen: file.mtime,
             loudness: album_loudness,
         };
 
@@ -871,9 +867,9 @@ impl BuildMetaIndex {
             // If we have an existing album, take the max import date over all
             // files in that album. This is not a material difference for the
             // difference check below.
-            let max_import_date = import_date.max(existing_album.import_date);
-            existing_album.import_date = max_import_date;
-            album.import_date = max_import_date;
+            let first_seen = album.first_seen.min(existing_album.first_seen);
+            existing_album.first_seen = first_seen;
+            album.first_seen = first_seen;
 
             if let Some(detail) = albums_different(
                 &self.strings,

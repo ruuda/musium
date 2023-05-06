@@ -38,9 +38,11 @@ pub fn write_brief_album_json<W: Write>(
     serde_json::to_writer(&mut w, index.get_string(album.artist))?;
     write!(
         w,
-        r#","release_date":"{}","import_date":"{}"}}"#,
+        r#","release_date":"{}","first_seen":"{}"}}"#,
         album.original_release_date,
-        album.import_date,
+        // TODO: Should this be a string, or integer? Integer is more efficient,
+        // but worse for interpretability.
+        album.first_seen.format_iso8601(),
     )?;
     Ok(())
 }

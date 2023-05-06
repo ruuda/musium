@@ -9,6 +9,7 @@
 
 use std::fmt;
 use std::str::FromStr;
+use chrono::{DateTime, Utc};
 
 // Stats of my personal music library at this point:
 //
@@ -231,21 +232,26 @@ impl Date {
             day,
         }
     }
+}
 
-    /// Get the date, in UTC, from a POSIX timestamp (assumed to be in UTC).
-    ///
-    /// Take a timestamp in seconds, which is assumed to be a POSIX timestamp in
-    /// UTC timezone, and convert it to YYYY-MM-DD notation in UTC.
-    pub fn utc_from_posix_time(timestamp: i64) -> Date {
-        use chrono::{Datelike, DateTime, NaiveDateTime, Utc};
-        let secs = timestamp;
+/// An instant with second granularity, used for e.g. album import times.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct Instant {
+    pub posix_seconds_utc: i64,
+}
+
+impl Instant {
+    pub fn to_datetime(&self) -> DateTime<Utc> {
+        use chrono::NaiveDateTime;
+        let secs = self.posix_seconds_utc;
         let nsecs = 0;
-        let dt = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(secs, nsecs), Utc);
-        Date {
-            year: dt.year() as u16,
-            month: dt.month() as u8,
-            day: dt.day() as u8,
-        }
+        DateTime::from_utc(NaiveDateTime::from_timestamp(secs, nsecs), Utc)
+    }
+
+    pub fn format_iso8601(&self) -> String {
+        use chrono::SecondsFormat;
+        let use_z = true;
+        self.to_datetime().to_rfc3339_opts(SecondsFormat::Secs, use_z)
     }
 }
 
@@ -266,8 +272,12 @@ pub struct Album {
     pub artist: StringRef,
     pub title: StringRef,
     pub original_release_date: Date,
-    pub import_date: Date,
     pub loudness: Option<Lufs>,
+
+    /// First time that we encountered this album, can be either:
+    /// * The minimal `mtime` across the files in the album.
+    /// * The first play of one of the tracks in the album. (TODO)
+    pub first_seen: Instant,
 }
 
 #[repr(C)]
@@ -330,11 +340,11 @@ pub fn get_track_id(album_id: AlbumId,
 fn struct_sizes_are_as_expected() {
     use std::mem;
     assert_eq!(mem::size_of::<Track>(), 40);
-    assert_eq!(mem::size_of::<Album>(), 24);
+    assert_eq!(mem::size_of::<Album>(), 32);
     assert_eq!(mem::size_of::<Artist>(), 8);
     assert_eq!(mem::size_of::<(TrackId, Track)>(), 48);
 
     assert_eq!(mem::align_of::<Track>(), 8);
-    assert_eq!(mem::align_of::<Album>(), 4);
+    assert_eq!(mem::align_of::<Album>(), 8);
     assert_eq!(mem::align_of::<Artist>(), 4);
 }
