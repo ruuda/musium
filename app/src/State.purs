@@ -8,6 +8,9 @@
 module State
   ( AppState (..)
   , Elements (..)
+  , SortDirection (..)
+  , SortField (..)
+  , SortMode
   , handleEvent
   , new
   ) where
@@ -80,9 +83,20 @@ type Elements =
   , paneAbout :: Element
   }
 
+data SortDirection
+  = SortIncreasing
+  | SortDecreasing
+
+data SortField
+  = SortReleaseDate
+  | SortFirstSeen
+
+type SortMode = { field :: SortField, direction :: SortDirection }
+
 type AppState =
   { albums :: Array Album
   , albumsById :: Object Album
+  , sort :: SortMode
   , currentArtist :: Maybe Artist
   , queue :: Array QueuedTrack
   , nextQueueFetch :: Fiber Unit
@@ -197,6 +211,7 @@ new bus = do
   pure
     { albums: []
     , albumsById: Object.empty
+    , sort: { field: SortReleaseDate, direction: SortDecreasing }
     , currentArtist: Nothing
     , queue: []
     , nextQueueFetch: never
@@ -297,6 +312,18 @@ prefetchImagesIfNeeded now state = case Array.head state.queue of
 
   _ -> pure state
 
+sortAlbums :: SortMode -> Array Album -> Array Album
+sortAlbums {field, direction} albums =
+  let
+    applyDir = case direction of
+      SortIncreasing -> identity
+      SortDecreasing -> Array.reverse
+    getField = case field of
+      SortReleaseDate -> \(Album album) -> album.releaseDate
+      SortFirstSeen   -> \(Album album) -> album.firstSeen
+  in
+    applyDir $ Array.sortWith getField albums
+
 handleEvent :: Event -> AppState -> Aff AppState
 handleEvent event state = case event of
   Event.Initialize albums queue -> do
@@ -304,11 +331,15 @@ handleEvent event state = case event of
     let
       withId album@(Album a) = let (AlbumId id) = a.id in Tuple id album
       albumsById = Object.fromFoldable $ map withId albums
+      albumsSorted = sortAlbums state.sort albums
 
-    libraryBrowser <- liftEffect $ AlbumListView.setAlbums albums state.elements.libraryBrowser
+    libraryBrowser <- liftEffect $
+      AlbumListView.setAlbums
+      albumsSorted
+      state.elements.libraryBrowser
     let
       state' = state
-        { albums = albums
+        { albums = albumsSorted
         , albumsById = albumsById
         , elements = state.elements { libraryBrowser = libraryBrowser }
           -- See also below.
