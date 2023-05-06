@@ -342,15 +342,40 @@ pub fn get_track_id(album_id: AlbumId,
     TrackId(high | mid | low)
 }
 
-#[test]
-fn struct_sizes_are_as_expected() {
-    use std::mem;
-    assert_eq!(mem::size_of::<Track>(), 40);
-    assert_eq!(mem::size_of::<Album>(), 32);
-    assert_eq!(mem::size_of::<Artist>(), 8);
-    assert_eq!(mem::size_of::<(TrackId, Track)>(), 48);
+#[cfg(test)]
+mod test {
+    use super::*;
 
-    assert_eq!(mem::align_of::<Track>(), 8);
-    assert_eq!(mem::align_of::<Album>(), 8);
-    assert_eq!(mem::align_of::<Artist>(), 4);
+    #[test]
+    fn struct_sizes_are_as_expected() {
+        use std::mem;
+        assert_eq!(mem::size_of::<Track>(), 40);
+        assert_eq!(mem::size_of::<Album>(), 32);
+        assert_eq!(mem::size_of::<Artist>(), 8);
+        assert_eq!(mem::size_of::<(TrackId, Track)>(), 48);
+
+        assert_eq!(mem::align_of::<Track>(), 8);
+        assert_eq!(mem::align_of::<Album>(), 8);
+        assert_eq!(mem::align_of::<Artist>(), 4);
+    }
+
+    #[test]
+    fn instant_from_iso8601_rounds_down_and_format_iso8601_roundtrips() {
+        let timestamps = [
+            "2020-08-22T07:47:48.021Z",
+            "2021-06-29T18:35:58.038Z",
+            "2021-07-02T20:13:19.043Z",
+            "2021-07-06T10:25:29.664Z",
+        ];
+        let timestamps_rounded = [
+            "2020-08-22T07:47:48Z",
+            "2021-06-29T18:35:58Z",
+            "2021-07-02T20:13:19Z",
+            "2021-07-06T10:25:29Z",
+        ];
+        for (t_str, t_str_round) in timestamps.iter().zip(timestamps_rounded) {
+            let t = Instant::from_iso8601(t_str).unwrap();
+            assert_eq!(*t_str_round, t.format_iso8601());
+        }
+    }
 }
