@@ -134,7 +134,7 @@ renderAlbumInit postEvent (Album album) = do
         Html.text " ⋅ "
         Html.span $ do
           Html.addClass "date"
-          Html.text album.date
+          Html.text album.releaseDate
 
     Html.div $ do
       Html.addClass "album-actions"
@@ -305,7 +305,7 @@ enqueueTrack postEvent (Album album) (Track track) trackElement = do
     , album: album.title
     , albumId: album.id
     , albumArtistIds: album.artistIds
-    , date: album.date
+    , releaseDate: album.releaseDate
     , durationSeconds: track.durationSeconds
     , positionSeconds: 0.0
     , bufferedSeconds: 0.0

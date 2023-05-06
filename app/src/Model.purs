@@ -137,7 +137,7 @@ instance decodeJsonAlbum :: DecodeJson Album where
       Nothing -> Left $ AtKey "artist_ids" MissingValue
     artist      <- Json.getField obj "artist"
     releaseDate <- Json.getField obj "release_date"
-    firstSeen   <- Json.getFeeld obj "first_seen"
+    firstSeen   <- Json.getField obj "first_seen"
     pure $ Album { id, title, artist, artistIds, releaseDate, firstSeen }
 
 getAlbums :: Aff (Array Album)

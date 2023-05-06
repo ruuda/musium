@@ -114,7 +114,7 @@ nowPlayingInfo postEvent (QueuedTrack track) = Html.div $ do
         Html.text " ⋅ "
         Html.span $ do
           Html.addClass "date"
-          Html.text track.date
+          Html.text track.releaseDate
 
     Html.div $ do
       Html.addClass "waveform"

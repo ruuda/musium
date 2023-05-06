@@ -68,10 +68,10 @@ renderSearchAlbum postEvent (SearchAlbum album) = do
       Html.text $ album.artist <> " "
       Html.span $ do
         Html.addClass "date"
-        Html.setTitle album.date
+        Html.setTitle album.releaseDate
         -- The date is of the form YYYY-MM-DD in ascii, so we can safely take
         -- the first 4 characters to get the year.
-        Html.text (CodeUnits.take 4 album.date)
+        Html.text (CodeUnits.take 4 album.releaseDate)
 
     Html.onClick $ launchAff_ $ postEvent $ Event.NavigateTo
       (Navigation.Album $ album.id)
