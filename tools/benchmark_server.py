@@ -14,11 +14,12 @@ benchmark_server.py -- Benchmark Musium API server performance.
 from http.client import HTTPConnection
 from typing import List
 
+import gc
 import json
 import random
-import time
 import socket
 import sys
+import time
 
 AlbumId = str
 
@@ -53,6 +54,11 @@ def measure_get_all(albums: List[AlbumId], host: str, port: int) -> None:
     with socket.socket() as sock:
         sock.connect((host, port))
 
+        # Force a GC now, so it doesn't bother us in the middle of the
+        # measurement, should it be needed.
+        gc.collect()
+        gc.disable()
+
         t0_sec = time.monotonic()
         sock.sendall(b"".join(requests))
         while True:
@@ -63,6 +69,7 @@ def measure_get_all(albums: List[AlbumId], host: str, port: int) -> None:
                 break
 
         t1_sec = time.monotonic()
+        gc.enable()
         print(f"{t1_sec - t0_sec:.6f}")
 
 
