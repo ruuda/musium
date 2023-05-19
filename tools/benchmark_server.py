@@ -32,11 +32,13 @@ def load_albums(host: str, port: int) -> List[AlbumId]:
     return [album["id"] for album in albums]
 
 
-def measure_get_all(albums: List[AlbumId], host: str, port: int) -> None:
+def measure_get_all_seconds(albums: List[AlbumId], host: str, port: int) -> float:
     """
     Benchmark how long it takes to request every individual album, in a random
     order. We send all requests at once, pipelined, directly to a socket to
     avoid Python overhead, and then we read until the end.
+
+    Returns the time in seconds.
     """
     random.shuffle(albums)
 
@@ -70,15 +72,27 @@ def measure_get_all(albums: List[AlbumId], host: str, port: int) -> None:
 
         t1_sec = time.monotonic()
         gc.enable()
-        print(f"{t1_sec - t0_sec:.6f}")
+
+    return t1_sec - t0_sec
 
 
 def record() -> None:
     host = "localhost"
     port = 8233
     albums = load_albums(host, port)
+
+    # Perform a few warmup rounds. Maybe the Python socket module takes some
+    # time to be imported when we use it for the first time, maybe the parts of
+    # the server binary that handle this endpoint need to be paged in from disk
+    # ... I don't know the exact reason, but the first measurement was always
+    # an outlier. To be sure, let's do a few more rounds of warmup before the
+    # start.
+    for _ in range(5):
+        _ = measure_get_all_seconds(albums, host, port)
+
     for _ in range(1000):
-        measure_get_all(albums, host, port)
+        duration_sec = measure_get_all_seconds(albums, host, port)
+        print(f"{duration_sec:.6f}")
 
 
 def report(f1: str, f2: str) -> None:
