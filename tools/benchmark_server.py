@@ -18,6 +18,7 @@ import json
 import random
 import time
 import socket
+import sys
 
 AlbumId = str
 
@@ -31,6 +32,11 @@ def load_albums(host: str, port: int) -> List[AlbumId]:
 
 
 def measure_get_all(albums: List[AlbumId], host: str, port: int) -> None:
+    """
+    Benchmark how long it takes to request every individual album, in a random
+    order. We send all requests at once, pipelined, directly to a socket to
+    avoid Python overhead, and then we read until the end.
+    """
     random.shuffle(albums)
 
     requests = []
@@ -51,6 +57,8 @@ def measure_get_all(albums: List[AlbumId], host: str, port: int) -> None:
         sock.sendall(b"".join(requests))
         while True:
             data = sock.recv(8192)
+            # We only get no data when the socket is closed, which should be
+            # after the last request.
             if len(data) == 0:
                 break
 
@@ -58,7 +66,7 @@ def measure_get_all(albums: List[AlbumId], host: str, port: int) -> None:
         print(f"{t1_sec - t0_sec:.6f}")
 
 
-def main() -> None:
+def record() -> None:
     host = "localhost"
     port = 8233
     albums = load_albums(host, port)
@@ -66,5 +74,40 @@ def main() -> None:
         measure_get_all(albums, host, port)
 
 
+def report(f1: str, f2: str) -> None:
+    from matplotlib import gridspec, pyplot as plt
+    from scipy import stats
+    import numpy as np
+
+    with open(f1, encoding="ascii") as f:
+        xs = np.array([float(x) for x in f])
+
+    with open(f2, encoding="ascii") as f:
+        ys = np.array([float(y) for y in f])
+
+    def summarize(zs: np.ndarray) -> None:
+        m = np.mean(zs)
+        sd = np.std(zs)
+        print(f"{m:.6f} ± {sd:.6f} s")
+
+    summarize(xs)
+    summarize(ys)
+
+    fig = plt.figure(tight_layout=True)
+    gs = gridspec.GridSpec(2, 2)
+    ax = fig.add_subplot(gs[0, 0])
+    print(xs.shape, len(xs))
+    print(np.arange(0, 1, 1000).shape)
+    ax.scatter(np.linspace(0, 1, len(xs)), xs, s=1.5)
+    ax.scatter(np.linspace(1, 2, len(ys)), ys, s=1.5)
+    plt.show()
+
+    print(stats.mannwhitneyu(xs, ys))
+
+
 if __name__ == "__main__":
-    main()
+    if sys.argv[1] == "record":
+        record()
+
+    if sys.argv[1] == "report":
+        report(sys.argv[2], sys.argv[3])

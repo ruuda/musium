@@ -22,6 +22,11 @@
           name = "musium";
           version = builtins.substring 0 8 self.lastModifiedDate;
           pkgs = import nixpkgs { inherit system; };
+          python = pkgs.python3.withPackages (ps: [
+            ps.scipy
+            ps.numpy
+            ps.matplotlib
+          ]);
         in
           rec {
             devShells.default = pkgs.mkShell {
@@ -32,6 +37,7 @@
                 pkgs.purescript
                 pkgs.rustup
                 pkgs.sqlite
+                python
                 squiller.packages.${system}.default
               ]
               ++ packages.default.nativeBuildInputs
