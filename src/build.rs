@@ -9,10 +9,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::str::FromStr;
 
-use crate::prim::{AlbumId, Album, AlbumArtistsRef, ArtistId, Artist, FileId, Instant, TrackId, Track, Date, Lufs, FilenameRef, StringRef, get_track_id};
-use crate::string_utils::{StringDeduper, normalize_words};
-use crate::word_index::{WordMeta};
 use crate::database::{FileMetadata, Transaction, self as db};
+use crate::prim::{AlbumId, Album, AlbumArtistsRef, ArtistId, Artist, FileId, Instant, TrackId, Track, Date, Lufs, FilenameRef, StringRef};
+use crate::string_utils::{StringDeduper, normalize_words};
+use crate::word_index::WordMeta;
 
 pub enum BuildError {
     /// Something went wrong interacting with the database.
@@ -186,6 +186,25 @@ fn parse_uuid(uuid: &str) -> Option<u64> {
     Some((high << 32) | low)
 }
 
+/// Like `parse_uuid`, but take only 52 bits. This is used for album ids.
+///
+/// On purpose, we still take the digits from the beginning and end of the
+/// uuid, such that the uuid can easily be compared from begin or end to our
+/// internal id. We don't just shift the `parse_uuid` result, because then
+/// either the start or end of the hex-formatted id would no longer match the
+/// hex-formatted uuid.
+fn parse_uuid_52bits(uuid: &str) -> Option<u64> {
+    // See also the comments in `parse_uuid`
+    if uuid.len() != 36 { return None }
+    if uuid.as_bytes()[8] != b'-' { return None }
+    if uuid.as_bytes()[13] != b'-' { return None }
+    if uuid.as_bytes()[18] != b'-' { return None }
+    if uuid.as_bytes()[23] != b'-' { return None }
+    let high = u32::from_str_radix(&uuid[..8], 16).ok()? as u64;
+    let low = u32::from_str_radix(&uuid[31..], 16).ok()? as u64;
+    Some((high << 20) | low)
+}
+
 /// Return an issue if the two albums are not equal.
 pub fn albums_different(
     strings: &StringDeduper,
@@ -333,33 +352,6 @@ impl AlbumArtistsDeduper {
     /// Return the artists with the given index.
     pub fn get(&self, ids: AlbumArtistsRef) -> &[ArtistId] {
         &self.artists[ids.begin as usize..ids.end as usize]
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::{ArtistId, AlbumArtistsDeduper};
-
-    #[test]
-    fn album_artists_deduper_works() {
-        let mut dup = AlbumArtistsDeduper::new();
-        let a = ArtistId(1);
-        let b = ArtistId(2);
-        let c = ArtistId(4);
-
-        let a1 = dup.insert([a]);
-        let a2 = dup.insert([a]);
-        assert_eq!(a1, a2);
-
-        let b1 = dup.insert([b]);
-        assert_ne!(a1, b1);
-
-        let ab1 = dup.insert([a, b]);
-        let ac1 = dup.insert([a, c]);
-        let ab2 = dup.insert([a, b]);
-        let ac2 = dup.insert([a, c]);
-        assert_eq!(ab1, ab2);
-        assert_eq!(ac1, ac2);
     }
 }
 
@@ -621,7 +613,7 @@ impl BuildMetaIndex {
         let mbid_album = self.require_and_parse(
             "musicbrainz_albumid",
             tag_musicbrainz_albumid.as_ref(),
-            |v| parse_uuid(v)
+            |v| parse_uuid_52bits(v)
         )?;
 
         let original_date = self.parse(
@@ -695,7 +687,7 @@ impl BuildMetaIndex {
         }
 
         let album_id = AlbumId(mbid_album);
-        let track_id = get_track_id(album_id, disc_number, track_number);
+        let track_id = TrackId::new(album_id, disc_number, track_number);
 
         // Record the maximum file id per album, so we can use it to invalidate
         // per-album data later.
@@ -916,9 +908,26 @@ impl BuildMetaIndex {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{Date};
-    use super::{parse_date};
+mod test {
+    use super::{ArtistId, AlbumArtistsDeduper};
+    use super::{Date, parse_date};
+    use super::{parse_uuid, parse_uuid_52bits};
+
+    #[test]
+    fn parse_uuid_parses_uuid() {
+        assert_eq!(parse_uuid("9c9f1380-2516-4fc9-a3e6-f9f61941d090"), Some(0x9c9f_1380_1941_d090));
+        assert_eq!(parse_uuid("056e4f3e-d505-4dad-8ec1-d04f521cbb56"), Some(0x056e_4f3e_521c_bb56));
+        assert_eq!(parse_uuid("nonsense"), None);
+    }
+
+    #[test]
+    #[allow(clippy::unusual_byte_groupings)]
+    fn parse_uuid_52bit_parses_uuid() {
+        // Same as above, but note that we removed three hex digits in the middle.
+        assert_eq!(parse_uuid_52bits("9c9f1380-2516-4fc9-a3e6-f9f61941d090"), Some(0x9c9f_1380_1_d090));
+        assert_eq!(parse_uuid_52bits("056e4f3e-d505-4dad-8ec1-d04f521cbb56"), Some(0x056e_4f3e_c_bb56));
+        assert_eq!(parse_uuid_52bits("nonsense"), None);
+    }
 
     #[test]
     fn parse_date_parses_year() {
@@ -963,5 +972,27 @@ mod tests {
     #[test]
     fn format_date_formats_year_and_month_and_day() {
         assert_eq!(format!("{}", Date::new(2018, 1, 2)), "2018-01-02");
+    }
+
+    #[test]
+    fn album_artists_deduper_works() {
+        let mut dup = AlbumArtistsDeduper::new();
+        let a = ArtistId(1);
+        let b = ArtistId(2);
+        let c = ArtistId(4);
+
+        let a1 = dup.insert([a]);
+        let a2 = dup.insert([a]);
+        assert_eq!(a1, a2);
+
+        let b1 = dup.insert([b]);
+        assert_ne!(a1, b1);
+
+        let ab1 = dup.insert([a, b]);
+        let ac1 = dup.insert([a, c]);
+        let ab2 = dup.insert([a, b]);
+        let ac2 = dup.insert([a, c]);
+        assert_eq!(ab1, ab2);
+        assert_eq!(ac1, ac2);
     }
 }

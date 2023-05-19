@@ -55,7 +55,7 @@ use std::path::Path;
 
 use crate::build::{AlbumArtistsDeduper, BuildMetaIndex, BuildError};
 use crate::error::{Error, Result};
-use crate::prim::{ArtistId, Artist, AlbumArtistsRef, AlbumId, Album, TrackId, Track, Lufs, StringRef, FilenameRef, get_track_id};
+use crate::prim::{ArtistId, Artist, AlbumArtistsRef, AlbumId, Album, TrackId, Track, Lufs, StringRef, FilenameRef};
 use crate::string_utils::StringDeduper;
 use crate::word_index::MemoryWordIndex;
 
@@ -445,7 +445,7 @@ impl MetaIndex for MemoryMetaIndex {
         // Look for track 0 of disc 0. This is the first track of the album,
         // if it exists. Otherwise binary search would find the first track
         // after it.
-        let tid = get_track_id(id, 0, 0);
+        let tid = TrackId::new(id, 0, 0);
         // TODO: Use bookmarks for this.
         let begin = match self.tracks.binary_search_by_key(&tid, |pair| pair.0) {
             Ok(i) => i,
