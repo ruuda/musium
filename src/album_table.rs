@@ -98,7 +98,7 @@ impl<T: Copy> AlbumTable<T> {
                 value = current.1;
             }
 
-            probe_len = probe_len + 1;
+            probe_len += 1;
         }
         panic!("Failed to insert, the table is full.");
     }

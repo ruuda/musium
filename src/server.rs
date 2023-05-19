@@ -552,6 +552,5 @@ pub fn serve(bind: &str, service: Arc<MetaServer>) -> ! {
         handle.join().unwrap();
     }
 
-    // This code is unreachable, but serves to satisfy the typechecker.
-    loop {}
+    unreachable!("The server runs indefinitely, joins should not return.")
 }

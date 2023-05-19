@@ -5,6 +5,15 @@
 // you may not use this file except in compliance with the License.
 // A copy of the License has been included in the root of the repository.
 
+// Disable some of Clippy's opinions that I disagree with.
+#![allow(clippy::identity_op)]
+#![allow(clippy::len_without_is_empty)]
+#![allow(clippy::len_zero)]
+#![allow(clippy::let_and_return)]
+#![allow(clippy::new_without_default)]
+#![allow(clippy::nonminimal_bool)]
+#![allow(clippy::redundant_field_names)]
+
 extern crate alsa;
 extern crate claxon;
 extern crate crossbeam;
@@ -40,8 +49,6 @@ pub mod thumb_cache;
 pub mod thumb_gen;
 
 use std::path::Path;
-use std::u32;
-use std::u64;
 
 use crate::build::{AlbumArtistsDeduper, BuildMetaIndex, BuildError};
 use crate::error::{Error, Result};
@@ -146,14 +153,14 @@ impl Bookmarks {
         for id in iter {
             let b = (id >> 56) as u8;
             while bc < b as i32 {
-                bc = bc + 1;
+                bc += 1;
                 bookmarks[bc as usize] = len;
             }
             assert!(len < u32::MAX);
             len += 1;
         }
         while bc < 256 {
-            bc = bc + 1;
+            bc += 1;
             bookmarks[bc as usize] = len;
         }
         Bookmarks {

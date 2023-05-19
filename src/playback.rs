@@ -125,8 +125,8 @@ fn set_format(pcm: &alsa::PCM, format: Format) -> Result<()> {
     };
 
     {
-        let hwp = alsa::pcm::HwParams::any(&pcm)?;
-        // TOOD: Confirm by first querying the device without "plug:" that it
+        let hwp = alsa::pcm::HwParams::any(pcm)?;
+        // TODO: Confirm by first querying the device without "plug:" that it
         // supports this sample rate and format without plugin involvement (to
         // ensure that the plugin is only responsible for channel count
         // conversion). Alternatively, do the channel conversion manually.

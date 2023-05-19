@@ -69,7 +69,7 @@ impl StringDeduper {
             // NOTE: We could use memchr for this if it turns out to be a
             // bottleneck.
             let mut from = 0;
-            while let Some(off) = &s[from..].find("'") {
+            while let Some(off) = &s[from..].find('\'') {
                 let i = from + off;
 
                 let before = if i > 0 { s.as_bytes()[i - 1] } else { b' ' };

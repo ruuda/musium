@@ -276,7 +276,7 @@ pub fn generate_thumbnails(
     for &(_tid, ref track) in index.get_tracks() {
         if track.album_id != prev_album_id {
             let fname = index.get_filename(track.filename);
-            for task in GenThumb::new(&mut tx, track.album_id, track.file_id, fname.as_ref())? {
+            if let Some(task) = GenThumb::new(&mut tx, track.album_id, track.file_id, fname.as_ref())? {
                 pending_tasks.push(task);
                 status.files_to_process_thumbnails += 1;
 
@@ -315,7 +315,7 @@ pub fn generate_thumbnails(
             Vec::with_capacity(n_threads);
 
         for i in 0..n_threads {
-            let db_path_ref = db_path.clone();
+            let db_path_ref = db_path;
             let drain = move || {
                 let raw_conn = database_utils::connect_read_write(db_path_ref)?;
                 let mut conn = Connection::new(&raw_conn);

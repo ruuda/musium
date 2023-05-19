@@ -48,6 +48,6 @@ fn notify(kv_pairs: &CStr) -> Result<(), ()> {
 pub fn notify_ready_if_can_notify() {
     if can_notify() {
         let message = CStr::from_bytes_with_nul(b"READY=1\0").unwrap();
-        notify(&message).expect("Failed to notify systemd of readiness.");
+        notify(message).expect("Failed to notify systemd of readiness.");
     }
 }

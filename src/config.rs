@@ -34,19 +34,19 @@ pub struct Config {
 
 impl fmt::Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "  listen                 = {}\n", self.listen)?;
-        write!(f, "  library_path           = {}\n", self.library_path.to_string_lossy())?;
-        write!(f, "  db_path                = {}\n", self.db_path.to_string_lossy())?;
-        write!(f, "  audio_device           = {}\n", self.audio_device)?;
-        write!(f, "  audio_volume_control   = {}\n", self.audio_volume_control)?;
-        write!(f, "  high_pass_cutoff       = {}\n", self.high_pass_cutoff)?;
+        writeln!(f, "  listen                 = {}", self.listen)?;
+        writeln!(f, "  library_path           = {}", self.library_path.to_string_lossy())?;
+        writeln!(f, "  db_path                = {}", self.db_path.to_string_lossy())?;
+        writeln!(f, "  audio_device           = {}", self.audio_device)?;
+        writeln!(f, "  audio_volume_control   = {}", self.audio_volume_control)?;
+        writeln!(f, "  high_pass_cutoff       = {}", self.high_pass_cutoff)?;
         match self.exec_pre_playback_path.as_ref() {
-            Some(path) => write!(f, "  exec_pre_playback_path = {}\n", path.to_string_lossy())?,
-            None => write!(f, "  exec_pre_playback_path is not set\n")?,
+            Some(path) => writeln!(f, "  exec_pre_playback_path = {}", path.to_string_lossy())?,
+            None => writeln!(f, "  exec_pre_playback_path is not set")?,
         }
         match self.exec_post_idle_path.as_ref() {
-            Some(path) => write!(f, "  exec_post_idle_path    = {}\n", path.to_string_lossy())?,
-            None => write!(f, "  exec_post_idle_path    is not set\n")?,
+            Some(path) => writeln!(f, "  exec_post_idle_path    = {}", path.to_string_lossy())?,
+            None => writeln!(f, "  exec_post_idle_path    is not set")?,
         }
         write!(f, "  idle_timeout_seconds   = {}", self.idle_timeout_seconds)?;
 
@@ -79,7 +79,7 @@ impl Config {
             }
 
             // Skip lines starting with '#' to allow comments.
-            if line.starts_with("#") {
+            if line.starts_with('#') {
                 continue
             }
 

@@ -13,7 +13,6 @@ use std::sync::{Arc, Mutex};
 
 use bs1770::{ChannelLoudnessMeter};
 use claxon::FlacReader;
-use claxon;
 
 use crate::database_utils;
 use crate::database as db;
@@ -165,7 +164,7 @@ enum Task {
 
 enum TaskResult {
     None,
-    Track(TrackResult),
+    Track(Box<TrackResult>),
     Album,
 }
 
@@ -237,7 +236,7 @@ impl Task {
     /// Returns the result in case of a `Task::AnalyzeTrack` task.
     pub fn execute(self, inserts: &SyncSender<Insert>) -> error::Result<TaskResult> {
         match self {
-            Task::AnalyzeTrack(task) => task.execute(inserts).map(TaskResult::Track),
+            Task::AnalyzeTrack(task) => task.execute(inserts).map(Box::new).map(TaskResult::Track),
             Task::AnalyzeAlbum(task) => {
                 task.execute(inserts);
                 Ok(TaskResult::Album)
@@ -304,8 +303,6 @@ impl<'a> TaskQueue<'a> {
     /// check the existence of every album and track. It's better to rely on
     /// incremental building, but this can be used to backfill an old database.
     pub fn push_tasks_missing(&mut self, tx: &mut Transaction) -> db::Result<()> {
-        let index = self.index.clone();
-
         // Note, this is not the most efficient index query, because we have to
         // locate the tracks per album. We could do better by iterating the
         // tracks instead, but it complicates this code, and we are issueing a
@@ -313,7 +310,7 @@ impl<'a> TaskQueue<'a> {
         // should be dwarfed by the SQLite call anyway.
         // TODO: Instead, enumerate both the index and the database in
         // parallel, and do a merge-diff.
-        'albums: for (album_id, _album) in index.get_albums() {
+        'albums: for (album_id, _album) in self.index.get_albums() {
             // If the album is not there, we need to add it.
             if db::select_album_loudness_lufs(tx, album_id.0 as i64)?.is_none() {
                 self.push_task_album(*album_id);
@@ -321,7 +318,7 @@ impl<'a> TaskQueue<'a> {
             }
 
             // If one of the tracks is not there, we also add the full album.
-            for (track_id, _track) in index.get_album_tracks(*album_id) {
+            for (track_id, _track) in self.index.get_album_tracks(*album_id) {
                 if db::select_track_loudness_lufs(tx, track_id.0 as i64)?.is_none() {
                     self.push_task_album(*album_id);
                     continue 'albums
@@ -354,11 +351,11 @@ impl<'a> TaskQueue<'a> {
             TaskResult::Track(track_result) => {
                 self.finish_track(track_result.album_id, track_result.meters);
                 self.status.tracks_processed_loudness += 1;
-                self.status_sender.send(self.status.clone()).unwrap();
+                self.status_sender.send(*self.status).unwrap();
             }
             TaskResult::Album => {
                 self.status.albums_processed_loudness += 1;
-                self.status_sender.send(self.status.clone()).unwrap();
+                self.status_sender.send(*self.status).unwrap();
             }
             TaskResult::None => {}
         }
@@ -442,7 +439,7 @@ impl<'a> TaskQueue<'a> {
 
             for i in 0..n_threads {
                 let task_queue_i = task_queue.clone();
-                let mut sender_i = insert_sender.clone();
+                let sender_i = insert_sender.clone();
                 let process = move || {
                     // Run the thread until there is no more task to execute. If
                     // there is currently no task, it doesn't mean there will be no
@@ -458,7 +455,7 @@ impl<'a> TaskQueue<'a> {
                                 None => break,
                             }
                         };
-                        prev_result = task.execute(&mut sender_i)?;
+                        prev_result = task.execute(&sender_i)?;
                     }
 
                     Ok(())
@@ -475,7 +472,7 @@ impl<'a> TaskQueue<'a> {
             // thread can do the database inserts for them. This function
             // returns when all senders have closed their channel, which happens
             // after all threads exit.
-            std::mem::drop(insert_sender);
+            drop(insert_sender);
 
             // We could propagate the error here, but if the thread that has the
             // receiver leaves, then the sending threads will panic anyway, so

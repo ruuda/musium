@@ -5,6 +5,9 @@
 // you may not use this file except in compliance with the License.
 // A copy of the License has been included in the root of the repository.
 
+// Disable some of Clippy's opinions that I disagree with.
+#![allow(clippy::len_zero)]
+
 extern crate claxon;
 extern crate crossbeam;
 extern crate musium;
@@ -30,7 +33,7 @@ use musium::thumb_cache::ThumbCache;
 use musium::{MetaIndex, MemoryMetaIndex};
 
 fn make_index(db_path: &Path) -> Result<MemoryMetaIndex> {
-    let (index, builder) = MemoryMetaIndex::from_database(&db_path)?;
+    let (index, builder) = MemoryMetaIndex::from_database(db_path)?;
 
     for issue in &builder.issues {
         println!("{}\n", issue);
@@ -115,8 +118,8 @@ fn equals_normalized(x1: &str, x2: &str) -> bool {
     // TODO: Figure out a faster way to do this.
     let mut w1 = Vec::new();
     let mut w2 = Vec::new();
-    normalize_words(&x1[..], &mut w1);
-    normalize_words(&x2[..], &mut w2);
+    normalize_words(x1, &mut w1);
+    normalize_words(x2, &mut w2);
     w1 == w2
 }
 
@@ -134,7 +137,7 @@ fn match_listens(
 
     // Skip the header row for reading, print the header row for writing.
     lines.next();
-    write!(w, "seconds_since_epoch\ttrack_id\n")?;
+    writeln!(w, "seconds_since_epoch\ttrack_id")?;
 
     let mut total = 0_u32;
     let mut matched = 0_u32;
@@ -149,8 +152,8 @@ fn match_listens(
 
         let mut words = Vec::new();
         let mut tracks = Vec::new();
-        normalize_words(&track_title[..], &mut words);
-        normalize_words(&artist_name[..], &mut words);
+        normalize_words(track_title, &mut words);
+        normalize_words(artist_name, &mut words);
         // TODO: Add a way to turn off prefix search for the last word.
         index.search_track(&words[..], &mut tracks);
 
@@ -164,7 +167,7 @@ fn match_listens(
             let album_ok = equals_normalized(index.get_string(album.title), album_name);
             if track_ok && artist_ok && album_ok {
                 if !found {
-                    write!(w, "{}\t{}\n", time_str, track_id)?;
+                    writeln!(w, "{}\t{}", time_str, track_id)?;
                     found = true;
                     matched += 1;
                 } else {
@@ -206,12 +209,12 @@ fn run_scan(config: &Config) -> Result<()> {
 
     let (scan_thread, rx) = musium::scan::run_scan_in_thread(
         config,
-        index_var.clone(),
+        index_var,
         thumb_cache_var,
     );
 
     {
-        let stdout = std::io::stdout();
+        let stdout = io::stdout();
         let mut lock = stdout.lock();
 
         write!(lock, "\n\n\n\n\n").unwrap();
@@ -276,7 +279,7 @@ fn main() -> Result<()> {
             let config_clone = config.clone();
             let index = make_index(&config.db_path)?;
             let arc_index = Arc::new(index);
-            let index_var = Arc::new(MVar::new(arc_index.clone()));
+            let index_var = Arc::new(MVar::new(arc_index));
             println!("Indexing complete.");
 
             println!("Loading cover art thumbnails ...");
@@ -293,7 +296,7 @@ fn main() -> Result<()> {
             );
             let service = MetaServer::new(
                 config_clone,
-                index_var.clone(),
+                index_var,
                 thumb_cache_var,
                 player,
             );

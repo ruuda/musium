@@ -191,7 +191,7 @@ fn intersect<'a, I: 'a + WordIndex, F: FnMut(&I::Item, &[WordMeta])>(
         metas.clear();
 
         'iters: for iter in iters.iter_mut() {
-            'values: while let Some(ref v) = iter.peek_value() {
+            'values: while let Some(v) = iter.peek_value() {
                 match value.cmp(v) {
                     Ordering::Greater => {
                         // This iterator is still less than the maximum, advance
@@ -234,7 +234,7 @@ fn intersect<'a, I: 'a + WordIndex, F: FnMut(&I::Item, &[WordMeta])>(
         // If we get here, then all iterators are currently peeking the same
         // value, which means we potentially have a match. We still have to
         // check the final union iterator as well.
-        'final_values: while let Some(ref v) = prefix_values.peek_value() {
+        'final_values: while let Some(v) = prefix_values.peek_value() {
             match value.cmp(v) {
                 Ordering::Greater => {
                     prefix_values.advance();

@@ -8,7 +8,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::str::FromStr;
-use std::u16;
 
 use crate::prim::{AlbumId, Album, AlbumArtistsRef, ArtistId, Artist, FileId, Instant, TrackId, Track, Date, Lufs, FilenameRef, StringRef, get_track_id};
 use crate::string_utils::{StringDeduper, normalize_words};
@@ -298,7 +297,7 @@ impl AlbumArtistsDeduper {
         let mut h = 0;
         let begin = self.artists.len();
         for id in ids {
-            h = h ^ id.0;
+            h ^= id.0;
             self.artists.push(id);
         }
         let end = self.artists.len();
@@ -311,7 +310,7 @@ impl AlbumArtistsDeduper {
         match self.refs.entry(h) {
             Occupied(existing) => {
                 let e = *existing.get();
-                if &self.artists[e.begin as usize..e.end as usize] == &self.artists[begin..end] {
+                if self.artists[e.begin as usize..e.end as usize] == self.artists[begin..end] {
                     // We found an existing range, and it's the same. We don't need
                     // the one we just inserted, they were already there.
                     self.artists.truncate(begin);
@@ -609,12 +608,12 @@ impl BuildMetaIndex {
         let track_number = self.require_and_parse(
             "tracknumber",
             tag_tracknumber.as_ref(),
-            |v| u8::from_str(&v).ok(),
+            |v| u8::from_str(v).ok(),
         )?;
         let disc_number = self.parse(
             "discnumber",
             tag_discnumber.as_ref(),
-            |v| u8::from_str(&v).ok(),
+            |v| u8::from_str(v).ok(),
         )?;
         // If the disc number is not set, assume disc 1.
         let disc_number = disc_number.unwrap_or(1);
@@ -622,18 +621,18 @@ impl BuildMetaIndex {
         let mbid_album = self.require_and_parse(
             "musicbrainz_albumid",
             tag_musicbrainz_albumid.as_ref(),
-            |v| parse_uuid(&v)
+            |v| parse_uuid(v)
         )?;
 
         let original_date = self.parse(
             "originaldate",
             tag_originaldate.as_ref(),
-            |v| parse_date(&v),
+            |v| parse_date(v),
         )?;
         let date = self.parse(
             "date",
             tag_date.as_ref(),
-            |v| parse_date(&v),
+            |v| parse_date(v),
         )?;
 
         // Use the 'originaldate' field, fall back to 'date' if it is not set.
@@ -673,7 +672,7 @@ impl BuildMetaIndex {
             let mbid_artist = self.require_and_parse(
                 "musicbrainz_albumartistid",
                 Some(tag_aa_mbid),
-                |v| parse_uuid(&v),
+                |v| parse_uuid(v),
             )?;
             let aa_name = self.strings.insert(&tag_aa_name);
             let aa_name_sort = self.strings.insert(&tag_aa_name_sort);
@@ -751,7 +750,7 @@ impl BuildMetaIndex {
             let album_artist_full = self.strings.get(album_artist);
             normalize_words(album_artist_full, &mut words);
             for (i, w) in words.iter().enumerate() {
-                if !all_words_album_artist.contains(&w) {
+                if !all_words_album_artist.contains(w) {
                     let meta_rank_0 = WordMeta::new(w.len(), album_artist_full.len(), i, 0);
                     self.words_album.insert((w.clone(), album_id, meta_rank_0));
                     self.words_track.insert((w.clone(), track_id, meta_rank_0));
@@ -760,7 +759,7 @@ impl BuildMetaIndex {
             // Add the words to the all collection only afterwards; if it
             // occurs twice in the album artist then it should be in the
             // index twice.
-            all_words_album_artist.extend(words.drain(..));
+            all_words_album_artist.append(&mut words);
 
             let track_title = &self.strings.get(title);
             let album_title = &self.strings.get(album);

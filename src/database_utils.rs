@@ -9,8 +9,6 @@
 
 use std::path::Path;
 
-use sqlite;
-
 pub type Result<T> = sqlite::Result<T>;
 
 fn connect_internal<P: AsRef<Path>>(

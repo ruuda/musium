@@ -465,7 +465,7 @@ pub fn insert_file_metadata_for_paths(
 
         for (i, flac_reader) in rx_file.iter() {
             let (ref path, mtime) = paths_to_scan[i];
-            insert_file_metadata(tx, now_str, &path, mtime, flac_reader)?;
+            insert_file_metadata(tx, now_str, path, mtime, flac_reader)?;
 
             // Keep the status up to date, and send it once in a while. We send
             // it more often here than when enumerating files, because reading

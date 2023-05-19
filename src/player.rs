@@ -164,7 +164,7 @@ impl Filters {
             q,
         );
         Self {
-            filters: [filter.clone(), filter.clone()],
+            filters: [filter.clone(), filter],
             format: Format {
                 sample_rate: Hertz(44_100),
                 bits_per_sample: 16,
@@ -616,10 +616,7 @@ impl PlayerState {
         let n_running = self
             .queue
             .iter()
-            .filter(|qt| match qt.decode {
-                Decode::Running => true,
-                _               => false,
-            })
+            .filter(|qt| matches!(qt.decode, Decode::Running))
             .count();
         assert!(n_running <= 1, "At most one decode should be in progress.");
 
@@ -758,7 +755,7 @@ impl PlayerState {
                 _ => return true,
             }
         }
-        return false
+        false
     }
 
     /// Return whether we should start decoding more.
@@ -790,9 +787,8 @@ impl PlayerState {
         );
 
         for (i, queued_track) in self.queue.iter_mut().enumerate() {
-            match &queued_track.decode {
-                &Decode::Done => continue,
-                _ => {}
+            if let Decode::Done = queued_track.decode {
+                continue
             }
 
             // If the decode is not done, then we will now start or continue,
@@ -1029,7 +1025,7 @@ impl Player {
             }).unwrap();
 
         let builder = std::thread::Builder::new();
-        let index_for_history = index_var.clone();
+        let index_for_history = index_var;
 
         let db_path = config.db_path.clone();
         let history_join_handle = builder
@@ -1078,8 +1074,8 @@ impl Player {
     pub fn enqueue(&self, index: &dyn MetaIndex, track_id: TrackId) -> QueueId {
         let track = index.get_track(track_id).expect("Can only enqueue existing tracks.");
         let album = index.get_album(track.album_id).expect("Track must belong to album.");
-        let track_loudness = track.loudness.unwrap_or(Lufs::default());
-        let album_loudness = album.loudness.unwrap_or(Lufs::default());
+        let track_loudness = track.loudness.unwrap_or_else(Lufs::default);
+        let album_loudness = album.loudness.unwrap_or_else(Lufs::default);
 
         // If the queue is empty, then the playback thread may be parked,
         // so we may need to wake it after enqueuing something.
@@ -1111,10 +1107,7 @@ impl Player {
                 track_id: queued_track.track_id,
                 position_ms: queued_track.position_ms(),
                 buffered_ms: queued_track.duration_ms(),
-                is_buffering: match queued_track.decode {
-                    Decode::Running => true,
-                    _ => false,
-                },
+                is_buffering: matches!(queued_track.decode, Decode::Running),
             };
             tracks.push(t);
         }
