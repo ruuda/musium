@@ -831,9 +831,6 @@ impl BuildMetaIndex {
 
         let track = Track {
             file_id: file_id,
-            album_id: album_id,
-            disc_number: disc_number,
-            track_number: track_number,
             title: StringRef(title),
             artist: StringRef(track_artist),
             duration_seconds: file.duration_seconds as u16,

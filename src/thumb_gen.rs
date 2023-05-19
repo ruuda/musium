@@ -273,10 +273,10 @@ pub fn generate_thumbnails(
     // Determine which albums need to have a new thumbnail extracted.
     let mut pending_tasks = Vec::new();
     let mut prev_album_id = AlbumId(0);
-    for &(_tid, ref track) in index.get_tracks() {
-        if track.album_id != prev_album_id {
+    for &(tid, ref track) in index.get_tracks() {
+        if tid.album_id() != prev_album_id {
             let fname = index.get_filename(track.filename);
-            if let Some(task) = GenThumb::new(&mut tx, track.album_id, track.file_id, fname.as_ref())? {
+            if let Some(task) = GenThumb::new(&mut tx, tid.album_id(), track.file_id, fname.as_ref())? {
                 pending_tasks.push(task);
                 status.files_to_process_thumbnails += 1;
 
@@ -284,7 +284,7 @@ pub fn generate_thumbnails(
                     status_sender.send(*status).unwrap();
                 }
             }
-            prev_album_id = track.album_id;
+            prev_album_id = tid.album_id();
         }
     }
 

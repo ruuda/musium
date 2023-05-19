@@ -459,7 +459,7 @@ impl MetaIndex for MemoryMetaIndex {
         // access pattern.
         let end = begin + self.tracks[begin..]
             .iter()
-            .position(|&(_tid, ref track)| track.album_id != id)
+            .position(|&(tid, ref _track)| tid.album_id() != id)
             .unwrap_or(self.tracks.len() - begin);
 
         &self.tracks[begin..end]

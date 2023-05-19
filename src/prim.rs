@@ -228,9 +228,6 @@ pub struct Mtime(pub i64);
 #[repr(C)]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Track {
-    // TODO: Remove album_id, disc_number, track_number, now that we can tell
-    // from the track id.
-    pub album_id: AlbumId,
     pub file_id: FileId,
     pub title: StringRef,
     pub artist: StringRef,
@@ -243,8 +240,6 @@ pub struct Track {
     // becomes a problem, we could use some of the disc number bits to extend
     // the duration range or track number range.
     pub duration_seconds: u16,
-    pub disc_number: u8,
-    pub track_number: u8,
     pub loudness: Option<Lufs>,
 }
 
@@ -369,10 +364,10 @@ mod test {
     #[test]
     fn struct_sizes_are_as_expected() {
         use std::mem;
-        assert_eq!(mem::size_of::<Track>(), 40);
+        assert_eq!(mem::size_of::<Track>(), 24);
         assert_eq!(mem::size_of::<Album>(), 32);
         assert_eq!(mem::size_of::<Artist>(), 8);
-        assert_eq!(mem::size_of::<(TrackId, Track)>(), 48);
+        assert_eq!(mem::size_of::<(TrackId, Track)>(), 32);
 
         assert_eq!(mem::align_of::<Track>(), 8);
         assert_eq!(mem::align_of::<Album>(), 8);

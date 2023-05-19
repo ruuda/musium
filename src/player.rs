@@ -226,9 +226,6 @@ pub struct QueuedTrack {
     /// Track id of the track to be played.
     track_id: TrackId,
 
-    /// Album id of the track to be played.
-    album_id: AlbumId,
-
     /// Perceived track loudness in Loudness Units Full Scale.
     track_loudness: Lufs,
 
@@ -257,14 +254,12 @@ impl QueuedTrack {
     pub fn new(
         queue_id: QueueId,
         track_id: TrackId,
-        album_id: AlbumId,
         track_loudness: Lufs,
         album_loudness: Lufs,
     ) -> QueuedTrack {
         QueuedTrack {
             queue_id: queue_id,
             track_id: track_id,
-            album_id: album_id,
             track_loudness: track_loudness,
             album_loudness: album_loudness,
             blocks: Vec::new(),
@@ -272,6 +267,10 @@ impl QueuedTrack {
             sample_rate: None,
             decode: Decode::NotStarted,
         }
+    }
+
+    pub fn album_id(&self) -> AlbumId {
+        self.track_id.album_id()
     }
 
     /// Return the duration of the unconsumed samples in milliseconds.
@@ -666,8 +665,8 @@ impl PlayerState {
         };
 
         let loudness = match self.queue.get(1) {
-            Some(next_track) if current_track.album_id == next_track.album_id => current_track.album_loudness,
-            _ if current_track.album_id == previous_album => current_track.album_loudness,
+            Some(next_track) if current_track.album_id() == next_track.album_id() => current_track.album_loudness,
+            _ if current_track.album_id() == previous_album => current_track.album_loudness,
             _ => current_track.track_loudness,
         };
 
@@ -729,7 +728,7 @@ impl PlayerState {
             self.events.send(PlaybackEvent::Completed(track.queue_id, track.track_id))
                 .expect("Failed to send completion event to history thread.");
 
-            let previous_album = track.album_id;
+            let previous_album = track.album_id();
             self.update_current_track_loudness(previous_album);
         }
 
@@ -1072,8 +1071,9 @@ impl Player {
 
     /// Enqueue the track for playback at the end of the queue.
     pub fn enqueue(&self, index: &dyn MetaIndex, track_id: TrackId) -> QueueId {
+        let album_id = track_id.album_id();
         let track = index.get_track(track_id).expect("Can only enqueue existing tracks.");
-        let album = index.get_album(track.album_id).expect("Track must belong to album.");
+        let album = index.get_album(album_id).expect("Track must belong to album.");
         let track_loudness = track.loudness.unwrap_or_else(Lufs::default);
         let album_loudness = album.loudness.unwrap_or_else(Lufs::default);
 
@@ -1084,7 +1084,7 @@ impl Player {
             let needs_wake = state.is_queue_empty();
             let id = state.next_unused_id;
             state.next_unused_id = QueueId(id.0 + 1);
-            let qt = QueuedTrack::new(id, track_id, track.album_id, track_loudness, album_loudness);
+            let qt = QueuedTrack::new(id, track_id, track_loudness, album_loudness);
             state.enqueue(qt);
             (id, needs_wake)
         };

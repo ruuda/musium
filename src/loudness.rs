@@ -84,7 +84,6 @@ struct TrackResult {
 
 /// Tracks the state of loudness analysis for one track.
 struct TrackTask {
-    album_id: AlbumId,
     track_id: TrackId,
     file_id: FileId,
     path: PathBuf,
@@ -149,7 +148,7 @@ impl TrackTask {
         }).unwrap();
 
         let result = TrackResult {
-            album_id: self.album_id,
+            album_id: self.track_id.album_id(),
             meters: meters,
         };
 
@@ -384,7 +383,6 @@ impl<'a> TaskQueue<'a> {
                 .expect("We got this track from this index.");
             let fname = self.index.get_filename(track.filename);
             let task = TrackTask {
-                album_id: album_task.album_id,
                 track_id: track_id,
                 file_id: track.file_id,
                 path: PathBuf::from(fname),
