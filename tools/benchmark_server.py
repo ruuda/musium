@@ -17,34 +17,54 @@ from typing import List
 import json
 import random
 import time
+import socket
 
 AlbumId = str
 
-def load_albums(conn: HTTPConnection) -> List[AlbumId]:
+
+def load_albums(host: str, port: int) -> List[AlbumId]:
+    conn = HTTPConnection(host, port)
     conn.request("GET", "/api/albums")
     albums = json.load(conn.getresponse())
+    conn.close()
     return [album["id"] for album in albums]
 
 
-def measure_get_all(conn: HTTPConnection, albums: List[AlbumId]) -> List[float]:
+def measure_get_all(albums: List[AlbumId], host: str, port: int) -> None:
     random.shuffle(albums)
-    chunk_size = 10
 
-    for i in range(0, len(albums), chunk_size):
-        ids = albums[i:i + chunk_size]
+    requests = []
+
+    for i, album_id in enumerate(albums):
+        is_last = i == len(albums) - 1
+        conn_header = b"close" if is_last else b"keep-alive"
+
+        requests.append(
+            b"GET /api/album/" + album_id.encode("utf-8") + b" HTTP/1.1\r\n"
+            b"Connection: " + conn_header + b"\r\n\r\n"
+        )
+
+    with socket.socket() as sock:
+        sock.connect((host, port))
+
         t0_sec = time.monotonic()
-
-        for album_id in ids:
-            conn.request("GET", f"/api/album/{album_id}")
-            response = conn.getresponse()
-            response.read()
-            assert not response.closed
+        sock.sendall(b"".join(requests))
+        while True:
+            data = sock.recv(8192)
+            if len(data) == 0:
+                break
 
         t1_sec = time.monotonic()
-        print(f"[{i:4}/{len(albums)}] {t1_sec - t0_sec:.3f}s")
+        print(f"{t1_sec - t0_sec:.6f}")
+
+
+def main() -> None:
+    host = "localhost"
+    port = 8233
+    albums = load_albums(host, port)
+    for _ in range(1000):
+        measure_get_all(albums, host, port)
 
 
 if __name__ == "__main__":
-    conn = HTTPConnection("localhost:8233")
-    albums = load_albums(conn)
-    measure_get_all(conn, albums)
+    main()
