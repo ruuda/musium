@@ -139,7 +139,7 @@ impl fmt::Display for Lufs {
 impl FromStr for Lufs {
     type Err = &'static str;
 
-    fn from_str(s: &str) -> std::result::Result<Lufs, &'static str> {
+    fn from_str(s: &str) -> Result<Lufs, &'static str> {
         match s.strip_suffix(" LUFS") {
             None => Err("Expected loudness value of the form '-9.999 LUFS', but the LUFS suffix is missing."),
             Some(num) => match f32::from_str(num) {
@@ -162,7 +162,7 @@ pub struct Hertz(pub u32);
 impl FromStr for Hertz {
     type Err = &'static str;
 
-    fn from_str(s: &str) -> std::result::Result<Hertz, &'static str> {
+    fn from_str(s: &str) -> Result<Hertz, &'static str> {
         match s.strip_suffix(" Hz") {
             None => Err("Expected integer frequency value of the form '999 Hz', but the Hz suffix is missing."),
             Some(num) => match u32::from_str(num) {
@@ -173,7 +173,7 @@ impl FromStr for Hertz {
     }
 }
 
-impl std::fmt::Display for Hertz {
+impl fmt::Display for Hertz {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} Hz", self.0)
     }
