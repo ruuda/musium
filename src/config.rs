@@ -101,7 +101,7 @@ impl Config {
                     "idle_timeout_seconds" => match u64::from_str(value) {
                         Ok(seconds) => idle_timeout_seconds = seconds,
                         Err(_) => {
-                            let msg = "Invalid idle_timout_seconds value, must be an integer.";
+                            let msg = "Invalid idle_timeout_seconds value, must be an integer.";
                             return Err(Error::InvalidConfig(lineno, msg));
                         }
                     }

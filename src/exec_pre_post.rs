@@ -109,7 +109,7 @@ pub fn main(config: &Config, events: Receiver<QueueEvent>) -> ! {
             continue
         }
 
-        // If we get here, then we waited for the full timout, and playback did
+        // If we get here, then we waited for the full timeout, and playback did
         // not resume, which means we are idle now.
         if let Some(exe) = config.exec_post_idle_path.as_ref() {
             execute_program_with_timeout(exe, "post-idle");
