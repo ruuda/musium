@@ -95,13 +95,19 @@ def report(f1: str, f2: str) -> None:
 
     fig = plt.figure(tight_layout=True)
     gs = gridspec.GridSpec(2, 2)
+
     ax = fig.add_subplot(gs[0, 0])
-    print(xs.shape, len(xs))
-    print(np.arange(0, 1, 1000).shape)
+    z = 0.5 * (np.median(xs) + np.median(ys))
+    ax.axhline(z, color="black", alpha=0.2)
     ax.scatter(np.linspace(0, 1, len(xs)), xs, s=1.5)
     ax.scatter(np.linspace(1, 2, len(ys)), ys, s=1.5)
-    plt.show()
 
+    cmap = plt.get_cmap("tab10")
+    for i, zs in enumerate([xs, ys]):
+        ax = fig.add_subplot(gs[1, i])
+        ax.hist(zs, bins=50, color=cmap(i))
+
+    plt.show()
     print(stats.mannwhitneyu(xs, ys))
 
 
