@@ -14,6 +14,9 @@
 #![allow(clippy::nonminimal_bool)]
 #![allow(clippy::redundant_field_names)]
 
+// Harmful lint, see https://github.com/rust-lang/rust-clippy/issues/4295#issuecomment-1554996707.
+#![allow(clippy::mutex_atomic)]
+
 extern crate alsa;
 extern crate claxon;
 extern crate crossbeam;
