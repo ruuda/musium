@@ -106,15 +106,9 @@ def report(f1: str, f2: str) -> None:
     with open(f2, encoding="ascii") as f:
         ys = np.array([float(y) for y in f])
 
-    def summarize(zs: np.ndarray) -> None:
-        m = np.mean(zs)
-        sd = np.std(zs)
-        print(f"{m:.6f} ± {sd:.6f} s")
+    plt.rcParams["font.family"] = "Source Serif Pro"
 
-    summarize(xs)
-    summarize(ys)
-
-    fig = plt.figure(tight_layout=True)
+    fig = plt.figure(tight_layout=True, figsize=(8, 7))
     gs = gridspec.GridSpec(3, 2)
 
     xs_ys = np.concatenate((xs, ys))
@@ -155,7 +149,6 @@ def report(f1: str, f2: str) -> None:
         x_axis = ax
 
     ax = fig.add_subplot(gs[2, 0], sharex=x_axis)
-    print(np.mean(xs))
     mean_a, std_a = np.mean(xs), np.std(xs)
     mean_b, std_b = np.mean(ys), np.std(ys)
     bar_a = ax.barh(2.0, mean_a, xerr=std_a)
@@ -164,7 +157,7 @@ def report(f1: str, f2: str) -> None:
     # We don't need labels on the bars, the entire plot is color-coded.
     ax.axes.get_yaxis().set_visible(False)
     ax.set_xlabel("duration (seconds, mean ± stddev)")
-    ax.legend([bar_a, bar_b], ["A", "B"])
+    ax.legend([bar_a, bar_b], ["A", "B"], loc="lower right")
 
     ax = fig.add_subplot(gs[0, 1])
     ax.text(
@@ -192,8 +185,9 @@ def report(f1: str, f2: str) -> None:
     )
     ax.set_axis_off()
 
-    fig.suptitle(f"A = {f1} vs. B = {f2}")
-    plt.show()
+    fig.suptitle(f"Benchmark Analysis\nA = {f1}  vs.  B = {f2}")
+    plt.savefig("benchmark.png", dpi=250)
+    print("Comparison saved to benchmark.png")
 
 
 if __name__ == "__main__":
