@@ -331,6 +331,8 @@ impl MemoryMetaIndex {
 
         MemoryMetaIndex {
             artist_bookmarks: Bookmarks::new(artists.iter().map(|p| (p.0).0)),
+            // TODO: The album bookmarks have become useless now that the album
+            // ids have their high bits all zero!
             album_bookmarks: Bookmarks::new(albums.iter().map(|p| (p.0).0)),
             track_bookmarks: Bookmarks::new(tracks.iter().map(|p| (p.0).0)),
             albums_by_artist_bookmarks: Bookmarks::new(albums_by_artist.iter().map(|p| (p.0).0)),
