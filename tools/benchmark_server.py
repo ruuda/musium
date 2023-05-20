@@ -115,18 +115,49 @@ def report(f1: str, f2: str) -> None:
     summarize(ys)
 
     fig = plt.figure(tight_layout=True)
-    gs = gridspec.GridSpec(2, 2)
+    gs = gridspec.GridSpec(3, 2)
 
-    ax = fig.add_subplot(gs[0, 0])
+    xs_ys = np.concatenate((xs, ys))
+    p005, p995 = np.quantile(xs_ys, [0.005, 0.995])
+
+    ax = fig.add_subplot(gs[2, 1])
     z = 0.5 * (np.median(xs) + np.median(ys))
-    ax.axhline(z, color="black", alpha=0.2)
-    ax.scatter(np.linspace(0, 1, len(xs)), xs, s=1.5)
-    ax.scatter(np.linspace(1, 2, len(ys)), ys, s=1.5)
+    ax.axhline(z, color="black", alpha=0.4, linewidth=1.0)
+    # Position the points sequentially. We don't devote half the space to each
+    # data set, but instead space proportional to the size, so you can visually
+    # see when there is a mismatch in the size of the data.
+    ax.scatter(np.arange(0, len(xs)), xs, s=1.3)
+    ax.scatter(np.arange(len(xs), len(xs) + len(ys)), ys, s=1.3)
+    # Unset the axis labels, it's just the index, this is not meaningful aside
+    # from the order.
+    #ax.axes.get_xaxis().set_visible(False)
+    ax.set_xticks([])
+    ax.set_xlabel("iteration")
+    ax.set_ylabel("duration")
 
     cmap = plt.get_cmap("tab10")
-    for i, zs in enumerate([xs, ys]):
-        ax = fig.add_subplot(gs[1, i])
-        ax.hist(zs, bins=50, color=cmap(i))
+    hist_bins = np.linspace(p005, p995, 25)
+    x_axis = None
+    for i in range(2):
+        zs_now = [xs, ys][i]
+        zs_alt = [xs, ys][1 - i]
+        ax = fig.add_subplot(gs[i, 0], sharex=x_axis)
+        ax.hist(zs_now, bins=hist_bins, color=cmap(i))
+        ax.hist(zs_alt, bins=hist_bins, edgecolor=cmap(1 - i), linewidth=1.0, histtype="step")
+        # We don't need labels on the y-axis, whether it is frequency or count,
+        # what matters is the shape of the distribution.
+        ax.axes.get_yaxis().set_visible(False)
+        x_axis = ax
+
+    ax = fig.add_subplot(gs[2, 0], sharex=x_axis)
+    print(np.mean(xs))
+    bar_a = ax.barh(1.0, np.mean(xs), xerr=np.std(xs))
+    bar_b = ax.barh(2.0, np.mean(ys), xerr=np.std(ys))
+    ax.set_xlim(p005, p995)
+    # We don't need labels on the bars, the entire plot is color-coded.
+    ax.axes.get_yaxis().set_visible(False)
+    ax.set_xlabel("duration (mean ± stddev)")
+    ax.legend([bar_a, bar_b], ["A", "B"])
 
     plt.show()
     print(stats.mannwhitneyu(xs, ys))
