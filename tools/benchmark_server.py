@@ -151,13 +151,15 @@ def report(f1: str, f2: str) -> None:
 
     ax = fig.add_subplot(gs[2, 0], sharex=x_axis)
     print(np.mean(xs))
-    bar_a = ax.barh(1.0, np.mean(xs), xerr=np.std(xs))
-    bar_b = ax.barh(2.0, np.mean(ys), xerr=np.std(ys))
+    bar_a = ax.barh(2.0, np.mean(xs), xerr=np.std(xs))
+    bar_b = ax.barh(1.0, np.mean(ys), xerr=np.std(ys))
     ax.set_xlim(p005, p995)
     # We don't need labels on the bars, the entire plot is color-coded.
     ax.axes.get_yaxis().set_visible(False)
     ax.set_xlabel("duration (mean ± stddev)")
     ax.legend([bar_a, bar_b], ["A", "B"])
+
+    fig.suptitle(f"A = {f1} vs. B = {f2}")
 
     plt.show()
     print(stats.mannwhitneyu(xs, ys))
