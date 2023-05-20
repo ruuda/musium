@@ -331,9 +331,7 @@ impl MemoryMetaIndex {
 
         MemoryMetaIndex {
             artist_bookmarks: Bookmarks::new(artists.iter().map(|p| (p.0).0)),
-            // TODO: The album bookmarks have become useless now that the album
-            // ids have their high bits all zero!
-            album_bookmarks: Bookmarks::new(albums.iter().map(|p| (p.0).0)),
+            album_bookmarks: Bookmarks::new(albums.iter().map(|p| p.0.for_bookmark())),
             track_bookmarks: Bookmarks::new(tracks.iter().map(|p| (p.0).0)),
             albums_by_artist_bookmarks: Bookmarks::new(albums_by_artist.iter().map(|p| (p.0).0)),
             artists: artists,
@@ -437,7 +435,7 @@ impl MetaIndex for MemoryMetaIndex {
 
     #[inline]
     fn get_album(&self, id: AlbumId) -> Option<&Album> {
-        let slice = self.album_bookmarks.range(&self.albums[..], id.0);
+        let slice = self.album_bookmarks.range(&self.albums[..], id.for_bookmark());
         slice
             .binary_search_by_key(&id, |pair| pair.0)
             .ok()

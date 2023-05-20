@@ -122,6 +122,16 @@ impl AlbumId {
     pub fn parse(src: &str) -> Option<AlbumId> {
         u64::from_str_radix(src, 16).ok().map(AlbumId)
     }
+
+    /// Return the album id, but shifted so the most significant byte is used.
+    ///
+    /// By default, the top 12 bits of the album id are unused, but that means
+    /// the album id is unsuiable for use with the `Bookmark` accelerator. This
+    /// resolves that.
+    #[inline(always)]
+    pub fn for_bookmark(&self) -> u64 {
+        self.0 << 12
+    }
 }
 
 impl ArtistId {
