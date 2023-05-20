@@ -270,9 +270,13 @@ impl MemoryMetaIndex {
         // aligned (we could define a custom struct instead of the tuple, but
         // that is rather invasive), but the allocator will give us an aligned
         // buffer anyway at this size class. Confirm that.
-        let tracks_addr = &tracks[..].as_ptr();
+        // TODO: Apparently, this can be violated after all, I am getting
+        // 16-byte alignment instead of 32-byte alignment :/
+        let tracks_addr = tracks[..].as_ptr() as *const u8;
         let align_off = tracks_addr.align_offset(32);
-        assert_eq!(align_off, 0, "I was hoping that the tracks buffer would be aligned to a cache line.");
+        if align_off != 0 {
+            println!("Warning: Tracks table is not aligned to 32 bytes, this may impact performance.");
+        }
 
         for (id, album) in builder.albums.iter() {
             let (id, mut album) = (*id, album.clone());
