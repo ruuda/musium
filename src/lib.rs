@@ -266,6 +266,14 @@ impl MemoryMetaIndex {
             tracks.push((id, track));
         }
 
+        // There is no easy way in Rust to guarantee that the tracks buffer is
+        // aligned (we could define a custom struct instead of the tuple, but
+        // that is rather invasive), but the allocator will give us an aligned
+        // buffer anyway at this size class. Confirm that.
+        let tracks_addr = &tracks[..].as_ptr();
+        let align_off = tracks_addr.align_offset(32);
+        assert_eq!(align_off, 0, "I was hoping that the tracks buffer would be aligned to a cache line.");
+
         for (id, album) in builder.albums.iter() {
             let (id, mut album) = (*id, album.clone());
 
