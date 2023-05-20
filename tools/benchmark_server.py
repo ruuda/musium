@@ -133,7 +133,7 @@ def report(f1: str, f2: str) -> None:
     #ax.axes.get_xaxis().set_visible(False)
     ax.set_xticks([])
     ax.set_xlabel("iteration")
-    ax.set_ylabel("duration")
+    ax.set_ylabel("duration (seconds)")
 
     cmap = plt.get_cmap("tab10")
     hist_bins = np.linspace(p005, p995, 25)
@@ -151,18 +151,31 @@ def report(f1: str, f2: str) -> None:
 
     ax = fig.add_subplot(gs[2, 0], sharex=x_axis)
     print(np.mean(xs))
-    bar_a = ax.barh(2.0, np.mean(xs), xerr=np.std(xs))
-    bar_b = ax.barh(1.0, np.mean(ys), xerr=np.std(ys))
+    mean_a, std_a = np.mean(xs), np.std(xs)
+    mean_b, std_b = np.mean(ys), np.std(ys)
+    bar_a = ax.barh(2.0, mean_a, xerr=std_a)
+    bar_b = ax.barh(1.0, mean_b, xerr=std_b)
     ax.set_xlim(p005, p995)
     # We don't need labels on the bars, the entire plot is color-coded.
     ax.axes.get_yaxis().set_visible(False)
-    ax.set_xlabel("duration (mean ± stddev)")
+    ax.set_xlabel("duration (seconds, mean ± stddev)")
     ax.legend([bar_a, bar_b], ["A", "B"])
 
-    fig.suptitle(f"A = {f1} vs. B = {f2}")
+    ax = fig.add_subplot(gs[0, 1])
+    ax.text(0.5, 0.66, "B duration as percentage of A:", ha="center", va="center", size=10)
+    rel_mean = mean_b / mean_a
+    rel_std = rel_mean * np.sqrt((std_a / mean_a) ** 2 + (std_b / mean_b) ** 2)
+    ax.text(0.5, 0.33, f"{rel_mean:.2%} ± {rel_std:.2%}", ha="center", va="center", size=15)
+    ax.set_axis_off()
 
+    ax = fig.add_subplot(gs[1, 1])
+    utest = stats.mannwhitneyu(xs, ys)
+    ax.text(0.5, 0.65, "H0: Samples A and B are drawn\nfrom the same distribution.", ha="center", va="center", size=10)
+    ax.text(0.5, 0.25, f"p-value: {utest.pvalue:.2g}", ha="center", va="center", size=10)
+    ax.set_axis_off()
+
+    fig.suptitle(f"A = {f1} vs. B = {f2}")
     plt.show()
-    print(stats.mannwhitneyu(xs, ys))
 
 
 if __name__ == "__main__":
