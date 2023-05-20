@@ -130,7 +130,6 @@ def report(f1: str, f2: str) -> None:
     ax.scatter(np.arange(len(xs), len(xs) + len(ys)), ys, s=1.3)
     # Unset the axis labels, it's just the index, this is not meaningful aside
     # from the order.
-    #ax.axes.get_xaxis().set_visible(False)
     ax.set_xticks([])
     ax.set_xlabel("iteration")
     ax.set_ylabel("duration (seconds)")
@@ -143,7 +142,13 @@ def report(f1: str, f2: str) -> None:
         zs_alt = [xs, ys][1 - i]
         ax = fig.add_subplot(gs[i, 0], sharex=x_axis)
         ax.hist(zs_now, bins=hist_bins, color=cmap(i))
-        ax.hist(zs_alt, bins=hist_bins, edgecolor=cmap(1 - i), linewidth=1.0, histtype="step")
+        ax.hist(
+            zs_alt,
+            bins=hist_bins,
+            edgecolor=cmap(1 - i),
+            linewidth=1.0,
+            histtype="step",
+        )
         # We don't need labels on the y-axis, whether it is frequency or count,
         # what matters is the shape of the distribution.
         ax.axes.get_yaxis().set_visible(False)
@@ -162,16 +167,29 @@ def report(f1: str, f2: str) -> None:
     ax.legend([bar_a, bar_b], ["A", "B"])
 
     ax = fig.add_subplot(gs[0, 1])
-    ax.text(0.5, 0.66, "B duration as percentage of A:", ha="center", va="center", size=10)
+    ax.text(
+        0.5, 0.66, "B duration as percentage of A:", ha="center", va="center", size=10
+    )
     rel_mean = mean_b / mean_a
     rel_std = rel_mean * np.sqrt((std_a / mean_a) ** 2 + (std_b / mean_b) ** 2)
-    ax.text(0.5, 0.33, f"{rel_mean:.2%} ± {rel_std:.2%}", ha="center", va="center", size=15)
+    ax.text(
+        0.5, 0.33, f"{rel_mean:.2%} ± {rel_std:.2%}", ha="center", va="center", size=15
+    )
     ax.set_axis_off()
 
     ax = fig.add_subplot(gs[1, 1])
     utest = stats.mannwhitneyu(xs, ys)
-    ax.text(0.5, 0.65, "H0: Samples A and B are drawn\nfrom the same distribution.", ha="center", va="center", size=10)
-    ax.text(0.5, 0.25, f"p-value: {utest.pvalue:.2g}", ha="center", va="center", size=10)
+    ax.text(
+        0.5,
+        0.65,
+        "H0: Samples A and B are drawn\nfrom the same distribution.",
+        ha="center",
+        va="center",
+        size=10,
+    )
+    ax.text(
+        0.5, 0.25, f"p-value: {utest.pvalue:.2g}", ha="center", va="center", size=10
+    )
     ax.set_axis_off()
 
     fig.suptitle(f"A = {f1} vs. B = {f2}")
