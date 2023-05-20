@@ -472,7 +472,7 @@ impl MetaIndex for MemoryMetaIndex {
         let next_album_tid = TrackId::new(AlbumId(id.0 + 1), 0, 0);
         let end = begin + self.tracks[begin..]
             .iter()
-            .position(|&(tid, ref _track)| tid < next_album_tid)
+            .position(|&(tid, ref _track)| tid >= next_album_tid)
             .unwrap_or(self.tracks.len() - begin);
 
         &self.tracks[begin..end]
