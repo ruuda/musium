@@ -371,6 +371,30 @@ impl fmt::Display for ArtistId {
     }
 }
 
+/// An aligned `(TrackId, Track)` tuple.
+///
+/// Aligned to 32 bytes (same as its size) so these do not straddle cache lines.
+#[repr(align(32))]
+pub struct TrackWithId {
+    pub track_id: TrackId,
+    pub track: Track,
+}
+
+/// An `(AlbumId, Album)` tuple.
+pub struct AlbumWithId {
+    pub album_id: AlbumId,
+    pub album: Album,
+}
+
+/// An aligned `(ArtistId, Artist)` tuple.
+///
+/// Aligned to 16 bytes (same as its size) so these do not straddle cache lines.
+#[repr(align(16))]
+pub struct ArtistWithId {
+    pub artist_id: ArtistId,
+    pub artist: Artist,
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -381,7 +405,12 @@ mod test {
         assert_eq!(mem::size_of::<Track>(), 24);
         assert_eq!(mem::size_of::<Album>(), 32);
         assert_eq!(mem::size_of::<Artist>(), 8);
-        assert_eq!(mem::size_of::<(TrackId, Track)>(), 32);
+
+        assert_eq!(mem::size_of::<TrackWithId>(), 32);
+        assert_eq!(mem::size_of::<ArtistWithId>(), 16);
+
+        assert_eq!(mem::size_of::<TrackWithId>(), mem::align_of::<TrackWithId>());
+        assert_eq!(mem::size_of::<ArtistWithId>(), mem::align_of::<ArtistWithId>());
 
         assert_eq!(mem::align_of::<Track>(), 8);
         assert_eq!(mem::align_of::<Album>(), 8);

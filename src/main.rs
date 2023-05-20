@@ -47,9 +47,9 @@ fn make_index(db_path: &Path) -> Result<MemoryMetaIndex> {
     );
 
     let mut track_louds = Vec::new();
-    for &(track_id, ref track) in index.get_tracks() {
-        if let Some(lufs) = track.loudness {
-            track_louds.push((lufs, track_id));
+    for kv in index.get_tracks() {
+        if let Some(lufs) = kv.track.loudness {
+            track_louds.push((lufs, kv.track_id));
         }
     }
     track_louds.sort();
@@ -77,9 +77,9 @@ fn make_index(db_path: &Path) -> Result<MemoryMetaIndex> {
     }
 
     let mut album_louds = Vec::new();
-    for &(album_id, ref album) in index.get_albums() {
-        if let Some(lufs) = album.loudness {
-            album_louds.push((lufs, album_id));
+    for kv in index.get_albums() {
+        if let Some(lufs) = kv.album.loudness {
+            album_louds.push((lufs, kv.album_id));
         }
     }
     album_louds.sort();

@@ -56,6 +56,7 @@ use std::path::Path;
 use crate::build::{AlbumArtistsDeduper, BuildMetaIndex, BuildError};
 use crate::error::{Error, Result};
 use crate::prim::{ArtistId, Artist, AlbumArtistsRef, AlbumId, Album, TrackId, Track, Lufs, StringRef, FilenameRef};
+use crate::prim::{ArtistWithId, AlbumWithId, TrackWithId};
 use crate::string_utils::StringDeduper;
 use crate::word_index::MemoryWordIndex;
 
@@ -84,16 +85,16 @@ pub trait MetaIndex {
     fn get_album_artists(&self, range: AlbumArtistsRef) -> &[ArtistId];
 
     /// Return all tracks that are part of the album.
-    fn get_album_tracks(&self, id: AlbumId) -> &[(TrackId, Track)];
+    fn get_album_tracks(&self, id: AlbumId) -> &[TrackWithId];
 
     /// Return all tracks, ordered by id.
-    fn get_tracks(&self) -> &[(TrackId, Track)];
+    fn get_tracks(&self) -> &[TrackWithId];
 
     /// Return all albums, ordered by id.
-    fn get_albums(&self) -> &[(AlbumId, Album)];
+    fn get_albums(&self) -> &[AlbumWithId];
 
     /// Return all album artists, ordered by id.
-    fn get_artists(&self) -> &[(ArtistId, Artist)];
+    fn get_artists(&self) -> &[ArtistWithId];
 
     /// Look up an artist by id.
     fn get_artist(&self, _: ArtistId) -> Option<&Artist>;
@@ -181,9 +182,9 @@ impl Bookmarks {
 }
 
 pub struct MemoryMetaIndex {
-    artists: Vec<(ArtistId, Artist)>,
-    albums: Vec<(AlbumId, Album)>,
-    tracks: Vec<(TrackId, Track)>,
+    artists: Vec<ArtistWithId>,
+    albums: Vec<AlbumWithId>,
+    tracks: Vec<TrackWithId>,
 
     // Per artist, all albums, ordered by ascending release date.
     albums_by_artist: Vec<(ArtistId, AlbumId)>,
@@ -210,19 +211,19 @@ pub struct MemoryMetaIndex {
 /// binary search. Albums for a single artist are ordered by ascending release
 /// date.
 fn build_albums_by_artist_index(
-    albums: &[(AlbumId, Album)],
+    albums: &[AlbumWithId],
     album_artists: &AlbumArtistsDeduper,
 ) -> Vec<(ArtistId, AlbumId)> {
     // Add a bit of headroom, most albums have one artist, but some albums have
     // multiple.
     let mut entries_with_date = Vec::with_capacity(albums.len() * 40 / 32);
 
-    for &(album_id, ref album) in albums {
-        for album_artist_id in album_artists.get(album.artist_ids) {
+    for kv in albums {
+        for album_artist_id in album_artists.get(kv.album.artist_ids) {
             entries_with_date.push((
                 *album_artist_id,
-                album_id,
-                album.original_release_date,
+                kv.album_id,
+                kv.album.original_release_date,
             ));
         }
     }
@@ -243,9 +244,9 @@ fn build_albums_by_artist_index(
 impl MemoryMetaIndex {
     /// Convert the builder into a memory-backed index.
     fn new(builder: &BuildMetaIndex) -> MemoryMetaIndex {
-        let mut artists: Vec<(ArtistId, Artist)> = Vec::with_capacity(builder.artists.len());
-        let mut albums: Vec<(AlbumId, Album)> = Vec::with_capacity(builder.albums.len());
-        let mut tracks: Vec<(TrackId, Track)> = Vec::with_capacity(builder.tracks.len());
+        let mut artists: Vec<ArtistWithId> = Vec::with_capacity(builder.artists.len());
+        let mut albums: Vec<AlbumWithId> = Vec::with_capacity(builder.albums.len());
+        let mut tracks: Vec<TrackWithId> = Vec::with_capacity(builder.tracks.len());
         let mut album_artists = AlbumArtistsDeduper::new();
         let mut strings = StringDeduper::new();
         let mut filenames = Vec::new();
@@ -263,20 +264,18 @@ impl MemoryMetaIndex {
             filenames.push(builder.filenames[track.filename.0 as usize].clone());
             track.filename = FilenameRef(filenames.len() as u32 - 1);
 
-            tracks.push((id, track));
+            tracks.push(TrackWithId { track_id: id, track });
         }
 
-        // There is no easy way in Rust to guarantee that the tracks buffer is
-        // aligned (we could define a custom struct instead of the tuple, but
-        // that is rather invasive), but the allocator will give us an aligned
-        // buffer anyway at this size class. Confirm that.
-        // TODO: Apparently, this can be violated after all, I am getting
-        // 16-byte alignment instead of 32-byte alignment :/
+        // This should be enforced by the repr(align), but confirm this at
+        // runtime to double check that I am using the right types.
         let tracks_addr = tracks[..].as_ptr() as *const u8;
         let align_off = tracks_addr.align_offset(32);
-        if align_off != 0 {
-            println!("Warning: Tracks table is not aligned to 32 bytes, this may impact performance.");
-        }
+        assert_eq!(
+            align_off,
+            0,
+            "Tracks table must align to 32 bytes so elements do not straddle cache lines."
+        );
 
         for (id, album) in builder.albums.iter() {
             let (id, mut album) = (*id, album.clone());
@@ -310,7 +309,7 @@ impl MemoryMetaIndex {
                 album.first_seen = album.first_seen.min(*first_listen);
             }
 
-            albums.push((id, album));
+            albums.push(AlbumWithId { album_id: id, album });
         }
 
         for (id, artist) in builder.artists.iter() {
@@ -323,7 +322,7 @@ impl MemoryMetaIndex {
                 strings.insert(builder.strings.get(artist.name_for_sort.0))
             );
 
-            artists.push((id, artist));
+            artists.push(ArtistWithId { artist_id: id, artist });
         }
 
         strings.upgrade_quotes();
@@ -334,9 +333,9 @@ impl MemoryMetaIndex {
         );
 
         MemoryMetaIndex {
-            artist_bookmarks: Bookmarks::new(artists.iter().map(|p| (p.0).0)),
-            album_bookmarks: Bookmarks::new(albums.iter().map(|p| p.0.for_bookmark())),
-            track_bookmarks: Bookmarks::new(tracks.iter().map(|p| (p.0).0)),
+            artist_bookmarks: Bookmarks::new(artists.iter().map(|p| p.artist_id.0)),
+            album_bookmarks: Bookmarks::new(albums.iter().map(|p| p.album_id.for_bookmark())),
+            track_bookmarks: Bookmarks::new(tracks.iter().map(|p| p.track_id.0)),
             albums_by_artist_bookmarks: Bookmarks::new(albums_by_artist.iter().map(|p| (p.0).0)),
             artists: artists,
             albums: albums,
@@ -431,20 +430,20 @@ impl MetaIndex for MemoryMetaIndex {
     fn get_track(&self, id: TrackId) -> Option<&Track> {
         let slice = self.track_bookmarks.range(&self.tracks[..], id.0);
         slice
-            .binary_search_by_key(&id, |pair| pair.0)
+            .binary_search_by_key(&id, |kv| kv.track_id)
             .ok()
             // TODO: Remove bounds check.
-            .map(|idx| &slice[idx].1)
+            .map(|idx| &slice[idx].track)
     }
 
     #[inline]
     fn get_album(&self, id: AlbumId) -> Option<&Album> {
         let slice = self.album_bookmarks.range(&self.albums[..], id.for_bookmark());
         slice
-            .binary_search_by_key(&id, |pair| pair.0)
+            .binary_search_by_key(&id, |kv| kv.album_id)
             .ok()
             // TODO: Remove bounds check.
-            .map(|idx| &slice[idx].1)
+            .map(|idx| &slice[idx].album)
     }
 
     #[inline]
@@ -453,13 +452,13 @@ impl MetaIndex for MemoryMetaIndex {
     }
 
     #[inline]
-    fn get_album_tracks(&self, id: AlbumId) -> &[(TrackId, Track)] {
+    fn get_album_tracks(&self, id: AlbumId) -> &[TrackWithId] {
         // Look for track 0 of disc 0. This is the first track of the album,
         // if it exists. Otherwise binary search would find the first track
         // after it.
         let tid = TrackId::new(id, 0, 0);
         // TODO: Use bookmarks for this.
-        let begin = match self.tracks.binary_search_by_key(&tid, |pair| pair.0) {
+        let begin = match self.tracks.binary_search_by_key(&tid, |kv| kv.track_id) {
             Ok(i) => i,
             Err(i) => i,
         };
@@ -472,24 +471,24 @@ impl MetaIndex for MemoryMetaIndex {
         let next_album_tid = TrackId::new(AlbumId(id.0 + 1), 0, 0);
         let end = begin + self.tracks[begin..]
             .iter()
-            .position(|&(tid, ref _track)| tid >= next_album_tid)
+            .position(|kv| kv.track_id >= next_album_tid)
             .unwrap_or(self.tracks.len() - begin);
 
         &self.tracks[begin..end]
     }
 
     #[inline]
-    fn get_tracks(&self) -> &[(TrackId, Track)] {
+    fn get_tracks(&self) -> &[TrackWithId] {
         &self.tracks
     }
 
     #[inline]
-    fn get_albums(&self) -> &[(AlbumId, Album)] {
+    fn get_albums(&self) -> &[AlbumWithId] {
         &self.albums
     }
 
     #[inline]
-    fn get_artists(&self) -> &[(ArtistId, Artist)] {
+    fn get_artists(&self) -> &[ArtistWithId] {
         &self.artists
     }
 
@@ -497,10 +496,10 @@ impl MetaIndex for MemoryMetaIndex {
     fn get_artist(&self, id: ArtistId) -> Option<&Artist> {
         let slice = self.artist_bookmarks.range(&self.artists[..], id.0);
         slice
-            .binary_search_by_key(&id, |pair| pair.0)
+            .binary_search_by_key(&id, |kv| kv.artist_id)
             .ok()
             // TODO: Remove bounds check.
-            .map(|idx| &slice[idx].1)
+            .map(|idx| &slice[idx].artist)
     }
 
     #[inline]

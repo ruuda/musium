@@ -283,10 +283,10 @@ impl<'a> TaskQueue<'a> {
             album_id: album_id,
             file_id: tracks
                 .iter()
-                .map(|(_id, f)| f.file_id)
+                .map(|pair| pair.track.file_id)
                 .max()
                 .expect("Album contains at least one track."),
-            tracks_pending: tracks.iter().map(|(id, _)| *id).collect(),
+            tracks_pending: tracks.iter().map(|kv| kv.track_id).collect(),
             tracks_done: Vec::with_capacity(tracks.len()),
             num_tracks: tracks.len(),
         };
@@ -309,22 +309,26 @@ impl<'a> TaskQueue<'a> {
         // should be dwarfed by the SQLite call anyway.
         // TODO: Instead, enumerate both the index and the database in
         // parallel, and do a merge-diff.
-        'albums: for (album_id, _album) in self.index.get_albums() {
+        'albums: for album_kv in self.index.get_albums() {
+            let album_id = album_kv.album_id;
+
             // If the album is not there, we need to add it.
             if db::select_album_loudness_lufs(tx, album_id.0 as i64)?.is_none() {
-                self.push_task_album(*album_id);
+                self.push_task_album(album_id);
                 continue 'albums
             }
 
             // If one of the tracks is not there, we also add the full album.
-            for (track_id, _track) in self.index.get_album_tracks(*album_id) {
+            for track_kv in self.index.get_album_tracks(album_id) {
+                let track_id = track_kv.track_id;
+
                 if db::select_track_loudness_lufs(tx, track_id.0 as i64)?.is_none() {
-                    self.push_task_album(*album_id);
+                    self.push_task_album(album_id);
                     continue 'albums
                 }
 
                 if db::select_track_waveform(tx, track_id.0 as i64)?.is_none() {
-                    self.push_task_album(*album_id);
+                    self.push_task_album(album_id);
                     continue 'albums
                 }
             }
