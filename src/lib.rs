@@ -457,8 +457,14 @@ impl MetaIndex for MemoryMetaIndex {
         // if it exists. Otherwise binary search would find the first track
         // after it.
         let tid = TrackId::new(id, 0, 0);
-        // TODO: Use bookmarks for this.
-        let begin = match self.tracks.binary_search_by_key(&tid, |kv| kv.track_id) {
+
+        // We can leverage the bookmarks, because they index on most significant
+        // byte of the id, but the track ids of the same album only differ in
+        // the least significant two bytes, so all tracks of a given album are
+        // in the same bookmarks slice.
+        let slice = self.track_bookmarks.range(&self.tracks[..], tid.0);
+
+        let begin = match slice.binary_search_by_key(&tid, |kv| kv.track_id) {
             Ok(i) => i,
             Err(i) => i,
         };
@@ -469,12 +475,12 @@ impl MetaIndex for MemoryMetaIndex {
         // less tracks than that, and the linear scan has a very regular memory
         // access pattern.
         let next_album_tid = TrackId::new(AlbumId(id.0 + 1), 0, 0);
-        let end = begin + self.tracks[begin..]
+        let end = begin + slice[begin..]
             .iter()
             .position(|kv| kv.track_id >= next_album_tid)
-            .unwrap_or(self.tracks.len() - begin);
+            .unwrap_or(slice.len() - begin);
 
-        &self.tracks[begin..end]
+        &slice[begin..end]
     }
 
     #[inline]
