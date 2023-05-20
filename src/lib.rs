@@ -457,9 +457,10 @@ impl MetaIndex for MemoryMetaIndex {
         // 13 random memory accesses for 12k tracks, whereas most albums have
         // less tracks than that, and the linear scan has a very regular memory
         // access pattern.
+        let next_album_tid = TrackId::new(AlbumId(id.0 + 1), 0, 0);
         let end = begin + self.tracks[begin..]
             .iter()
-            .position(|&(tid, ref _track)| tid.album_id() != id)
+            .position(|&(tid, ref _track)| tid < next_album_tid)
             .unwrap_or(self.tracks.len() - begin);
 
         &self.tracks[begin..end]

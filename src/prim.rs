@@ -87,6 +87,7 @@ impl TrackId {
         u64::from_str_radix(src, 16).ok().map(TrackId)
     }
 
+    #[inline(always)]
     pub fn new(album_id: AlbumId, disc_number: u8, track_number: u8) -> TrackId {
         // Confirm that the numbers are in range so we don't discard anything.
         debug_assert_eq!(album_id.0 & 0xfff0_0000_0000_0000, 0);
@@ -100,14 +101,17 @@ impl TrackId {
         TrackId(id)
     }
 
+    #[inline(always)]
     pub fn track_number(&self) -> u8 {
         (self.0 & 0xff) as u8
     }
 
+    #[inline(always)]
     pub fn disc_number(&self) -> u8 {
         ((self.0 >> 8) & 0x0f) as u8
     }
 
+    #[inline(always)]
     pub fn album_id(&self) -> AlbumId {
         AlbumId(self.0 >> 12)
     }
