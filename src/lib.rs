@@ -41,6 +41,7 @@ pub mod error;
 pub mod history;
 pub mod mvar;
 pub mod playback;
+pub mod playcount;
 pub mod player;
 pub mod prim;
 pub mod scan;
