@@ -905,6 +905,8 @@ pub fn iter_listens<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<Iter<
             cast(strftime('%s', started_at) as integer) as started_at_second
         from
             listens
+        where
+            completed_at is not null
         order by
             started_at_second asc;
         "#;

@@ -201,16 +201,21 @@ impl Default for ExpCounter {
 ///
 /// While at it, this also reverses the ordering so we get a min-heap instead of
 /// a max-heap without needing to manually negate the numbers.
-#[derive(PartialEq, PartialOrd)]
+#[derive(PartialEq)]
 pub struct RevNotNan(pub f32);
 
 impl Eq for RevNotNan {}
+
+impl PartialOrd for RevNotNan {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(&other.0).map(|ord| ord.reverse())
+    }
+}
 
 impl Ord for RevNotNan {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.partial_cmp(other)
             .expect("Counts must not be NaN.")
-            .reverse()
     }
 }
 
@@ -269,6 +274,11 @@ impl PlayCounter {
         counter_album.increment(at, w_album);
 
         // For the artists, counting by time listened seems approprriate.
+        // TODO: After inspecting the output, it seems this is not the case.
+        // Sometimes one day I put on two albums by an artist, and it's a few
+        // hours and many tracks, but then I listen one or two tracks by one
+        // artist on many days. That second one should make the artist count
+        // more.
         let album = index.get_album(album_id).expect("Album should exist.");
         for artist_id in index.get_album_artists(album.artist_ids) {
             let counter_artist = self.artists.entry(*artist_id).or_default();
@@ -394,7 +404,39 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
 
     counter.equalize_counters();
 
+    for (k, v) in counter.albums.iter() {
+        println!("{} {:?}", k, v.n);
+    }
+
+    for timescale in 0..5 {
+        let (top_artists, top_albums, top_tracks) = counter.get_top(timescale, 50);
+        println!("\nTOP ARTISTS (timescale {})\n", timescale);
+
+        for (i, (count, artist_id)) in top_artists.iter().enumerate() {
+            let artist = index.get_artist(*artist_id).unwrap();
+            let artist_name = index.get_string(artist.name);
+
+            println!("  {:2} {:7.3} {} {}", i + 1, count.0, artist_id, artist_name);
+        }
+        println!();
+    }
+
     // TODO: Print topk.
 
     Ok(())
 }
+
+/* Note, for comparison:
+select
+  printf("%x", album_artist_id),
+  album_artist,
+  count(*) as n
+from
+  listens
+where
+  completed_at is not null
+group by
+  album_artist_id, album_artist
+order by
+  n desc;
+*/

@@ -321,6 +321,8 @@ select
     cast(strftime('%s', started_at) as integer) as started_at_second /* :i64 */
 from
     listens
+where
+    completed_at is not null
 order by
     started_at_second asc;
 
