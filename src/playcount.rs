@@ -7,7 +7,11 @@
 
 //! Computation of playcounts and other statistics.
 
+use std::collections::HashMap;
+
 use crate::prim::Instant;
+use crate::prim::{ArtistId, AlbumId, TrackId};
+use crate::{MetaIndex, MemoryMetaIndex};
 
 /// An instant with ~hour granularity, used to track last played events.
 ///
@@ -54,6 +58,11 @@ impl From<Instant> for CoarseInstant {
             posix_4kiseconds_utc: (t.posix_seconds_utc / 4096) as i32
         }
     }
+}
+
+impl CoarseDuration {
+    /// A duration of 205 minutes (12 kibiseconds, three times 4096 seconds).
+    const MINUTES_205: CoarseDuration = CoarseDuration { duration_4kiseconds: 3 };
 }
 
 pub struct ExpCounter {
@@ -171,5 +180,74 @@ impl ExpCounter {
             *ni = ni.mul_add(factor, weight);
         }
         self.t = t1;
+    }
+}
+
+impl Default for ExpCounter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub struct PlayCounter {
+    artists: HashMap<ArtistId, ExpCounter>,
+    albums: HashMap<AlbumId, ExpCounter>,
+    tracks: HashMap<TrackId, ExpCounter>,
+}
+
+impl PlayCounter {
+    pub fn new() -> PlayCounter {
+        PlayCounter {
+            artists: HashMap::new(),
+            albums: HashMap::new(),
+            tracks: HashMap::new(),
+        }
+    }
+
+    pub fn count(
+        &mut self,
+        index: &MemoryMetaIndex,
+        at: CoarseInstant,
+        track_id: TrackId,
+    ) {
+        // The track playcount is fairly straightforward, just count 1.0.
+        let counter_track = self.tracks.entry(track_id).or_default();
+        counter_track.increment(at, 1.0);
+
+        // Get the duration of the track, normalized to the average duration of
+        // 264 seconds (which happens to be the mean across my collection).
+        let track = index.get_track(track_id).expect("Track must exist.");
+        let time_weight = track.duration_seconds as f32 * (1.0 / 264.0);
+
+        // The album playcount is more subtle. If we counted 1.0 for every track
+        // in the album, then albums with more tracks would get higher counts if
+        // we often listen full albums.
+        //
+        // To mitigate this, if we already counted this album in the same ~hour
+        // window, or in the two ~hours before it, then reduce the weight. We
+        // still give some non-zero weight, because we *did* spend time
+        // listening to this album, so in the extreme where we listen to one
+        // album on repeat all day, it should be counted more than an album that
+        // we listen only once.
+        //
+        // TODO: Should we have two coarse duration types, one with at least
+        // ~minute resolution, so the weight can be better tweaked, and there is
+        // less arbitrary behavior at bucket boundaries? Some exponentially
+        // decaying penalty that decays in ~hours?
+        let album_id = track_id.album_id();
+        let counter_album = self.albums.entry(album_id).or_default();
+        let w_album = if at.duration_since(counter_album.t) < CoarseDuration::MINUTES_205 {
+            time_weight * 0.1
+        } else {
+            1.0
+        };
+        counter_album.increment(at, w_album);
+
+        // For the artists, counting by time listened seems approprriate.
+        let album = index.get_album(album_id).expect("Album should exist.");
+        for artist_id in index.get_album_artists(album.artist_ids) {
+            let counter_artist = self.artists.entry(*artist_id).or_default();
+            counter_artist.increment(at, time_weight);
+        }
     }
 }
