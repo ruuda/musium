@@ -48,15 +48,28 @@ use chrono::{DateTime, Utc};
 // 0.1% at that number of artists. The lowest multiple of 8 that I can get away
 // with is 48 bits.
 
+/// The file id is a 64-bit integer assigned by SQLite.
+///
+/// File ids are not recycled, when a file changes on disk, it gets a new id.
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FileId(pub i64);
 
+/// The track id is a concatenation of (album id, disc number, track number).
+///
+/// The album id is 52 bits, the disc number 4 bits, the track number 8 bits.
+/// The track number goes in the least significant bits, then the disc number,
+/// then the album id in the most significant bits.
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct TrackId(pub u64);
 
+/// The album id is a 52-bit id derived from the `musicbrainz_albumid` tag.
+///
+/// Only 52 bits of the id are used, such that the album id can be a prefix of
+/// the track id. The most significant 12 bits should be zero.
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct AlbumId(pub u64);
 
+/// The artist (album artist) is derived form the `musicbrainz_albumartist` tag.
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ArtistId(pub u64);
 
@@ -73,12 +86,51 @@ impl TrackId {
     pub fn parse(src: &str) -> Option<TrackId> {
         u64::from_str_radix(src, 16).ok().map(TrackId)
     }
+
+    #[inline(always)]
+    pub fn new(album_id: AlbumId, disc_number: u8, track_number: u8) -> TrackId {
+        // Confirm that the numbers are in range so we don't discard anything.
+        debug_assert_eq!(album_id.0 & 0xfff0_0000_0000_0000, 0);
+        debug_assert_eq!(disc_number & 0xf0, 0);
+
+        let id = 0
+            | (album_id.0 << 12)
+            | ((disc_number as u64) << 8)
+            | (track_number as u64);
+
+        TrackId(id)
+    }
+
+    #[inline(always)]
+    pub fn track_number(&self) -> u8 {
+        (self.0 & 0xff) as u8
+    }
+
+    #[inline(always)]
+    pub fn disc_number(&self) -> u8 {
+        ((self.0 >> 8) & 0x0f) as u8
+    }
+
+    #[inline(always)]
+    pub fn album_id(&self) -> AlbumId {
+        AlbumId(self.0 >> 12)
+    }
 }
 
 impl AlbumId {
     #[inline]
     pub fn parse(src: &str) -> Option<AlbumId> {
         u64::from_str_radix(src, 16).ok().map(AlbumId)
+    }
+
+    /// Return the album id, but shifted so the most significant byte is used.
+    ///
+    /// By default, the top 12 bits of the album id are unused, but that means
+    /// the album id is unsuiable for use with the `Bookmark` accelerator. This
+    /// resolves that.
+    #[inline(always)]
+    pub fn for_bookmark(&self) -> u64 {
+        self.0 << 12
     }
 }
 
@@ -190,9 +242,6 @@ pub struct Mtime(pub i64);
 #[repr(C)]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Track {
-    // TODO: We might make the album id a true prefix of the track id, then we
-    // don't need to store the track id. Just make the album id 52 bits.
-    pub album_id: AlbumId,
     pub file_id: FileId,
     pub title: StringRef,
     pub artist: StringRef,
@@ -205,8 +254,6 @@ pub struct Track {
     // becomes a problem, we could use some of the disc number bits to extend
     // the duration range or track number range.
     pub duration_seconds: u16,
-    pub disc_number: u8,
-    pub track_number: u8,
     pub loudness: Option<Lufs>,
 }
 
@@ -311,7 +358,10 @@ impl fmt::Display for TrackId {
 
 impl fmt::Display for AlbumId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:016x}", self.0)
+        // The upper 12 bits (3 hex digits) should be zero,
+        // so we only pad to a width of 13, not 16.
+        debug_assert_eq!(self.0 & 0xfff0_0000_0000_0000, 0);
+        write!(f, "{:013x}", self.0)
     }
 }
 
@@ -321,25 +371,28 @@ impl fmt::Display for ArtistId {
     }
 }
 
-pub fn get_track_id(album_id: AlbumId,
-                disc_number: u8,
-                track_number: u8)
-                -> TrackId {
-    // Take the bits from the album id, so all the tracks within one album are
-    // adjacent. This is desirable, because two tracks fit in a cache line,
-    // halving the memory access cost of looking up an entire album. It also
-    // makes memory access more predictable. Finally, if the 52 most significant
-    // bits uniquely identify the album (which we assume), then all tracks are
-    // guaranteed to be adjacent, and we can use an efficient range query to
-    // find them.
-    let high = album_id.0 & 0xffff_ffff_ffff_f000;
+/// An aligned `(TrackId, Track)` tuple.
+///
+/// Aligned to 32 bytes (same as its size) so these do not straddle cache lines.
+#[repr(align(32))]
+pub struct TrackWithId {
+    pub track_id: TrackId,
+    pub track: Track,
+}
 
-    // Finally, within an album the disc number and track number should uniquely
-    // identify the track.
-    let mid = ((disc_number & 0xf) as u64) << 8;
-    let low = track_number as u64;
+/// An `(AlbumId, Album)` tuple.
+pub struct AlbumWithId {
+    pub album_id: AlbumId,
+    pub album: Album,
+}
 
-    TrackId(high | mid | low)
+/// An aligned `(ArtistId, Artist)` tuple.
+///
+/// Aligned to 16 bytes (same as its size) so these do not straddle cache lines.
+#[repr(align(16))]
+pub struct ArtistWithId {
+    pub artist_id: ArtistId,
+    pub artist: Artist,
 }
 
 #[cfg(test)]
@@ -349,10 +402,15 @@ mod test {
     #[test]
     fn struct_sizes_are_as_expected() {
         use std::mem;
-        assert_eq!(mem::size_of::<Track>(), 40);
+        assert_eq!(mem::size_of::<Track>(), 24);
         assert_eq!(mem::size_of::<Album>(), 32);
         assert_eq!(mem::size_of::<Artist>(), 8);
-        assert_eq!(mem::size_of::<(TrackId, Track)>(), 48);
+
+        assert_eq!(mem::size_of::<TrackWithId>(), 32);
+        assert_eq!(mem::size_of::<ArtistWithId>(), 16);
+
+        assert_eq!(mem::size_of::<TrackWithId>(), mem::align_of::<TrackWithId>());
+        assert_eq!(mem::size_of::<ArtistWithId>(), mem::align_of::<ArtistWithId>());
 
         assert_eq!(mem::align_of::<Track>(), 8);
         assert_eq!(mem::align_of::<Album>(), 8);

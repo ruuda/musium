@@ -51,9 +51,9 @@ pub fn write_brief_album_json<W: Write>(
 pub fn write_albums_json<W: Write>(index: &dyn MetaIndex, mut w: W) -> io::Result<()> {
     write!(w, "[")?;
     let mut first = true;
-    for &(id, ref album) in index.get_albums() {
+    for kv in index.get_albums() {
         if !first { write!(w, ",")?; }
-        write_brief_album_json(index, &mut w, id, album)?;
+        write_brief_album_json(index, &mut w, kv.album_id, &kv.album)?;
         first = false;
     }
     write!(w, "]")
@@ -77,14 +77,20 @@ pub fn write_album_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: AlbumId, 
     serde_json::to_writer(&mut w, index.get_string(album.artist))?;
     write!(w, r#","release_date":"{}","tracks":["#, album.original_release_date)?;
     let mut first = true;
-    for &(ref tid, ref track) in index.get_album_tracks(id) {
+    for kv in index.get_album_tracks(id) {
+        let track_id = kv.track_id;
         if !first { write!(w, ",")?; }
-        write!(w, r#"{{"id":"{}","disc_number":{},"track_number":{},"title":"#,
-               tid, track.disc_number, track.track_number)?;
-        serde_json::to_writer(&mut w, index.get_string(track.title))?;
+        write!(
+            w,
+            r#"{{"id":"{}","disc_number":{},"track_number":{},"title":"#,
+            track_id,
+            track_id.disc_number(),
+            track_id.track_number(),
+        )?;
+        serde_json::to_writer(&mut w, index.get_string(kv.track.title))?;
         write!(w, r#","artist":"#)?;
-        serde_json::to_writer(&mut w, index.get_string(track.artist))?;
-        write!(w, r#","duration_seconds":{}}}"#, track.duration_seconds)?;
+        serde_json::to_writer(&mut w, index.get_string(kv.track.artist))?;
+        write!(w, r#","duration_seconds":{}}}"#, kv.track.duration_seconds)?;
         first = false;
     }
     write!(w, "]}}")
@@ -172,10 +178,15 @@ pub fn write_search_album_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: Al
 
 pub fn write_search_track_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: TrackId) -> io::Result<()> {
     let track = index.get_track(id).unwrap();
-    let album = index.get_album(track.album_id).unwrap();
+    let album_id = id.album_id();
+    let album = index.get_album(album_id).unwrap();
     write!(w, r#"{{"id":"{}","title":"#, id)?;
     serde_json::to_writer(&mut w, index.get_string(track.title))?;
-    write!(w, r#","album_id":"{}","album":"#, track.album_id)?;
+    // TODO: We might exclude the album id from the response, because it is just
+    // the suffix of the track id. It makes the response smaller, which is
+    // beneficial for sending over the network, but it also makes the format
+    // slightly more unwieldy.
+    write!(w, r#","album_id":"{}","album":"#, album_id)?;
     serde_json::to_writer(&mut w, index.get_string(album.title))?;
     write!(w, r#","artist":"#)?;
     serde_json::to_writer(&mut w, index.get_string(track.artist))?;
@@ -189,8 +200,9 @@ fn write_queued_track_json<W: Write>(
 ) -> io::Result<()> {
     // Same as the search result track format, but additionally includes
     // the duration, and playback information.
+    let album_id = queued_track.track_id.album_id();
     let track = index.get_track(queued_track.track_id).unwrap();
-    let album = index.get_album(track.album_id).unwrap();
+    let album = index.get_album(album_id).unwrap();
     write!(
         w,
         r#"{{"queue_id":"{}","track_id":"{}","title":"#,
@@ -201,7 +213,9 @@ fn write_queued_track_json<W: Write>(
     write!(
         w,
         r#","album_id":"{}","album_artist_ids":["#,
-        track.album_id,
+        // TODO: We might omit the album id, as it is a prefix of the track id,
+        // though it would make the format slightly unwieldy.
+        album_id,
     )?;
     let mut first = true;
     for artist_id in index.get_album_artists(album.artist_ids) {

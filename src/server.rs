@@ -104,7 +104,7 @@ impl MetaServer {
 
         let index = &*self.index_var.get();
         let tracks = index.get_album_tracks(album_id);
-        let (_track_id, track) = tracks.first().expect("Albums have at least one track.");
+        let track = &tracks.first().expect("Albums have at least one track.").track;
         let fname = index.get_filename(track.filename);
 
         let opts = claxon::FlacReaderOptions {

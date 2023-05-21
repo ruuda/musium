@@ -47,9 +47,9 @@ fn make_index(db_path: &Path) -> Result<MemoryMetaIndex> {
     );
 
     let mut track_louds = Vec::new();
-    for &(track_id, ref track) in index.get_tracks() {
-        if let Some(lufs) = track.loudness {
-            track_louds.push((lufs, track_id));
+    for kv in index.get_tracks() {
+        if let Some(lufs) = kv.track.loudness {
+            track_louds.push((lufs, kv.track_id));
         }
     }
     track_louds.sort();
@@ -77,9 +77,9 @@ fn make_index(db_path: &Path) -> Result<MemoryMetaIndex> {
     }
 
     let mut album_louds = Vec::new();
-    for &(album_id, ref album) in index.get_albums() {
-        if let Some(lufs) = album.loudness {
-            album_louds.push((lufs, album_id));
+    for kv in index.get_albums() {
+        if let Some(lufs) = kv.album.loudness {
+            album_louds.push((lufs, kv.album_id));
         }
     }
     album_louds.sort();
@@ -161,7 +161,7 @@ fn match_listens(
 
         for track_id in tracks {
             let track = index.get_track(track_id).expect("Search result should be in index.");
-            let album = index.get_album(track.album_id).expect("Track album should be in index.");
+            let album = index.get_album(track_id.album_id()).expect("Track album should be in index.");
             let track_ok = equals_normalized(index.get_string(track.title), track_title);
             let artist_ok = equals_normalized(index.get_string(track.artist), artist_name);
             let album_ok = equals_normalized(index.get_string(album.title), album_name);

@@ -43,14 +43,14 @@ pub fn main(
             PlaybackEvent::Started(queue_id, track_id) => {
                 let index = index_var.get();
                 let track = index.get_track(track_id).unwrap();
-                let album = index.get_album(track.album_id).unwrap();
+                let album = index.get_album(track_id.album_id()).unwrap();
                 let album_artists = index.get_album_artists(album.artist_ids);
                 let listen = Listen {
                     started_at: &now_str[..],
                     file_id: track.file_id.0,
                     queue_id: queue_id.0 as i64,
                     track_id: track_id.0 as i64,
-                    album_id: track.album_id.0 as i64,
+                    album_id: track_id.album_id().0 as i64,
                     // We record only the first album artist, to keep the
                     // structure of the table simple.
                     album_artist_id: album_artists[0].0 as i64,
@@ -59,8 +59,8 @@ pub fn main(
                     track_artist: index.get_string(track.artist),
                     album_artist: index.get_string(album.artist),
                     duration_seconds: track.duration_seconds as i64,
-                    track_number: track.track_number as i64,
-                    disc_number: track.disc_number as i64,
+                    track_number: track_id.track_number() as i64,
+                    disc_number: track_id.disc_number() as i64,
                 };
                 let mut tx = db.begin()?;
                 let result = db::insert_listen_started(&mut tx, listen)?;
