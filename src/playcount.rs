@@ -7,11 +7,12 @@
 
 //! Computation of playcounts and other statistics.
 
+use std::collections::BinaryHeap;
 use std::collections::HashMap;
 
 use crate::prim::Instant;
-use crate::prim::{ArtistId, AlbumId, TrackId};
-use crate::{MetaIndex, MemoryMetaIndex};
+use crate::prim::{AlbumId, ArtistId, TrackId};
+use crate::{MemoryMetaIndex, MetaIndex};
 
 /// An instant with ~hour granularity, used to track last played events.
 ///
@@ -55,14 +56,16 @@ impl CoarseInstant {
 impl From<Instant> for CoarseInstant {
     fn from(t: Instant) -> CoarseInstant {
         CoarseInstant {
-            posix_4kiseconds_utc: (t.posix_seconds_utc / 4096) as i32
+            posix_4kiseconds_utc: (t.posix_seconds_utc / 4096) as i32,
         }
     }
 }
 
 impl CoarseDuration {
     /// A duration of 205 minutes (12 kibiseconds, three times 4096 seconds).
-    const MINUTES_205: CoarseDuration = CoarseDuration { duration_4kiseconds: 3 };
+    const MINUTES_205: CoarseDuration = CoarseDuration {
+        duration_4kiseconds: 3,
+    };
 }
 
 pub struct ExpCounter {
@@ -143,7 +146,9 @@ impl ExpCounter {
 
     pub fn new() -> ExpCounter {
         ExpCounter {
-            t: CoarseInstant { posix_4kiseconds_utc: 0 },
+            t: CoarseInstant {
+                posix_4kiseconds_utc: 0,
+            },
             n: [0.0; 5],
         }
     }
@@ -189,6 +194,23 @@ impl Default for ExpCounter {
     }
 }
 
+/// Boilerplate to make `BinaryHeap` accept floats.
+///
+/// While at it, this also reverses the ordering so we get a min-heap instead of
+/// a max-heap without needing to manually negate the numbers.
+#[derive(PartialEq, PartialOrd)]
+pub struct RevNotNan(pub f32);
+
+impl Eq for RevNotNan {}
+
+impl Ord for RevNotNan {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other)
+            .expect("Counts must not be NaN.")
+            .reverse()
+    }
+}
+
 pub struct PlayCounter {
     artists: HashMap<ArtistId, ExpCounter>,
     albums: HashMap<AlbumId, ExpCounter>,
@@ -204,12 +226,7 @@ impl PlayCounter {
         }
     }
 
-    pub fn count(
-        &mut self,
-        index: &MemoryMetaIndex,
-        at: CoarseInstant,
-        track_id: TrackId,
-    ) {
+    pub fn count(&mut self, index: &MemoryMetaIndex, at: CoarseInstant, track_id: TrackId) {
         // The track playcount is fairly straightforward, just count 1.0.
         let counter_track = self.tracks.entry(track_id).or_default();
         counter_track.increment(at, 1.0);
@@ -249,5 +266,73 @@ impl PlayCounter {
             let counter_artist = self.artists.entry(*artist_id).or_default();
             counter_artist.increment(at, time_weight);
         }
+    }
+
+    /// Advance all counters (without incrementing) to time `t`.
+    ///
+    /// This enables the `n` value of the counters to be directly compared
+    /// between different counters.
+    pub fn advance_counters(&mut self, t: CoarseInstant) {
+        for counter in self.artists.values_mut() {
+            counter.advance(t);
+        }
+        for counter in self.albums.values_mut() {
+            counter.advance(t);
+        }
+        for counter in self.tracks.values_mut() {
+            counter.advance(t);
+        }
+    }
+
+    /// Return the top `n` elements at the given timescale.
+    ///
+    /// This assumes that all counters are at the same time. If not, the result
+    /// is nonsensical. Make sure to call `advance_counters` first.
+    ///
+    /// `timescale` is an index into `ExpCounter::n`, lower indexes have higher
+    /// half-life (so count long-term trends), while higher indexes have a lower
+    /// half-life (so they are more sensitive to recent trends).
+    pub fn get_top(
+        &self,
+        timescale: usize,
+        n_top: usize,
+    ) -> (
+        Vec<(RevNotNan, ArtistId)>,
+        Vec<(RevNotNan, AlbumId)>,
+        Vec<(RevNotNan, TrackId)>,
+    ) {
+        fn get_top_n<K: Copy + Ord>(
+            timescale: usize,
+            n_top: usize,
+            counters: &HashMap<K, ExpCounter>,
+        ) -> Vec<(RevNotNan, K)> {
+            let mut result = BinaryHeap::new();
+
+            for (k, counter) in counters.iter() {
+                let count = counter.n[timescale];
+
+                if result.len() < n_top {
+                    result.push((RevNotNan(count), *k));
+                    continue;
+                }
+
+                let should_insert = match result.peek() {
+                    None => true,
+                    Some((other_count, _)) => count > other_count.0,
+                };
+                if should_insert {
+                    result.pop();
+                    result.push((RevNotNan(count), *k));
+                }
+            }
+
+            result.into_sorted_vec()
+        }
+
+        (
+            get_top_n(timescale, n_top, &self.artists),
+            get_top_n(timescale, n_top, &self.albums),
+            get_top_n(timescale, n_top, &self.tracks),
+        )
     }
 }
