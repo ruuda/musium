@@ -8,7 +8,7 @@
 # A copy of the License has been included in the root of the repository.
 
 """
-migrate_thumbnails.py -- Migrate album ids from 0.12.0 to 0.12.1.
+migrate_thumbnails.py -- Migrate album ids from 0.12.0 to 0.13.0.
 
 This updates the database in-place.
 
@@ -17,7 +17,7 @@ USAGE
  1. Stop Musium 0.12.0.
  2. Make a back-up of your database file.
  3. Run 'tools/migrate_album_ids.py <db.sqlite3>'
- 4. Start Musium 0.12.1.
+ 4. Start Musium 0.13.0.
 """
 
 import sqlite3

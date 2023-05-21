@@ -20,7 +20,9 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
    or a migration of the database).
  * The patch version is bumped for bugfixes and other small changes.
 
-## Unreleased
+## 0.13.0
+
+Released 2023-05-21.
 
  * **Breaking:** Album ids are now 52 bits instead of 64 bit. This ensures that
    album ids are prefixes of track ids, which unlocks a few optimizations and
