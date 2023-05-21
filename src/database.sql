@@ -312,6 +312,18 @@ from
 group by
   album_id;
 
+-- Iterate the listens in chronological order.
+-- @query iter_listens() ->* ListenAt
+select
+    track_id /* :i64 */,
+    -- Note that we have an index on this expression, so this should be just an
+    -- index scan.
+    cast(strftime('%s', started_at) as integer) as started_at_second /* :i64 */
+from
+    listens
+order by
+    started_at_second asc;
+
 -- Insert a rating for a given track.
 --
 -- When the `created_at` timestamp is not unique, this replaces the previous
