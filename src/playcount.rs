@@ -9,7 +9,10 @@
 
 use std::collections::BinaryHeap;
 use std::collections::HashMap;
+use std::path::Path;
 
+use crate::database::{self, Transaction};
+use crate::database_utils::connect_readonly;
 use crate::prim::Instant;
 use crate::prim::{AlbumId, ArtistId, TrackId};
 use crate::{MemoryMetaIndex, MetaIndex};
@@ -212,6 +215,8 @@ impl Ord for RevNotNan {
 }
 
 pub struct PlayCounter {
+    /// The timestamp of the last inserted listen.
+    last_counted_at: CoarseInstant,
     artists: HashMap<ArtistId, ExpCounter>,
     albums: HashMap<AlbumId, ExpCounter>,
     tracks: HashMap<TrackId, ExpCounter>,
@@ -220,6 +225,7 @@ pub struct PlayCounter {
 impl PlayCounter {
     pub fn new() -> PlayCounter {
         PlayCounter {
+            last_counted_at: CoarseInstant { posix_4kiseconds_utc: 0 },
             artists: HashMap::new(),
             albums: HashMap::new(),
             tracks: HashMap::new(),
@@ -227,6 +233,8 @@ impl PlayCounter {
     }
 
     pub fn count(&mut self, index: &MemoryMetaIndex, at: CoarseInstant, track_id: TrackId) {
+        debug_assert!(at >= self.last_counted_at, "Counts must be done in ascending order.");
+
         // The track playcount is fairly straightforward, just count 1.0.
         let counter_track = self.tracks.entry(track_id).or_default();
         counter_track.increment(at, 1.0);
@@ -266,6 +274,18 @@ impl PlayCounter {
             let counter_artist = self.artists.entry(*artist_id).or_default();
             counter_artist.increment(at, time_weight);
         }
+
+        self.last_counted_at = at;
+
+        // TODO: Delete again once the stats printing at the end works.
+        println!(
+            "{} {}:{:?} {}:{:?}",
+            self.last_counted_at.posix_4kiseconds_utc,
+            track_id,
+            counter_track.n,
+            album_id,
+            counter_album.n,
+        );
     }
 
     /// Advance all counters (without incrementing) to time `t`.
@@ -282,6 +302,11 @@ impl PlayCounter {
         for counter in self.tracks.values_mut() {
             counter.advance(t);
         }
+    }
+
+    /// Advance all counters to the time of the last inserted listen.
+    pub fn equalize_counters(&mut self) {
+        self.advance_counters(self.last_counted_at);
     }
 
     /// Return the top `n` elements at the given timescale.
@@ -335,4 +360,41 @@ impl PlayCounter {
             get_top_n(timescale, n_top, &self.tracks),
         )
     }
+
+    /// Traverse all listens in the `listens` table and count them.
+    pub fn count_from_database(
+        &mut self,
+        index: &MemoryMetaIndex,
+        tx: &mut Transaction,
+    ) -> database::Result<()> {
+        for listen_opt in database::iter_listens(tx)? {
+            let listen = listen_opt?;
+            let at = Instant {
+                posix_seconds_utc: listen.started_at_second,
+            };
+            let track_id = TrackId(listen.track_id as u64);
+            self.count(index, at.into(), track_id);
+        }
+        Ok(())
+    }
+}
+
+/// Print playcount statistics about the library.
+///
+/// This is mostly for debugging and development purposes, playcounts should be
+/// integrated into the application at a later time.
+pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
+    let conn = connect_readonly(db_path)?;
+    let mut db = database::Connection::new(&conn);
+
+    let mut counter = PlayCounter::new();
+    let mut tx = db.begin()?;
+    counter.count_from_database(index, &mut tx)?;
+    tx.commit()?;
+
+    counter.equalize_counters();
+
+    // TODO: Print topk.
+
+    Ok(())
 }

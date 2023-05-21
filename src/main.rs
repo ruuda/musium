@@ -243,6 +243,7 @@ Usage:
   musium scan musium.conf
   musium serve musium.conf
   musium match musium.conf listenbrainz.tsv matched.tsv
+  musium count musium.conf
 
 SCAN
 
@@ -255,7 +256,11 @@ SERVE
 
 MATCH
 
-  Match listens (see process_listens.py) to tracks.");
+  Match listens (see process_listens.py) to tracks.
+
+COUNT
+
+  Print listen count statistics.");
 }
 
 fn load_config(config_fname: &str) -> Result<Config> {
@@ -321,6 +326,13 @@ fn main() -> Result<()> {
         "scan" => {
             run_scan(&config)?;
             Ok(())
+        }
+        "count" => {
+            let conn = database_utils::connect_readonly(&config.db_path)?;
+            let mut db = database::Connection::new(&conn);
+            let mut tx = db.begin()?;
+            let index = make_index(&mut tx)?;
+            musium::playcount::main(&index, &config.db_path)
         }
         "match" => {
             let in_path = env::args().nth(3).unwrap();
