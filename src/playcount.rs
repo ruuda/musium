@@ -320,16 +320,16 @@ impl PlayCounter {
         fill_rate_per_second: 1.0 / (3600.0 * 8.0),
     };
 
-    /// Similar for albums, give a burst of 2.0 so albums where we listen to
-    /// the full album count twice as much as when we just listened one
-    /// track. But make the fill rate longer, so we only count these two
-    /// every 8 hours. So you can listen to the album in the morning and the
-    /// afternoon and it would be counted twice, but listening to half the
-    /// album, then some other tracks, and then the other half, would only
-    /// count as slightly more than a single session.
+    /// Similar for albums, give a burst of >1.0 so albums where we listen to
+    /// the full album count more than when we just listened one track. But make
+    /// the fill rate longer, so we only count every few hours. You can listen
+    /// to the album in the morning and the afternoon and it would be counted
+    /// more than listening a single time, but listening to half the album, then
+    /// some other tracks, and then the other half, would only count as slightly
+    /// more than a single session.
     const LIMIT_ALBUM: RateLimit = RateLimit {
-        capacity: 2.0,
-        fill_rate_per_second: 1.0 / (3600.0 * 4.0),
+        capacity: 2.5,
+        fill_rate_per_second: 1.0 / (3600.0 * 6.0),
     };
 
     /// For tracks we don't want to rate limit, but to keep the code uniform
@@ -486,10 +486,17 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
 
             println!("  {:2} {:7.3} {} {}", i + 1, count.0, artist_id, artist_name);
         }
+
+        println!("\nTOP ALBUMS (timescale {})\n", timescale);
+
+        for (i, (count, album_id)) in top_albums.iter().enumerate() {
+            let album = index.get_album(*album_id).unwrap();
+            let album_title = index.get_string(album.title);
+
+            println!("  {:2} {:7.3} {} {}", i + 1, count.0, album_id, album_title);
+        }
         println!();
     }
-
-    // TODO: Print topk.
 
     Ok(())
 }
