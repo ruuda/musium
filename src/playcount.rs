@@ -13,67 +13,115 @@ use std::path::Path;
 
 use crate::database::{self, Transaction};
 use crate::database_utils::connect_readonly;
-use crate::prim::Instant;
 use crate::prim::{AlbumId, ArtistId, TrackId};
 use crate::{MemoryMetaIndex, MetaIndex};
 
-/// An instant with ~hour granularity, used to track last played events.
+/// A point in time with second granularity.
 ///
-/// The timestamp is reduced in resolution with a dual purpose:
+/// This is like a traditional POSIX timestamp, with two differences:
 ///
-/// * To limit memory requirements, we would like to store the _last played_
-///   timestamp in 32 bits, but that would put a Y2K38 timebomb in the
-///   application. So we just shift everything by a few bits; that that reduces
-///   the resolution to multiples of 4096 seconds, but it extends the range by
-///   about 300,000 years, long enough not to care.
-/// * Exponential moving averages need to be updated every time we move them
-///   forward in time by multiplying by a number that is very close to 1. But if
-///   the number is too close, floating-point inaccuracies may accumulate
-///   quickly. So instead of stepping the clock for every listen, we step it
-///   less frequently, in bigger steps. This also allows us to skip updating the
-///   moving averages every time we record a new listen.
+/// * The epoch is 2000-01-01 rather than 1970-01-01.
+/// * The value is unsigned rather than signed.
+///
+/// The timestamp is 32 bits, because we need lots of them (one per track at
+/// least), so the memory savings add up.
+///
+/// Together, this means that listens before 2000-01-01 cannot be represented,
+/// but the upside is that we sidestep the Y2K38 problem by extending the range
+/// from ~70 to ~140 years and shifting it by 30, for a range from 2000-01-01 up
+/// to 2136-02-07. I will not be alive long enough for this to become a problem,
+/// and Audioscrobbler/Last.fm only exists since 2002 it’s unlikely that older
+/// listens even exist.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct CoarseInstant {
-    /// Seconds since Posix epoch, in multiples of 4096 seconds.
+pub struct Instant {
+    /// Nominal seconds since 2000-01-01 00:00 UTC.
     ///
-    /// 4ki stands for 4 _kilobinary_, 4 × 1024.
-    pub posix_4kiseconds_utc: i32,
+    /// Like in POSIX time, leap seconds are ignored, so this is just the
+    /// POSIX time but with an offset, so the epoch is not the traditional
+    /// Unix epoch of 1970-01-01.
+    pub seconds_since_jan_2000: u32,
 }
 
-/// Measures time elapsed in multiples of 4096 seconds (~1 hour).
+/// We divide time in “epochs” of 4 hours and 33 minutes.
+///
+/// When applying exponential decay, if the elapsed time is very short, then the
+/// decay factor is very close to 1, and when we multiply many times with a
+/// number very close to but not quite 1, the result may be different than
+/// making one big jump due to accumulation of numerical errors. To avoid this,
+/// we only apply the exponential decay periodically, if we have moved at least
+/// to the next “epoch”.
+///
+/// The duration of an epoch is 2<sup>14</sup> = 16384 seconds, such that we can
+/// compute the epoch number from a timestamp through an inexpensive bitshift.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct CoarseDuration {
-    pub duration_4kiseconds: i32,
+pub struct Epoch(u32);
+
+/// Measures a non-negative time elapsed in seconds.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct Duration {
+    pub seconds: u32,
 }
 
-impl CoarseInstant {
+/// Measures a non-negative time elapsed in epochs.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct EpochDuration {
+    pub epochs: u32,
+}
+
+impl Instant {
+    #[inline(always)]
+    pub fn from_posix_timestamp(timestamp: i64) -> Instant {
+        // 2000-01-01T00:00:00Z as a Posix timestamp.
+        let jan_2000_posix_seconds = 946684800;
+        Instant {
+            seconds_since_jan_2000: (timestamp - jan_2000_posix_seconds) as u32,
+        }
+    }
+
+    /// Return the epoch that this instant falls in (rounds the time down).
+    #[inline(always)]
+    pub fn epoch(&self) -> Epoch {
+        Epoch(self.seconds_since_jan_2000 >> 14)
+    }
+
     /// Return the time elapsed since `t0`, which should be before `self`.
     #[inline(always)]
-    pub fn duration_since(&self, t0: CoarseInstant) -> CoarseDuration {
-        CoarseDuration {
-            duration_4kiseconds: self.posix_4kiseconds_utc - t0.posix_4kiseconds_utc,
+    pub fn duration_since(&self, t0: Instant) -> Duration {
+        Duration {
+            seconds: self.seconds_since_jan_2000 - t0.seconds_since_jan_2000,
         }
     }
 }
 
-impl From<Instant> for CoarseInstant {
-    fn from(t: Instant) -> CoarseInstant {
-        CoarseInstant {
-            posix_4kiseconds_utc: (t.posix_seconds_utc / 4096) as i32,
+impl Epoch {
+    /// Return the time elapsed since `t0`, which should be before `self`.
+    #[inline(always)]
+    pub fn duration_since(&self, t0: Epoch) -> EpochDuration {
+        EpochDuration {
+            epochs: self.0 - t0.0,
         }
     }
 }
 
-impl CoarseDuration {
-    /// A duration of 205 minutes (12 kibiseconds, three times 4096 seconds).
-    const MINUTES_205: CoarseDuration = CoarseDuration {
-        duration_4kiseconds: 3,
-    };
+/// Configures how the leaky bucket rate limiter behaves.
+///
+/// Note, the current amount per bucket is stored in [`ExpCounter`], not in this
+/// config stuct.
+pub struct RateLimit {
+    /// The capacity of the bucket, also called the “burst” amount.
+    pub capacity: f32,
+
+    /// The rate at which the bucket refills until it reaches `capacity` again.
+    pub fill_rate_per_second: f32,
 }
 
+/// Exponential moving averages at different timescales plus leaky bucket rate limiter.
 pub struct ExpCounter {
     /// Time at which the counts were last updated.
-    pub t: CoarseInstant,
+    pub t: Instant,
+
+    /// “Count” left in the bucket for leaky-bucket rate limiting.
+    pub bucket: f32,
 
     /// Exponentially decaying counts for different half-lives.
     pub n: [f32; 5],
@@ -93,22 +141,22 @@ impl ExpCounter {
     /// factors from the long-duration one: raise it to the fourth power to get
     /// the decay factor for the next half-life. There is some risk of
     /// accumulating numerical errors here (computing using powf directly is
-    /// more precise than repeated multiplication), but even for the lowest
-    /// possible timestep of 4096 seconds, the relative error at the shortest
+    /// more precise than repeated multiplication), but even for a timestep of
+    /// 4096 seconds (lower than one epoch), the relative error at the shortest
     /// half-life bucket is only 0.0002%.
     ///
     /// ## Definition
     ///
-    /// The unit for the half life is 4096 seconds (4kisecond), so we can
-    /// multiply with the inner value of `CoarseDuration` without additional
-    /// scaling factor multiplication (which we would need if we measured the
-    /// half-life in seconds).
+    /// The unit for the half life is the epoch (2<sup>14</sup> seconds), so we
+    /// can multiply with the difference of the epochs of the timestamps without
+    /// additional scaling factor multiplication (which we would need if we
+    /// measured the half-life in seconds).
     ///
     /// Table can be generated with the following program:
     /// ```python
-    /// xs = [(10 / 4**i) * (365.25 * 24 * 3600 / 4096) for i in range(5)]
+    /// xs = [(10 / 4**i) * (365.25 * 24 * 3600 / 2**14) for i in range(5)]
     /// for x in xs:
-    ///     print(f"        {x:.6f}, // {x * 4096 / (3600 * 24):i} days")
+    ///     print(f"        {x:.6f}, // {x * 2**14 / (3600 * 24):.0f} days")
     /// ```
     ///
     /// ## Comparing counters
@@ -132,61 +180,84 @@ impl ExpCounter {
     /// TODO: We can choose for `t_1` the first time at which the album was
     /// seen, then new albums don't have as much of a penalty in the
     /// long-running average.
-    const HALF_LIFE_4KISECONDS: [f32; 5] = [
-        77044.921875, // 10 years
-        19261.230469, // 2.5 years (30 months)
-        4815.307617,  // 7.5 months
-        1203.826904,  // 2 months (57 days)
-        300.956726,   // 2 weeks (14 days)
+    const HALF_LIFE_EPOCHS: [f32; 5] = [
+        19261.230469, // 10 years   / 3652 days
+        4815.307617,  // 2.5 years  / 913 days
+        1203.826904,  // 7.5 months / 228 days
+        300.956726,   // 2 months   / 57 days
+        75.239182,    // 2 weeks    / 14 days
     ];
 
     /// Return how much to decay the counters by after the elapsed time.
     #[inline]
-    pub fn decay_factors(duration: CoarseDuration) -> [f32; 5] {
-        let dt = duration.duration_4kiseconds as f32;
-        Self::HALF_LIFE_4KISECONDS.map(|t| 0.5_f32.powf(dt / t))
+    pub fn decay_factors(duration: EpochDuration) -> [f32; 5] {
+        let dt = duration.epochs as f32;
+        Self::HALF_LIFE_EPOCHS.map(|t| 0.5_f32.powf(dt / t))
     }
 
     pub fn new() -> ExpCounter {
         ExpCounter {
-            t: CoarseInstant {
-                posix_4kiseconds_utc: 0,
+            t: Instant {
+                seconds_since_jan_2000: 0,
             },
+            // The bucket starts out empty, but the timestamp also starts out
+            // very long ago, so by the time we count something, the bucket will
+            // have long replenished.
+            bucket: 0.0,
             n: [0.0; 5],
         }
+    }
+
+    /// Replenish the bucket to its value at time `t1` (but do not update `self.t`).
+    #[inline]
+    fn refill_bucket(&mut self, rate_limit: &RateLimit, t1: Instant) {
+        let elapsed_seconds = t1.duration_since(self.t).seconds as f32;
+        self.bucket = rate_limit
+            .fill_rate_per_second
+            .mul_add(elapsed_seconds, self.bucket)
+            .min(rate_limit.capacity);
     }
 
     /// Advance the time to the given instant.
     ///
     /// This applies decay without incrementing the count.
     #[inline]
-    pub fn advance(&mut self, t1: CoarseInstant) {
+    pub fn advance(&mut self, rate_limit: &RateLimit, t1: Instant) {
         debug_assert!(t1 >= self.t, "New time must be later than previous time.");
-        let elapsed = t1.duration_since(self.t);
-        let decay_factors = Self::decay_factors(elapsed);
+        self.refill_bucket(rate_limit, t1);
+
+        // Note, we round to epochs first, and then take the diff, to ensure
+        // that the decay gets applied at consisten times across all counters.
+        let elapsed_epochs = t1.epoch().duration_since(self.t.epoch());
+        let decay_factors = Self::decay_factors(elapsed_epochs);
 
         for (ni, factor) in self.n.iter_mut().zip(decay_factors) {
             *ni *= factor;
         }
+
         self.t = t1;
     }
 
     /// Advance the time to the given instant and increment the count.
-    ///
-    /// `weight` specifies the amount to increment by. The standard count is
-    /// 1.0, but for example for the album counter, multiple consecutive listens
-    /// of tracks on the same album should maybe not all count as 1, because
-    /// that would create a bias towards albums with more tracks when you listen
-    /// entire albums at once.
     #[inline]
-    pub fn increment(&mut self, t1: CoarseInstant, weight: f32) {
+    pub fn increment(&mut self, rate_limit: &RateLimit, t1: Instant) {
         debug_assert!(t1 >= self.t, "New time must be later than previous time.");
-        let elapsed = t1.duration_since(self.t);
-        let decay_factors = Self::decay_factors(elapsed);
+        self.refill_bucket(rate_limit, t1);
+
+        // Take 1.0 out of the bucket, or as much as we can get if there is not
+        // that much “count” left in the bucket.
+        let count = self.bucket.min(1.0);
+        self.bucket -= count;
+
+        // Apply any decay that has happened since the last update. See also
+        // the comment in `advance`.
+        let elapsed_epochs = t1.epoch().duration_since(self.t.epoch());
+        let decay_factors = Self::decay_factors(elapsed_epochs);
 
         for (ni, factor) in self.n.iter_mut().zip(decay_factors) {
-            *ni = ni.mul_add(factor, weight);
+            *ni = ni.mul_add(factor, count);
         }
+
         self.t = t1;
     }
 }
@@ -221,7 +292,7 @@ impl Ord for RevNotNan {
 
 pub struct PlayCounter {
     /// The timestamp of the last inserted listen.
-    last_counted_at: CoarseInstant,
+    last_counted_at: Instant,
     artists: HashMap<ArtistId, ExpCounter>,
     albums: HashMap<AlbumId, ExpCounter>,
     tracks: HashMap<TrackId, ExpCounter>,
@@ -230,59 +301,58 @@ pub struct PlayCounter {
 impl PlayCounter {
     pub fn new() -> PlayCounter {
         PlayCounter {
-            last_counted_at: CoarseInstant { posix_4kiseconds_utc: 0 },
+            last_counted_at: Instant { seconds_since_jan_2000: 0 },
             artists: HashMap::new(),
             albums: HashMap::new(),
             tracks: HashMap::new(),
         }
     }
 
-    pub fn count(&mut self, index: &MemoryMetaIndex, at: CoarseInstant, track_id: TrackId) {
+    /// For artists, we want some balance between "unique days listened to
+    /// this artist" (which would correspond to a capacity of 1 and a fill
+    /// rate of 1/day) and "time listened to this artist" (which would
+    /// correspond to a capacity of ~1 and a high fill rate). After much
+    /// tweaking, I ended up with the following which I think reasonably
+    /// matches my feeling for what I listened to vs. what the algorithm
+    /// outputs.
+    const LIMIT_ARTIST: RateLimit = RateLimit {
+        capacity: 3.0,
+        fill_rate_per_second: 1.0 / (3600.0 * 8.0),
+    };
+
+    /// Similar for albums, give a burst of 2.0 so albums where we listen to
+    /// the full album count twice as much as when we just listened one
+    /// track. But make the fill rate longer, so we only count these two
+    /// every 8 hours. So you can listen to the album in the morning and the
+    /// afternoon and it would be counted twice, but listening to half the
+    /// album, then some other tracks, and then the other half, would only
+    /// count as slightly more than a single session.
+    const LIMIT_ALBUM: RateLimit = RateLimit {
+        capacity: 2.0,
+        fill_rate_per_second: 1.0 / (3600.0 * 4.0),
+    };
+
+    /// For tracks we don't want to rate limit, but to keep the code uniform
+    /// we have this which is generous enough that it should never trigger.
+    const LIMIT_TRACK: RateLimit = RateLimit {
+        capacity: 256.0,
+        fill_rate_per_second: 1.0,
+    };
+
+    pub fn count(&mut self, index: &MemoryMetaIndex, at: Instant, track_id: TrackId) {
         debug_assert!(at >= self.last_counted_at, "Counts must be done in ascending order.");
 
-        // The track playcount is fairly straightforward, just count 1.0.
         let counter_track = self.tracks.entry(track_id).or_default();
-        counter_track.increment(at, 1.0);
+        counter_track.increment(&Self::LIMIT_TRACK, at);
 
-        // Get the duration of the track, normalized to the average duration of
-        // 264 seconds (which happens to be the mean across my collection).
-        let track = index.get_track(track_id).expect("Track must exist.");
-        let time_weight = track.duration_seconds as f32 * (1.0 / 264.0);
-
-        // The album playcount is more subtle. If we counted 1.0 for every track
-        // in the album, then albums with more tracks would get higher counts if
-        // we often listen full albums.
-        //
-        // To mitigate this, if we already counted this album in the same ~hour
-        // window, or in the two ~hours before it, then reduce the weight. We
-        // still give some non-zero weight, because we *did* spend time
-        // listening to this album, so in the extreme where we listen to one
-        // album on repeat all day, it should be counted more than an album that
-        // we listen only once.
-        //
-        // TODO: Should we have two coarse duration types, one with at least
-        // ~minute resolution, so the weight can be better tweaked, and there is
-        // less arbitrary behavior at bucket boundaries? Some exponentially
-        // decaying penalty that decays in ~hours?
         let album_id = track_id.album_id();
         let counter_album = self.albums.entry(album_id).or_default();
-        let w_album = if at.duration_since(counter_album.t) < CoarseDuration::MINUTES_205 {
-            time_weight * 0.1
-        } else {
-            1.0
-        };
-        counter_album.increment(at, w_album);
+        counter_album.increment(&Self::LIMIT_ALBUM, at);
 
-        // For the artists, counting by time listened seems approprriate.
-        // TODO: After inspecting the output, it seems this is not the case.
-        // Sometimes one day I put on two albums by an artist, and it's a few
-        // hours and many tracks, but then I listen one or two tracks by one
-        // artist on many days. That second one should make the artist count
-        // more.
         let album = index.get_album(album_id).expect("Album should exist.");
         for artist_id in index.get_album_artists(album.artist_ids) {
             let counter_artist = self.artists.entry(*artist_id).or_default();
-            counter_artist.increment(at, time_weight);
+            counter_artist.increment(&Self::LIMIT_ARTIST, at);
         }
 
         self.last_counted_at = at;
@@ -290,7 +360,7 @@ impl PlayCounter {
         // TODO: Delete again once the stats printing at the end works.
         println!(
             "{} {}:{:?} {}:{:?}",
-            self.last_counted_at.posix_4kiseconds_utc,
+            self.last_counted_at.seconds_since_jan_2000,
             track_id,
             counter_track.n,
             album_id,
@@ -302,15 +372,15 @@ impl PlayCounter {
     ///
     /// This enables the `n` value of the counters to be directly compared
     /// between different counters.
-    pub fn advance_counters(&mut self, t: CoarseInstant) {
+    pub fn advance_counters(&mut self, t: Instant) {
         for counter in self.artists.values_mut() {
-            counter.advance(t);
+            counter.advance(&Self::LIMIT_ARTIST, t);
         }
         for counter in self.albums.values_mut() {
-            counter.advance(t);
+            counter.advance(&Self::LIMIT_ALBUM, t);
         }
         for counter in self.tracks.values_mut() {
-            counter.advance(t);
+            counter.advance(&Self::LIMIT_TRACK, t);
         }
     }
 
@@ -379,9 +449,7 @@ impl PlayCounter {
     ) -> database::Result<()> {
         for listen_opt in database::iter_listens(tx)? {
             let listen = listen_opt?;
-            let at = Instant {
-                posix_seconds_utc: listen.started_at_second,
-            };
+            let at = Instant::from_posix_timestamp(listen.started_at_second);
             let track_id = TrackId(listen.track_id as u64);
             self.count(index, at.into(), track_id);
         }
