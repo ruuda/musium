@@ -492,10 +492,20 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         for (i, (count, album_id)) in top_albums.iter().enumerate() {
             let album = index.get_album(*album_id).unwrap();
             let album_title = index.get_string(album.title);
+            let album_artist = index.get_string(album.artist);
 
-            println!("  {:2} {:7.3} {} {}", i + 1, count.0, album_id, album_title);
+            println!("  {:2} {:7.3} {} {:25}  {}", i + 1, count.0, album_id, album_title, album_artist);
         }
-        println!();
+
+        println!("\nTOP TRACKS (timescale {})\n", timescale);
+
+        for (i, (count, track_id)) in top_tracks.iter().enumerate() {
+            let track = index.get_track(*track_id).unwrap();
+            let track_title = index.get_string(track.title);
+            let track_artist = index.get_string(track.artist);
+
+            println!("  {:2} {:7.3} {} {:25}  {}", i + 1, count.0, track_id, track_title, track_artist);
+        }
     }
 
     Ok(())
