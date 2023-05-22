@@ -29,6 +29,7 @@ nav:
     - Changelog: changelog.md
   - API Reference: api.md
   - Internals:
+    - Playcounts: playcounts.md
     - Search: search.md
     - Performance: performance.md
     - Thumbnails: thumbnails.md
