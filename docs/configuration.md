@@ -107,9 +107,9 @@ This setting is optional. When it is not set, Musium starts playback instantly.
 ### exec_post_idle_path
 
 After playback ends, Musium can optionally execute a program. For example, you
-can use this to turn your speakers off when there is no longer any music
-playing. See the page about [Trådfri control](tradfri.md) for how to do this
-with Ikea Trådfri outlets.
+can use this to submit listens to Last.fm, or to turn your speakers off when
+there is no longer any music playing. See the page about [Trådfri
+control](tradfri.md) for how to do this with Ikea Trådfri outlets.
 
 The value is the path of a program to be executed. It is not possible to pass
 arguments to the program. Instead, you can create a shell script that will call

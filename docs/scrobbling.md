@@ -1,10 +1,9 @@
 # Scrobbling to Last.fm
 
-Musium can be set up to scrobble plays to [Last.fm][lfm]. Musium logs plays to a
-SQLite database in the data directory. An enclosed script can batch-submit those
-plays to Last.fm. Running the script regularly ensures that all plays get
-scrobbled.  Musium does not currently offer immediate scrobbling or *now
-playing* updates.
+Musium can be set up to scrobble plays to [Last.fm][lfm]. Musium logs plays to
+its SQLite database. An enclosed script can batch-submit those plays to Last.fm.
+Running the script regularly ensures that all plays get scrobbled. Musium does
+not currently offer immediate scrobbling or *now playing* updates.
 
 [lfm]: https://last.fm/
 
@@ -85,3 +84,11 @@ Write it to `/etc/systemd/system/musium-scrobble.timer`, then start the timer:
     systemctl daemon-reload
     systemctl enable musium-scrobble.timer
     systemctl start musium-scrobble.timer
+
+## On post-idle
+
+It is possible to scrobble listens right after playback ends using a post-idle
+command. For this, set the [`exec_post_idle_path`](configuration.md#exec_post_idle_path)
+setting in your configuration file to a shell script. That script could either
+call `scrobble.py` directly, or it could `systemctl start musium-scrobble.service`
+if you also have the systemd unit set up as described above.

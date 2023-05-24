@@ -1,10 +1,9 @@
 # Submitting listens to Listenbrainz
 
 Musium can be set up to submit plays to [Listenbrainz][lb]. Musium logs plays to
-a SQLite database in the data directory. An enclosed script can batch-submit
-those plays to Listenbrainz. Running the script regularly ensures that all plays
-get submitted. Musium does not currently offer immediate submission or *now
-playing* updates.
+its SQLite database. An enclosed script can batch-submit those plays to
+Listenbrainz. Running the script regularly ensures that all plays get submitted.
+Musium does not currently offer immediate submission or *now playing* updates.
 
 [lb]: https://listenbrainz.org
 
@@ -37,3 +36,9 @@ small differences:
  * The command is `scrobble.py submit-listens`, not `scrobble.py scrobble`.
  * The environment variable to set is `LISTENBRAINZ_USER_TOKEN`, the
    `LAST_FM_*` variables are not needed.
+
+## On post-idle
+
+It is possible to submit listens right after playback ends using a post-idle
+command. This works the same as [for Last.fm
+scrobbling](scrobbling.md#on-post-idle), see that page for more details.
