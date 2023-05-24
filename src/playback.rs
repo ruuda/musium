@@ -21,6 +21,7 @@ use libc;
 
 use crate::config::Config;
 use crate::exec_pre_post::QueueEvent;
+use crate::history::PlaybackEvent;
 use crate::player::{Format, Millibel, PlayerState};
 use crate::prim::Hertz;
 
@@ -496,6 +497,7 @@ pub fn main(
     state_mutex: Arc<Mutex<PlayerState>>,
     decode_thread: &Thread,
     queue_events: SyncSender<QueueEvent>,
+    history_events: SyncSender<PlaybackEvent>,
 ) {
     use std::time::{Instant, Duration};
 
@@ -534,6 +536,12 @@ pub fn main(
                 decode_thread,
             );
             println!("Playback done, sleeping ...");
+
+            // Inform the history thread that the queue ended, so it can
+            // checkpoint the WAL.
+            history_events
+                .send(PlaybackEvent::QueueEnded)
+                .expect("History thread runs indefinitely, sending does not fail.");
 
             // Signal the exec thread to start the idle timeout and execute the
             // post-idle program afterwards.

@@ -989,7 +989,7 @@ impl Player {
         // Same for playback start and end queue events, for the exec thread.
         let (queue_events_sender, queue_events_receiver) = mpsc::sync_channel(5);
 
-        let state = Arc::new(Mutex::new(PlayerState::new(hist_sender)));
+        let state = Arc::new(Mutex::new(PlayerState::new(hist_sender.clone())));
 
         // Start the decode thread. It runs indefinitely, but we do need to
         // periodically unpark it when there is new stuff to decode.
@@ -1020,6 +1020,7 @@ impl Player {
                     state_mutex_for_playback,
                     &decode_thread_for_playback,
                     queue_events_sender,
+                    hist_sender,
                 );
             }).unwrap();
 

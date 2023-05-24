@@ -21,6 +21,7 @@ use crate::{MetaIndex, MemoryMetaIndex, TrackId};
 pub enum PlaybackEvent {
     Started(QueueId, TrackId),
     Completed(QueueId, TrackId),
+    QueueEnded,
 }
 
 /// Main for the thread that logs historical playback events.
@@ -84,6 +85,14 @@ pub fn main(
                         queue_id, track_id,
                     );
                 }
+            }
+            PlaybackEvent::QueueEnded => {
+                // When the queue ends, flush the WAL. This is not really
+                // needed, but I back up my database with rsync once in a
+                // while, and I like to have everything in one file instead
+                // of having to sync the WAL as well. We checkpoint after
+                // the queue ends, before after the post-playback program runs.
+                connection.execute("PRAGMA wal_checkpoint(PASSIVE);")?;
             }
         }
     }
