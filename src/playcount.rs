@@ -477,8 +477,10 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
     }
 
     for timescale in 0..5 {
-        let (top_artists, top_albums, top_tracks) = counter.get_top(timescale, 50);
-        println!("\nTOP ARTISTS (timescale {})\n", timescale);
+        let n_days = ExpCounter::HALF_LIFE_EPOCHS[timescale] * 0.1896;
+
+        let (top_artists, top_albums, top_tracks) = counter.get_top(timescale, 200);
+        println!("\nTOP ARTISTS (timescale {}, {:.0} days)\n", timescale, n_days);
 
         for (i, (count, artist_id)) in top_artists.iter().enumerate() {
             let artist = index.get_artist(*artist_id).unwrap();
@@ -487,7 +489,7 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
             println!("  {:2} {:7.3} {} {}", i + 1, count.0, artist_id, artist_name);
         }
 
-        println!("\nTOP ALBUMS (timescale {})\n", timescale);
+        println!("\nTOP ALBUMS (timescale {}, {:.0} days)\n", timescale, n_days);
 
         for (i, (count, album_id)) in top_albums.iter().enumerate() {
             let album = index.get_album(*album_id).unwrap();
@@ -497,7 +499,7 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
             println!("  {:2} {:7.3} {} {:25}  {}", i + 1, count.0, album_id, album_title, album_artist);
         }
 
-        println!("\nTOP TRACKS (timescale {})\n", timescale);
+        println!("\nTOP TRACKS (timescale {}, {:.0} days)\n", timescale, n_days);
 
         for (i, (count, track_id)) in top_tracks.iter().enumerate() {
             let track = index.get_track(*track_id).unwrap();
