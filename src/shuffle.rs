@@ -156,7 +156,7 @@ fn shuffle_interleave(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec
     for partition in partitions {
         // From the new partition and our intermediate result, determine the
         // longest one, and break ties randomly.
-        let (long, short) = match (result.len(), partition.len()) {
+        let (long, short) = match (partition.len(), result.len()) {
             (n, m) if n < m => (result, partition),
             (n, m) if n > m => (partition, result),
             _ if bool::random(rng) => (partition, result),
@@ -178,7 +178,7 @@ fn shuffle_interleave(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec
         let mut src_spans = &long[..];
         let mut src_seps = &short[..];
 
-        let last_span_len = if n_spans < long.len() {
+        let last_span_len = if n_spans > short.len() {
             span_lens.pop().expect("We should not have empty partitions.")
         } else {
             0
@@ -234,24 +234,47 @@ mod test {
                 let mut v: Vec<u32> = (0..len).collect();
                 let mut v_expected = v.clone();
                 rng.shuffle(&mut v_expected);
-                let mut p: Vec<_> = v_expected.iter().cloned().map(TrackRef).collect();
+                let p: Vec<_> = v_expected.iter().cloned().map(TrackRef).collect();
                 apply_permutation(&p, &mut v);
                 assert_eq!(v, v_expected);
             }
         }
     }
 
-    #[test]
-    fn shuffle_interleaves_artists() {
-        // With this input, there is only one possible optimal shuffle.
-        let mut tracks = [*b"A00", *b"A00", *b"B00"];
-        let expected = [*b"A00", *b"B00", *b"A00"];
+    /// Test that `shuffle` produces one of the given optimal shuffles.
+    ///
+    /// The input to the process is itself a shuffle of the first expected
+    /// entry.
+    fn test_shuffle(expected: &[&[[u8; 3]]]) {
+        let mut rng = Prng::new_seed(42);
 
-        for seed in 0..100 {
-            let mut rng = Prng::new_seed(seed);
+        for _ in 0..10_000 {
+            let mut tracks: Vec<_> = expected[0].into();
+            rng.shuffle(&mut tracks);
             shuffle(TestShuffler, &mut rng, &mut tracks);
-
-            assert_eq!(tracks, expected);
+            assert!(
+                expected.contains(&&tracks[..]),
+                "Unexpected shuffle: {:?}",
+                tracks.iter().map(|x| std::str::from_utf8(x).unwrap()).collect::<Vec<_>>(),
+            );
         }
+    }
+
+    #[test]
+    fn shuffle_interleaves_artist() {
+        // With this input, there is only one possible optimal shuffle.
+        test_shuffle(&[&[*b"A00", *b"B00", *b"A00"]]);
+
+        // Here we have freedom to flip B and C, but A surrounds them.
+        test_shuffle(&[
+            &[*b"A00", *b"B00", *b"A00", *b"C00", *b"A00"],
+            &[*b"A00", *b"C00", *b"A00", *b"B00", *b"A00"],
+        ]);
+
+        // Here we interleave, but either artist can go first.
+        test_shuffle(&[
+            &[*b"A00", *b"B00", *b"A00", *b"B00"],
+            &[*b"B00", *b"A00", *b"B00", *b"A00"],
+        ]);
     }
 }
