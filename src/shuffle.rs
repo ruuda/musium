@@ -7,8 +7,10 @@
 
 //! Logic for shuffling playlists.
 
-use std::hash::Hash;
+use std::cmp;
 use std::collections::HashMap;
+use std::hash::Hash;
+use std::iter;
 
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -106,10 +108,9 @@ fn shuffle_internal(rng: &mut Prng, tracks: &mut Vec<TrackRef>) {
 fn shuffle_internal_artist(rng: &mut Prng, tracks: &mut Vec<TrackRef>) {
     // Take out the tracks and leave an empty vec in its place, we will
     // construct the result into there later.
-    let mut result = Vec::new();
-    std::mem::swap(&mut result, tracks);
-
-    let mut partitions = partition_on(result, |t| t.album_id);
+    let mut tracks_tmp = Vec::new();
+    std::mem::swap(&mut tracks_tmp, tracks);
+    let mut partitions = partition_on(tracks_tmp, |t| t.album_id);
 
     // Shuffle every album by itself before we combine them,
     // using a regular shuffle.
@@ -117,7 +118,10 @@ fn shuffle_internal_artist(rng: &mut Prng, tracks: &mut Vec<TrackRef>) {
         partition.shuffle(rng);
     }
 
-    todo!("Merge");
+    let mut result = merge_shuffle(rng, partitions);
+
+    // Put the result in place. This juggle
+    std::mem::swap(&mut result, tracks);
 }
 
 fn merge_shuffle(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec<TrackRef> {
@@ -138,7 +142,38 @@ fn merge_shuffle(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec<Trac
             _ => (result, partition),
         };
 
-        result = long;
+        // We are going to partition the longer vector into spans. Figure out
+        // the length of each span. Some spans may have to be 1 element longer,
+        // shuffle the lengths.
+        let n_spans = cmp::min(short.len() + 1, long.len());
+        let span_len = long.len() / n_spans;
+        let remainder = long.len() - span_len * n_spans;
+        let mut span_lens = Vec::with_capacity(n_spans);
+        span_lens.extend(iter::repeat(span_len + 1).take(remainder));
+        span_lens.extend(iter::repeat(span_len).take(n_spans - remainder));
+        span_lens.shuffle(rng);
+
+        result = Vec::with_capacity(long.len() + short.len());
+        let mut src_spans = &long[..];
+        let mut src_seps = &short[..];
+
+        let last_span_len = if n_spans < long.len() {
+            span_lens.pop().expect("We should not have empty partitions.")
+        } else {
+            0
+        };
+
+        // Fill the output vec with a span and separator alternatingly.
+        for span_len in span_lens {
+            result.extend_from_slice(&src_spans[..span_len]);
+            result.push(src_seps[0]);
+            src_spans = &src_spans[span_len..];
+            src_seps = &src_seps[1..];
+        }
+
+        // Then after the final separator, there can be a final span.
+        debug_assert_eq!(src_spans.len(), last_span_len);
+        result.extend_from_slice(src_spans);
     }
 
     result
