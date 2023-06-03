@@ -170,9 +170,8 @@ dependencies = [
 
 [[package]]
 name = "nanorand"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a51313c5820b0b02bd422f4b44776fbf47961755c74ce64afc73bfad10226c3"
+version = "0.8.0"
+source = "git+https://github.com/Absolucy/nanorand-rs?rev=3440f2ca5241d9e63c3f6db680e0a895064943c1#3440f2ca5241d9e63c3f6db680e0a895064943c1"
 
 [[package]]
 name = "nix"
