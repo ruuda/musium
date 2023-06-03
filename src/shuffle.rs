@@ -83,6 +83,27 @@ impl Shuffle for TestShuffler {
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 struct TrackRef(pub u32);
 
+/// Given a list of indexes into `tracks`, put `tracks` in that order.
+fn apply_permutation<T>(permutation: &[TrackRef], tracks: &mut [T]) {
+    debug_assert_eq!(permutation.len(), tracks.len());
+
+    // Invariant: pos[i] holds the current index (into `tracks`) of the element
+    // that was originally at index i.
+    let mut pos: Vec<u32> = (0..permutation.len() as u32).collect();
+
+    // Invariant: pos[i] = k <=> inv[k] = i.
+    let mut inv: Vec<u32> = (0..permutation.len() as u32).collect();
+
+    for (i, TrackRef(orig_index)) in permutation.iter().enumerate() {
+        let j = pos[*orig_index as usize] as usize;
+        tracks.swap(i, j);
+
+        let (ii, ij) = (inv[i] as usize, inv[j] as usize);
+        pos.swap(ii, ij);
+        inv.swap(i, j);
+    }
+}
+
 fn shuffle<Meta: Shuffle>(
     meta: Meta,
     rng: &mut Prng,
@@ -118,9 +139,10 @@ fn shuffle<Meta: Shuffle>(
         .map(|album_partitions| shuffle_interleave(rng, album_partitions))
         .collect();
 
-    let result = shuffle_interleave(rng, artist_partitions);
+    let permutation = shuffle_interleave(rng, artist_partitions);
 
-    todo!("Apply the permutation.");
+    // Finally put the right track at the right index.
+    apply_permutation(&permutation, tracks);
 }
 
 fn shuffle_interleave(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec<TrackRef> {
@@ -184,8 +206,40 @@ fn shuffle_interleave(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec
 /// write them as ascii literals for easy visualisation.
 #[cfg(test)]
 mod test {
-    use super::{Prng, TestShuffler, shuffle};
+    use nanorand::Rng;
+    use super::{Prng, TestShuffler, TrackRef, shuffle, apply_permutation};
 
+    #[test]
+    fn apply_permutation_is_correct_simple() {
+        let p = [TrackRef(3), TrackRef(2), TrackRef(1), TrackRef(0)];
+        let mut v = [0, 1, 2, 3];
+        apply_permutation(&p, &mut v);
+        assert_eq!(v, [3, 2, 1, 0]);
+
+        let p = [TrackRef(0), TrackRef(2), TrackRef(3), TrackRef(1)];
+        let mut v = [0, 1, 2, 3];
+        apply_permutation(&p, &mut v);
+        assert_eq!(v, [0, 2, 3, 1]);
+    }
+
+    #[test]
+    fn apply_permutation_is_correct_random() {
+        let mut rng = Prng::new_seed(42);
+
+        for len in 1..100_u32 {
+            for _ in 0..len * 10 {
+                // When our initial data is just 0, 1, 2, 3, etc., then a given
+                // permutation will reorder it such that the result is equal to
+                // the permutation itself.
+                let mut v: Vec<u32> = (0..len).collect();
+                let mut v_expected = v.clone();
+                rng.shuffle(&mut v_expected);
+                let mut p: Vec<_> = v_expected.iter().cloned().map(TrackRef).collect();
+                apply_permutation(&p, &mut v);
+                assert_eq!(v, v_expected);
+            }
+        }
+    }
 
     #[test]
     fn shuffle_interleaves_artists() {
