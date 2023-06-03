@@ -17,114 +17,64 @@ use rand::Rng;
 
 use crate::{MetaIndex, MemoryMetaIndex};
 use crate::player::{QueuedTrack};
-use crate::prim::{TrackId, AlbumId, ArtistId};
-
+use crate::prim::{AlbumId, ArtistId};
 
 type Prng = rand_chacha::ChaCha8Rng;
 
-/// Intermediate representation of a queued track used for shuffling.
+/// Index into the queued tracks slice, used internally for shuffling.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-struct TrackRef {
-    /// Index into the original slice of tracks.
-    index: usize,
-
-    album_id: AlbumId,
-
-    /// The first artist of the album.
-    ///
-    /// For shuffle we only take the album's first artist into account. We could
-    /// instead use unique combination of artists (more groups), or the
-    /// connected component of artists connected by collaborating on an album
-    /// (fewer groups), but more groups, when the groups are not really
-    /// different, creates more risk of playing the same artist consecutively,
-    /// while fewer groups leaves us with fewer other groups to interleave with,
-    /// and besides searching for the connected component in the graph is
-    /// overkill for simply shuffling a playlist. So we just pick the first
-    /// album artist to partitions on.
-    artist_id: ArtistId,
-}
-
-fn partition_on<T: Hash + Eq, F: Fn(&TrackRef) -> T>(
-    tracks: Vec<TrackRef>,
-    partition_key: F,
-) -> Vec<Vec<TrackRef>> {
-    let mut partitions = HashMap::<_, Vec<TrackRef>>::new();
-
-    // Partition on artist first.
-    for track in tracks {
-        partitions
-            .entry(partition_key(&track))
-            .or_default()
-            .push(track);
-    }
-
-    partitions.into_values().collect()
-}
+struct TrackRef(pub u32);
 
 fn shuffle(
     index: &MemoryMetaIndex,
     rng: &mut Prng,
     tracks: &mut [QueuedTrack],
 ) {
-    let mut refs = Vec::with_capacity(tracks.len());
-
+    // First we partition all tracks into albums. Rather than moving around the
+    // full QueuedTrack all the time, we store indices into the tracks slice.
+    let mut albums = HashMap::<AlbumId, Vec<TrackRef>>::new();
     for (i, track) in tracks.iter().enumerate() {
         let album_id = track.track_id.album_id();
-        let album = index
-            .get_album(album_id)
-            .expect("Queued track must exist in the index.");
-        let artists = index.get_album_artists(album.artist_ids);
-        let artist_id = artists[0];
-        refs.push(TrackRef {
-            index: i,
-            album_id: album_id,
-            artist_id: artist_id,
-        });
+        albums.entry(album_id).or_default().push(TrackRef(i as u32));
     }
 
-    shuffle_internal(rng, &mut refs);
+    // Then we shuffle the tracks in every album using a regular shuffle.
+    // Subsequent interleavings will preserve the relative order of those
+    // tracks.
+    for album_tracks in albums.values_mut() {
+        album_tracks.shuffle(rng);
+    }
+
+    // Then we group everything back on artist. For "artist", we take the first
+    // album of the album artists. Two alternatives come to mind: counting every
+    // collaboration as a unique artist (more smaller groups), or counting every
+    // connected component in the graph of artists with edges for collaboration
+    // albums (fewer larger groups). If we make artists "more distinct", then we
+    // risk placing their tracks consecutively in the final order because we
+    // consider them distinct. If we make artists "less distinct", then we risk
+    // having too few of them to properly interleave. So one artist per album is
+    // probably okay, but also, it’s just the easiest thing to implement.
+    let mut artists = HashMap::<ArtistId, Vec<Vec<TrackRef>>>::new();
+    for (album_id, album_tracks) in albums {
+        let album = index.get_album(album_id).expect("Queued tracks should exist on album.");
+        let artist_ids = index.get_album_artists(album.artist_ids);
+        artists.entry(artist_ids[0]).or_default().push(album_tracks);
+    }
+
+    // Then we combine all albums into one partition per artist, using our
+    // interleaving shuffle, then we interleave-shuffle the per-artist
+    // partitions once more into the final order.
+    let artist_partitions: Vec<Vec<TrackRef>> = artists
+        .into_values()
+        .map(|album_partitions| shuffle_interleave(rng, album_partitions))
+        .collect();
+
+    let result = shuffle_interleave(rng, artist_partitions);
 
     todo!("Apply the permutation.");
 }
 
-fn shuffle_internal(rng: &mut Prng, tracks: &mut Vec<TrackRef>) {
-    // Take out the tracks and leave an empty vec in its place, we will
-    // construct the result into there later.
-    let mut result = Vec::new();
-    std::mem::swap(&mut result, tracks);
-
-    let mut partitions = partition_on(result, |t| t.artist_id);
-
-    partitions.sort_unstable_by_key(|v| v.len());
-
-    // Shuffle every artist by itself before we combine them.
-    for partition in &mut partitions {
-        shuffle_internal_artist(rng, partition);
-    }
-
-    todo!("Merge.");
-}
-
-fn shuffle_internal_artist(rng: &mut Prng, tracks: &mut Vec<TrackRef>) {
-    // Take out the tracks and leave an empty vec in its place, we will
-    // construct the result into there later.
-    let mut tracks_tmp = Vec::new();
-    std::mem::swap(&mut tracks_tmp, tracks);
-    let mut partitions = partition_on(tracks_tmp, |t| t.album_id);
-
-    // Shuffle every album by itself before we combine them,
-    // using a regular shuffle.
-    for partition in &mut partitions {
-        partition.shuffle(rng);
-    }
-
-    let mut result = merge_shuffle(rng, partitions);
-
-    // Put the result in place. This juggle
-    std::mem::swap(&mut result, tracks);
-}
-
-fn merge_shuffle(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec<TrackRef> {
+fn shuffle_interleave(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec<TrackRef> {
     // Shuffle partitions and then use a stable sort to sort by ascending
     // length. This way, for partitions that are the same size, the ties are
     // broken randomly.
