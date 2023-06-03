@@ -221,10 +221,10 @@ pub enum Decode {
 
 pub struct QueuedTrack {
     /// A unique identifier for this particular queuement of the track.
-    queue_id: QueueId,
+    pub queue_id: QueueId,
 
     /// Track id of the track to be played.
-    track_id: TrackId,
+    pub track_id: TrackId,
 
     /// Perceived track loudness in Loudness Units Full Scale.
     track_loudness: Lufs,

@@ -7,11 +7,15 @@
 
 //! Logic for shuffling playlists.
 
+use std::hash::Hash;
+use std::collections::HashMap;
+
+use rand::seq::SliceRandom;
+
 use crate::{MetaIndex, MemoryMetaIndex};
 use crate::player::{QueuedTrack};
 use crate::prim::{TrackId, AlbumId, ArtistId};
 
-use std::collections::HashMap;
 
 type Rng = rand_chacha::ChaCha8Rng;
 
@@ -37,6 +41,23 @@ struct TrackRef {
     artist_id: ArtistId,
 }
 
+fn partition_on<T: Hash + Eq, F: Fn(&TrackRef) -> T>(
+    tracks: Vec<TrackRef>,
+    partition_key: F,
+) -> Vec<Vec<TrackRef>> {
+    let mut partitions = HashMap::<_, Vec<TrackRef>>::new();
+
+    // Partition on artist first.
+    for track in tracks {
+        partitions
+            .entry(partition_key(&track))
+            .or_default()
+            .push(track);
+    }
+
+    partitions.into_values().collect()
+}
+
 fn shuffle(
     index: &MemoryMetaIndex,
     rng: &mut Rng,
@@ -58,43 +79,44 @@ fn shuffle(
         });
     }
 
-    refs = shuffle_internal_outer(rng, refs);
+    shuffle_internal(rng, &mut refs);
 
     todo!("Apply the permutation.");
 }
 
-fn shuffle_internal_outer(rng: &mut Rng, tracks: Vec<TrackRef>) -> Vec<TrackRef> {
-    let mut partitions = HashMap::<_, Vec<TrackRef>>::new();
-    let result = Vec::with_capacity(tracks.len());
+fn shuffle_internal(rng: &mut Rng, tracks: &mut Vec<TrackRef>) {
+    // Take out the tracks and leave an empty vec in its place, we will
+    // construct the result into there later.
+    let mut result = Vec::with_capacity(tracks.len());
+    std::mem::swap(&mut result, tracks);
 
-    // Partition on artist first.
-    for track in tracks {
-        partitions
-            .entry(track.artist_id)
-            .or_default()
-            .push(track);
+    let mut partitions = partition_on(result, |t| t.artist_id);
+
+    partitions.sort_unstable_by_key(|v| v.len());
+
+    // Shuffle every artist by itself before we combine them.
+    for partition in &mut partitions {
+        shuffle_internal_artist(rng, partition);
     }
 
-    todo!("Shuffle the artists internally.");
     todo!("Merge.");
-
-    result
 }
 
-fn shuffle_internal_inner(rng: &mut Rng, tracks: Vec<TrackRef>) -> Vec<TrackRef> {
-    let mut partitions = HashMap::<_, Vec<TrackRef>>::new();
-    let result = Vec::with_capacity(tracks.len());
+fn shuffle_internal_artist(rng: &mut Rng, tracks: &mut Vec<TrackRef>) {
+    // Take out the tracks and leave an empty vec in its place, we will
+    // construct the result into there later.
+    let mut result = Vec::with_capacity(tracks.len());
+    std::mem::swap(&mut result, tracks);
 
-    // Partition on album.
-    for track in tracks {
-        partitions
-            .entry(track.album_id)
-            .or_default()
-            .push(track);
+    let mut partitions = partition_on(result, |t| t.album_id);
+
+    partitions.sort_unstable_by_key(|v| v.len());
+
+    // Shuffle every album by itself before we combine them,
+    // using a regular shuffle.
+    for partition in &mut partitions {
+        partition.shuffle(rng);
     }
 
-    todo!("Shuffle the albums internally.");
     todo!("Merge");
-
-    result
 }

@@ -46,6 +46,7 @@ pub mod prim;
 pub mod scan;
 pub mod serialization;
 pub mod server;
+pub mod shuffle;
 pub mod string_utils;
 pub mod systemd;
 pub mod thumb_cache;

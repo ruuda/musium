@@ -19,6 +19,10 @@ url                   = "2.1"
 walkdir               = "2.3"
 wait-timeout          = "0.2.0"
 
+# TODO: Use xoshiro instead
+rand_chacha          = "0.3.1"
+rand                 = "0.8.3"
+
 [dependencies.claxon]
 git = "https://github.com/ruuda/claxon"
 rev = "1f868774a250f5937ae70c868d77d1b1479f1831"
