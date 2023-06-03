@@ -11,13 +11,14 @@ use std::hash::Hash;
 use std::collections::HashMap;
 
 use rand::seq::SliceRandom;
+use rand::Rng;
 
 use crate::{MetaIndex, MemoryMetaIndex};
 use crate::player::{QueuedTrack};
 use crate::prim::{TrackId, AlbumId, ArtistId};
 
 
-type Rng = rand_chacha::ChaCha8Rng;
+type Prng = rand_chacha::ChaCha8Rng;
 
 /// Intermediate representation of a queued track used for shuffling.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -60,7 +61,7 @@ fn partition_on<T: Hash + Eq, F: Fn(&TrackRef) -> T>(
 
 fn shuffle(
     index: &MemoryMetaIndex,
-    rng: &mut Rng,
+    rng: &mut Prng,
     tracks: &mut [QueuedTrack],
 ) {
     let mut refs = Vec::with_capacity(tracks.len());
@@ -84,10 +85,10 @@ fn shuffle(
     todo!("Apply the permutation.");
 }
 
-fn shuffle_internal(rng: &mut Rng, tracks: &mut Vec<TrackRef>) {
+fn shuffle_internal(rng: &mut Prng, tracks: &mut Vec<TrackRef>) {
     // Take out the tracks and leave an empty vec in its place, we will
     // construct the result into there later.
-    let mut result = Vec::with_capacity(tracks.len());
+    let mut result = Vec::new();
     std::mem::swap(&mut result, tracks);
 
     let mut partitions = partition_on(result, |t| t.artist_id);
@@ -102,15 +103,13 @@ fn shuffle_internal(rng: &mut Rng, tracks: &mut Vec<TrackRef>) {
     todo!("Merge.");
 }
 
-fn shuffle_internal_artist(rng: &mut Rng, tracks: &mut Vec<TrackRef>) {
+fn shuffle_internal_artist(rng: &mut Prng, tracks: &mut Vec<TrackRef>) {
     // Take out the tracks and leave an empty vec in its place, we will
     // construct the result into there later.
-    let mut result = Vec::with_capacity(tracks.len());
+    let mut result = Vec::new();
     std::mem::swap(&mut result, tracks);
 
     let mut partitions = partition_on(result, |t| t.album_id);
-
-    partitions.sort_unstable_by_key(|v| v.len());
 
     // Shuffle every album by itself before we combine them,
     // using a regular shuffle.
@@ -119,4 +118,28 @@ fn shuffle_internal_artist(rng: &mut Rng, tracks: &mut Vec<TrackRef>) {
     }
 
     todo!("Merge");
+}
+
+fn merge_shuffle(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec<TrackRef> {
+    // Shuffle partitions and then use a stable sort to sort by ascending
+    // length. This way, for partitions that are the same size, the ties are
+    // broken randomly.
+    partitions.shuffle(rng);
+    partitions.sort_by_key(|v| v.len());
+
+    let mut result = Vec::new();
+    for partition in partitions {
+        // From the new partition and our intermediate result, determine the
+        // longest one, and break ties randomly.
+        let (long, short) = match (result.len(), partition.len()) {
+            (n, m) if n < m => (result, partition),
+            (n, m) if n > m => (partition, result),
+            _ if rng.gen_bool(0.5) => (partition, result),
+            _ => (result, partition),
+        };
+
+        result = long;
+    }
+
+    result
 }
