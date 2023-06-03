@@ -57,21 +57,21 @@ impl Shuffle for MemoryMetaIndex {
 
 /// Shuffler for use in tests.
 ///
-/// In the tests we use `u32` as the track type and abuse it a bit such that:
-/// * The least significant 8 bits identify the track on the album.
-/// * The next 8 bits identify the album within the artist.
-/// * The next 8 bits identify the artist.
-/// * The most significant 8 bits are zero.
+/// In the tests we use a triple of bits as the track type:
+///
+/// * Index 0 identifies the artist.
+/// * Index 1 identifies the album within the artist.
+/// * Index 2 identifies the track on the album.
 ///
 /// This makes it easy to construct such ids as literals without having to build
 /// up large dictionaries etc. It's also easy to fuzz.
 pub struct TestShuffler;
 
 impl Shuffle for TestShuffler {
-    type Track = u32;
+    type Track = [u8; 3];
 
-    fn get_album_id(&self, track: &u32) -> AlbumId {
-        AlbumId((*track >> 8) as u64)
+    fn get_album_id(&self, track: &[u8; 3]) -> AlbumId {
+        AlbumId(((track[0] as u64) << 16) | ((track[1] as u64) << 8))
     }
 
     fn get_artist_id(&self, album_id: AlbumId) -> ArtistId {
@@ -176,4 +176,28 @@ fn shuffle_interleave(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec
     }
 
     result
+}
+
+/// Note, see also the `TestShuffler` impl about the track representation.
+///
+/// Tracks in the tests are slices of the form [Artist, Album, Track]. We can
+/// write them as ascii literals for easy visualisation.
+#[cfg(test)]
+mod test {
+    use super::{Prng, TestShuffler, shuffle};
+
+
+    #[test]
+    fn shuffle_interleaves_artists() {
+        // With this input, there is only one possible optimal shuffle.
+        let mut tracks = [*b"A00", *b"A00", *b"B00"];
+        let expected = [*b"A00", *b"B00", *b"A00"];
+
+        for seed in 0..100 {
+            let mut rng = Prng::new_seed(seed);
+            shuffle(TestShuffler, &mut rng, &mut tracks);
+
+            assert_eq!(tracks, expected);
+        }
+    }
 }
