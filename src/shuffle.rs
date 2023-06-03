@@ -11,19 +11,13 @@ use std::cmp;
 use std::collections::HashMap;
 use std::iter;
 
-// TODO: Replace with Nanorand.
-use rand::seq::SliceRandom;
-use rand::Rng;
+use nanorand::{Rng, RandomGen};
 
 use crate::{MetaIndex, MemoryMetaIndex};
 use crate::player::{QueuedTrack};
 use crate::prim::{AlbumId, ArtistId};
 
-type Prng = rand_chacha::ChaCha8Rng;
-
-/// Index into the queued tracks slice, used internally for shuffling.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-struct TrackRef(pub u32);
+pub type Prng = nanorand::WyRand;
 
 /// Trait to decouple metadata lookups from shuffling.
 ///
@@ -85,6 +79,10 @@ impl Shuffle for TestShuffler {
     }
 }
 
+/// Index into the queued tracks slice, used internally for shuffling.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+struct TrackRef(pub u32);
+
 fn shuffle<Meta: Shuffle>(
     meta: Meta,
     rng: &mut Prng,
@@ -102,7 +100,7 @@ fn shuffle<Meta: Shuffle>(
     // Subsequent interleavings will preserve the relative order of those
     // tracks.
     for album_tracks in albums.values_mut() {
-        album_tracks.shuffle(rng);
+        rng.shuffle(album_tracks);
     }
 
     // Then we group everything back on artist.
@@ -129,7 +127,7 @@ fn shuffle_interleave(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec
     // Shuffle partitions and then use a stable sort to sort by ascending
     // length. This way, for partitions that are the same size, the merge order
     // is random, which aids the randomness of our shuffle.
-    partitions.shuffle(rng);
+    rng.shuffle(&mut partitions);
     partitions.sort_by_key(|v| v.len());
 
     let mut result = Vec::new();
@@ -139,7 +137,7 @@ fn shuffle_interleave(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec
         let (long, short) = match (result.len(), partition.len()) {
             (n, m) if n < m => (result, partition),
             (n, m) if n > m => (partition, result),
-            _ if rng.gen_bool(0.5) => (partition, result),
+            _ if bool::random(rng) => (partition, result),
             _ => (result, partition),
         };
 
@@ -152,7 +150,7 @@ fn shuffle_interleave(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec
         let mut span_lens = Vec::with_capacity(n_spans);
         span_lens.extend(iter::repeat(span_len + 1).take(remainder));
         span_lens.extend(iter::repeat(span_len).take(n_spans - remainder));
-        span_lens.shuffle(rng);
+        rng.shuffle(&mut span_lens);
 
         result = Vec::with_capacity(long.len() + short.len());
         let mut src_spans = &long[..];

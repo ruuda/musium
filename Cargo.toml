@@ -18,10 +18,7 @@ unicode-normalization = "0.1.13"
 url                   = "2.1"
 walkdir               = "2.3"
 wait-timeout          = "0.2.0"
-
-# TODO: Use xoshiro instead
-rand_chacha          = "0.3.1"
-rand                 = "0.8.3"
+nanorand              = "0.7.0"
 
 [dependencies.claxon]
 git = "https://github.com/ruuda/claxon"
