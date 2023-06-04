@@ -295,4 +295,13 @@ mod test {
             &[*b"_B0", *b"_A0", *b"_B0", *b"_A0"],
         ]);
     }
+
+    /// Testcases found through fuzzing.
+    #[test]
+    fn shuffle_fuzz_cases() {
+        test_shuffle(&[
+            &[*b"A11", *b"B22", *b"A00"],
+            &[*b"A00", *b"B22", *b"A11"],
+        ]);
+    }
 }
