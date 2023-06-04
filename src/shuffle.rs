@@ -261,7 +261,7 @@ mod test {
     }
 
     #[test]
-    fn shuffle_interleaves_artist() {
+    fn shuffle_interleaves_artists() {
         // With this input, there is only one possible optimal shuffle.
         test_shuffle(&[&[*b"A00", *b"B00", *b"A00"]]);
 
@@ -275,6 +275,24 @@ mod test {
         test_shuffle(&[
             &[*b"A00", *b"B00", *b"A00", *b"B00"],
             &[*b"B00", *b"A00", *b"B00", *b"A00"],
+        ]);
+    }
+
+    #[test]
+    fn shuffle_interleaves_albums() {
+        // With this input, there is only one possible optimal shuffle.
+        test_shuffle(&[&[*b"_A0", *b"_B0", *b"_A0"]]);
+
+        // Here we have freedom to flip B and C, but A surrounds them.
+        test_shuffle(&[
+            &[*b"_A0", *b"_B0", *b"_A0", *b"_C0", *b"_A0"],
+            &[*b"_A0", *b"_C0", *b"_A0", *b"_B0", *b"_A0"],
+        ]);
+
+        // Here we interleave, but either album can go first.
+        test_shuffle(&[
+            &[*b"_A0", *b"_B0", *b"_A0", *b"_B0"],
+            &[*b"_B0", *b"_A0", *b"_B0", *b"_A0"],
         ]);
     }
 }
