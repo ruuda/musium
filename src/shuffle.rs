@@ -71,7 +71,7 @@ impl Shuffle for TestShuffler {
     type Track = [u8; 3];
 
     fn get_album_id(&self, track: &[u8; 3]) -> AlbumId {
-        AlbumId(((track[0] as u64) << 16) | ((track[1] as u64) << 8))
+        AlbumId(((track[0] as u64) << 8) | (track[1] as u64))
     }
 
     fn get_artist_id(&self, album_id: AlbumId) -> ArtistId {
@@ -251,10 +251,12 @@ mod test {
         for _ in 0..10_000 {
             let mut tracks: Vec<_> = expected[0].into();
             rng.shuffle(&mut tracks);
+            let orig = tracks.clone();
             shuffle(TestShuffler, &mut rng, &mut tracks);
             assert!(
                 expected.contains(&&tracks[..]),
-                "Unexpected shuffle: {:?}",
+                "\nUnexpected shuffle:\n\n  {:?}\n\ninto\n\n  {:?}\n\n",
+                orig.iter().map(|x| std::str::from_utf8(x).unwrap()).collect::<Vec<_>>(),
                 tracks.iter().map(|x| std::str::from_utf8(x).unwrap()).collect::<Vec<_>>(),
             );
         }
