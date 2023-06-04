@@ -23,7 +23,7 @@ pub type Prng = nanorand::WyRand;
 ///
 /// This is to make the shuffling easier to test without having to construct
 /// full `QueuedTrack` instances and a full index.
-trait Shuffle {
+pub trait Shuffle {
     type Track;
 
     fn get_album_id(&self, track: &Self::Track) -> AlbumId;
@@ -104,7 +104,7 @@ fn apply_permutation<T>(permutation: &[TrackRef], tracks: &mut [T]) {
     }
 }
 
-fn shuffle<Meta: Shuffle>(
+pub fn shuffle<Meta: Shuffle>(
     meta: Meta,
     rng: &mut Prng,
     tracks: &mut [Meta::Track],
