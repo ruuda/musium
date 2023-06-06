@@ -136,16 +136,62 @@ pub fn shuffle<Meta: Shuffle>(
     // partitions once more into the final order.
     let artist_partitions: Vec<Vec<TrackRef>> = artists
         .into_values()
-        .map(|album_partitions| shuffle_interleave(rng, album_partitions))
+        .map(|album_partitions| merge_shuffle(rng, album_partitions))
         .collect();
 
-    let permutation = shuffle_interleave(rng, artist_partitions);
+    let permutation = merge_shuffle(rng, artist_partitions);
 
     // Finally put the right track at the right index.
     apply_permutation(&permutation, tracks);
 }
 
-fn shuffle_interleave(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec<TrackRef> {
+/// Interleave two lists, the shorter one breaking up spans of the longer one.
+fn interleave(rng: &mut Prng, x: Vec<TrackRef>, y: Vec<TrackRef>) -> Vec<TrackRef> {
+    // Determine the longest list and break ties randomly.
+    let (long, short) = match (x.len(), y.len()) {
+        (n, m) if n < m => (y, x),
+        (n, m) if n > m => (x, y),
+        _ if bool::random(rng) => (x, y),
+        _ => (y, x),
+    };
+
+    // We are going to partition the longer vector into spans. Figure out
+    // the length of each span. Some spans may have to be 1 element longer,
+    // shuffle the lengths.
+    let n_spans = cmp::min(short.len() + 1, long.len());
+    let span_len = long.len() / n_spans;
+    let remainder = long.len() - span_len * n_spans;
+    let mut span_lens = Vec::with_capacity(n_spans);
+    span_lens.extend(iter::repeat(span_len + 1).take(remainder));
+    span_lens.extend(iter::repeat(span_len).take(n_spans - remainder));
+    rng.shuffle(&mut span_lens);
+
+    let mut result = Vec::with_capacity(long.len() + short.len());
+    let mut src_spans = &long[..];
+    let mut src_seps = &short[..];
+
+    let last_span_len = if n_spans > short.len() {
+        span_lens.pop().expect("We should not have empty partitions.")
+    } else {
+        0
+    };
+
+    // Fill the output vec with a span and separator alternatingly.
+    for span_len in span_lens {
+        result.extend_from_slice(&src_spans[..span_len]);
+        result.push(src_seps[0]);
+        src_spans = &src_spans[span_len..];
+        src_seps = &src_seps[1..];
+    }
+
+    // Then after the final separator, there can be a final span.
+    debug_assert_eq!(src_spans.len(), last_span_len);
+    result.extend_from_slice(src_spans);
+
+    result
+}
+
+fn merge_shuffle(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec<TrackRef> {
     // Shuffle partitions and then use a stable sort to sort by ascending
     // length. This way, for partitions that are the same size, the merge order
     // is random, which aids the randomness of our shuffle.
@@ -154,47 +200,8 @@ fn shuffle_interleave(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec
 
     let mut result = Vec::new();
     for partition in partitions {
-        // From the new partition and our intermediate result, determine the
-        // longest one, and break ties randomly.
-        let (long, short) = match (partition.len(), result.len()) {
-            (n, m) if n < m => (result, partition),
-            (n, m) if n > m => (partition, result),
-            _ if bool::random(rng) => (partition, result),
-            _ => (result, partition),
-        };
-
-        // We are going to partition the longer vector into spans. Figure out
-        // the length of each span. Some spans may have to be 1 element longer,
-        // shuffle the lengths.
-        let n_spans = cmp::min(short.len() + 1, long.len());
-        let span_len = long.len() / n_spans;
-        let remainder = long.len() - span_len * n_spans;
-        let mut span_lens = Vec::with_capacity(n_spans);
-        span_lens.extend(iter::repeat(span_len + 1).take(remainder));
-        span_lens.extend(iter::repeat(span_len).take(n_spans - remainder));
-        rng.shuffle(&mut span_lens);
-
-        result = Vec::with_capacity(long.len() + short.len());
-        let mut src_spans = &long[..];
-        let mut src_seps = &short[..];
-
-        let last_span_len = if n_spans > short.len() {
-            span_lens.pop().expect("We should not have empty partitions.")
-        } else {
-            0
-        };
-
-        // Fill the output vec with a span and separator alternatingly.
-        for span_len in span_lens {
-            result.extend_from_slice(&src_spans[..span_len]);
-            result.push(src_seps[0]);
-            src_spans = &src_spans[span_len..];
-            src_seps = &src_seps[1..];
-        }
-
-        // Then after the final separator, there can be a final span.
-        debug_assert_eq!(src_spans.len(), last_span_len);
-        result.extend_from_slice(src_spans);
+        // TODO: Call intersperse when needed.
+        result = interleave(rng, partition, result);
     }
 
     result
