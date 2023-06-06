@@ -13,9 +13,9 @@ use std::iter;
 
 use nanorand::Rng;
 
-use crate::{MetaIndex, MemoryMetaIndex};
-use crate::player::{QueuedTrack};
+use crate::player::QueuedTrack;
 use crate::prim::{AlbumId, ArtistId};
+use crate::{MemoryMetaIndex, MetaIndex};
 
 pub type Prng = nanorand::WyRand;
 
@@ -49,7 +49,9 @@ impl Shuffle for MemoryMetaIndex {
         // risk having too few of them to properly interleave. So one artist per
         // album is probably okay, but also, it’s just the easiest thing to
         // implement.
-        let album = self.get_album(album_id).expect("Queued tracks should exist on album.");
+        let album = self
+            .get_album(album_id)
+            .expect("Queued tracks should exist on album.");
         let artist_ids = self.get_album_artists(album.artist_ids);
         artist_ids[0]
     }
@@ -122,11 +124,7 @@ fn apply_permutation<T>(permutation: &[TrackRef], tracks: &mut [T]) {
     }
 }
 
-pub fn shuffle<Meta: Shuffle>(
-    meta: Meta,
-    rng: &mut Prng,
-    tracks: &mut [Meta::Track],
-) {
+pub fn shuffle<Meta: Shuffle>(meta: Meta, rng: &mut Prng, tracks: &mut [Meta::Track]) {
     // First we partition all tracks into albums. Rather than moving around the
     // full QueuedTrack all the time, we store indices into the tracks slice.
     let mut albums = HashMap::<AlbumId, Vec<TrackRef>>::new();
@@ -177,17 +175,15 @@ pub fn shuffle<Meta: Shuffle>(
 }
 
 /// Join the spans of `long` with an element of `short` as joiner.
-fn join_sep(
-    long: Vec<TrackRef>,
-    short: Vec<TrackRef>,
-    mut span_lens: Vec<usize>,
-) -> Vec<TrackRef> {
+fn join_sep(long: Vec<TrackRef>, short: Vec<TrackRef>, mut span_lens: Vec<usize>) -> Vec<TrackRef> {
     let mut result = Vec::with_capacity(long.len() + short.len());
     let mut src_spans = &long[..];
     let mut src_seps = &short[..];
 
     let last_span_len = if span_lens.len() > short.len() {
-        span_lens.pop().expect("We should not have empty partitions.")
+        span_lens
+            .pop()
+            .expect("We should not have empty partitions.")
     } else {
         0
     };
@@ -256,7 +252,9 @@ fn intersperse(rng: &mut Prng, long: Vec<TrackRef>, short: Vec<TrackRef>) -> Vec
     while span_lens.len() < n_spans {
         let i = rng.generate_range(0..span_lens.len());
         let n = span_lens[i];
-        if n == 1 { continue }
+        if n == 1 {
+            continue;
+        }
         let m = rng.generate_range(1..n);
         span_lens.remove(i);
         span_lens.insert(i, m);
@@ -286,23 +284,25 @@ fn merge_shuffle(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec<Trac
         // produced when we interleave and the parition is the long side, and it
         // is at least two longer than the short side.
         result = match (result.len(), partition.len()) {
-            (n, m) if n > m + 1 => if has_bad {
-                intersperse(rng, result, partition)
-            } else {
-                interleave(rng, result, partition)
+            (n, m) if n > m + 1 => {
+                if has_bad {
+                    intersperse(rng, result, partition)
+                } else {
+                    interleave(rng, result, partition)
+                }
             }
-            (n, m) if n == m + 1 => {
-                interleave(rng, result, partition)
-            }
+            (n, m) if n == m + 1 => interleave(rng, result, partition),
             (n, m) if n < m => {
                 created_badness = n + 1 < m;
                 interleave(rng, partition, result)
             }
             // If m == n, flip a coin.
-            _ => if rng.generate::<bool>() {
-                interleave(rng, result, partition)
-            } else {
-                interleave(rng, partition, result)
+            _ => {
+                if rng.generate::<bool>() {
+                    interleave(rng, result, partition)
+                } else {
+                    interleave(rng, partition, result)
+                }
             }
         };
         has_bad = created_badness;
@@ -317,8 +317,8 @@ fn merge_shuffle(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec<Trac
 /// write them as ascii literals for easy visualisation.
 #[cfg(test)]
 mod test {
+    use super::{apply_permutation, shuffle, Prng, TestShuffler, TrackRef};
     use nanorand::Rng;
-    use super::{Prng, TestShuffler, TrackRef, shuffle, apply_permutation};
 
     /// Helper to shorten writing `TrackRef` where we don’t care about the partition.
     fn tr(i: u32) -> TrackRef {
@@ -330,7 +330,6 @@ mod test {
 
     #[test]
     fn apply_permutation_is_correct_simple() {
-
         let p = [tr(3), tr(2), tr(1), tr(0)];
         let mut v = [0, 1, 2, 3];
         apply_permutation(&p, &mut v);
@@ -376,8 +375,13 @@ mod test {
             assert!(
                 expected.contains(&&tracks[..]),
                 "\nUnexpected shuffle:\n\n  {:?}\n\ninto\n\n  {:?}\n\n",
-                orig.iter().map(|x| std::str::from_utf8(x).unwrap()).collect::<Vec<_>>(),
-                tracks.iter().map(|x| std::str::from_utf8(x).unwrap()).collect::<Vec<_>>(),
+                orig.iter()
+                    .map(|x| std::str::from_utf8(x).unwrap())
+                    .collect::<Vec<_>>(),
+                tracks
+                    .iter()
+                    .map(|x| std::str::from_utf8(x).unwrap())
+                    .collect::<Vec<_>>(),
             );
         }
     }
@@ -421,9 +425,6 @@ mod test {
     /// Testcases found through fuzzing.
     #[test]
     fn shuffle_fuzz_cases() {
-        test_shuffle(&[
-            &[*b"A11", *b"B22", *b"A00"],
-            &[*b"A00", *b"B22", *b"A11"],
-        ]);
+        test_shuffle(&[&[*b"A11", *b"B22", *b"A00"], &[*b"A00", *b"B22", *b"A11"]]);
     }
 }
