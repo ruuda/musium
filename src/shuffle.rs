@@ -176,32 +176,17 @@ pub fn shuffle<Meta: Shuffle>(
     apply_permutation(&permutation, tracks);
 }
 
-/// Interleave two lists, the shorter one breaking up spans of the longer one.
-fn interleave(rng: &mut Prng, x: Vec<TrackRef>, y: Vec<TrackRef>) -> Vec<TrackRef> {
-    // Determine the longest list and break ties randomly.
-    let (long, short) = match (x.len(), y.len()) {
-        (n, m) if n < m => (y, x),
-        (n, m) if n > m => (x, y),
-        _ if bool::random(rng) => (x, y),
-        _ => (y, x),
-    };
-
-    // We are going to partition the longer vector into spans. Figure out
-    // the length of each span. Some spans may have to be 1 element longer,
-    // shuffle the lengths.
-    let n_spans = cmp::min(short.len() + 1, long.len());
-    let span_len = long.len() / n_spans;
-    let remainder = long.len() - span_len * n_spans;
-    let mut span_lens = Vec::with_capacity(n_spans);
-    span_lens.extend(iter::repeat(span_len + 1).take(remainder));
-    span_lens.extend(iter::repeat(span_len).take(n_spans - remainder));
-    rng.shuffle(&mut span_lens);
-
+/// Join the spans of `long` with an element of `short` as joiner.
+fn join_sep(
+    long: Vec<TrackRef>,
+    short: Vec<TrackRef>,
+    mut span_lens: Vec<usize>,
+) -> Vec<TrackRef> {
     let mut result = Vec::with_capacity(long.len() + short.len());
     let mut src_spans = &long[..];
     let mut src_seps = &short[..];
 
-    let last_span_len = if n_spans > short.len() {
+    let last_span_len = if span_lens.len() > short.len() {
         span_lens.pop().expect("We should not have empty partitions.")
     } else {
         0
@@ -222,9 +207,49 @@ fn interleave(rng: &mut Prng, x: Vec<TrackRef>, y: Vec<TrackRef>) -> Vec<TrackRe
     result
 }
 
+/// Interleave two lists, the shorter one breaking up spans of the longer one.
+fn interleave(rng: &mut Prng, long: Vec<TrackRef>, short: Vec<TrackRef>) -> Vec<TrackRef> {
+    // We are going to partition the longer vector into spans. Figure out
+    // the length of each span. Some spans may have to be 1 element longer,
+    // shuffle the lengths.
+    let n_spans = cmp::min(short.len() + 1, long.len());
+    let span_len = long.len() / n_spans;
+    let remainder = long.len() - span_len * n_spans;
+    let mut span_lens = Vec::with_capacity(n_spans);
+    span_lens.extend(iter::repeat(span_len + 1).take(remainder));
+    span_lens.extend(iter::repeat(span_len).take(n_spans - remainder));
+    rng.shuffle(&mut span_lens);
+
+    join_sep(long, short, span_lens)
+}
+
 /// Use the short list to break up consecutive entries in the long list.
 fn intersperse(rng: &mut Prng, long: Vec<TrackRef>, short: Vec<TrackRef>) -> Vec<TrackRef> {
-    todo!();
+    debug_assert!(long.len() > short.len());
+
+    let n_spans = short.len() + 1;
+    let mut span_lens = Vec::with_capacity(n_spans);
+
+    let mut begin = 0;
+    let mut partition = long[0].partition;
+
+    for (i, track) in long.iter().enumerate().skip(1) {
+        if track.partition == partition {
+            // At position i-1 and i we have tracks from the same partition, we
+            // need to break this up.
+            span_lens.push(i - begin);
+            begin = i;
+        }
+
+        partition = track.partition;
+    }
+
+    // The final partition.
+    span_lens.push(long.len() - begin);
+
+    // TODO: We may need to break up some spans.
+
+    join_sep(long, short, span_lens)
 }
 
 fn merge_shuffle(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec<TrackRef> {
@@ -235,9 +260,38 @@ fn merge_shuffle(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec<Trac
     partitions.sort_by_key(|v| v.len());
 
     let mut result = Vec::new();
+    // Whether `result` has consecutive tracks from the same partition.
+    let mut has_bad = false;
+
     for partition in partitions {
-        // TODO: Call intersperse when needed.
-        result = interleave(rng, partition, result);
+        let mut created_badness = false;
+        // If we can interleave, then interleave, because it produces more
+        // homogeneous results. If we can interleave in multiple orders, then
+        // flip a coin about it. Only when the current result has badness, then
+        // we have to intersperse, and that removes all badness. Badness is only
+        // produced when we interleave and the parition is the long side, and it
+        // is at least two longer than the short side.
+        result = match (result.len(), partition.len()) {
+            (n, m) if n > m + 1 => if has_bad {
+                intersperse(rng, result, partition)
+            } else {
+                interleave(rng, result, partition)
+            }
+            (n, m) if n == m + 1 => {
+                interleave(rng, result, partition)
+            }
+            (n, m) if n < m => {
+                created_badness = n + 1 < m;
+                interleave(rng, partition, result)
+            }
+            // If m == n, flip a coin.
+            _ => if bool::random(rng) {
+                interleave(rng, result, partition)
+            } else {
+                interleave(rng, partition, result)
+            }
+        };
+        has_bad = created_badness;
     }
 
     result
