@@ -11,7 +11,7 @@ use std::cmp;
 use std::collections::HashMap;
 use std::iter;
 
-use nanorand::{Rng, RandomGen};
+use nanorand::Rng;
 
 use crate::{MetaIndex, MemoryMetaIndex};
 use crate::player::{QueuedTrack};
@@ -247,7 +247,21 @@ fn intersperse(rng: &mut Prng, long: Vec<TrackRef>, short: Vec<TrackRef>) -> Vec
     // The final partition.
     span_lens.push(long.len() - begin);
 
-    // TODO: We may need to break up some spans.
+    debug_assert!(
+        span_lens.len() <= short.len() + 1,
+        "The long list can have at most a 2-badness of the length of the short list.",
+    );
+
+    // Break up a random span at a random position until we have sufficient spans.
+    while span_lens.len() < n_spans {
+        let i = rng.generate_range(0..span_lens.len());
+        let n = span_lens[i];
+        if n == 1 { continue }
+        let m = rng.generate_range(1..n);
+        span_lens.remove(i);
+        span_lens.insert(i, m);
+        span_lens.insert(i, n - m);
+    }
 
     join_sep(long, short, span_lens)
 }
@@ -285,7 +299,7 @@ fn merge_shuffle(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec<Trac
                 interleave(rng, partition, result)
             }
             // If m == n, flip a coin.
-            _ => if bool::random(rng) {
+            _ => if rng.generate::<bool>() {
                 interleave(rng, result, partition)
             } else {
                 interleave(rng, partition, result)
