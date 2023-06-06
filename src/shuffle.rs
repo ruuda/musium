@@ -81,7 +81,25 @@ impl Shuffle for TestShuffler {
 
 /// Index into the queued tracks slice, used internally for shuffling.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-struct TrackRef(pub u32);
+struct TrackRef {
+    /// Index into the original tracks array.
+    orig_index: u32,
+
+    /// Partition that this track belongs to.
+    ///
+    /// During the first stage of the shuffle, the partition is an album, during
+    /// the second stage it’s an artist. The partition is used to avoid as much
+    /// as possible that tracks from the same partition end up adjacent in the
+    /// final order.
+    partition: u32,
+}
+
+/// Overwrite the `partition` field of every track.
+fn set_partition(tracks: &mut [TrackRef], partition: u32) {
+    for track in tracks.iter_mut() {
+        track.partition = partition;
+    }
+}
 
 /// Given a list of indexes into `tracks`, put `tracks` in that order.
 fn apply_permutation<T>(permutation: &[TrackRef], tracks: &mut [T]) {
@@ -94,8 +112,8 @@ fn apply_permutation<T>(permutation: &[TrackRef], tracks: &mut [T]) {
     // Invariant: pos[i] = k <=> inv[k] = i.
     let mut inv: Vec<u32> = (0..permutation.len() as u32).collect();
 
-    for (i, TrackRef(orig_index)) in permutation.iter().enumerate() {
-        let j = pos[*orig_index as usize] as usize;
+    for (i, track_ref) in permutation.iter().enumerate() {
+        let j = pos[track_ref.orig_index as usize] as usize;
         tracks.swap(i, j);
 
         let (ii, ij) = (inv[i] as usize, inv[j] as usize);
@@ -114,13 +132,19 @@ pub fn shuffle<Meta: Shuffle>(
     let mut albums = HashMap::<AlbumId, Vec<TrackRef>>::new();
     for (i, track) in tracks.iter().enumerate() {
         let album_id = meta.get_album_id(track);
-        albums.entry(album_id).or_default().push(TrackRef(i as u32));
+        let track_ref = TrackRef {
+            orig_index: i as u32,
+            // We fill the partition afterwards.
+            partition: 0,
+        };
+        albums.entry(album_id).or_default().push(track_ref);
     }
 
     // Then we shuffle the tracks in every album using a regular shuffle.
     // Subsequent interleavings will preserve the relative order of those
     // tracks.
-    for album_tracks in albums.values_mut() {
+    for (i, album_tracks) in albums.values_mut().enumerate() {
+        set_partition(album_tracks, i as u32);
         rng.shuffle(album_tracks);
     }
 
@@ -132,13 +156,20 @@ pub fn shuffle<Meta: Shuffle>(
     }
 
     // Then we combine all albums into one partition per artist, using our
-    // interleaving shuffle, then we interleave-shuffle the per-artist
-    // partitions once more into the final order.
-    let artist_partitions: Vec<Vec<TrackRef>> = artists
+    // merge-shuffle.
+    let mut artist_partitions: Vec<Vec<TrackRef>> = artists
         .into_values()
         .map(|album_partitions| merge_shuffle(rng, album_partitions))
         .collect();
 
+    // We need to renumber the partition of every track, since now the
+    // partitions are artists, not albums.
+    for (i, artist_tracks) in artist_partitions.iter_mut().enumerate() {
+        set_partition(artist_tracks, i as u32);
+    }
+
+    // Then we merge-shuffle the per-artist partitions once more into the final
+    // order.
     let permutation = merge_shuffle(rng, artist_partitions);
 
     // Finally put the right track at the right index.
@@ -191,6 +222,11 @@ fn interleave(rng: &mut Prng, x: Vec<TrackRef>, y: Vec<TrackRef>) -> Vec<TrackRe
     result
 }
 
+/// Use the short list to break up consecutive entries in the long list.
+fn intersperse(rng: &mut Prng, long: Vec<TrackRef>, short: Vec<TrackRef>) -> Vec<TrackRef> {
+    todo!();
+}
+
 fn merge_shuffle(rng: &mut Prng, mut partitions: Vec<Vec<TrackRef>>) -> Vec<TrackRef> {
     // Shuffle partitions and then use a stable sort to sort by ascending
     // length. This way, for partitions that are the same size, the merge order
@@ -216,14 +252,23 @@ mod test {
     use nanorand::Rng;
     use super::{Prng, TestShuffler, TrackRef, shuffle, apply_permutation};
 
+    /// Helper to shorten writing `TrackRef` where we don’t care about the partition.
+    fn tr(i: u32) -> TrackRef {
+        TrackRef {
+            orig_index: i,
+            partition: 0,
+        }
+    }
+
     #[test]
     fn apply_permutation_is_correct_simple() {
-        let p = [TrackRef(3), TrackRef(2), TrackRef(1), TrackRef(0)];
+
+        let p = [tr(3), tr(2), tr(1), tr(0)];
         let mut v = [0, 1, 2, 3];
         apply_permutation(&p, &mut v);
         assert_eq!(v, [3, 2, 1, 0]);
 
-        let p = [TrackRef(0), TrackRef(2), TrackRef(3), TrackRef(1)];
+        let p = [tr(0), tr(2), tr(3), tr(1)];
         let mut v = [0, 1, 2, 3];
         apply_permutation(&p, &mut v);
         assert_eq!(v, [0, 2, 3, 1]);
@@ -241,7 +286,7 @@ mod test {
                 let mut v: Vec<u32> = (0..len).collect();
                 let mut v_expected = v.clone();
                 rng.shuffle(&mut v_expected);
-                let p: Vec<_> = v_expected.iter().cloned().map(TrackRef).collect();
+                let p: Vec<_> = v_expected.iter().cloned().map(tr).collect();
                 apply_permutation(&p, &mut v);
                 assert_eq!(v, v_expected);
             }
