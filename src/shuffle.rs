@@ -59,7 +59,7 @@ impl Shuffle for MemoryMetaIndex {
 
 /// Shuffler for use in tests.
 ///
-/// In the tests we use a triple of bits as the track type:
+/// In the tests we use a triple of bytes as the track type:
 ///
 /// * Index 0 identifies the artist.
 /// * Index 1 identifies the album within the artist.
