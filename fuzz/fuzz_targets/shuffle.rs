@@ -78,7 +78,7 @@ fuzz_target!(|input: FuzzInput| {
     let mut tracks = input.tracks;
     let mut rng = Prng::new_seed(input.random_seed);
 
-    shuffle(TestShuffler, &mut rng, &mut tracks);
+    shuffle(&TestShuffler, &mut rng, &mut tracks);
 
     let expected_badness = get_optimal_2_badness(&tracks);
     let actual_badness = get_actual_2_badness(&tracks);

@@ -124,7 +124,7 @@ fn apply_permutation<T>(permutation: &[TrackRef], tracks: &mut [T]) {
     }
 }
 
-pub fn shuffle<Meta: Shuffle>(meta: Meta, rng: &mut Prng, tracks: &mut [Meta::Track]) {
+pub fn shuffle<Meta: Shuffle>(meta: &Meta, rng: &mut Prng, tracks: &mut [Meta::Track]) {
     // First we partition all tracks into albums. Rather than moving around the
     // full QueuedTrack all the time, we store indices into the tracks slice.
     let mut albums = HashMap::<AlbumId, Vec<TrackRef>>::new();
@@ -371,7 +371,7 @@ mod test {
             let mut tracks: Vec<_> = expected[0].into();
             rng.shuffle(&mut tracks);
             let orig = tracks.clone();
-            shuffle(TestShuffler, &mut rng, &mut tracks);
+            shuffle(&TestShuffler, &mut rng, &mut tracks);
             assert!(
                 expected.contains(&&tracks[..]),
                 "\nUnexpected shuffle:\n\n  {:?}\n\ninto\n\n  {:?}\n\n",
