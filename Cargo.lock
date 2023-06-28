@@ -156,6 +156,7 @@ dependencies = [
  "claxon",
  "crossbeam",
  "libc",
+ "nanorand",
  "num_cpus",
  "serde_json",
  "sqlite",
@@ -166,6 +167,11 @@ dependencies = [
  "wait-timeout",
  "walkdir",
 ]
+
+[[package]]
+name = "nanorand"
+version = "0.8.0"
+source = "git+https://github.com/Absolucy/nanorand-rs?rev=3440f2ca5241d9e63c3f6db680e0a895064943c1#3440f2ca5241d9e63c3f6db680e0a895064943c1"
 
 [[package]]
 name = "nix"

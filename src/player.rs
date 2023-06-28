@@ -28,6 +28,7 @@ use crate::history;
 use crate::mvar::Var;
 use crate::playback;
 use crate::prim::Hertz;
+use crate::shuffle;
 use crate::{AlbumId, Lufs, MetaIndex, MemoryMetaIndex, TrackId};
 
 type FlacReader = claxon::FlacReader<fs::File>;
@@ -221,10 +222,10 @@ pub enum Decode {
 
 pub struct QueuedTrack {
     /// A unique identifier for this particular queuement of the track.
-    queue_id: QueueId,
+    pub queue_id: QueueId,
 
     /// Track id of the track to be played.
-    track_id: TrackId,
+    pub track_id: TrackId,
 
     /// Perceived track loudness in Loudness Units Full Scale.
     track_loudness: Lufs,
@@ -303,10 +304,10 @@ impl QueuedTrack {
 /// A task to be executed by the decoder thread.
 enum DecodeTask {
     /// Continue decoding with the given reader.
-    Continue(FlacReader),
+    Continue(QueueId, FlacReader),
 
     /// Start decoding a new track.
-    Start(TrackId),
+    Start(QueueId, TrackId),
 }
 
 /// The result of a decode task.
@@ -314,6 +315,7 @@ enum DecodeTask {
 /// If the file has been fully decoded, the reader is `None`, if there is more
 /// to decode, it is returned here.
 pub struct DecodeResult {
+    queue_id: QueueId,
     block: Block,
     reader: Option<FlacReader>,
 }
@@ -359,12 +361,22 @@ impl DecodeTask {
         stop_after_bytes: usize,
     ) -> DecodeResult {
         match self {
-            DecodeTask::Continue(reader) => DecodeTask::decode(reader, filters, stop_after_bytes),
-            DecodeTask::Start(track_id) => DecodeTask::start(index, track_id, filters, stop_after_bytes),
+            DecodeTask::Continue(qid, reader) => {
+                DecodeTask::decode(qid, reader, filters, stop_after_bytes)
+            }
+            DecodeTask::Start(qid, track_id) => {
+                DecodeTask::start(index, qid, track_id, filters, stop_after_bytes)
+            }
         }
     }
 
-    fn start(index: &dyn MetaIndex, track_id: TrackId, filters: &mut Filters, stop_after_bytes: usize) -> DecodeResult {
+    fn start(
+        index: &dyn MetaIndex,
+        queue_id: QueueId,
+        track_id: TrackId,
+        filters: &mut Filters,
+        stop_after_bytes: usize,
+    ) -> DecodeResult {
         let track = match index.get_track(track_id) {
             Some(t) => t,
             None => panic!("Track {} does not exist, how did it end up queued?", track_id),
@@ -378,25 +390,27 @@ impl DecodeTask {
             Err(err) => {
                 println!("Error in {:?}: {:?}", fname, err);
                 return DecodeResult {
+                    queue_id: queue_id,
                     block: Block::new(Format::default(), Vec::new()),
                     reader: None,
                 };
             }
         };
 
-        DecodeTask::decode(reader, filters, stop_after_bytes)
+        DecodeTask::decode(queue_id, reader, filters, stop_after_bytes)
     }
 
-    fn decode(reader: FlacReader, filters: &mut Filters, stop_after_bytes: usize) -> DecodeResult {
+    fn decode(queue_id: QueueId, reader: FlacReader, filters: &mut Filters, stop_after_bytes: usize) -> DecodeResult {
         let streaminfo = reader.streaminfo();
         match streaminfo.bits_per_sample {
-            16 => DecodeTask::decode_i16(reader, streaminfo, filters, stop_after_bytes),
-            24 => DecodeTask::decode_i24(reader, streaminfo, filters, stop_after_bytes),
+            16 => DecodeTask::decode_i16(queue_id, reader, streaminfo, filters, stop_after_bytes),
+            24 => DecodeTask::decode_i24(queue_id, reader, streaminfo, filters, stop_after_bytes),
             n  => panic!("Unsupported bit depth: {}", n),
         }
     }
 
     fn decode_i16(
+        queue_id: QueueId,
         mut reader: FlacReader,
         streaminfo: StreamInfo,
         filters: &mut Filters,
@@ -455,12 +469,14 @@ impl DecodeTask {
 
         let block = Block::new(format, out);
         DecodeResult {
+            queue_id: queue_id,
             block: block,
             reader: if is_done { None } else { Some(reader) }
         }
     }
 
     fn decode_i24(
+        queue_id: QueueId,
         mut reader: FlacReader,
         streaminfo: StreamInfo,
         filters: &mut Filters,
@@ -519,6 +535,7 @@ impl DecodeTask {
 
         let block = Block::new(format, out);
         DecodeResult {
+            queue_id: queue_id,
             block: block,
             reader: if is_done { None } else { Some(reader) }
         }
@@ -570,18 +587,13 @@ pub struct PlayerState {
     /// of the queue.
     queue: Vec<QueuedTrack>,
 
-    /// The index of the track for which a decode is in progress.
-    ///
-    /// The decoder itself will be moved into the decoder thread temporarily.
-    /// When the decode is done, the decoder thread needs to add the new blocks,
-    /// and put the `FlacReader` back, but the queue could have changed in the
-    /// meantime, so we need to track the index of where to restore later.
-    current_decode: Option<usize>,
-
     /// Sender for playback events.
     ///
     /// These events get consumed by the history thread, who logs them.
     events: SyncSender<PlaybackEvent>,
+
+    /// Random number generator used for shuffling.
+    rng: shuffle::Prng,
 }
 
 
@@ -593,8 +605,8 @@ impl PlayerState {
             target_loudness: Lufs::new(-2300),
             current_track_loudness: None,
             queue: Vec::new(),
-            current_decode: None,
             events: events,
+            rng: shuffle::Prng::new(),
         }
     }
 
@@ -618,6 +630,21 @@ impl PlayerState {
             .filter(|qt| matches!(qt.decode, Decode::Running))
             .count();
         assert!(n_running <= 1, "At most one decode should be in progress.");
+
+        for (qt0, qt1) in self.queue.iter().zip(self.queue.iter().skip(1)) {
+            assert!(
+                matches!(
+                    (&qt0.decode, &qt1.decode),
+                    (Decode::Done, Decode::Done)
+                    | (Decode::Done, Decode::Running)
+                    | (Decode::Done, Decode::Partial(..))
+                    | (Decode::Running, Decode::NotStarted)
+                    | (Decode::Partial(..), Decode::NotStarted)
+                    | (Decode::NotStarted, Decode::NotStarted)
+                ),
+                "Decoding must happen at the front of the queue.",
+            );
+        }
 
         let has_current_track_loudness = self.current_track_loudness.is_some();
         let has_track = self.queue.len() > 0;
@@ -687,6 +714,45 @@ impl PlayerState {
         self.queue.push(track);
     }
 
+    /// Shuffle the queue.
+    pub fn shuffle(&mut self, index: &MemoryMetaIndex) {
+        if self.queue.len() < 3 {
+            // The track at index 0 is being played, we cannot move it, and then
+            // we need at least 2 more tracks to be able to shuffle anything at
+            // all.
+            return;
+        }
+
+        let tracks = &mut self.queue[1..];
+        shuffle::shuffle(index, &mut self.rng, tracks);
+
+        // After the shuffle, the invariant that decoded samples are at the
+        // front of the queue may be violated, so we need to restore that.
+        let mut should_clear = false;
+        for queued_track in self.queue.iter_mut() {
+            if should_clear {
+                // Note, if the decode was running and we set it to not started
+                // now, the decode result will simply be dropped once the decode
+                // thread finishes the task.
+                queued_track.decode = Decode::NotStarted;
+                queued_track.blocks.clear();
+            } else {
+                // If we still have any tracks done decoding in the front that's
+                // great, we can keep the samples, but as soon as there is any
+                // decode not done, everything after that needs to be cleared.
+                match queued_track.decode {
+                    Decode::Done => continue,
+                    Decode::Running => should_clear = true,
+                    Decode::Partial(..) => should_clear = true,
+                    Decode::NotStarted => should_clear = true,
+                }
+            }
+        }
+
+        #[cfg(debug)]
+        self.assert_invariants();
+    }
+
     /// Consume n samples from the peeked block.
     pub fn consume(&mut self, n: usize) {
         assert!(n > 0, "Must consume at least one sample.");
@@ -719,11 +785,6 @@ impl PlayerState {
         };
         if track_done {
             let track = self.queue.remove(0);
-            // If a decode is in progress, the index of the track it is decoding
-            // changed because of the `remove` above.
-            if let Some(i) = self.current_decode {
-                self.current_decode = Some(i - 1);
-            }
 
             self.events.send(PlaybackEvent::Completed(track.queue_id, track.track_id))
                 .expect("Failed to send completion event to history thread.");
@@ -780,14 +841,11 @@ impl PlayerState {
 
     /// Return a decode task, if there is something to decode.
     fn take_decode_task(&mut self) -> Option<DecodeTask> {
-        assert!(
-            self.current_decode.is_none(),
-            "Can only take decode task when none is already in progress.",
-        );
-
-        for (i, queued_track) in self.queue.iter_mut().enumerate() {
-            if let Decode::Done = queued_track.decode {
-                continue
+        for queued_track in self.queue.iter_mut() {
+            match queued_track.decode {
+                Decode::Done => continue,
+                Decode::Running => panic!("Can only take decode task when none is already in progress."),
+                _ => {}
             }
 
             // If the decode is not done, then we will now start or continue,
@@ -795,20 +853,20 @@ impl PlayerState {
             let mut decode = Decode::Running;
             mem::swap(&mut decode, &mut queued_track.decode);
 
+            let queue_id = queued_track.queue_id;
+
             match decode {
                 Decode::NotStarted => {
-                    self.current_decode = Some(i);
-                    return Some(DecodeTask::Start(queued_track.track_id));
+                    return Some(DecodeTask::Start(queue_id, queued_track.track_id));
                 }
                 Decode::Partial(reader) => {
-                    self.current_decode = Some(i);
-                    return Some(DecodeTask::Continue(reader));
+                    return Some(DecodeTask::Continue(queue_id, reader));
                 }
                 Decode::Running => {
-                    panic!("No decode can be running when current_decode is None.");
+                    unreachable!("Would have panicked already.");
                 }
                 Decode::Done => {
-                    panic!("Unreachable, we skipped the iteration on Done.");
+                    unreachable!("We skipped the iteration on Done.");
                 }
             }
         }
@@ -821,29 +879,47 @@ impl PlayerState {
     /// If the file has not been fully decoded yet, the reader needs to be
     /// returned as well.
     pub fn return_decode_task(&mut self, result: DecodeResult) {
-        let queued_track = match self.current_decode {
-            Some(i) => &mut self.queue[i],
-            None => panic!("Can only return from a decode task if one is in progress."),
-        };
-        match queued_track.decode {
-            Decode::Running => {},
-            _ => panic!("If we decoded for this track, it must have been marked running."),
+        for queued_track in self.queue.iter_mut() {
+            match queued_track.decode {
+                Decode::Done => {
+                    // The track before us is already done, so this could not
+                    // have been our task.
+                    assert_ne!(queued_track.queue_id, result.queue_id);
+                }
+                Decode::Running => {
+                    // We found the track that we were decoding.
+                    assert_eq!(queued_track.queue_id, result.queue_id);
+
+                    // Store the sample rate in the queued track as well as in
+                    // the block, so we can compute the playback position in
+                    // seconds even in case of a buffer underrun, when there are
+                    // no blocks.
+                    queued_track.sample_rate = Some(result.block.format.sample_rate);
+                    queued_track.blocks.push(result.block);
+                    queued_track.decode = match result.reader {
+                        Some(r) => Decode::Partial(r),
+                        None => Decode::Done,
+                    };
+
+                    break;
+                }
+                Decode::Partial(..) => {
+                    panic!("If a decode was running, there cannot have been a partial one.");
+                }
+                Decode::NotStarted => {
+                    // When we get to a not started entry, that's the end of
+                    // where we have consecutive samples for. If we have a
+                    // decode result, it is further down the queue; the queue
+                    // may have changed, and the result is no longer relevant.
+                    break;
+                }
+            }
         }
-        // Store the sample rate in the queued track as well as in the block, so
-        // we can compute the playback position in seconds even in case of a
-        // buffer underrun, when there are no blocks.
-        queued_track.sample_rate = Some(result.block.format.sample_rate);
-        queued_track.blocks.push(result.block);
-        queued_track.decode = match result.reader {
-            Some(r) => Decode::Partial(r),
-            None => Decode::Done,
-        };
-        self.current_decode = None;
     }
 }
 
 /// Decode the queue until we reach a set memory limit.
-fn decode_burst(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>, filters: &mut Filters) {
+fn decode_burst(index: &MemoryMetaIndex, state_mutex: &Mutex<PlayerState>, filters: &mut Filters) {
     // The decode thread is a trade-off between power consumption and memory
     // usage: decoding a lot in one go and then sleeping for a long time is more
     // efficient than decoding a bit all the time, because the CPU can be
@@ -1071,7 +1147,7 @@ impl Player {
     }
 
     /// Enqueue the track for playback at the end of the queue.
-    pub fn enqueue(&self, index: &dyn MetaIndex, track_id: TrackId) -> QueueId {
+    pub fn enqueue(&self, index: &MemoryMetaIndex, track_id: TrackId) -> QueueId {
         let album_id = track_id.album_id();
         let track = index.get_track(track_id).expect("Can only enqueue existing tracks.");
         let album = index.get_album(album_id).expect("Track must belong to album.");
@@ -1116,6 +1192,16 @@ impl Player {
         QueueSnapshot {
             tracks: tracks,
         }
+    }
+
+    /// Shuffle the queue.
+    pub fn shuffle(&self, index: &MemoryMetaIndex) {
+        self.state.lock().unwrap().shuffle(index);
+
+        // After a shuffle, a new track may be following the current one, so
+        // even if decoding was caught up before the shuffle, after the shuffle
+        // we may need to start decoding right now.
+        self.decode_thread.thread().unpark();
     }
 
     /// Return the current playback volume.

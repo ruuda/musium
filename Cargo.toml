@@ -19,6 +19,16 @@ url                   = "2.1"
 walkdir               = "2.3"
 wait-timeout          = "0.2.0"
 
+[dependencies.nanorand]
+# Shuffle is broken in 0.7.0. This was fixed in
+# c6f380231d0931cc7664ac3c52fa4043b1439ce2,
+# but there hasn’t been a new release since.
+# We also shouldn't take too recent a version,
+# because Rust 1.57 compatibility was broken in
+# 4be7f33567a13769e3d128133d9e5b2fb7693ff7.
+git = "https://github.com/Absolucy/nanorand-rs"
+rev = "3440f2ca5241d9e63c3f6db680e0a895064943c1"
+
 [dependencies.claxon]
 git = "https://github.com/ruuda/claxon"
 rev = "1f868774a250f5937ae70c868d77d1b1479f1831"

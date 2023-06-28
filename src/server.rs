@@ -311,6 +311,12 @@ impl MetaServer {
             .boxed()
     }
 
+    fn handle_shuffle(&self) -> ResponseBox {
+        let index = &*self.index_var.get();
+        self.player.shuffle(index);
+        self.handle_queue()
+    }
+
     fn handle_get_volume(&self) -> ResponseBox {
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
@@ -438,8 +444,9 @@ impl MetaServer {
             (&Get, "stats",    None)    => self.handle_stats(),
 
             // Play queue manipulation.
-            (&Get, "queue",  None)    => self.handle_queue(),
-            (&Put, "queue",  Some(t)) => self.handle_enqueue(t),
+            (&Get,  "queue",  None)            => self.handle_queue(),
+            (&Put,  "queue",  Some(t))         => self.handle_enqueue(t),
+            (&Post, "queue",  Some("shuffle")) => self.handle_shuffle(),
 
             // Volume control, volume up/down change the volume by 1 dB.
             (&Get,  "volume", None)         => self.handle_get_volume(),
