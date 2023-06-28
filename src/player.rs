@@ -28,6 +28,7 @@ use crate::history;
 use crate::mvar::Var;
 use crate::playback;
 use crate::prim::Hertz;
+use crate::shuffle;
 use crate::{AlbumId, Lufs, MetaIndex, MemoryMetaIndex, TrackId};
 
 type FlacReader = claxon::FlacReader<fs::File>;
@@ -582,6 +583,9 @@ pub struct PlayerState {
     ///
     /// These events get consumed by the history thread, who logs them.
     events: SyncSender<PlaybackEvent>,
+
+    /// Random number generator used for shuffling.
+    rng: shuffle::Prng,
 }
 
 
@@ -595,6 +599,7 @@ impl PlayerState {
             queue: Vec::new(),
             current_decode: None,
             events: events,
+            rng: shuffle::Prng::new(),
         }
     }
 
@@ -685,6 +690,24 @@ impl PlayerState {
         }
 
         self.queue.push(track);
+    }
+
+    /// Shuffle the queue.
+    pub fn shuffle(&mut self, index: &MemoryMetaIndex) {
+        if self.queue.len() < 3 {
+            // The track at index 0 is being played, we cannot move it, and then
+            // we need at least 2 more tracks to be able to shuffle anything at
+            // all.
+            return;
+        }
+
+        let tracks = &mut self.queue[1..];
+        shuffle::shuffle(index, &mut self.rng, tracks);
+
+        // TODO: Reset the decode index to the right position.
+
+        #[cfg(debug)]
+        self.assert_invariants();
     }
 
     /// Consume n samples from the peeked block.
@@ -843,7 +866,7 @@ impl PlayerState {
 }
 
 /// Decode the queue until we reach a set memory limit.
-fn decode_burst(index: &dyn MetaIndex, state_mutex: &Mutex<PlayerState>, filters: &mut Filters) {
+fn decode_burst(index: &MemoryMetaIndex, state_mutex: &Mutex<PlayerState>, filters: &mut Filters) {
     // The decode thread is a trade-off between power consumption and memory
     // usage: decoding a lot in one go and then sleeping for a long time is more
     // efficient than decoding a bit all the time, because the CPU can be
@@ -1071,7 +1094,7 @@ impl Player {
     }
 
     /// Enqueue the track for playback at the end of the queue.
-    pub fn enqueue(&self, index: &dyn MetaIndex, track_id: TrackId) -> QueueId {
+    pub fn enqueue(&self, index: &MemoryMetaIndex, track_id: TrackId) -> QueueId {
         let album_id = track_id.album_id();
         let track = index.get_track(track_id).expect("Can only enqueue existing tracks.");
         let album = index.get_album(album_id).expect("Track must belong to album.");
@@ -1116,6 +1139,12 @@ impl Player {
         QueueSnapshot {
             tracks: tracks,
         }
+    }
+
+    /// Shuffle the queue.
+    pub fn shuffle(&self, index: &MemoryMetaIndex) {
+        let mut state = self.state.lock().unwrap();
+        state.shuffle(index);
     }
 
     /// Return the current playback volume.
