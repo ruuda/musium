@@ -20,6 +20,10 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
    or a migration of the database).
  * The patch version is bumped for bugfixes and other small changes.
 
+## Unreleased
+
+ * Add the ability to shuffle the play queue.
+
 ## 0.13.0
 
 Released 2023-05-21.
