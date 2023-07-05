@@ -51,6 +51,7 @@
                 lockFile = ./Cargo.lock;
                 outputHashes = {
                   "claxon-0.4.3" = "sha256-aYFNOVGl2Iiw8/u1NrL3ZprTt48OFpG9LKs1EwEAfms=";
+                  "nanorand-0.8.0" = "sha256-X4VgXXw6cquRV3TcSnSBo7XudemDrdIH0NFLGSTyByY=";
                 };
               };
               nativeBuildInputs = [ pkgs.pkg-config ];
