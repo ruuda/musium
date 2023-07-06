@@ -200,6 +200,7 @@ pub fn normalize_words(title: &str, dest: &mut Vec<String>) {
             '°' => word.push('o'),
             '♯' => word.push('#'),
             'ø' => word.push('o'),
+            'ð' => word.push('d'),
             '×' => word.push('x'),
             'æ' => word.push_str("ae"),
             'œ' => word.push_str("oe"),
