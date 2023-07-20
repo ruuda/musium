@@ -39,7 +39,7 @@ impl Shuffle for MemoryMetaIndex {
     }
 
     fn get_artist_id(&self, album_id: AlbumId) -> ArtistId {
-        // For "artist", we take the first album of the album artists. Two
+        // For "artist", we take the first artist of the album artists. Two
         // alternatives come to mind: counting every collaboration as a unique
         // artist (more smaller groups), or counting every connected component
         // in the graph of artists with edges for collaboration albums (fewer
