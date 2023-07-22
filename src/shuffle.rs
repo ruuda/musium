@@ -6,6 +6,8 @@
 // A copy of the License has been included in the root of the repository.
 
 //! Logic for shuffling playlists.
+//!
+//! See also <https://ruudvanasseldonk.com/2023/an-algorithm-for-shuffling-playlists>.
 
 use std::cmp;
 use std::collections::HashMap;

@@ -21,6 +21,9 @@ such as the ability to pause playback.*
  * Responsive design, supports both mobile and desktop.
  * Logarithmic volume control and loudness normalization.
  * Last.fm and ListenBrainz scrobbling.
+ * [Thoughtful shuffling][shuffle].
+
+[shuffle]: https://ruudvanasseldonk.com/2023/an-algorithm-for-shuffling-playlists
 
 ## Limitations
 

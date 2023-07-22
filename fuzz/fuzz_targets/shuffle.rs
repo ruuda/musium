@@ -16,9 +16,8 @@ struct FuzzInput {
 
 /// Return the theoretical lowest possible 2-badness for the given tracks.
 ///
-/// This is independent of the order of the tracks.
-///
-/// TODO: Add link to blog post once published.
+/// This is independent of the order of the tracks. See also
+/// <https://ruudvanasseldonk.com/2023/an-algorithm-for-shuffling-playlists>.
 fn get_optimal_2_badness(tracks: &[[u8; 3]]) -> usize {
     if tracks.is_empty() {
         return 0;
@@ -52,7 +51,7 @@ fn get_optimal_2_badness(tracks: &[[u8; 3]]) -> usize {
 
 /// Compute the 2-badness of the playlist, from its definition.
 ///
-/// TODO: Add link to blog post.
+/// See also <https://ruudvanasseldonk.com/2023/an-algorithm-for-shuffling-playlists>.
 fn get_actual_2_badness(tracks: &[[u8; 3]]) -> usize {
     if tracks.is_empty() {
         return 0;
