@@ -11,9 +11,9 @@ anywhere on the local network through a webinterface.
  * [Building](https://docs.ruuda.nl/musium/building/)
  * [Running](https://docs.ruuda.nl/musium/running/)
 
-<p align="center"><a href="https://github.com/ruuda/musium/tree/master/screenshots">
+<p align="center"><a href="https://github.com/ruuda/musium/tree/master/docs/screenshots">
   <!-- The png is the rasterized version of the svg. -->
-  <img src="screenshots/exhibition.png" alt="Musium screenshots" width="600">
+  <img src="docs/screenshots/exhibition.png" alt="Musium screenshots" width="600">
 </a></p>
 
 ## Status
