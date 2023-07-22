@@ -4,6 +4,10 @@ Musium is an album-centered music player. It is designed to run as a daemon on
 an always-on device connected to speakers. Playback can be controlled from
 anywhere on the local network through a webinterface.
 
+<p align="center">
+<img src="screenshots/exhibition.png" alt="Musium screenshots" width="80%">
+</p>
+
 *Vaporware warning: while Musium is usable, it is missing essential features,
 such as the ability to pause playback.*
 
