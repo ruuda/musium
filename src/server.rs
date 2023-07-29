@@ -11,14 +11,14 @@ use std::sync::Arc;
 use std::thread;
 
 use tiny_http::{Header, Request, Response, ResponseBox, Server};
-use tiny_http::Method::{Get, Post, Put, self};
+use tiny_http::Method::{Delete, Get, Post, Put, self};
 
 use crate::config::Config;
 use crate::database_utils;
 use crate::database as db;
 use crate::database::Connection;
 use crate::mvar::Var;
-use crate::player::{Millibel, Player};
+use crate::player::{Millibel, Player, QueueId};
 use crate::prim::{ArtistId, AlbumId, TrackId};
 use crate::scan::BackgroundScanner;
 use crate::serialization;
@@ -311,6 +311,15 @@ impl MetaServer {
             .boxed()
     }
 
+    fn handle_dequeue(&self, id: &str) -> ResponseBox {
+        let queue_id = match QueueId::parse(id) {
+            Some(qid) => qid,
+            None => return self.handle_bad_request("Invalid queue id."),
+        };
+        self.player.dequeue(queue_id);
+        Response::empty(200).boxed()
+    }
+
     fn handle_queue_shuffle(&self) -> ResponseBox {
         let index = &*self.index_var.get();
         self.player.shuffle(index);
@@ -449,10 +458,11 @@ impl MetaServer {
             (&Get, "stats",    None)    => self.handle_stats(),
 
             // Play queue manipulation.
-            (&Get,  "queue",  None)            => self.handle_queue(),
-            (&Put,  "queue",  Some(t))         => self.handle_enqueue(t),
-            (&Post, "queue",  Some("shuffle")) => self.handle_queue_shuffle(),
-            (&Post, "queue",  Some("clear"))   => self.handle_queue_clear(),
+            (&Get,    "queue",  None)            => self.handle_queue(),
+            (&Put,    "queue",  Some(t))         => self.handle_enqueue(t),
+            (&Delete, "queue",  Some(t))         => self.handle_dequeue(t),
+            (&Post,   "queue",  Some("shuffle")) => self.handle_queue_shuffle(),
+            (&Post,   "queue",  Some("clear"))   => self.handle_queue_clear(),
 
             // Volume control, volume up/down change the volume by 1 dB.
             (&Get,  "volume", None)         => self.handle_get_volume(),

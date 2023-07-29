@@ -45,6 +45,10 @@ position.
 ### `PUT` /api/queue/:track_id
 Enqueue the track with the given id.
 
+### `DELETE` /api/queue/:queue_id
+Remove a single queued track from the queue. Note, this takes the queue id of
+the particular enqueuement, not the track id.
+
 ### `POST` /api/queue/shuffle
 Shuffle the queue. Returns the new queue.
 

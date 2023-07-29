@@ -47,6 +47,13 @@ impl fmt::Display for QueueId {
     }
 }
 
+impl QueueId {
+    #[inline]
+    pub fn parse(src: &str) -> Option<QueueId> {
+        u64::from_str_radix(src, 16).ok().map(QueueId)
+    }
+}
+
 /// A dimensionless number expressed on a logarithmic scale.
 ///
 /// The representation is millibel, or in other words, this is a decibel as
@@ -714,6 +721,17 @@ impl PlayerState {
         self.queue.push(track);
     }
 
+    /// Dequeue the track, if it exists and is not currently playing.
+    pub fn dequeue(&mut self, queue_id: QueueId) {
+        match self.queue.iter().position(|qt| qt.queue_id == queue_id) {
+            // If the track is currently playing, we cannot remove it from the
+            // queue.
+            Some(0) => return,
+            None => return,
+            Some(i) => self.queue.remove(i),
+        };
+    }
+
     /// Shuffle the queue.
     pub fn shuffle(&mut self, index: &MemoryMetaIndex) {
         if self.queue.len() < 3 {
@@ -1176,6 +1194,11 @@ impl Player {
         }
 
         queue_id
+    }
+
+    /// Enqueue the track for playback at the end of the queue.
+    pub fn dequeue(&self, queue_id: QueueId) {
+        self.state.lock().unwrap().dequeue(queue_id);
     }
 
     /// Return a snapshot of the queue.
