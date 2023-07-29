@@ -753,6 +753,11 @@ impl PlayerState {
         self.assert_invariants();
     }
 
+    /// Clear the play queue. Does not affect the currently playing track.
+    pub fn clear_queue(&mut self) {
+        self.queue.truncate(1);
+    }
+
     /// Consume n samples from the peeked block.
     pub fn consume(&mut self, n: usize) {
         assert!(n > 0, "Must consume at least one sample.");
@@ -1202,6 +1207,11 @@ impl Player {
         // even if decoding was caught up before the shuffle, after the shuffle
         // we may need to start decoding right now.
         self.decode_thread.thread().unpark();
+    }
+
+    /// Shuffle the queue.
+    pub fn clear_queue(&self) {
+        self.state.lock().unwrap().clear_queue();
     }
 
     /// Return the current playback volume.

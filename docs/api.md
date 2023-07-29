@@ -48,6 +48,10 @@ Enqueue the track with the given id.
 ### `POST` /api/queue/shuffle
 Shuffle the queue. Returns the new queue.
 
+### `POST` /api/queue/clear
+Clear the play queue. This does not affect the currently playing track. Returns
+the new queue.
+
 ## Volume
 
 ### `GET` /api/volume
