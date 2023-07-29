@@ -23,6 +23,7 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
 ## Unreleased
 
  * Add the ability to shuffle the play queue.
+ * Add endpoints for clearing the play queue and dequeueing a track.
 
 ## 0.13.0
 
