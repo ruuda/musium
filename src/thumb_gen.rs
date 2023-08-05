@@ -115,27 +115,27 @@ impl<'a> GenThumb<'a> {
             // thumbnail become darker, which is especially noticeable for
             // covers with white edges, and also shows up as a "pop" in the
             // album view when the full-resolution image loads.
-            .args(&["-background", "black"])
-            .args(&["-alpha", "remove"])
-            .args(&["-alpha", "off"])
-            .args(&["-flatten"])
+            .args(["-background", "black"])
+            .args(["-alpha", "remove"])
+            .args(["-alpha", "off"])
+            .args(["-flatten"])
             // Resize in a linear color space, sRGB is not suitable for it
             // because it is nonlinear. "RGB" in ImageMagick is linear.
-            .args(&["-colorspace", "RGB"])
+            .args(["-colorspace", "RGB"])
             // See also the note about -flatten above. I think Edge is the
             // default, but let's be explicit about it.
-            .args(&["-virtual-pixel", "Edge"])
+            .args(["-virtual-pixel", "Edge"])
             // Lanczos2 is a bit less sharp than Cosine, but less sharp edges
             // means that the image compresses better, and less artifacts. But
             // still, Lanczos was too blurry in my opinion.
-            .args(&["-filter", "Cosine"])
+            .args(["-filter", "Cosine"])
             // Twice the size of the thumb in the webinterface, so they appear
             // pixel-perfect on a high-DPI display, or on a mobile phone.
-            .args(&["-distort", "Resize", "140x140!"])
-            .args(&["-colorspace", "sRGB"])
+            .args(["-distort", "Resize", "140x140!"])
+            .args(["-colorspace", "sRGB"])
             // Remove EXIF metadata, including the colour profile if there was
             // any -- we convert to sRGB anyway.
-            .args(&["-strip"])
+            .args(["-strip"])
             // Write lossless, we will later compress to jpeg with Guetzli,
             // which has a better compressor.
             .arg(&out_path)
@@ -172,7 +172,7 @@ impl<'a> GenThumb<'a> {
             .map_err(|e| Error::CommandError("Imagemagick's 'convert' failed.", e))?;
 
         let guetzli = Command::new("guetzli")
-            .args(&["--quality", "97"])
+            .args(["--quality", "97"])
             // Input is the intermediate file.
             .arg(&out_path)
             // Output is stdout, but guetzli does not understand `-`.
@@ -212,7 +212,7 @@ impl<'a> GenThumb<'a> {
                     .map_err(|e| Error::CommandError("Guetzli failed.", e))?;
 
                 // Delete the intermediate png file.
-                std::fs::remove_file(&in_path)?;
+                std::fs::remove_file(in_path)?;
 
                 let mut stdout = child
                     .stdout

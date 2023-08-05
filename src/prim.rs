@@ -176,8 +176,10 @@ impl Lufs {
             .expect("A value of 0.0 LUFS is not allowed, use -0.01 LUFS instead.")
         )
     }
+}
 
-    pub fn default() -> Lufs {
+impl Default for Lufs {
+    fn default() -> Lufs {
         Lufs(std::num::NonZeroI16::new(-900).unwrap())
     }
 }

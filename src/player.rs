@@ -75,8 +75,8 @@ pub struct Format {
     pub bits_per_sample: u32,
 }
 
-impl Format {
-    pub fn default() -> Format {
+impl Default for Format {
+    fn default() -> Format {
         Format {
             sample_rate: Hertz(44_100),
             bits_per_sample: 16,
@@ -1031,7 +1031,7 @@ fn decode_main(
 
         if should_decode {
             let current_index = index.get();
-            decode_burst(&*current_index, state_mutex, &mut filters);
+            decode_burst(&current_index, state_mutex, &mut filters);
         }
 
         println!("Decoder going to sleep.");
@@ -1101,7 +1101,7 @@ impl Player {
             .spawn(move || {
                 decode_main(
                     index_for_decode,
-                    &*state_mutex_for_decode,
+                    &state_mutex_for_decode,
                     high_pass_cutoff,
                 );
             }).unwrap();
@@ -1174,8 +1174,8 @@ impl Player {
         let album_id = track_id.album_id();
         let track = index.get_track(track_id).expect("Can only enqueue existing tracks.");
         let album = index.get_album(album_id).expect("Track must belong to album.");
-        let track_loudness = track.loudness.unwrap_or_else(Lufs::default);
-        let album_loudness = album.loudness.unwrap_or_else(Lufs::default);
+        let track_loudness = track.loudness.unwrap_or_default();
+        let album_loudness = album.loudness.unwrap_or_default();
 
         // If the queue is empty, then the playback thread may be parked,
         // so we may need to wake it after enqueuing something.

@@ -532,7 +532,7 @@ pub fn main(
             play_queue(
                 &config.audio_device,
                 &config.audio_volume_control,
-                &*state_mutex,
+                &state_mutex,
                 decode_thread,
             );
             println!("Playback done, sleeping ...");

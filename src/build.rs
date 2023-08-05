@@ -833,7 +833,7 @@ impl BuildMetaIndex {
             file_id: file_id,
             title: StringRef(title),
             artist: StringRef(track_artist),
-            duration_seconds: file.duration_seconds as u16,
+            duration_seconds: file.duration_seconds,
             filename: file.filename,
             loudness: track_loudness,
         };

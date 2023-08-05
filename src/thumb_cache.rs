@@ -87,7 +87,7 @@ impl ThumbCache {
     ///
     /// See also [`load_from_database`].
     pub fn load_from_database_at(db_path: &Path) -> db::Result<ThumbCache> {
-        let inner = database_utils::connect_readonly(&db_path)?;
+        let inner = database_utils::connect_readonly(db_path)?;
         let mut conn = db::Connection::new(&inner);
         let mut tx = conn.begin()?;
         let result = ThumbCache::load_from_database(&mut tx)?;

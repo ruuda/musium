@@ -130,10 +130,10 @@ impl WordMeta {
     /// Return a copy of the word meta, with log-frequency filled in.
     fn set_frequency(self, frequency: u64) -> WordMeta {
         debug_assert!(frequency > 0, "Frequency must be positive.");
-        let log2_frequency = 63 - frequency.leading_zeros();
+        let log2_frequency: u32 = 63 - frequency.leading_zeros();
 
         // The 6-bit log-frequency is at offset 24.
-        WordMeta(self.0 | ((log2_frequency as u32) << 24))
+        WordMeta(self.0 | (log2_frequency << 24))
     }
 }
 

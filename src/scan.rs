@@ -636,7 +636,7 @@ pub fn run_scan_in_thread(
                 tx.send(status).unwrap();
 
                 let mut loudness_tasks = loudness::TaskQueue::new(
-                    &*index_arc,
+                    &index_arc,
                     &mut status,
                     &mut tx,
                 );
@@ -653,7 +653,7 @@ pub fn run_scan_in_thread(
             // If there are any new or updated albums, regenerate thumbnails for
             // those.
             crate::thumb_gen::generate_thumbnails(
-                &*index_arc,
+                &index_arc,
                 &db_path,
                 &mut status,
                 &mut tx,
