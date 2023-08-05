@@ -1,7 +1,7 @@
 {
   description = "Musium";
 
-  inputs.nixpkgs.url = "nixpkgs/nixos-unstable";
+  inputs.nixpkgs.url = "nixpkgs/nixos-23.05";
   inputs.squiller.url = "github:ruuda/squiller?ref=v0.3.0";
   inputs.squiller.inputs.nixpkgs.follows = "nixpkgs";
 
