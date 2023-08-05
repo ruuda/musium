@@ -47,7 +47,7 @@ module Model
 
 import Prelude
 
-import Affjax as Http
+import Affjax.Web as Http
 import Affjax.ResponseFormat as Http.ResponseFormat
 import Affjax.StatusCode (StatusCode (..))
 import Control.Monad.Error.Class (class MonadThrow, throwError)

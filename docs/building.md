@@ -12,7 +12,7 @@ a requirement. You are free to source the build tools elsewhere, for example
 from your system package repositories.
 
 The webinterface is written in [Purescript][purescript]. There is a basic
-makefile that calls `purs` and `psc-package`:
+makefile that calls `purs` and `spago`, which in turn needs `esbuild`:
 
     make -C app
     stat app/output/app.js

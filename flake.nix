@@ -32,10 +32,11 @@
             devShells.default = pkgs.mkShell {
               inherit name;
               nativeBuildInputs = [
+                pkgs.esbuild
                 pkgs.mkdocs
-                pkgs.psc-package
                 pkgs.purescript
                 pkgs.rustup
+                pkgs.spago
                 pkgs.sqlite
                 python
                 squiller.packages.${system}.default

@@ -7,19 +7,19 @@
 
 "use strict";
 
-exports.create = function(initialValue) {
+export const create = function(initialValue) {
   return function() {
     return { value: initialValue };
   }
 }
 
-exports.get = function(variable) {
+export const get = function(variable) {
   return function() {
     return variable.value;
   }
 }
 
-exports.set = function(variable) {
+export const set = function(variable) {
   return function(value) {
     return function() {
       variable.value = value;

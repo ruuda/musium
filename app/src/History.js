@@ -7,14 +7,14 @@
 
 "use strict";
 
-exports.pushStateImpl = function(data, title, url) {
+export const pushStateImpl = function(data, title, url) {
   return function() {
     document.title = title;
     history.pushState(data, title, url);
   };
 }
 
-exports.onPopStateImpl = function(nothing, just, callback) {
+export const onPopStateImpl = function(nothing, just, callback) {
   return function() {
     // We manage scroll positions manually on naviagation,
     // the browser should not mess with it.

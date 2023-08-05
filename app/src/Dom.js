@@ -7,25 +7,25 @@
 
 "use strict";
 
-exports.eqElementImpl = function(x) {
+export const eqElementImpl = function(x) {
   return function(y) {
     return x === y;
   }
 }
 
-exports.createElement = function(tagName) {
+export const createElement = function(tagName) {
   return function() {
     return document.createElement(tagName);
   }
 }
 
-exports.appendChildImpl = function(child, container) {
+export const appendChildImpl = function(child, container) {
   return function() {
     container.appendChild(child);
   }
 }
 
-exports.renderHtml = function(html) {
+export const renderHtml = function(html) {
   return function() {
     const range = document.createRange();
     range.selectNode(document.body);
@@ -33,13 +33,13 @@ exports.renderHtml = function(html) {
   }
 }
 
-exports.removeChildImpl = function(child, container) {
+export const removeChildImpl = function(child, container) {
   return function() {
     container.removeChild(child);
   }
 }
 
-exports.clearElement = function(container) {
+export const clearElement = function(container) {
   return function() {
     while (container.hasChildNodes()) {
       container.removeChild(container.lastChild);
@@ -47,13 +47,13 @@ exports.clearElement = function(container) {
   }
 }
 
-exports.appendTextImpl = function(text, container) {
+export const appendTextImpl = function(text, container) {
   return function() {
     container.insertAdjacentText('beforeend', text);
   }
 }
 
-exports.getElementByIdImpl = function(id, just, nothing) {
+export const getElementByIdImpl = function(id, just, nothing) {
   return function() {
     var element = document.getElementById(id);
     if (element === null) {
@@ -64,13 +64,13 @@ exports.getElementByIdImpl = function(id, just, nothing) {
   }
 }
 
-exports.getBoundingClientRect = function(element) {
+export const getBoundingClientRect = function(element) {
   return function() {
     return element.getBoundingClientRect();
   }
 }
 
-exports.assumeElementById = function(id) {
+export const assumeElementById = function(id) {
   return function() {
     var element = document.getElementById(id);
     window.console.assert(element !== null, 'No element with id: ' + id);
@@ -78,43 +78,43 @@ exports.assumeElementById = function(id) {
   }
 }
 
-exports.body = document.body;
+export const body = document.body;
 
-exports.getValue = function(element) {
+export const getValue = function(element) {
   return function() {
     return element.value;
   }
 }
 
-exports.setValueImpl = function(value, element) {
+export const setValueImpl = function(value, element) {
   return function() {
     element.value = value;
   }
 }
 
-exports.getOffsetHeight = function(element) {
+export const getOffsetHeight = function(element) {
   return function() {
     return element.offsetHeight;
   }
 }
 
-exports.getWindowHeight = function() {
+export const getWindowHeight = function() {
   return window.innerHeight;
 }
 
-exports.getScrollTop = function(element) {
+export const getScrollTop = function(element) {
   return function() {
     return element.scrollTop;
   }
 }
 
-exports.setScrollTopImpl = function(off, element) {
+export const setScrollTopImpl = function(off, element) {
   return function() {
     element.scrollTop = off;
   }
 }
 
-exports.scrollIntoView = function(element) {
+export const scrollIntoView = function(element) {
   return function() {
     element.scrollIntoView({
       // Page transitions are immediate, so scrolling should jump, it should not
@@ -126,32 +126,32 @@ exports.scrollIntoView = function(element) {
   }
 }
 
-exports.focusElement = function(element) {
+export const focusElement = function(element) {
   return function() {
     return element.focus();
   }
 }
 
-exports.setAttributeImpl = function(attribute, value, element) {
+export const setAttributeImpl = function(attribute, value, element) {
   return function() {
     element.setAttribute(attribute, value);
   }
 }
 
-exports.setImageImpl = function(src, alt, element) {
+export const setImageImpl = function(src, alt, element) {
   return function() {
     element.src = src;
     element.alt = alt;
   }
 }
 
-exports.getComplete = function(element) {
+export const getComplete = function(element) {
   return function() {
     return element.complete;
   }
 }
 
-exports.waitCompleteImpl = function(unit, imgElement) {
+export const waitCompleteImpl = function(unit, imgElement) {
   return function (onError, onSuccess) {
     let decodePromise = imgElement.decode();
 
@@ -167,37 +167,37 @@ exports.waitCompleteImpl = function(unit, imgElement) {
   };
 }
 
-exports.addClassImpl = function(className, element) {
+export const addClassImpl = function(className, element) {
   return function() {
     element.classList.add(className);
   }
 }
 
-exports.removeClassImpl = function(className, element) {
+export const removeClassImpl = function(className, element) {
   return function() {
     element.classList.remove(className);
   }
 }
 
-exports.setIdImpl = function(id, element) {
+export const setIdImpl = function(id, element) {
   return function() {
     element.id = id;
   }
 }
 
-exports.setTransformImpl = function(transform, element) {
+export const setTransformImpl = function(transform, element) {
   return function() {
     element.style.transform = transform;
   }
 }
 
-exports.setTransitionImpl = function(transition, element) {
+export const setTransitionImpl = function(transition, element) {
   return function() {
     element.style.transition = transition;
   }
 }
 
-exports.setMaskImageImpl = function(mask, element) {
+export const setMaskImageImpl = function(mask, element) {
   return function() {
     if ('webkitMaskImage' in element.style) {
       element.style.webkitMaskImage = mask;
@@ -207,19 +207,19 @@ exports.setMaskImageImpl = function(mask, element) {
   }
 }
 
-exports.setWidthImpl = function(width, element) {
+export const setWidthImpl = function(width, element) {
   return function() {
     element.style.width = width;
   }
 }
 
-exports.setHeightImpl = function(height, element) {
+export const setHeightImpl = function(height, element) {
   return function() {
     element.style.height = height;
   }
 }
 
-exports.addEventListenerImpl = function(eventName, callback, element) {
+export const addEventListenerImpl = function(eventName, callback, element) {
   return function() {
     element.addEventListener(eventName, function(evt) {
       callback();
@@ -229,7 +229,7 @@ exports.addEventListenerImpl = function(eventName, callback, element) {
   }
 }
 
-exports.onWindowKeyDown = function(callback) {
+export const onWindowKeyDown = function(callback) {
   return function() {
     window.addEventListener('keydown', function (evt) {
       callback(evt.key)();
@@ -237,7 +237,7 @@ exports.onWindowKeyDown = function(callback) {
   }
 }
 
-exports.onScrollImpl = function(callback, element) {
+export const onScrollImpl = function(callback, element) {
   return function() {
     // For some reason, addEventListener('scroll') does not work,
     // but this does.
@@ -247,7 +247,7 @@ exports.onScrollImpl = function(callback, element) {
   }
 }
 
-exports.onResizeWindow = function(callback) {
+export const onResizeWindow = function(callback) {
   return function() {
     window.onresize = function(evt) {
       callback();

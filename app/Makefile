@@ -1,5 +1,5 @@
 output/app.js: output/Main/index.js
-	purs bundle output/*/*.js -m Main > output/app.js
+	spago bundle-app --minify --to output/app.js
 
-output/Main/index.js: src/*.purs src/*.js psc-package.json
-	psc-package build
+output/Main/index.js: src/*.purs src/*.js spago.dhall packages.dhall
+	spago build

@@ -10,22 +10,22 @@
 
 "use strict";
 
-exports.eqInstantImpl = function(lhs, rhs) {
+export const eqInstantImpl = function(lhs, rhs) {
   return lhs === rhs;
 }
 
-exports.ordInstantImpl = function(lt, eq, gt, lhs, rhs) {
+export const ordInstantImpl = function(lt, eq, gt, lhs, rhs) {
   return lhs < rhs ? lt : lhs === rhs ? eq : gt;
 }
 
-exports.getCurrentInstant = function() {
+export const getCurrentInstant = function() {
   return new Date(Date.now());
 }
 
-exports.addSecondsImpl = function(secs, instant) {
+export const addSecondsImpl = function(secs, instant) {
   return new Date(secs * 1000.0 + instant.getTime());
 }
 
-exports.diffSecondsImpl = function(t0, t1) {
+export const diffSecondsImpl = function(t0, t1) {
   return (t0.getTime() - t1.getTime()) / 1000.0;
 }
