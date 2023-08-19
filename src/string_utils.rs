@@ -234,3 +234,21 @@ pub fn normalize_words(title: &str, dest: &mut Vec<String>) {
     // Push the final word.
     push_word(dest, &mut word);
 }
+
+#[cfg(test)]
+mod test {
+    use super::normalize_words;
+
+    fn expect_normalize_words(input: &str, expected_output: &[&str]) {
+        let mut words = Vec::new();
+        normalize_words(input, &mut words);
+        let words_slice: Vec<&str> = words.iter().map(|s| &s[..]).collect();
+        assert_eq!(&words_slice[..], expected_output);
+    }
+
+    #[test]
+    pub fn test_normalize_words() {
+        expect_normalize_words("Ṣānnu yārru lī", &["sannu", "yarru", "li"]);
+        expect_normalize_words("Orð vǫlu", &["ord", "volu"]);
+    }
+}
