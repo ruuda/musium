@@ -10,6 +10,8 @@
 use std::path::Path;
 use std::sync::mpsc::Receiver;
 
+use chrono::{DateTime, SecondsFormat, Utc};
+
 use crate::database_utils;
 use crate::database as db;
 use crate::database::{Connection, Listen, Result};
@@ -21,6 +23,11 @@ use crate::{MetaIndex, MemoryMetaIndex, TrackId};
 pub enum PlaybackEvent {
     Started(QueueId, TrackId),
     Completed(QueueId, TrackId),
+    Rated {
+        track_id: TrackId,
+        created_at: DateTime<Utc>,
+        delta: i8,
+    },
     QueueEnded,
 }
 
@@ -36,9 +43,9 @@ pub fn main(
     let mut last_listen_id = None;
 
     for event in events {
-        let now = chrono::Utc::now();
+        let now = Utc::now();
         let use_zulu_suffix = true;
-        let now_str = now.to_rfc3339_opts(chrono::SecondsFormat::Millis, use_zulu_suffix);
+        let now_str = now.to_rfc3339_opts(SecondsFormat::Millis, use_zulu_suffix);
 
         match event {
             PlaybackEvent::Started(queue_id, track_id) => {
@@ -86,12 +93,19 @@ pub fn main(
                     );
                 }
             }
+            PlaybackEvent::Rated { track_id, created_at, delta } => {
+                let use_zulu_suffix = true;
+                let date_str = created_at.to_rfc3339_opts(SecondsFormat::Millis, use_zulu_suffix);
+                let mut tx = db.begin()?;
+                db::insert_rating(&mut tx, track_id.0 as i64, &date_str, delta as i64)?;
+                tx.commit()?;
+            }
             PlaybackEvent::QueueEnded => {
                 // When the queue ends, flush the WAL. This is not really
                 // needed, but I back up my database with rsync once in a
                 // while, and I like to have everything in one file instead
                 // of having to sync the WAL as well. We checkpoint after
-                // the queue ends, before after the post-playback program runs.
+                // the queue ends, before the post-playback program runs.
                 connection.execute("PRAGMA wal_checkpoint(PASSIVE);")?;
             }
         }
