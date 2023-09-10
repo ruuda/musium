@@ -131,26 +131,45 @@ nowPlayingInfo postEvent (QueuedTrack track) = Html.div $ do
 ratingButtons :: Rating -> Html Unit
 ratingButtons (Rating rating) = Html.div $ do
   Html.addClass "rating-buttons"
-  Html.button $ do
+  b1 <- Html.button $ do
     Html.text "✖"
     Html.setTitle "Rate as 'dislike'"
     when (rating == (-1)) $ Html.addClass "active"
     Html.onClick $ pure unit
-  Html.button $ do
+    ask
+  b2 <- Html.button $ do
     Html.text "•"
     Html.setTitle "Rate as neutral (clear rating)"
     when (rating == 0) $ Html.addClass "active"
     Html.onClick $ pure unit
-  Html.button $ do
+    ask
+  b3 <- Html.button $ do
     Html.text "★"
     Html.setTitle "Rate as 'like'"
     when (rating == 1) $ Html.addClass "active"
     Html.onClick $ pure unit
-  Html.button $ do
+    ask
+  b4 <- Html.button $ do
     Html.text "❤"
     when (rating == 2) $ Html.addClass "active"
     Html.setTitle "Rate as 'love'"
     Html.onClick $ pure unit
+    ask
+
+  let
+    doRate :: Element -> Int -> Effect Unit
+    doRate elem newRating = do
+      Html.withElement b1 $ Html.removeClass "active"
+      Html.withElement b2 $ Html.removeClass "active"
+      Html.withElement b3 $ Html.removeClass "active"
+      Html.withElement b4 $ Html.removeClass "active"
+      Html.withElement elem $ Html.addClass "active"
+
+  liftEffect $ do
+    Html.withElement b1 $ Html.onClick (doRate b1 (-1))
+    Html.withElement b2 $ Html.onClick (doRate b2 0)
+    Html.withElement b3 $ Html.onClick (doRate b3 1)
+    Html.withElement b4 $ Html.onClick (doRate b4 2)
 
 nothingPlayingInfo :: Html NowPlayingState
 nothingPlayingInfo = Html.div $ do

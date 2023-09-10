@@ -706,6 +706,18 @@ button.play-next::before {
   display: inline-block;
   width: 2em;
   color: #ddd;
+  transition:
+    color 0.2s ease-in-out,
+    background 0.3s ease-out;
+}
+
+.rating-buttons button:active {
+  /* Equivalent to the normal button color, but using transparency instead of
+   * an opaque color to make it blend better with the album art shadow. */
+  background-color: rgba(136, 136, 136, 0.06);
+  transition:
+    color 0.2s ease-in-out,
+    background 0s linear;
 }
 
 .rating-buttons button.active {
