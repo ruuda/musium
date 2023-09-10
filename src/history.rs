@@ -10,7 +10,7 @@
 use std::path::Path;
 use std::sync::mpsc::Receiver;
 
-use chrono::{DateTime, SecondsFormat, Utc};
+use chrono::{SecondsFormat, Utc};
 
 use crate::database_utils;
 use crate::database as db;
@@ -25,8 +25,7 @@ pub enum PlaybackEvent {
     Completed(QueueId, TrackId),
     Rated {
         track_id: TrackId,
-        created_at: DateTime<Utc>,
-        delta: i8,
+        rating: u8,
     },
     QueueEnded,
 }
@@ -93,11 +92,9 @@ pub fn main(
                     );
                 }
             }
-            PlaybackEvent::Rated { track_id, created_at, delta } => {
-                let use_zulu_suffix = true;
-                let date_str = created_at.to_rfc3339_opts(SecondsFormat::Millis, use_zulu_suffix);
+            PlaybackEvent::Rated { track_id, rating } => {
                 let mut tx = db.begin()?;
-                db::insert_rating(&mut tx, track_id.0 as i64, &date_str, delta as i64)?;
+                db::insert_rating(&mut tx, track_id.0 as i64, &now_str, rating as i64)?;
                 tx.commit()?;
             }
             PlaybackEvent::QueueEnded => {

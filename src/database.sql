@@ -67,9 +67,8 @@ create table if not exists ratings
 -- downside is that we may end up with dangling ratings if tracks get deleted
 -- or moved (e.g. a correction in track number), but that's acceptable.
 , track_id    integer not null
--- How much to increase or decrease the rating. The sum of deltas for a track
--- should be in {-1, 0, 1, 2}, but this is not enforced.
-, delta       integer not null
+-- The rating for this track.
+, rating      integer not null check ((rating >= -1) and (rating <= 2))
 -- "musium" for ratings created from Musium, otherwise the source that the
 -- rating was imported from, e.g. "last.fm".
 , source      string not null
@@ -313,17 +312,17 @@ from
 group by
   album_id;
 
--- @query insert_rating(track_id: i64, created_at: str, delta: i64)
+-- @query insert_rating(track_id: i64, created_at: str, rating: i64)
 insert into
-  ratings (track_id, created_at, delta)
+  ratings (track_id, created_at, rating)
 values
-  (:track_id, :created_at, :delta);
+  (:track_id, :created_at, :rating);
 
 -- @query iter_ratings() ->* TrackRating
 select
     id       -- :i64
   , track_id -- :i64
-  , delta    -- :i64
+  , rating   -- :i64
 from
   ratings
 order by

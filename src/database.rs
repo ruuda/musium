@@ -158,9 +158,8 @@ pub fn ensure_schema_exists(tx: &mut Transaction) -> Result<()> {
         -- downside is that we may end up with dangling ratings if tracks get deleted
         -- or moved (e.g. a correction in track number), but that's acceptable.
         , track_id    integer not null
-        -- How much to increase or decrease the rating. The sum of deltas for a track
-        -- should be in {-1, 0, 1, 2}, but this is not enforced.
-        , delta       integer not null
+        -- The rating for this track.
+        , rating      integer not null check ((rating >= -1) and (rating <= 2))
         -- "musium" for ratings created from Musium, otherwise the source that the
         -- rating was imported from, e.g. "last.fm".
         , source      string not null
@@ -890,12 +889,12 @@ pub fn iter_album_first_listens<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> 
     Ok(result)
 }
 
-pub fn insert_rating(tx: &mut Transaction, track_id: i64, created_at: &str, delta: i64) -> Result<()> {
+pub fn insert_rating(tx: &mut Transaction, track_id: i64, created_at: &str, rating: i64) -> Result<()> {
     let sql = r#"
         insert into
-          ratings (track_id, created_at, delta)
+          ratings (track_id, created_at, rating)
         values
-          (:track_id, :created_at, :delta);
+          (:track_id, :created_at, :rating);
         "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
         Occupied(entry) => entry.into_mut(),
@@ -904,7 +903,7 @@ pub fn insert_rating(tx: &mut Transaction, track_id: i64, created_at: &str, delt
     statement.reset()?;
     statement.bind(1, track_id)?;
     statement.bind(2, created_at)?;
-    statement.bind(3, delta)?;
+    statement.bind(3, rating)?;
     let result = match statement.next()? {
         Row => panic!("Query 'insert_rating' unexpectedly returned a row."),
         Done => (),
@@ -916,7 +915,7 @@ pub fn insert_rating(tx: &mut Transaction, track_id: i64, created_at: &str, delt
 pub struct TrackRating {
     pub id: i64,
     pub track_id: i64,
-    pub delta: i64,
+    pub rating: i64,
 }
 
 pub fn iter_ratings<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<Iter<'i, 'a, TrackRating>> {
@@ -924,7 +923,7 @@ pub fn iter_ratings<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<Iter<
         select
             id
           , track_id
-          , delta
+          , rating
         from
           ratings
         order by
@@ -940,7 +939,7 @@ pub fn iter_ratings<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<Iter<
     let decode_row = |statement: &Statement| Ok(TrackRating {
         id: statement.read(0)?,
         track_id: statement.read(1)?,
-        delta: statement.read(2)?,
+        rating: statement.read(2)?,
     });
     let result = Iter { statement, decode_row };
     Ok(result)
