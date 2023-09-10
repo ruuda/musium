@@ -691,6 +691,27 @@ button.play-next::before {
   border-right: 1pt solid #bbb;
 }
 
+.cover-area {
+  position: relative;
+}
+
+.rating-buttons {
+  bottom: -3em;
+  position: absolute;
+  width: 100%;
+  text-align: center;
+}
+
+.rating-buttons button {
+  display: inline-block;
+  width: 2em;
+  color: #ddd;
+}
+
+.rating-buttons button.active {
+  color: #888;
+}
+
 .volume-controls {
   grid-area: volume-controls;
   display: grid;
@@ -876,6 +897,10 @@ button.scan-library::before {
     max-width: none;
   }
 
+  .rating-buttons {
+    bottom: -0.5em;
+  }
+
   .album-info h1 {
     /* When the cover could be centered above the title, we need plenty of
      * whitespace to not make it look weird, but when it is aligned to the
@@ -927,7 +952,7 @@ button.scan-library::before {
     ;
   }
 
-  .current .album-info .cover {
+  .current .album-info .cover-area {
     grid-area: cover;
     margin-right: 1em;
   }

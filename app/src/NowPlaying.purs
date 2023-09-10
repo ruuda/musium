@@ -27,7 +27,7 @@ import Event (Event)
 import Event as Event
 import Html (Html)
 import Html as Html
-import Model (Decibel (Decibel), QueuedTrack (QueuedTrack), Volume (Volume))
+import Model (Decibel (Decibel), QueuedTrack (QueuedTrack), Rating (Rating), Volume (Volume))
 import Model as Model
 import Navigation as Navigation
 import StatusBar as StatusBar
@@ -89,12 +89,15 @@ nowPlayingInfo postEvent (QueuedTrack track) = Html.div $ do
   -- This structure roughly follows that of the album view.
   Html.addClass "album-info"
   Html.div $ do
-    Html.addClass "cover"
-    let alt = track.title <> " by " <> track.artist
-    Html.img (Model.thumbUrl track.albumId) alt $ Html.addClass "backdrop"
-    Html.img (Model.thumbUrl track.albumId) alt $ Html.addClass "lowres"
-    Html.img (Model.coverUrl track.albumId) alt $ pure unit
-    onClickGoTo $ Navigation.Album track.albumId
+    Html.addClass "cover-area"
+    Html.div $ do
+      Html.addClass "cover"
+      let alt = track.title <> " by " <> track.artist
+      Html.img (Model.thumbUrl track.albumId) alt $ Html.addClass "backdrop"
+      Html.img (Model.thumbUrl track.albumId) alt $ Html.addClass "lowres"
+      Html.img (Model.coverUrl track.albumId) alt $ pure unit
+      onClickGoTo $ Navigation.Album track.albumId
+    ratingButtons $ track.rating
 
   Html.div $ do
     Html.addClass "current-info"
@@ -124,6 +127,30 @@ nowPlayingInfo postEvent (QueuedTrack track) = Html.div $ do
         StatusBar.setInitialProgress (QueuedTrack track)
         self <- ask
         pure $ StatePlaying { progressBar: self }
+
+ratingButtons :: Rating -> Html Unit
+ratingButtons (Rating rating) = Html.div $ do
+  Html.addClass "rating-buttons"
+  Html.button $ do
+    Html.text "✖"
+    Html.setTitle "Rate as 'dislike'"
+    when (rating == (-1)) $ Html.addClass "active"
+    Html.onClick $ pure unit
+  Html.button $ do
+    Html.text "•"
+    Html.setTitle "Rate as neutral (clear rating)"
+    when (rating == 0) $ Html.addClass "active"
+    Html.onClick $ pure unit
+  Html.button $ do
+    Html.text "★"
+    Html.setTitle "Rate as 'like'"
+    when (rating == 1) $ Html.addClass "active"
+    Html.onClick $ pure unit
+  Html.button $ do
+    Html.text "❤"
+    when (rating == 2) $ Html.addClass "active"
+    Html.setTitle "Rate as 'love'"
+    Html.onClick $ pure unit
 
 nothingPlayingInfo :: Html NowPlayingState
 nothingPlayingInfo = Html.div $ do
