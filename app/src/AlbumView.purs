@@ -309,6 +309,7 @@ enqueueTrack postEvent (Album album) (Track track) trackElement = do
     , durationSeconds: track.durationSeconds
     , positionSeconds: 0.0
     , bufferedSeconds: 0.0
+    , rating: track.rating
       -- Assume not buffering when we add the track, to avoid showing the
       -- spinner in the happy case where playback starts instantly. In the
       -- unhappy case where buffering takes a long time, the thumbnail
