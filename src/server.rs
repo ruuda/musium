@@ -236,7 +236,14 @@ impl MetaServer {
 
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        serialization::write_album_json(index, &mut w, album_id, album).unwrap();
+
+        serialization::write_album_json(
+            index,
+            &self.user_data.lock().unwrap(),
+            &mut w,
+            album_id,
+            album,
+        ).unwrap();
 
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
@@ -284,6 +291,7 @@ impl MetaServer {
         let queue = self.player.get_queue();
         serialization::write_queue_json(
             index,
+            &self.user_data.lock().unwrap(),
             &mut w,
             &queue.tracks[..],
         ).unwrap();
