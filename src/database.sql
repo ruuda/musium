@@ -58,6 +58,26 @@ create table if not exists listens
 create unique index if not exists ix_listens_unique_second
 on listens (cast(strftime('%s', started_at) as integer));
 
+create table if not exists ratings
+( id          integer primary key
+-- ISO-8601 time with UTC offset at which we rated the track.
+, created_at  string  not null unique
+-- Musium track that we are rating. We don't enforce a foreign key relation
+-- here, such that when we re-import a track we don't lose the rating data. The
+-- downside is that we may end up with dangling ratings if tracks get deleted
+-- or moved (e.g. a correction in track number), but that's acceptable.
+, track_id    integer not null
+-- How much to increase or decrease the rating. The sum of deltas for a track
+-- should be in {-1, 0, 1, 2}, but this is not enforced.
+, delta       integer not null
+-- "musium" for ratings created from Musium, otherwise the source that the
+-- rating was imported from, e.g. "last.fm".
+, source      string not null
+);
+
+create unique index if not exists ix_ratings_unique_second
+on ratings (cast(strftime('%s', created_at) as integer));
+
 create table if not exists files
 -- First an id, and properties about the file, but not its contents.
 -- We can use this to see if a file needs to be re-scanned. The mtime
@@ -292,3 +312,21 @@ from
   listens
 group by
   album_id;
+
+-- @query insert_rating(track_id: i64, created_at: str, delta: i64)
+insert into
+  ratings (track_id, created_at, delta)
+values
+  (:track_id, :created_at, :delta);
+
+-- @query iter_ratings() ->* TrackRating
+select
+    id       -- :i64
+  , track_id -- :i64
+  , delta    -- :i64
+from
+  ratings
+order by
+  -- Order by ascending creation time to ensure we can clamp to rating ranges,
+  -- should we need to. We have an index on this expression.
+  cast(strftime('%s', created_at) as integer) asc;
