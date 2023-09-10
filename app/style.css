@@ -346,6 +346,13 @@ img.thumb
   grid-area: number;
   font-weight: 700;
   transition: color 0.2s ease-in-out;
+  text-wrap: nowrap;
+}
+
+.track-number .rating {
+  /* The symbols are a bit too big by default. */
+  font-size: 0.8em;
+  padding-right: 1pt;
 }
 
 .duration
