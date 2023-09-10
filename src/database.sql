@@ -312,11 +312,11 @@ from
 group by
   album_id;
 
--- @query insert_rating(track_id: i64, created_at: str, rating: i64)
+-- @query insert_rating(track_id: i64, created_at: str, rating: i64, source: str)
 insert into
-  ratings (track_id, created_at, rating)
+  ratings (track_id, created_at, rating, source)
 values
-  (:track_id, :created_at, :rating);
+  (:track_id, :created_at, :rating, :source);
 
 -- @query iter_ratings() ->* TrackRating
 select

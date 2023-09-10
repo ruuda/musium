@@ -889,12 +889,12 @@ pub fn iter_album_first_listens<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> 
     Ok(result)
 }
 
-pub fn insert_rating(tx: &mut Transaction, track_id: i64, created_at: &str, rating: i64) -> Result<()> {
+pub fn insert_rating(tx: &mut Transaction, track_id: i64, created_at: &str, rating: i64, source: &str) -> Result<()> {
     let sql = r#"
         insert into
-          ratings (track_id, created_at, rating)
+          ratings (track_id, created_at, rating, source)
         values
-          (:track_id, :created_at, :rating);
+          (:track_id, :created_at, :rating, :source);
         "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
         Occupied(entry) => entry.into_mut(),
@@ -904,6 +904,7 @@ pub fn insert_rating(tx: &mut Transaction, track_id: i64, created_at: &str, rati
     statement.bind(1, track_id)?;
     statement.bind(2, created_at)?;
     statement.bind(3, rating)?;
+    statement.bind(4, source)?;
     let result = match statement.next()? {
         Row => panic!("Query 'insert_rating' unexpectedly returned a row."),
         Done => (),

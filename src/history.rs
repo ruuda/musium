@@ -95,7 +95,14 @@ pub fn main(
             }
             PlaybackEvent::Rated { track_id, rating } => {
                 let mut tx = db.begin()?;
-                db::insert_rating(&mut tx, track_id.0 as i64, &now_str, rating as i64)?;
+                let source = "musium";
+                db::insert_rating(
+                    &mut tx,
+                    track_id.0 as i64,
+                    &now_str,
+                    rating as i64,
+                    source,
+                )?;
                 tx.commit()?;
             }
             PlaybackEvent::QueueEnded => {
