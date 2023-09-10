@@ -28,16 +28,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1679141596,
-        "narHash": "sha256-HbUO3Bh8Z2joOp5er1pIeXDLtpYE6thwW72teTlLD0I=",
+        "lastModified": 1694347767,
+        "narHash": "sha256-yxmF7g1rGE6U5lboL1PrcFJoNxlnTvstpQJoJ0yJqoo=",
         "owner": "ruuda",
         "repo": "squiller",
-        "rev": "2a5964b025db4ba5e5785617036dd1473b8f8592",
+        "rev": "7bc113622dded2860a097213d05a10d68c41b171",
         "type": "github"
       },
       "original": {
         "owner": "ruuda",
-        "ref": "v0.3.0",
+        "ref": "v0.4.0",
         "repo": "squiller",
         "type": "github"
       }
