@@ -18,7 +18,7 @@ use crate::database::{Connection, Listen, Result};
 use crate::mvar::Var;
 use crate::player::QueueId;
 use crate::{MetaIndex, MemoryMetaIndex, TrackId};
-use crate::stats::Rating;
+use crate::user_data::Rating;
 
 /// Changes in the playback state to be recorded.
 pub enum PlaybackEvent {

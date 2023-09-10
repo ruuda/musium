@@ -20,20 +20,22 @@ use std::env;
 use std::fs;
 use std::io::{BufRead, Write};
 use std::io;
-use std::path::Path;
 use std::process;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use musium::config::Config;
+use musium::database;
+use musium::database_utils;
 use musium::error::Result;
 use musium::mvar::MVar;
 use musium::server::{MetaServer, serve};
 use musium::string_utils::normalize_words;
 use musium::thumb_cache::ThumbCache;
+use musium::user_data::UserData;
 use musium::{MetaIndex, MemoryMetaIndex};
 
-fn make_index(db_path: &Path) -> Result<MemoryMetaIndex> {
-    let (index, builder) = MemoryMetaIndex::from_database(db_path)?;
+fn make_index(tx: &mut database::Transaction) -> Result<MemoryMetaIndex> {
+    let (index, builder) = MemoryMetaIndex::from_database(tx)?;
 
     for issue in &builder.issues {
         println!("{}\n", issue);
@@ -277,17 +279,29 @@ fn main() -> Result<()> {
     match &cmd[..] {
         "serve" => {
             let config_clone = config.clone();
-            let index = make_index(&config.db_path)?;
+
+            let conn = database_utils::connect_readonly(&config.db_path)?;
+            let mut db = database::Connection::new(&conn);
+            let mut tx = db.begin()?;
+
+            let index = make_index(&mut tx)?;
             let arc_index = Arc::new(index);
             let index_var = Arc::new(MVar::new(arc_index));
-            println!("Indexing complete.");
+            println!("Index loaded.");
+
+            println!("Loading user data ...");
+            let user_data = UserData::load_from_database(&mut tx)?;
+            let user_data_arc = Arc::new(Mutex::new(user_data));
 
             println!("Loading cover art thumbnails ...");
-            let thumb_cache = ThumbCache::load_from_database_at(&config.db_path)
-                .expect("Failed to load cover art thumbnails.");
+            let thumb_cache = ThumbCache::load_from_database(&mut tx)?;
             println!("Thumb cache size: {}", thumb_cache.size());
             let arc_thumb_cache = Arc::new(thumb_cache);
             let thumb_cache_var = Arc::new(MVar::new(arc_thumb_cache));
+
+            tx.commit()?;
+            std::mem::drop(db);
+            std::mem::drop(conn);
 
             println!("Starting server on {}.", config.listen);
             let player = musium::player::Player::new(
@@ -298,6 +312,7 @@ fn main() -> Result<()> {
                 config_clone,
                 index_var,
                 thumb_cache_var,
+                user_data_arc,
                 player,
             );
             serve(&config.listen, Arc::new(service));
@@ -309,7 +324,10 @@ fn main() -> Result<()> {
         "match" => {
             let in_path = env::args().nth(3).unwrap();
             let out_path = env::args().nth(4).unwrap();
-            let index = make_index(&config.library_path)?;
+            let conn = database_utils::connect_readonly(&config.db_path)?;
+            let mut db = database::Connection::new(&conn);
+            let mut tx = db.begin()?;
+            let index = make_index(&mut tx)?;
             match_listens(&index, in_path, out_path)
         }
         _ => {

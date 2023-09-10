@@ -7,7 +7,7 @@
 
 use std::fs;
 use std::io;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use tiny_http::{Header, Request, Response, ResponseBox, Server};
@@ -25,6 +25,7 @@ use crate::serialization;
 use crate::string_utils::normalize_words;
 use crate::systemd;
 use crate::thumb_cache::ThumbCache;
+use crate::user_data::UserData;
 use crate::{MetaIndex, MemoryMetaIndex};
 
 fn header_content_type(content_type: &str) -> Header {
@@ -45,6 +46,7 @@ pub struct MetaServer {
     config: Config,
     index_var: Var<MemoryMetaIndex>,
     thumb_cache_var: Var<ThumbCache>,
+    user_data: Arc<Mutex<UserData>>,
     player: Player,
     scanner: BackgroundScanner,
 }
@@ -54,12 +56,14 @@ impl MetaServer {
         config: Config,
         index_var: Var<MemoryMetaIndex>,
         thumb_cache_var: Var<ThumbCache>,
+        user_data: Arc<Mutex<UserData>>,
         player: Player,
     ) -> MetaServer {
         MetaServer {
             config: config,
             index_var: index_var.clone(),
             thumb_cache_var: thumb_cache_var.clone(),
+            user_data: user_data,
             player: player,
             scanner: BackgroundScanner::new(
                 index_var,

@@ -617,9 +617,12 @@ pub fn run_scan_in_thread(
             // immediately publish that new index so it can be accessed by the
             // webinterface, even before the thumbnails are ready (because
             // generating those may take a while).
-            let (index, builder) = MemoryMetaIndex::from_database(&db_path)?;
+            let mut db = Connection::new(&connection);
+            let mut db_tx = db.begin()?;
+            let (index, builder) = MemoryMetaIndex::from_database(&mut db_tx)?;
             let index_arc = Arc::new(index);
             index_var.set(index_arc.clone());
+            db_tx.commit()?;
 
             // TODO: Move issue reporting to a better place. Maybe take the builder and
             // index as an argument to this method.
@@ -640,10 +643,9 @@ pub fn run_scan_in_thread(
                     &mut status,
                     &mut tx,
                 );
-                let mut db = Connection::new(&connection);
-                let mut tx = db.begin()?;
-                loudness_tasks.push_tasks_missing(&mut tx)?;
-                tx.commit()?;
+                let mut db_tx = db.begin()?;
+                loudness_tasks.push_tasks_missing(&mut db_tx)?;
+                db_tx.commit()?;
                 loudness_tasks.status.stage = ScanStage::AnalyzingLoudness;
                 loudness_tasks.status_sender.send(*loudness_tasks.status).unwrap();
 

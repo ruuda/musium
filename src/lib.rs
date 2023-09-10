@@ -27,8 +27,6 @@ extern crate bs1770;
 
 mod album_table;
 mod build;
-mod database;
-mod database_utils;
 mod exec_pre_post;
 mod filter;
 mod loudness;
@@ -37,6 +35,8 @@ mod waveform;
 mod word_index;
 
 pub mod config;
+pub mod database;
+pub mod database_utils;
 pub mod error;
 pub mod history;
 pub mod mvar;
@@ -47,13 +47,11 @@ pub mod scan;
 pub mod serialization;
 pub mod server;
 pub mod shuffle;
-pub mod stats;
 pub mod string_utils;
 pub mod systemd;
 pub mod thumb_cache;
 pub mod thumb_gen;
-
-use std::path::Path;
+pub mod user_data;
 
 use crate::build::{AlbumArtistsDeduper, BuildMetaIndex, BuildError};
 use crate::error::{Error, Result};
@@ -380,15 +378,11 @@ impl MemoryMetaIndex {
     /// Also returns the intermediate builder. It contains any issues
     /// discovered, and the mtimes per album, which can be used to check if any
     /// thumbnails need updating.
-    pub fn from_database(db_path: &Path) -> Result<(MemoryMetaIndex, BuildMetaIndex)> {
-        let conn = sqlite::Connection::open(db_path)?;
-        let mut db = database::Connection::new(&conn);
-        let mut tx = db.begin()?;
-
+    pub fn from_database(tx: &mut database::Transaction) -> Result<(MemoryMetaIndex, BuildMetaIndex)> {
         let mut builder = BuildMetaIndex::new();
         let mut tasks = Vec::new();
 
-        for file in database::iter_files(&mut tx)? {
+        for file in database::iter_files(tx)? {
             match builder.insert_meta(file?) {
                 Ok(task) => tasks.push(task),
                 Err(BuildError::DbError(err)) => return Err(Error::from(err)),
@@ -397,14 +391,14 @@ impl MemoryMetaIndex {
         }
 
         for task in tasks {
-            match builder.insert_full(&mut tx, task) {
+            match builder.insert_full(tx, task) {
                 Ok(()) => continue,
                 Err(BuildError::DbError(err)) => return Err(Error::from(err)),
                 Err(BuildError::FileFailed) => continue,
             }
         }
 
-        builder.insert_first_listens(&mut tx)?;
+        builder.insert_first_listens(tx)?;
 
         let memory_index = MemoryMetaIndex::new(&builder);
 
