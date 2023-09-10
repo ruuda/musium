@@ -67,6 +67,12 @@ Increase the volume by 1 dB. Returns the new volume.
 ### `POST` /api/volume/down
 Decrease the volume by 1 dB. Returns the new volume.
 
+## Rating
+
+### `PUT` /api/rating/:track_id?rating=:n
+Set the rating for the given track to `n`, which must range from -1 to 2. See
+also [the chapter on rating](rating.md) for more information.
+
 ## Scanning
 
 ### `GET` /api/scan/status

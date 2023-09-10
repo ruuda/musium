@@ -5,8 +5,10 @@
 // you may not use this file except in compliance with the License.
 // A copy of the License has been included in the root of the repository.
 
+use std::convert::TryFrom;
 use std::fs;
 use std::io;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -25,7 +27,7 @@ use crate::serialization;
 use crate::string_utils::normalize_words;
 use crate::systemd;
 use crate::thumb_cache::ThumbCache;
-use crate::user_data::UserData;
+use crate::user_data::{Rating, UserData};
 use crate::{MetaIndex, MemoryMetaIndex};
 
 fn header_content_type(content_type: &str) -> Header {
@@ -284,6 +286,45 @@ impl MetaServer {
             .boxed()
     }
 
+    fn handle_rating(&self, track_id: &str, raw_query: &str) -> ResponseBox {
+        let mut opt_rating = None;
+        for (k, v) in url::form_urlencoded::parse(raw_query.as_bytes()) {
+            if k == "rating" {
+                if let Ok(r) = i64::from_str(v.as_ref())
+                    .map_err(|_| "Failed to parse rating.")
+                    .and_then(Rating::try_from)
+                {
+                    opt_rating = Some(r);
+                }
+            }
+        };
+        let rating = match opt_rating {
+            Some(r) => r,
+            None => return self.handle_bad_request("Missing or invalid ?rating=<n> query param."),
+        };
+
+        let track_id = match TrackId::parse(track_id) {
+            Some(tid) => tid,
+            None => return self.handle_bad_request("Invalid track id."),
+        };
+
+        let index = &*self.index_var.get();
+
+        // Confirm that the track exists before we store its rating.
+        let _track = match index.get_track(track_id) {
+            Some(t) => t,
+            None => return self.handle_not_found(),
+        };
+
+        // TODO: Send this to the history thread. The history thread has to
+        // apply this.
+        self.user_data.lock().unwrap().set_track_rating(track_id, rating);
+
+        // The history thread will write to the database and update the user
+        // data afterwards.
+        Response::empty(202).boxed()
+    }
+
     fn handle_queue(&self) -> ResponseBox {
         let index = &*self.index_var.get();
         let buffer = Vec::new();
@@ -364,7 +405,6 @@ impl MetaServer {
     }
 
     fn handle_search(&self, raw_query: &str) -> ResponseBox {
-
         let mut opt_query = None;
         for (k, v) in url::form_urlencoded::parse(raw_query.as_bytes()) {
             if k == "q" {
@@ -468,6 +508,9 @@ impl MetaServer {
             (&Get, "albums",   None)    => self.handle_albums(),
             (&Get, "search",   None)    => self.handle_search(query),
             (&Get, "stats",    None)    => self.handle_stats(),
+
+            // Rating.
+            (&Put, "rating", Some(t)) => self.handle_rating(t, query),
 
             // Play queue manipulation.
             (&Get,    "queue",  None)            => self.handle_queue(),
