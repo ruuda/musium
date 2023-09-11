@@ -132,7 +132,9 @@ ratingButtons :: TrackId -> Rating -> Html Unit
 ratingButtons tid (Rating rating) = Html.div $ do
   Html.addClass "rating-buttons"
   b1 <- Html.button $ do
-    Html.text "✖"
+    -- NB: U+FE0E is a variation selector that ensures the preceding code point
+    -- renders as monochrome, not as emoji.
+    Html.text "✖\xfe0e"
     Html.setTitle "Rate as 'dislike'"
     when (rating == (-1)) $ Html.addClass "active"
     Html.onClick $ pure unit
@@ -144,13 +146,13 @@ ratingButtons tid (Rating rating) = Html.div $ do
     Html.onClick $ pure unit
     ask
   b3 <- Html.button $ do
-    Html.text "★"
+    Html.text "★\xfe0e"
     Html.setTitle "Rate as 'like'"
     when (rating == 1) $ Html.addClass "active"
     Html.onClick $ pure unit
     ask
   b4 <- Html.button $ do
-    Html.text "❤"
+    Html.text "❤\xfe0e"
     when (rating == 2) $ Html.addClass "active"
     Html.setTitle "Rate as 'love'"
     Html.onClick $ pure unit
