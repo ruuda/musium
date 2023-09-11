@@ -30,7 +30,7 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
  * Add <abbr>API</abbr> endpoint for shuffling the play queue. There is no
    button for this in the webinterface yet.
  * Add endpoints for clearing the play queue and dequeueing a track.
- * A few new exotic characters and diacritics are nor normalized for the pursose
+ * A few new exotic characters and diacritics are now normalized for the pursose
    of search. (E.g. a search for _dadi freyr_ will now match _Daði Freyr_.)
  * The SQLite <abbr>WAL</abbr> is now flushed after playback ends, to ensure
    that the database file is self-contained when the player is in an idle state.
