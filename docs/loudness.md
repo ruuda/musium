@@ -1,7 +1,10 @@
 # Loudness normalization
 
-Musium can normalize the perceptual playback loudness based on loudness
-information in flac tags.
+Musium normalizes the perceptual playback loudness to make tracks sound equally
+loud. It does this by estimating the loudness from audio data, and compensating
+playback volume for that.
+
+## Playback volume
 
 The volume slider in Musium treats 0 dB volume as 0 dB gain for the output
 device, but it does compensate for track or album loudness relative to a target
@@ -17,21 +20,38 @@ for inherently loud tracks: a track with a loudness of -23 <abbr>LUFS</abbr> is
 already playing at the maximum device volume, but a track with a loudness of
 -13 <abbr>LUFS</abbr> has enough headroom to allow the volume to be set to 10 dB.
 
-## Tags
+## Track and album loudness
 
-Two tags affect loudness normalization:
+When two tracks from the same album play consecutively, Musium adjusts for the
+album’s loudness rather than the track loudness. In other words, Musium does not
+change the relative volume of tracks on the same album. You can listen to the
+album the way it was mastered.
 
- * `BS17704_TRACK_LOUDNESS`
- * `BS17704_ALBUM_LOUDNESS`
+When tracks from _different_ albums play consecutively, Musium adjusts for track
+loudness, because this allows slightly better matching than album loudness.
 
-The tags must store the integrated loudness as defined in
-[<abbr>ITU-R BS.1770-4</abbr>][bs1770-4], for the track, and the concatenation
-of all tracks respectively. The value must be a decimal number, followed by the
-suffix “<abbr>LUFS</abbr>” for Loudness Units Full Scale. For example,
-`-9.317 LUFS`. The value for album loudness must be consistent across all tracks
-in the album.
+## Computing loudness
+
+Musium automatically computes the loudness for any new tracks when they are
+added to the library. This can take some time, especially on devices that do not
+have a fast <abbr>CPU</abbr>, like a Raspberry Pi. The upside is that this also
+instantly verifies that Musium can decode the file. Loudness is saved to [the
+database](configuration.md#db_path).
+
+## Loudness measurement
+
+Musium computes the integrated loudness as defined in
+[<abbr>ITU-R BS.1770-4</abbr>][bs1770-4].
+For album loudness, it computes the integrated loudness over the concatenation
+of all tracks on the album.
+
+To reproduce the measurement externally, [the <abbr>BS1770</abbr> `flacgain`
+utility][flacgain] can be used to analyze a collection of flac files, and to
+write loudness to `BS17704_*` tags. In the past Musium relied on these tags for
+loudness information, but since Musium 0.11.0 they are no longer used.
 
 [bs1770-4]: https://www.itu.int/rec/R-REC-BS.1770-4-201510-I/en
+[flacgain]: https://github.com/ruuda/bs1770#tagging-flac-files
 
 ## ReplayGain
 
@@ -46,19 +66,5 @@ ReplayGain 2.0. This means that ReplayGain tags from different sources do not
 necessarily have the same meaning, which defeats the purpose of normalization.
 In practice this means that ReplayGain is only really useful if you can be
 certain that all tags were produced by the same program with the same settings.
-
-The `BS17704_*` tags used by Musium aim to sidestep this problem by storing the
-observed loudness, instead of the gain. The gain can easily be computed by the
-player, and the particular target loudness that is used is not important anyway
-for normalizing loudness in a collection of music. (It does matter when you want
-to match the loudness of your music to e.g. external streaming services.)
-Furthermore, by naming the tag after the revision of the standard, future
-revisions to <abbr>BS.1770</abbr> will not create ambiguities in the meaning of
-existing tags.
-
-## Writing BS.1770-4 tags
-
-[The <abbr>BS1770</abbr> `flacgain` utility][flacgain] can be used to analyze a
-collection of flac files, and to add `BS17704_*` tags.
-
-[flacgain]: https://github.com/ruuda/bs1770#tagging-flac-files
+Musium sidesteps this problem by computing the loudness itself rather than
+depending on ambiguous tags.
