@@ -14,6 +14,7 @@ use std::io::Write;
 
 use crate::player::{Millibel, TrackSnapshot};
 use crate::scan;
+use crate::user_data::UserData;
 use crate::{Album, AlbumId, Artist, ArtistId, MetaIndex, TrackId};
 
 /// Write an album, but only with the album details, not its tracks.
@@ -63,7 +64,13 @@ pub fn write_albums_json<W: Write>(index: &dyn MetaIndex, mut w: W) -> io::Resul
 ///
 /// The album is expected to come from this index, so the artists and
 /// strings it references are valid.
-pub fn write_album_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: AlbumId, album: &Album) -> io::Result<()> {
+pub fn write_album_json<W: Write>(
+    index: &dyn MetaIndex,
+    user_data: &UserData,
+    mut w: W,
+    id: AlbumId,
+    album: &Album,
+) -> io::Result<()> {
     write!(w, r#"{{"title":"#)?;
     serde_json::to_writer(&mut w, index.get_string(album.title))?;
     write!(w, r#","artist_ids":["#)?;
@@ -90,7 +97,12 @@ pub fn write_album_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: AlbumId, 
         serde_json::to_writer(&mut w, index.get_string(kv.track.title))?;
         write!(w, r#","artist":"#)?;
         serde_json::to_writer(&mut w, index.get_string(kv.track.artist))?;
-        write!(w, r#","duration_seconds":{}}}"#, kv.track.duration_seconds)?;
+        write!(
+            w,
+            r#","duration_seconds":{},"rating":{}}}"#,
+            kv.track.duration_seconds,
+            user_data.get_track_rating(track_id) as i8,
+        )?;
         first = false;
     }
     write!(w, "]}}")
@@ -195,6 +207,7 @@ pub fn write_search_track_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: Tr
 
 fn write_queued_track_json<W: Write>(
     index: &dyn MetaIndex,
+    user_data: &UserData,
     mut w: W,
     queued_track: &TrackSnapshot,
 ) -> io::Result<()> {
@@ -229,9 +242,10 @@ fn write_queued_track_json<W: Write>(
     serde_json::to_writer(&mut w, index.get_string(track.artist))?;
     write!(
         w,
-        r#","release_date":"{}","duration_seconds":{}"#,
+        r#","release_date":"{}","duration_seconds":{},"rating":{}"#,
         album.original_release_date,
         track.duration_seconds,
+        user_data.get_track_rating(queued_track.track_id) as i8,
     )?;
 
     let position_seconds = queued_track.position_ms as f32 * 1e-3;
@@ -244,6 +258,7 @@ fn write_queued_track_json<W: Write>(
 
 pub fn write_queue_json<W: Write>(
     index: &dyn MetaIndex,
+    user_data: &UserData,
     mut w: W,
     tracks: &[TrackSnapshot],
 ) -> io::Result<()> {
@@ -251,7 +266,7 @@ pub fn write_queue_json<W: Write>(
     let mut first = true;
     for queued_track in tracks.iter() {
         if !first { write!(w, ",")?; }
-        write_queued_track_json(index, &mut w, queued_track)?;
+        write_queued_track_json(index, user_data, &mut w, queued_track)?;
         first = false;
     }
     write!(w, "]")

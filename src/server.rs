@@ -5,9 +5,11 @@
 // you may not use this file except in compliance with the License.
 // A copy of the License has been included in the root of the repository.
 
+use std::convert::TryFrom;
 use std::fs;
 use std::io;
-use std::sync::Arc;
+use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use tiny_http::{Header, Request, Response, ResponseBox, Server};
@@ -25,6 +27,7 @@ use crate::serialization;
 use crate::string_utils::normalize_words;
 use crate::systemd;
 use crate::thumb_cache::ThumbCache;
+use crate::user_data::{Rating, UserData};
 use crate::{MetaIndex, MemoryMetaIndex};
 
 fn header_content_type(content_type: &str) -> Header {
@@ -45,6 +48,7 @@ pub struct MetaServer {
     config: Config,
     index_var: Var<MemoryMetaIndex>,
     thumb_cache_var: Var<ThumbCache>,
+    user_data: Arc<Mutex<UserData>>,
     player: Player,
     scanner: BackgroundScanner,
 }
@@ -54,12 +58,14 @@ impl MetaServer {
         config: Config,
         index_var: Var<MemoryMetaIndex>,
         thumb_cache_var: Var<ThumbCache>,
+        user_data: Arc<Mutex<UserData>>,
         player: Player,
     ) -> MetaServer {
         MetaServer {
             config: config,
             index_var: index_var.clone(),
             thumb_cache_var: thumb_cache_var.clone(),
+            user_data: user_data,
             player: player,
             scanner: BackgroundScanner::new(
                 index_var,
@@ -232,7 +238,14 @@ impl MetaServer {
 
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        serialization::write_album_json(index, &mut w, album_id, album).unwrap();
+
+        serialization::write_album_json(
+            index,
+            &self.user_data.lock().unwrap(),
+            &mut w,
+            album_id,
+            album,
+        ).unwrap();
 
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
@@ -273,6 +286,36 @@ impl MetaServer {
             .boxed()
     }
 
+    fn handle_rating(&self, track_id: &str, rating_str: &str) -> ResponseBox {
+        let rating = match i64::from_str(rating_str)
+            .map_err(|_| "Failed to parse rating.")
+            .and_then(Rating::try_from)
+        {
+            Ok(r) => r,
+            Err(_) => return self.handle_bad_request("Invalid rating."),
+        };
+
+        let track_id = match TrackId::parse(track_id) {
+            Some(tid) => tid,
+            None => return self.handle_bad_request("Invalid track id."),
+        };
+
+        let index = &*self.index_var.get();
+
+        // Confirm that the track exists before we store its rating.
+        let _track = match index.get_track(track_id) {
+            Some(t) => t,
+            None => return self.handle_not_found(),
+        };
+
+        // Send the new rating to the history thread.
+        self.player.set_track_rating(track_id, rating);
+
+        // The history thread will write to the database and update the user
+        // data afterwards.
+        Response::empty(202).boxed()
+    }
+
     fn handle_queue(&self) -> ResponseBox {
         let index = &*self.index_var.get();
         let buffer = Vec::new();
@@ -280,6 +323,7 @@ impl MetaServer {
         let queue = self.player.get_queue();
         serialization::write_queue_json(
             index,
+            &self.user_data.lock().unwrap(),
             &mut w,
             &queue.tracks[..],
         ).unwrap();
@@ -352,7 +396,6 @@ impl MetaServer {
     }
 
     fn handle_search(&self, raw_query: &str) -> ResponseBox {
-
         let mut opt_query = None;
         for (k, v) in url::form_urlencoded::parse(raw_query.as_bytes()) {
             if k == "q" {
@@ -442,10 +485,12 @@ impl MetaServer {
         db: &mut Connection,
         method: &Method,
         endpoint: &str,
-        arg: Option<&str>,
+        arg1: Option<&str>,
+        arg2: Option<&str>,
+        arg3: Option<&str>,
         query: &str,
     ) -> ResponseBox {
-        match (method, endpoint, arg) {
+        match (method, endpoint, arg1) {
             // API endpoints.
             (&Get, "cover",    Some(t)) => self.handle_album_cover(t),
             (&Get, "thumb",    Some(t)) => self.handle_thumb(t),
@@ -456,6 +501,15 @@ impl MetaServer {
             (&Get, "albums",   None)    => self.handle_albums(),
             (&Get, "search",   None)    => self.handle_search(query),
             (&Get, "stats",    None)    => self.handle_stats(),
+
+            // Rating.
+            (&Put, "track", Some(t)) => match (arg2, arg3) {
+                (Some("rating"), Some(r)) => self.handle_rating(t, r),
+                _ => {
+                    println!("{arg2:?} {arg3:?}");
+                    self.handle_bad_request("No such endpoint.")
+                }
+            }
 
             // Play queue manipulation.
             (&Get,    "queue",  None)            => self.handle_queue(),
@@ -486,13 +540,17 @@ impl MetaServer {
         let mut p0 = None;
         let mut p1 = None;
         let mut p2 = None;
+        let mut p3 = None;
+        let mut p4 = None;
 
         if let Some(base) = url_iter.next() {
-            let mut parts = base.splitn(4, '/').filter(|x| x.len() > 0);
+            let mut parts = base.splitn(6, '/').filter(|x| x.len() > 0);
 
             p0 = parts.next();
             p1 = parts.next();
             p2 = parts.next();
+            p3 = parts.next();
+            p4 = parts.next();
         }
 
         let query = url_iter.next().unwrap_or("");
@@ -501,7 +559,7 @@ impl MetaServer {
         let response = match (request.method(), p0, p1) {
             // API endpoints go through the API router, to keep this match arm
             // a bit more concise.
-            (method, Some("api"), Some(endpoint)) => self.handle_api_request(db, method, endpoint, p2, query),
+            (method, Some("api"), Some(endpoint)) => self.handle_api_request(db, method, endpoint, p2, p3, p4, query),
 
             // Web endpoints.
             (&Get, None,                  None) => self.handle_static_file("app/index.html", "text/html"),

@@ -29,6 +29,7 @@ use crate::mvar::Var;
 use crate::playback;
 use crate::prim::Hertz;
 use crate::shuffle;
+use crate::user_data::{Rating, UserData};
 use crate::{AlbumId, Lufs, MetaIndex, MemoryMetaIndex, TrackId};
 
 type FlacReader = claxon::FlacReader<fs::File>;
@@ -1046,6 +1047,7 @@ pub struct Player {
     playback_thread: JoinHandle<()>,
     history_thread: JoinHandle<()>,
     exec_pre_post_thread: JoinHandle<()>,
+    events: SyncSender<PlaybackEvent>,
 }
 
 pub struct TrackSnapshot {
@@ -1078,6 +1080,7 @@ pub struct QueueSnapshot {
 impl Player {
     pub fn new(
         index_var: Var<MemoryMetaIndex>,
+        user_data: Arc<Mutex<UserData>>,
         config: &Config,
     ) -> Player {
         // Build the channel to send playback events to the history thread. That
@@ -1109,6 +1112,7 @@ impl Player {
         let state_mutex_for_playback = state.clone();
         let decode_thread_for_playback = decode_join_handle.thread().clone();
         let config_for_playback = config.clone();
+        let hist_sender_for_playback = hist_sender.clone();
 
         let builder = std::thread::Builder::new();
         let playback_join_handle = builder
@@ -1119,7 +1123,7 @@ impl Player {
                     state_mutex_for_playback,
                     &decode_thread_for_playback,
                     queue_events_sender,
-                    hist_sender,
+                    hist_sender_for_playback,
                 );
             }).unwrap();
 
@@ -1133,6 +1137,7 @@ impl Player {
                 let result = history::main(
                     &db_path,
                     index_for_history,
+                    user_data,
                     hist_receiver,
                 );
                 // The history thread should not exit. When it does, that's a
@@ -1156,6 +1161,7 @@ impl Player {
             playback_thread: playback_join_handle,
             history_thread: history_join_handle,
             exec_pre_post_thread: exec_pre_post_handle,
+            events: hist_sender,
         }
     }
 
@@ -1167,6 +1173,11 @@ impl Player {
         self.decode_thread.join().unwrap();
         self.history_thread.join().unwrap();
         self.exec_pre_post_thread.join().unwrap();
+    }
+
+    /// Send a track rating to the history thread for saving to the database.
+    pub fn set_track_rating(&self, track_id: TrackId, rating: Rating) {
+        self.events.send(PlaybackEvent::Rated { track_id, rating }).unwrap();
     }
 
     /// Enqueue the track for playback at the end of the queue.

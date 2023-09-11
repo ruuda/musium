@@ -346,6 +346,13 @@ img.thumb
   grid-area: number;
   font-weight: 700;
   transition: color 0.2s ease-in-out;
+  text-wrap: nowrap;
+}
+
+.track-number .rating {
+  /* The symbols are a bit too big by default. */
+  font-size: 0.8em;
+  padding-right: 1pt;
 }
 
 .duration
@@ -684,6 +691,39 @@ button.play-next::before {
   border-right: 1pt solid #bbb;
 }
 
+.cover-area {
+  position: relative;
+}
+
+.rating-buttons {
+  bottom: -3em;
+  position: absolute;
+  width: 100%;
+  text-align: center;
+}
+
+.rating-buttons button {
+  display: inline-block;
+  width: 2em;
+  color: #ddd;
+  transition:
+    color 0.2s ease-in-out,
+    background 0.3s ease-out;
+}
+
+.rating-buttons button:active {
+  /* Equivalent to the normal button color, but using transparency instead of
+   * an opaque color to make it blend better with the album art shadow. */
+  background-color: rgba(136, 136, 136, 0.06);
+  transition:
+    color 0.2s ease-in-out,
+    background 0s linear;
+}
+
+.rating-buttons button.active {
+  color: #888;
+}
+
 .volume-controls {
   grid-area: volume-controls;
   display: grid;
@@ -869,6 +909,10 @@ button.scan-library::before {
     max-width: none;
   }
 
+  .rating-buttons {
+    bottom: -0.5em;
+  }
+
   .album-info h1 {
     /* When the cover could be centered above the title, we need plenty of
      * whitespace to not make it look weird, but when it is aligned to the
@@ -920,7 +964,7 @@ button.scan-library::before {
     ;
   }
 
-  .current .album-info .cover {
+  .current .album-info .cover-area {
     grid-area: cover;
     margin-right: 1em;
   }

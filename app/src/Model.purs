@@ -11,19 +11,20 @@ module Model
   , Album (..)
   , AlbumId (..)
   , Decibel (..)
-  , Track (..)
-  , TrackId (..)
-  , SearchArtist (..)
-  , SearchAlbum (..)
-  , SearchResults (..)
-  , SearchTrack (..)
   , QueueId (..)
   , QueuedTrack (..)
-  , Volume (..)
-  , VolumeChange (..)
+  , Rating (..)
   , ScanStage (..)
   , ScanStatus (..)
+  , SearchAlbum (..)
+  , SearchArtist (..)
+  , SearchResults (..)
+  , SearchTrack (..)
   , Stats (..)
+  , Track (..)
+  , TrackId (..)
+  , Volume (..)
+  , VolumeChange (..)
   , coverUrl
   , changeVolume
   , enqueueTrack
@@ -38,6 +39,7 @@ module Model
   , getVolume
   , originalReleaseYear
   , search
+  , setRating
   , startScan
   , thumbUrl
   , timeLeft
@@ -104,6 +106,14 @@ derive instance queueIdOrd :: Ord QueueId
 
 instance showQueueId :: Show QueueId where
   show (QueueId id) = id
+
+newtype Rating = Rating Int
+
+derive instance ratingEq :: Eq Rating
+derive instance ratingOrd :: Ord Rating
+
+instance showRating :: Show Rating where
+  show (Rating n) = show n
 
 thumbUrl :: AlbumId -> String
 thumbUrl (AlbumId id) = "/api/thumb/" <> id
@@ -342,6 +352,15 @@ getStats = do
       Left err -> fatal $ "Failed to get stats: " <> printJsonDecodeError err
       Right stats -> pure stats
 
+setRating :: TrackId -> Rating -> Aff Unit
+setRating tid r = do
+  result <- Http.put Http.ResponseFormat.json
+    ("/api/track/" <> (show tid) <> "/rating/" <> (show r))
+    Nothing
+  case result of
+    Left err -> fatal $ "Failed to set rating: " <> Http.printError err
+    Right _ -> pure unit
+
 newtype SearchArtist = SearchArtist
   { id :: ArtistId
   , name :: String
@@ -422,6 +441,7 @@ newtype QueuedTrackRaw = QueuedTrackRaw
   , albumId :: AlbumId
   , albumArtistIds :: NonEmptyArray ArtistId
   , releaseDate :: String
+  , rating :: Rating
   , durationSeconds :: Int
   , positionSeconds :: Number
   , bufferedSeconds :: Number
@@ -437,6 +457,7 @@ newtype QueuedTrack = QueuedTrack
   , albumId :: AlbumId
   , albumArtistIds :: NonEmptyArray ArtistId
   , releaseDate :: String
+  , rating :: Rating
   , durationSeconds :: Int
   , positionSeconds :: Number
   , bufferedSeconds :: Number
@@ -467,6 +488,7 @@ instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
       Just xs -> pure xs
       Nothing -> Left $ AtKey "album_artist_ids" MissingValue
     releaseDate     <- Json.getField obj "release_date"
+    rating          <- map Rating $ Json.getField obj "rating"
     durationSeconds <- Json.getField obj "duration_seconds"
     positionSeconds <- Json.getField obj "position_seconds"
     bufferedSeconds <- Json.getField obj "buffered_seconds"
@@ -480,6 +502,7 @@ instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
       , albumId
       , albumArtistIds
       , releaseDate
+      , rating
       , durationSeconds
       , positionSeconds
       , bufferedSeconds
@@ -506,6 +529,7 @@ getQueue = do
       , albumId: track.albumId
       , albumArtistIds: track.albumArtistIds
       , releaseDate: track.releaseDate
+      , rating: track.rating
       , durationSeconds: track.durationSeconds
       , positionSeconds: track.positionSeconds
       , bufferedSeconds: track.bufferedSeconds
@@ -532,6 +556,7 @@ newtype Track = Track
   , title :: String
   , artist :: String
   , durationSeconds :: Int
+  , rating :: Rating
   }
 
 instance decodeJsonTrack :: DecodeJson Track where
@@ -543,7 +568,16 @@ instance decodeJsonTrack :: DecodeJson Track where
     title           <- Json.getField obj "title"
     artist          <- Json.getField obj "artist"
     durationSeconds <- Json.getField obj "duration_seconds"
-    pure $ Track { id, discNumber, trackNumber, title, artist, durationSeconds }
+    rating          <- map Rating $ Json.getField obj "rating"
+    pure $ Track
+      { id
+      , discNumber
+      , trackNumber
+      , title
+      , artist
+      , durationSeconds
+      , rating
+      }
 
 decodeAlbumTracks :: Json -> Either JsonDecodeError (Array Track)
 decodeAlbumTracks json = do

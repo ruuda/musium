@@ -8,13 +8,11 @@
 //! Defines an in-memory thumbnail cache.
 
 use std::fmt;
-use std::path::Path;
 
 use crate::AlbumId;
 use crate::album_table::AlbumTable;
 use crate::database as db;
 use crate::database::Transaction;
-use crate::database_utils;
 
 /// References a single image in the larger concatenated array.
 #[derive(Copy, Clone, Debug)]
@@ -81,18 +79,6 @@ impl ThumbCache {
             data: Box::new([]),
             references: AlbumTable::new(0, ImageReference { begin: 0, end: 0 }),
         }
-    }
-
-    /// Read cover art thumbnails from the database into memory.
-    ///
-    /// See also [`load_from_database`].
-    pub fn load_from_database_at(db_path: &Path) -> db::Result<ThumbCache> {
-        let inner = database_utils::connect_readonly(db_path)?;
-        let mut conn = db::Connection::new(&inner);
-        let mut tx = conn.begin()?;
-        let result = ThumbCache::load_from_database(&mut tx)?;
-        tx.commit()?;
-        Ok(result)
     }
 
     /// Read the cover art thumbnails from the database into memory.

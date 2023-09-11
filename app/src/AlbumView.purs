@@ -20,6 +20,7 @@ import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NonEmptyArray
 import Data.Foldable (oneOf)
+import Data.Maybe (Maybe (Just, Nothing))
 import Data.Time.Duration (Milliseconds (..))
 import Data.Traversable (traverse, for_)
 import Effect (Effect)
@@ -34,7 +35,7 @@ import Event (Event)
 import Event as Event
 import Html (Html)
 import Html as Html
-import Model (Album (..), QueuedTrack (..), Track (..), TrackId)
+import Model (Album (..), QueuedTrack (..), Rating (..), Track (..), TrackId)
 import Model as Model
 import Navigation as Navigation
 import Time as Time
@@ -309,6 +310,7 @@ enqueueTrack postEvent (Album album) (Track track) trackElement = do
     , durationSeconds: track.durationSeconds
     , positionSeconds: 0.0
     , bufferedSeconds: 0.0
+    , rating: track.rating
       -- Assume not buffering when we add the track, to avoid showing the
       -- spinner in the happy case where playback starts instantly. In the
       -- unhappy case where buffering takes a long time, the thumbnail
@@ -342,7 +344,21 @@ renderTrack postEvent (Album album) queuedTracks (Track track) =
 
     Html.div $ do
       Html.addClass "track-number"
-      Html.text $ show track.trackNumber
+      let
+        rating = case track.rating of
+          Rating (-1) -> Just { symbol: "✖", label: "Dislike" }
+          Rating 1 -> Just { symbol: "★", label: "Like" }
+          Rating 2 -> Just { symbol: "❤", label: "Love" }
+          _ -> Nothing
+      case rating of
+        Nothing -> Html.text $ show track.trackNumber
+        Just r -> do
+          Html.span $ do
+            Html.addClass "rating"
+            Html.addClass $ "rating-" <> (show track.rating)
+            Html.setTitle $ "Rating: " <> r.label
+            Html.text r.symbol
+          Html.text $ " " <> (show track.trackNumber)
     Html.div $ do
       Html.addClass "title"
       Html.text track.title

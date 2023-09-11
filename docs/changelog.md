@@ -22,7 +22,10 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
- * Add the ability to shuffle the play queue.
+ * Support storing track ratings. For now, in the webinterface you can only
+   change the rating of the currently playing track.
+ * Add <abbr>API</abbr> endpoint for shuffling the play queue. There is no
+   button for this in the webinterface yet.
  * Add endpoints for clearing the play queue and dequeueing a track.
 
 ## 0.13.0
