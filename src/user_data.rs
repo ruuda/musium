@@ -37,23 +37,18 @@ use crate::{database as db};
 /// one level of dislike is sufficient. For likes, setting a scale is difficult,
 /// but I think it can be worth distinguishing between “this track was that one
 /// nice one on this album” and “this is one of my favorite tracks ever”.
-#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 #[repr(i8)]
 pub enum Rating {
     /// Would usually skip this track when it ended up in the queue.
     Dislike = -1,
     /// No strong opinion, default for unrated tracks.
+    #[default]
     Neutral = 0,
     /// Like, the track stands out as a good track on the ablbum.
     Like = 1,
     /// Love, the track stands out as a good track in the library.
     Love = 2,
-}
-
-impl Default for Rating {
-    fn default() -> Self {
-        Rating::Neutral
-    }
 }
 
 impl TryFrom<i64> for Rating {
@@ -94,11 +89,13 @@ pub struct UserData {
 
 impl Default for UserData {
     fn default() -> Self {
+        use std::collections::hash_map::RandomState;
+        let s = RandomState::new();
         Self {
             // TODO: Use a cheaper hasher.
-            tracks: HashMap::new(),
-            albums: HashMap::new(),
-            artists: HashMap::new(),
+            tracks: HashMap::with_hasher(s.clone()),
+            albums: HashMap::with_hasher(s.clone()),
+            artists: HashMap::with_hasher(s),
         }
     }
 
