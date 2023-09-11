@@ -306,6 +306,7 @@ fn main() -> Result<()> {
             println!("Starting server on {}.", config.listen);
             let player = musium::player::Player::new(
                 index_var.clone(),
+                user_data_arc.clone(),
                 &config,
             );
             let service = MetaServer::new(

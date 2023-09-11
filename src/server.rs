@@ -308,9 +308,8 @@ impl MetaServer {
             None => return self.handle_not_found(),
         };
 
-        // TODO: Send this to the history thread. The history thread has to
-        // apply this.
-        self.user_data.lock().unwrap().set_track_rating(track_id, rating);
+        // Send the new rating to the history thread.
+        self.player.set_track_rating(track_id, rating);
 
         // The history thread will write to the database and update the user
         // data afterwards.

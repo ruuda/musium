@@ -9,6 +9,7 @@
 
 use std::path::Path;
 use std::sync::mpsc::Receiver;
+use std::sync::{Arc, Mutex};
 
 use chrono::{SecondsFormat, Utc};
 
@@ -18,23 +19,26 @@ use crate::database::{Connection, Listen, Result};
 use crate::mvar::Var;
 use crate::player::QueueId;
 use crate::{MetaIndex, MemoryMetaIndex, TrackId};
-use crate::user_data::Rating;
+use crate::user_data::{Rating, UserData};
 
-/// Changes in the playback state to be recorded.
+/// Changes in the playback state or library to be recorded.
 pub enum PlaybackEvent {
     Started(QueueId, TrackId),
     Completed(QueueId, TrackId),
+    QueueEnded,
+
+    /// The user modified the rating for the given track.
     Rated {
         track_id: TrackId,
         rating: Rating,
     },
-    QueueEnded,
 }
 
 /// Main for the thread that logs historical playback events.
 pub fn main(
     db_path: &Path,
     index_var: Var<MemoryMetaIndex>,
+    user_data: Arc<Mutex<UserData>>,
     events: Receiver<PlaybackEvent>,
 ) -> Result<()> {
     let connection = database_utils::connect_read_write(db_path)?;
@@ -93,6 +97,14 @@ pub fn main(
                     );
                 }
             }
+            PlaybackEvent::QueueEnded => {
+                // When the queue ends, flush the WAL. This is not really
+                // needed, but I back up my database with rsync once in a
+                // while, and I like to have everything in one file instead
+                // of having to sync the WAL as well. We checkpoint after
+                // the queue ends, before the post-playback program runs.
+                connection.execute("PRAGMA wal_checkpoint(PASSIVE);")?;
+            }
             PlaybackEvent::Rated { track_id, rating } => {
                 let mut tx = db.begin()?;
                 let source = "musium";
@@ -104,14 +116,7 @@ pub fn main(
                     source,
                 )?;
                 tx.commit()?;
-            }
-            PlaybackEvent::QueueEnded => {
-                // When the queue ends, flush the WAL. This is not really
-                // needed, but I back up my database with rsync once in a
-                // while, and I like to have everything in one file instead
-                // of having to sync the WAL as well. We checkpoint after
-                // the queue ends, before the post-playback program runs.
-                connection.execute("PRAGMA wal_checkpoint(PASSIVE);")?;
+                user_data.lock().unwrap().set_track_rating(track_id, rating);
             }
         }
     }
