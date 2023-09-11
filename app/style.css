@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css?family=Work+Sans:300,400,500,600,700,800,900&subset=all');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Symbols+2&family=Work+Sans:wght@300;400;500;600;700;800;900&display=swap&subset=all');
 
 *
 {
@@ -18,7 +18,7 @@
 html
 {
   font-size: 16px;
-  font-family: 'Work Sans', system-ui;
+  font-family: 'Work Sans', 'Noto Sans Symbols 2';
   line-height: 1.5em;
   height: 100vh;
 }
@@ -351,7 +351,7 @@ img.thumb
 
 .track-number .rating {
   /* The symbols are a bit too big by default. */
-  font-size: 0.8em;
+  font-size: 0.85em;
   padding-right: 1pt;
 }
 
