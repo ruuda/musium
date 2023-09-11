@@ -1,10 +1,7 @@
 # Rating
 
-Musium can store user ratings per track in the library.
-
-## Levels
-
-Musium knows four rating levels:
+Musium can store user ratings per track in the library. Musium supports the
+following levels:
 
 <dl>
 <dt><strong>Dislike</strong></dt>
@@ -15,7 +12,7 @@ if they came up in a randomly generated playlist.</dd>
 <dd>This is the default level for unrated tracks.</dd>
 
 <dt><strong>Like</strong></dt>
-<dd>This track stands as a good track on the album.</dd>
+<dd>This track stands out as a good track on the album.</dd>
 
 <dt><strong>Love</strong></dt>
 <dd>This track is among the best tracks in the entire library.</dd>
