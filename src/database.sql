@@ -312,6 +312,20 @@ from
 group by
   album_id;
 
+-- Insert a rating for a given track.
+--
+-- When the `created_at` timestamp is not unique, this replaces the previous
+-- rating that was present for that timestamp. This might happen when the user
+-- edits the rating in quick succession; then we only store the last write.
+-- @query insert_or_replace_rating(track_id: i64, created_at: str, rating: i64)
+insert or replace into
+  ratings (track_id, created_at, rating, source)
+values
+  (:track_id, :created_at, :rating, 'musium');
+
+-- Backfill a rating for a given track.
+--
+-- The timestamp must be unique on the second.
 -- @query insert_rating(track_id: i64, created_at: str, rating: i64, source: str)
 insert into
   ratings (track_id, created_at, rating, source)

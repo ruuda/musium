@@ -107,13 +107,11 @@ pub fn main(
             }
             PlaybackEvent::Rated { track_id, rating } => {
                 let mut tx = db.begin()?;
-                let source = "musium";
-                db::insert_rating(
+                db::insert_or_replace_rating(
                     &mut tx,
                     track_id.0 as i64,
                     &now_str,
                     rating as i64,
-                    source,
                 )?;
                 tx.commit()?;
                 user_data.lock().unwrap().set_track_rating(track_id, rating);

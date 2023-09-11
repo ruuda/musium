@@ -889,6 +889,36 @@ pub fn iter_album_first_listens<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> 
     Ok(result)
 }
 
+/// Insert a rating for a given track.
+///
+/// When the `created_at` timestamp is not unique, this replaces the previous
+/// rating that was present for that timestamp. This might happen when the user
+/// edits the rating in quick succession; then we only store the last write.
+pub fn insert_or_replace_rating(tx: &mut Transaction, track_id: i64, created_at: &str, rating: i64) -> Result<()> {
+    let sql = r#"
+        insert or replace into
+          ratings (track_id, created_at, rating, source)
+        values
+          (:track_id, :created_at, :rating, 'musium');
+        "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    statement.bind(1, track_id)?;
+    statement.bind(2, created_at)?;
+    statement.bind(3, rating)?;
+    let result = match statement.next()? {
+        Row => panic!("Query 'insert_or_replace_rating' unexpectedly returned a row."),
+        Done => (),
+    };
+    Ok(result)
+}
+
+/// Backfill a rating for a given track.
+///
+/// The timestamp must be unique on the second.
 pub fn insert_rating(tx: &mut Transaction, track_id: i64, created_at: &str, rating: i64, source: &str) -> Result<()> {
     let sql = r#"
         insert into
