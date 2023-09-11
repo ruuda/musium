@@ -27,7 +27,7 @@ import Event (Event)
 import Event as Event
 import Html (Html)
 import Html as Html
-import Model (Decibel (Decibel), QueuedTrack (QueuedTrack), Rating (Rating), Volume (Volume))
+import Model (Decibel (Decibel), QueuedTrack (QueuedTrack), Rating (Rating), TrackId, Volume (Volume))
 import Model as Model
 import Navigation as Navigation
 import StatusBar as StatusBar
@@ -97,7 +97,7 @@ nowPlayingInfo postEvent (QueuedTrack track) = Html.div $ do
       Html.img (Model.thumbUrl track.albumId) alt $ Html.addClass "lowres"
       Html.img (Model.coverUrl track.albumId) alt $ pure unit
       onClickGoTo $ Navigation.Album track.albumId
-    ratingButtons $ track.rating
+    ratingButtons track.trackId track.rating
 
   Html.div $ do
     Html.addClass "current-info"
@@ -128,8 +128,8 @@ nowPlayingInfo postEvent (QueuedTrack track) = Html.div $ do
         self <- ask
         pure $ StatePlaying { progressBar: self }
 
-ratingButtons :: Rating -> Html Unit
-ratingButtons (Rating rating) = Html.div $ do
+ratingButtons :: TrackId -> Rating -> Html Unit
+ratingButtons tid (Rating rating) = Html.div $ do
   Html.addClass "rating-buttons"
   b1 <- Html.button $ do
     Html.text "✖"
@@ -164,6 +164,7 @@ ratingButtons (Rating rating) = Html.div $ do
       Html.withElement b3 $ Html.removeClass "active"
       Html.withElement b4 $ Html.removeClass "active"
       Html.withElement elem $ Html.addClass "active"
+      launchAff_ $ Model.setRating tid (Rating newRating)
 
   liftEffect $ do
     Html.withElement b1 $ Html.onClick (doRate b1 (-1))

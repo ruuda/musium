@@ -39,6 +39,7 @@ module Model
   , getVolume
   , originalReleaseYear
   , search
+  , setRating
   , startScan
   , thumbUrl
   , timeLeft
@@ -350,6 +351,15 @@ getStats = do
     Right response -> case Json.decodeJson response.body of
       Left err -> fatal $ "Failed to get stats: " <> printJsonDecodeError err
       Right stats -> pure stats
+
+setRating :: TrackId -> Rating -> Aff Unit
+setRating tid r = do
+  result <- Http.put Http.ResponseFormat.json
+    ("/api/track/" <> (show tid) <> "/rating/" <> (show r))
+    Nothing
+  case result of
+    Left err -> fatal $ "Failed to set rating: " <> Http.printError err
+    Right _ -> pure unit
 
 newtype SearchArtist = SearchArtist
   { id :: ArtistId
