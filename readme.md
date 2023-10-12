@@ -1,7 +1,7 @@
-<h1 align="center">
+<p align="center">
 <img src="app/logo-light-background.svg#gh-light-mode-only" alt="Musium" width="400">
 <img src="app/logo-dark-background.svg#gh-dark-mode-only" alt="Musium" width="400">
-</h1>
+</p>
 
 Musium is an album-centered music player. It is designed to run as a daemon on
 an always-on device connected to speakers. Playback can be controlled from
