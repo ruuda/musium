@@ -104,6 +104,10 @@ impl<'a> GenThumb<'a> {
         let out_path = get_tmp_fname(album_id);
 
         let mut convert = Command::new("convert")
+            // Give Imagemagick enough time to open the image, recent versions
+            // are strict about it which leads to "time limit exceeded" error
+            // from "fatal/cache.c". The unit is seconds.
+            .args(["-limit", "time", "60"])
             // Read from stdin.
             .arg("-")
             // Some cover arts have an alpha channel, but we are going to encode
