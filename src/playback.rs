@@ -29,7 +29,55 @@ const EBUSY: i32 = 16;
 
 type Result<T> = result::Result<T, alsa::Error>;
 
-fn open_device(pcm_name: &str) -> Result<(alsa::PCM, alsa::Mixer)> {
+fn print_available_cards() -> Result<()> {
+    let cards = alsa::card::Iter::new();
+    let mut found_any = false;
+
+    for res_card in cards {
+        let card = res_card?;
+        println!("{}Name: {}", if found_any { "\n" } else { "" }, card.get_name()?);
+        println!("  Long name:  {}", card.get_longname()?);
+
+        let non_block = false;
+        let ctl = alsa::ctl::Ctl::from_card(&card, non_block)?;
+        let info = ctl.card_info()?;
+        println!("  Card id:    {}", info.get_id()?);
+        println!("  Driver:     {}", info.get_driver()?);
+        println!("  Components: {}", info.get_components()?);
+        println!("  Mixer name: {}", info.get_mixername()?);
+
+        found_any = true;
+    }
+
+    if !found_any {
+        println!("No cards found.");
+        println!("You may need to be a member of the 'audio' group.");
+    }
+
+    Ok(())
+}
+
+fn open_device(card_name: &str) -> Result<(alsa::PCM, alsa::Mixer)> {
+    let cards = alsa::card::Iter::new();
+    let mut opt_card_index = None;
+
+    for res_card in cards {
+        let card = res_card?;
+        if card.get_name()? == card_name {
+            opt_card_index = Some(card.get_index());
+        }
+    }
+
+    let card_index = match opt_card_index {
+        Some(i) => i,
+        None => {
+            println!("Could not find a card with name '{}'.", card_name);
+            println!("Valid options:\n");
+            print_available_cards()?;
+            std::process::exit(1);
+        }
+    };
+
     // Select the card by index (":{}") to get direct access to the hardware,
     // play back stereo on the front two speakers. Adding "plug:" in front makes
     // Alsa take care of conversions where needed. This is bad on the one hand,
@@ -40,17 +88,7 @@ fn open_device(pcm_name: &str) -> Result<(alsa::PCM, alsa::Mixer)> {
     // "front" without "plug", the minimum number of channels is 4, even though
     // https://alsa-project.org/wiki/DeviceNames claims that for "front" we
     // would get stereo.
-    // Update 2024-04: Suddenly after a system update, in particular updating
-    // alsa-lib and alsa-utils to 1.2.11, this broke, and downgrading did not
-    // fix the issue.
-    //
-    //   ALSA lib confmisc.c:1369:(snd_func_refer) Unable to find definition 'cards.0.pcm.front.0:CARD=0'
-    //   ALSA lib conf.c:5181:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
-    //   ALSA lib conf.c:5704:(snd_config_expand) Evaluate error: No such file or directory
-    //   ALSA lib pcm.c:2666:(snd_pcm_open_noupdate) Unknown PCM front:0
-    //
-    // However, referencing the PCM by name instead of by index did fix the issue.
-    let device = format!("plug:{}", pcm_name);
+    let device = format!("plug:hw:{}", card_index);
     let non_block = false;
     let pcm = match alsa::PCM::new(&device, alsa::Direction::Playback, non_block) {
         Ok(pcm) => pcm,
@@ -61,7 +99,6 @@ fn open_device(pcm_name: &str) -> Result<(alsa::PCM, alsa::Mixer)> {
         Err(error) => return Err(error),
     };
 
-    let card_index = pcm.info().expect("Failed to get PCM info.").get_card();
     let device = format!("hw:{}", card_index);
     let non_block = false;
     let mixer = alsa::Mixer::new(&device, non_block)?;
@@ -315,19 +352,12 @@ fn ensure_buffers_full(
 /// released. An outer loop can call it again once there is new content in the
 /// queue.
 fn play_queue(
-    pcm_name: &str,
+    card_name: &str,
     volume_name: &str,
     state_mutex: &Mutex<PlayerState>,
     decode_thread: &Thread,
 ) {
-    let (device, mixer) = match open_device(pcm_name) {
-        Ok(r) => r,
-        Err(err) => {
-            eprintln!("Failed to open PCM device '{}': {:?}", pcm_name, err);
-            eprintln!("Try `aplay --list-pcms` to list available PCMs.");
-            std::process::exit(1);
-        }
-    };
+    let (device, mixer) = open_device(card_name).expect("TODO: Failed to open device.");
     let vc = get_volume_control(&mixer, volume_name).expect("TODO: Failed to get volume control.");
     let mut fds = device.get().expect("TODO: Failed to get fds from device.");
 
@@ -337,8 +367,8 @@ fn play_queue(
         bits_per_sample: 16,
     };
     if let Err(err) = set_format(&device, format) {
-        panic!("Failed to set format for PCM device {} to format {:?}: {:?}",
-            pcm_name, format, err,
+        panic!("Failed to set format for device {} to format {:?}: {:?}",
+            card_name, format, err,
         );
     }
 

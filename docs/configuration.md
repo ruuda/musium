@@ -13,7 +13,7 @@ pairs with `=` separator, and support `#` for comments.
     library_path = /home/media/music
     db_path = /var/lib/musium/musium.sqlite3
 
-    audio_device = front:CARD=U192k,DEV=0
+    audio_device = UMC404HD 192k
     audio_volume_control = UMC404HD 192k Output
 
     high_pass_cutoff = 30 Hz
@@ -52,13 +52,10 @@ MB.
 
 ### audio_device
 
-The <abbr>Alsa</abbr> <abbr>PCM</abbr> device used for playback. To list
-available devices, check `aplay --list-pcms`. This will list devices ranging
-from generic `default`, to specific cards such as `default:CARD=vc4hdmi1` and
-`default:CARD=U192k`, to particular channels on those cards, such as
-`front:CARD=Dock,DEV=0`.
-
-Musium uses the <abbr>Alsa</abbr> hardware
+The <abbr>Alsa</abbr> card used for playback. When the configured card cannot
+be found, Musium will list all of the cards that are available. You can also
+list cards manually with `aplay --list-devices`. The name of the device is
+listed between square brackets. Musium uses the <abbr>Alsa</abbr> hardware
 device directly, there is no need nor support for PulseAudio.
 
 ### audio_volume_control
