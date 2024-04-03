@@ -5,7 +5,7 @@ authors = ["Ruud van Asseldonk <dev@veniogames.com>"]
 edition = "2018"
 
 [dependencies]
-alsa                  = "0.6.0"
+alsa                  = "0.9.0"
 bs1770                = "1.0.0"
 chrono                = "0.4.13"
 crossbeam             = "0.3"

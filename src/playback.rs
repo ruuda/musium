@@ -25,6 +25,8 @@ use crate::history::PlaybackEvent;
 use crate::player::{Format, Millibel, PlayerState};
 use crate::prim::Hertz;
 
+const EBUSY: i32 = 16;
+
 type Result<T> = result::Result<T, alsa::Error>;
 
 fn print_available_cards() -> Result<()> {
@@ -90,7 +92,7 @@ fn open_device(card_name: &str) -> Result<(alsa::PCM, alsa::Mixer)> {
     let non_block = false;
     let pcm = match alsa::PCM::new(&device, alsa::Direction::Playback, non_block) {
         Ok(pcm) => pcm,
-        Err(error) if error.errno() == alsa::nix::errno::Errno::EBUSY => {
+        Err(error) if error.errno() == EBUSY => {
             println!("Could not open audio interface for exclusive access, it is already use.");
             return Err(error);
         }
