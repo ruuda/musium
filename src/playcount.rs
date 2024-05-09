@@ -341,15 +341,20 @@ impl PlayCounter {
 
     pub fn count(&mut self, index: &MemoryMetaIndex, at: Instant, track_id: TrackId) {
         debug_assert!(at >= self.last_counted_at, "Counts must be done in ascending order.");
+        let album_id = track_id.album_id();
+        let album = match index.get_album(album_id) {
+            Some(album) => album,
+            // TODO: Report this, so we can try to match on something other than
+            // the track id?
+            None => return,
+        };
 
         let counter_track = self.tracks.entry(track_id).or_default();
         counter_track.increment(&Self::LIMIT_TRACK, at);
 
-        let album_id = track_id.album_id();
         let counter_album = self.albums.entry(album_id).or_default();
         counter_album.increment(&Self::LIMIT_ALBUM, at);
 
-        let album = index.get_album(album_id).expect("Album should exist.");
         for artist_id in index.get_album_artists(album.artist_ids) {
             let counter_artist = self.artists.entry(*artist_id).or_default();
             counter_artist.increment(&Self::LIMIT_ARTIST, at);
