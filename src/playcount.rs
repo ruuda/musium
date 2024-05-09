@@ -227,7 +227,7 @@ impl ExpCounter {
         self.refill_bucket(rate_limit, t1);
 
         // Note, we round to epochs first, and then take the diff, to ensure
-        // that the decay gets applied at consisten times across all counters.
+        // that the decay gets applied at consistent times across all counters.
         let elapsed_epochs = t1.epoch().duration_since(self.t.epoch());
         let decay_factors = Self::decay_factors(elapsed_epochs);
 
