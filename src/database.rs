@@ -889,6 +889,40 @@ pub fn iter_album_first_listens<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> 
     Ok(result)
 }
 
+#[derive(Debug)]
+pub struct ListenAt {
+    pub track_id: i64,
+    pub started_at_second: i64,
+}
+
+/// Iterate the listens in chronological order.
+pub fn iter_listens<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<Iter<'i, 'a, ListenAt>> {
+    let sql = r#"
+        select
+            track_id,
+            -- Note that we have an index on this expression, so this should be just an
+            -- index scan.
+            cast(strftime('%s', started_at) as integer) as started_at_second
+        from
+            listens
+        where
+            completed_at is not null
+        order by
+            started_at_second asc;
+        "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    let decode_row = |statement: &Statement| Ok(ListenAt {
+        track_id: statement.read(0)?,
+        started_at_second: statement.read(1)?,
+    });
+    let result = Iter { statement, decode_row };
+    Ok(result)
+}
+
 /// Insert a rating for a given track.
 ///
 /// When the `created_at` timestamp is not unique, this replaces the previous
