@@ -394,45 +394,51 @@ impl PlayCounter {
         self.advance_counters(self.last_counted_at);
     }
 
-    /// Return the top `n` elements at the given timescale.
+    /// Return the top `n` elements for the given expression.
     ///
     /// This assumes that all counters are at the same time. If not, the result
     /// is nonsensical. Make sure to call `advance_counters` first.
     ///
+    /// As an example, to get the top artists, albums, and tracks by playcount
+    /// at a given timescale, use predicate `|counter| counter.n[timescale]`.
+    ///
     /// `timescale` is an index into `ExpCounter::n`, lower indexes have higher
     /// half-life (so count long-term trends), while higher indexes have a lower
     /// half-life (so they are more sensitive to recent trends).
-    pub fn get_top(
+    pub fn get_top_by<F>(
         &self,
-        timescale: usize,
         n_top: usize,
+        mut expr: F
     ) -> (
         Vec<(RevNotNan, ArtistId)>,
         Vec<(RevNotNan, AlbumId)>,
         Vec<(RevNotNan, TrackId)>,
-    ) {
-        fn get_top_n<K: Copy + Ord>(
-            timescale: usize,
+    )
+    where
+        F: FnMut(&ExpCounter) -> RevNotNan
+    {
+        fn get_top_n<K: Copy + Ord, F: FnMut(&ExpCounter) -> RevNotNan>(
             n_top: usize,
+            expr: &mut F,
             counters: &HashMap<K, ExpCounter>,
         ) -> Vec<(RevNotNan, K)> {
             let mut result = BinaryHeap::new();
 
             for (k, counter) in counters.iter() {
-                let count = counter.n[timescale];
+                let count = expr(counter);
 
                 if result.len() < n_top {
-                    result.push((RevNotNan(count), *k));
+                    result.push((count, *k));
                     continue;
                 }
 
                 let should_insert = match result.peek() {
                     None => true,
-                    Some((other_count, _)) => count > other_count.0,
+                    Some((other_count, _)) => count.0 > other_count.0,
                 };
                 if should_insert {
                     result.pop();
-                    result.push((RevNotNan(count), *k));
+                    result.push((count, *k));
                 }
             }
 
@@ -440,9 +446,9 @@ impl PlayCounter {
         }
 
         (
-            get_top_n(timescale, n_top, &self.artists),
-            get_top_n(timescale, n_top, &self.albums),
-            get_top_n(timescale, n_top, &self.tracks),
+            get_top_n(n_top, &mut expr, &self.artists),
+            get_top_n(n_top, &mut expr, &self.albums),
+            get_top_n(n_top, &mut expr, &self.tracks),
         )
     }
 
@@ -484,7 +490,10 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
     for timescale in 0..5 {
         let n_days = ExpCounter::HALF_LIFE_EPOCHS[timescale] * 0.1896;
 
-        let (top_artists, top_albums, top_tracks) = counter.get_top(timescale, 200);
+        let (top_artists, top_albums, top_tracks) = counter.get_top_by(
+            150,
+            |counter: &ExpCounter| RevNotNan(counter.n[timescale]),
+        );
         println!("\nTOP ARTISTS (timescale {}, {:.0} days)\n", timescale, n_days);
 
         for (i, (count, artist_id)) in top_artists.iter().enumerate() {
@@ -513,6 +522,20 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
 
             println!("  {:2} {:7.3} {} {:25}  {}", i + 1, count.0, track_id, track_title, track_artist);
         }
+    }
+
+    let (_rise_artists, _rise_albums, rise_tracks) = counter.get_top_by(
+        350,
+        |counter: &ExpCounter| RevNotNan(counter.n[4] / counter.n[3]),
+    );
+    println!("\nRISING TRACKS (14d vs. 57 days)\n");
+    // TODO: Deuplicate the printing logic.
+    for (i, (score, track_id)) in rise_tracks.iter().enumerate() {
+        let track = index.get_track(*track_id).unwrap();
+        let track_title = index.get_string(track.title);
+        let track_artist = index.get_string(track.artist);
+
+        println!("  {:2} {:7.3} {} {:25}  {}", i + 1, score.0, track_id, track_title, track_artist);
     }
 
     Ok(())
