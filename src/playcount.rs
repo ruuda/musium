@@ -524,18 +524,51 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         }
     }
 
-    let (_rise_artists, _rise_albums, rise_tracks) = counter.get_top_by(
+    let (_trending_artists, trending_albums, trending_tracks) = counter.get_top_by(
         350,
-        |counter: &ExpCounter| RevNotNan(counter.n[4] / counter.n[3]),
+        |counter: &ExpCounter| RevNotNan(
+            3.0 * counter.n[4] / (counter.n[3] + counter.n[2] + counter.n[1])
+        ),
     );
-    println!("\nRISING TRACKS (14d vs. 57 days)\n");
-    // TODO: Deuplicate the printing logic.
-    for (i, (score, track_id)) in rise_tracks.iter().enumerate() {
+    println!("\nTRENDING ALBUMS (14d vs. 57 days)\n");
+    // TODO: Deduplicate the printing logic.
+    for (i, (score, album_id)) in trending_albums.iter().enumerate() {
+        let album = index.get_album(*album_id).unwrap();
+        let album_title = index.get_string(album.title);
+        let album_artist = index.get_string(album.artist);
+
+        println!("  {:2} {:7.3} {} {:25}  {}", i + 1, score.0, album_id, album_title, album_artist);
+    }
+    println!("\nTRENDING TRACKS (14d vs. 57 days)\n");
+    for (i, (score, track_id)) in trending_tracks.iter().enumerate() {
         let track = index.get_track(*track_id).unwrap();
         let track_title = index.get_string(track.title);
         let track_artist = index.get_string(track.artist);
 
         println!("  {:2} {:7.3} {} {:25}  {}", i + 1, score.0, track_id, track_title, track_artist);
+    }
+
+    let (_falling_artists, falling_albums, _falling_tracks) = counter.get_top_by(
+        350,
+        |counter: &ExpCounter| RevNotNan(
+            // The playcount is high either at timescale 1 (2.5 years)
+            // or 2 (8 months) -- the addition ensures the "either" here.
+            // If there is a playcount at either timescale 3 (2 months)
+            // or 4 (2 weeks) then the rank goes down again.
+            // Empirically, this works reasonably well to pick out forgotten
+            // albums. We take the logarithm to avoid very large numbers, it
+            // does not affect the sorting.
+            ((counter.n[1] * 0.5 + counter.n[2]) / (counter.n[3] + counter.n[4] * 2.0)).ln()
+        ),
+    );
+    println!("\nFALLING ALBUMS (228+ days vs. 14/57 days)\n");
+    // TODO: Deuplicate the printing logic.
+    for (i, (score, album_id)) in falling_albums.iter().enumerate() {
+        let album = index.get_album(*album_id).unwrap();
+        let album_title = index.get_string(album.title);
+        let album_artist = index.get_string(album.artist);
+
+        println!("  {:2} {:7.3} {} {:25}  {}", i + 1, score.0, album_id, album_title, album_artist);
     }
 
     Ok(())
