@@ -132,6 +132,7 @@ impl UserData {
 
         let mut counter = PlayCounter::new();
         counter.count_from_database(index, tx)?;
+        counter.equalize_counters();
         stats.replace_discover_rank(&counter.get_discover_rank());
 
         Ok(stats)
@@ -155,6 +156,10 @@ impl UserData {
         }
     }
 
+    /// Replace the album states with the new ranking.
+    ///
+    /// The albums that are more important discoveries should be at the start of
+    /// the slice, the less important ones at the end.
     pub fn replace_discover_rank(&mut self, ranking: &[AlbumId]) {
         // At this point the album state holds nothing more than the playcounts
         // rankings, so just replace the entire thing.

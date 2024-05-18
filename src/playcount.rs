@@ -447,6 +447,7 @@ impl PlayCounter {
     }
 
     /// Traverse all listens in the `listens` table and count them.
+    // TODO: Make it incremental from the last imported time.
     pub fn count_from_database(
         &mut self,
         index: &MemoryMetaIndex,
@@ -470,8 +471,8 @@ impl PlayCounter {
     /// Be sure to call [`equalize_counters`] before calling this to ensure the
     /// counts are comparable.
     ///
-    /// Returns the album ids, with higher ranked albums at the start, and lower
-    /// ranked albums at the end.
+    /// Returns the album ids, with more important discoveries at the start, and
+    /// less important discoveries at the end.
     pub fn get_discover_rank(&self) -> Vec<AlbumId> {
         // For the discovery rank, we interleave the trending and falling
         // entries for albums as well as albums that contain trending/falling
