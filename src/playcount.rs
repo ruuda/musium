@@ -682,18 +682,3 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
 
     Ok(())
 }
-
-/* Note, for comparison:
-select
-  printf("%x", album_artist_id),
-  album_artist,
-  count(*) as n
-from
-  listens
-where
-  completed_at is not null
-group by
-  album_artist_id, album_artist
-order by
-  n desc;
-*/
