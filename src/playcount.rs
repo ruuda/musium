@@ -361,16 +361,6 @@ impl PlayCounter {
         }
 
         self.last_counted_at = at;
-
-        // TODO: Delete again once the stats printing at the end works.
-        println!(
-            "{} {}:{:?} {}:{:?}",
-            self.last_counted_at.seconds_since_jan_2000,
-            track_id,
-            counter_track.n,
-            album_id,
-            counter_album.n,
-        );
     }
 
     /// Advance all counters (without incrementing) to time `t`.
@@ -468,6 +458,41 @@ impl PlayCounter {
     }
 }
 
+fn print_ranking(
+    title: &'static str,
+    description: String,
+    index: &MemoryMetaIndex,
+    top_artists: &[(RevNotNan, ArtistId)],
+    top_albums: &[(RevNotNan, AlbumId)],
+    top_tracks: &[(RevNotNan, TrackId)],
+) {
+    println!("\n{title} ARTISTS ({description})\n");
+    for (i, (count, artist_id)) in top_artists.iter().enumerate() {
+        let artist = index.get_artist(*artist_id).unwrap();
+        let artist_name = index.get_string(artist.name);
+
+        println!("  {:2} {:7.3} {} {}", i + 1, count.0, artist_id, artist_name);
+    }
+
+    println!("\n{title} ALBUMS ({description})\n");
+    for (i, (count, album_id)) in top_albums.iter().enumerate() {
+        let album = index.get_album(*album_id).unwrap();
+        let album_title = index.get_string(album.title);
+        let album_artist = index.get_string(album.artist);
+
+        println!("  {:2} {:7.3} {} {:25}  {}", i + 1, count.0, album_id, album_title, album_artist);
+    }
+
+    println!("\n{title} TRACKS ({description})\n");
+    for (i, (count, track_id)) in top_tracks.iter().enumerate() {
+        let track = index.get_track(*track_id).unwrap();
+        let track_title = index.get_string(track.title);
+        let track_artist = index.get_string(track.artist);
+
+        println!("  {:2} {:7.3} {} {:25}  {}", i + 1, count.0, track_id, track_title, track_artist);
+    }
+}
+
 /// Print playcount statistics about the library.
 ///
 /// This is mostly for debugging and development purposes, playcounts should be
@@ -483,10 +508,6 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
 
     counter.equalize_counters();
 
-    for (k, v) in counter.albums.iter() {
-        println!("{} {:?}", k, v.n);
-    }
-
     for timescale in 0..5 {
         let n_days = ExpCounter::HALF_LIFE_EPOCHS[timescale] * 0.1896;
 
@@ -494,61 +515,32 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
             150,
             |counter: &ExpCounter| RevNotNan(counter.n[timescale]),
         );
-        println!("\nTOP ARTISTS (timescale {}, {:.0} days)\n", timescale, n_days);
-
-        for (i, (count, artist_id)) in top_artists.iter().enumerate() {
-            let artist = index.get_artist(*artist_id).unwrap();
-            let artist_name = index.get_string(artist.name);
-
-            println!("  {:2} {:7.3} {} {}", i + 1, count.0, artist_id, artist_name);
-        }
-
-        println!("\nTOP ALBUMS (timescale {}, {:.0} days)\n", timescale, n_days);
-
-        for (i, (count, album_id)) in top_albums.iter().enumerate() {
-            let album = index.get_album(*album_id).unwrap();
-            let album_title = index.get_string(album.title);
-            let album_artist = index.get_string(album.artist);
-
-            println!("  {:2} {:7.3} {} {:25}  {}", i + 1, count.0, album_id, album_title, album_artist);
-        }
-
-        println!("\nTOP TRACKS (timescale {}, {:.0} days)\n", timescale, n_days);
-
-        for (i, (count, track_id)) in top_tracks.iter().enumerate() {
-            let track = index.get_track(*track_id).unwrap();
-            let track_title = index.get_string(track.title);
-            let track_artist = index.get_string(track.artist);
-
-            println!("  {:2} {:7.3} {} {:25}  {}", i + 1, count.0, track_id, track_title, track_artist);
-        }
+        print_ranking(
+            "TOP",
+            format!("timescale {}, {:.0} days", timescale, n_days),
+            index,
+            &top_artists,
+            &top_albums,
+            &top_tracks,
+        );
     }
 
-    let (_trending_artists, trending_albums, trending_tracks) = counter.get_top_by(
-        350,
+    let (trending_artists, trending_albums, trending_tracks) = counter.get_top_by(
+        250,
         |counter: &ExpCounter| RevNotNan(
             3.0 * counter.n[4] / (counter.n[3] + counter.n[2] + counter.n[1])
         ),
     );
-    println!("\nTRENDING ALBUMS (14d vs. 57 days)\n");
-    // TODO: Deduplicate the printing logic.
-    for (i, (score, album_id)) in trending_albums.iter().enumerate() {
-        let album = index.get_album(*album_id).unwrap();
-        let album_title = index.get_string(album.title);
-        let album_artist = index.get_string(album.artist);
+    print_ranking(
+        "TRENDING",
+        format!("14d vs. 57d"), 
+        index,
+        &trending_artists,
+        &trending_albums,
+        &trending_tracks,
+    );
 
-        println!("  {:2} {:7.3} {} {:25}  {}", i + 1, score.0, album_id, album_title, album_artist);
-    }
-    println!("\nTRENDING TRACKS (14d vs. 57 days)\n");
-    for (i, (score, track_id)) in trending_tracks.iter().enumerate() {
-        let track = index.get_track(*track_id).unwrap();
-        let track_title = index.get_string(track.title);
-        let track_artist = index.get_string(track.artist);
-
-        println!("  {:2} {:7.3} {} {:25}  {}", i + 1, score.0, track_id, track_title, track_artist);
-    }
-
-    let (_falling_artists, falling_albums, _falling_tracks) = counter.get_top_by(
+    let (falling_artists, falling_albums, falling_tracks) = counter.get_top_by(
         350,
         |counter: &ExpCounter| RevNotNan(
             // The playcount is high either at timescale 1 (2.5 years)
@@ -561,15 +553,14 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
             ((counter.n[1] * 0.5 + counter.n[2]) / (counter.n[3] + counter.n[4] * 2.0)).ln()
         ),
     );
-    println!("\nFALLING ALBUMS (228+ days vs. 14/57 days)\n");
-    // TODO: Deuplicate the printing logic.
-    for (i, (score, album_id)) in falling_albums.iter().enumerate() {
-        let album = index.get_album(*album_id).unwrap();
-        let album_title = index.get_string(album.title);
-        let album_artist = index.get_string(album.artist);
-
-        println!("  {:2} {:7.3} {} {:25}  {}", i + 1, score.0, album_id, album_title, album_artist);
-    }
+    print_ranking(
+        "FALLING",
+        format!("228+ days vs. 14/57 days"), 
+        index,
+        &falling_artists,
+        &falling_albums,
+        &falling_tracks,
+    );
 
     Ok(())
 }
