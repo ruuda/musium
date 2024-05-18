@@ -25,6 +25,9 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
+use crate::MemoryMetaIndex;
+use crate::album_table::AlbumTable;
+use crate::playcount::PlayCounter;
 use crate::prim::{AlbumId, ArtistId, TrackId};
 use crate::{database as db};
 
@@ -70,7 +73,7 @@ pub struct TrackState {
     // TODO: Add playcount.
 }
 
-#[derive(Default)]
+#[derive(Copy, Clone, Default)]
 pub struct AlbumState {
     /// Ranking for the _discover_ sorting method.
     ///
@@ -90,7 +93,7 @@ pub struct ArtistState {
 /// Mutable metadata for tracks, albums, and artists, stemming from user usage.
 pub struct UserData {
     tracks: HashMap<TrackId, TrackState>,
-    albums: HashMap<AlbumId, AlbumState>,
+    albums: AlbumTable<AlbumState>,
     artists: HashMap<ArtistId, ArtistState>,
 }
 
@@ -101,7 +104,7 @@ impl Default for UserData {
         Self {
             // TODO: Use a cheaper hasher.
             tracks: HashMap::with_hasher(s.clone()),
-            albums: HashMap::with_hasher(s.clone()),
+            albums: AlbumTable::new(0, AlbumState::default()),
             artists: HashMap::with_hasher(s),
         }
     }
@@ -114,7 +117,10 @@ impl UserData {
     }
 
     /// Rebuild the user data from events saved in the database.
-    pub fn load_from_database(tx: &mut db::Transaction) -> db::Result<Self> {
+    pub fn load_from_database(
+        index: &MemoryMetaIndex,
+        tx: &mut db::Transaction,
+    ) -> db::Result<Self> {
         let mut stats = Self::default();
 
         for opt_rating in db::iter_ratings(tx)? {
@@ -123,6 +129,10 @@ impl UserData {
             let rating = Rating::try_from(rating.rating).expect("Invalid rating value in the database.");
             stats.set_track_rating(tid, rating);
         }
+
+        let mut counter = PlayCounter::new();
+        counter.count_from_database(index, tx)?;
+        stats.replace_discover_rank(&counter.get_discover_rank());
 
         Ok(stats)
     }
@@ -133,5 +143,28 @@ impl UserData {
 
     pub fn get_track_rating(&self, track_id: TrackId) -> Rating {
         self.tracks.get(&track_id).map(|t| t.rating).unwrap_or_default()
+    }
+
+    pub fn get_album_discover_rank(&self, album_id: AlbumId) -> u32 {
+        match self.albums.get(album_id) {
+            Some(state) => state.discover_rank,
+            // If an album is not present, we don't have playcounts, so it's
+            // ranking number should be higher than the ranked albums, so we set
+            // it to a number higher than the number of albums.
+            None => self.albums.capacity() as u32,
+        }
+    }
+
+    pub fn replace_discover_rank(&mut self, ranking: &[AlbumId]) {
+        // At this point the album state holds nothing more than the playcounts
+        // rankings, so just replace the entire thing.
+        self.albums = AlbumTable::new(ranking.len(), AlbumState::default());
+
+        for (i, album_id) in ranking.iter().enumerate() {
+            let state = AlbumState {
+                discover_rank: i as u32,
+            };
+            self.albums.insert(*album_id, state);
+        }
     }
 }

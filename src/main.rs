@@ -289,14 +289,17 @@ fn main() -> Result<()> {
             let mut db = database::Connection::new(&conn);
             let mut tx = db.begin()?;
 
+            println!("Loading index ...");
             let index = make_index(&mut tx)?;
-            let arc_index = Arc::new(index);
-            let index_var = Arc::new(MVar::new(arc_index));
             println!("Index loaded.");
 
-            println!("Loading user data ...");
-            let user_data = UserData::load_from_database(&mut tx)?;
+            println!("Loading user data and playcounts ...");
+            let user_data = UserData::load_from_database(&index, &mut tx)?;
             let user_data_arc = Arc::new(Mutex::new(user_data));
+            println!("User data loaded.");
+
+            let arc_index = Arc::new(index);
+            let index_var = Arc::new(MVar::new(arc_index));
 
             println!("Loading cover art thumbnails ...");
             let thumb_cache = ThumbCache::load_from_database(&mut tx)?;
