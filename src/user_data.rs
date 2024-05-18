@@ -132,8 +132,8 @@ impl UserData {
 
         let mut counter = PlayCounter::new();
         counter.count_from_database(index, tx)?;
-        counter.equalize_counters();
-        stats.replace_discover_rank(&counter.get_discover_rank());
+        let counts = counter.into_counts();
+        stats.replace_discover_rank(&counts.get_discover_rank());
 
         Ok(stats)
     }

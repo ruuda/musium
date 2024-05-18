@@ -289,12 +289,30 @@ impl Ord for RevNotNan {
     }
 }
 
+/// A playcounter counts plays.
+///
+/// Internally it has a counter per entry (artist, album, track) with
+/// exponential moving averages. The last updated time can differ across those,
+/// which makes counts not directly comparable. To make the counter values
+/// comparable, we have to advance all counters to the same timestamp, which is
+/// what [`into_counts`] does.
 pub struct PlayCounter {
     /// The timestamp of the last inserted listen.
     last_counted_at: Instant,
     artists: HashMap<ArtistId, ExpCounter>,
     albums: HashMap<AlbumId, ExpCounter>,
     tracks: HashMap<TrackId, ExpCounter>,
+}
+
+/// Playcounts are the result of using a playcounter.
+///
+/// In a `PlayCounts` struct all the last updated times of the counters are
+/// equalized, which makes the count values comparable. This makes this form of
+/// the counter suitable for doing statistics on.
+///
+/// To resume counting, call `into_counter`.
+pub struct PlayCounts {
+    counter: PlayCounter,
 }
 
 impl PlayCounter {
@@ -383,9 +401,34 @@ impl PlayCounter {
         }
     }
 
+    /// Traverse all listens in the `listens` table and count them.
+    // TODO: Make it incremental from the last imported time.
+    pub fn count_from_database(
+        &mut self,
+        index: &MemoryMetaIndex,
+        tx: &mut Transaction,
+    ) -> database::Result<()> {
+        for listen_opt in database::iter_listens(tx)? {
+            let listen = listen_opt?;
+            let at = Instant::from_posix_timestamp(listen.started_at_second);
+            let track_id = TrackId(listen.track_id as u64);
+            self.count(index, at.into(), track_id);
+        }
+        Ok(())
+    }
+
     /// Advance all counters to the time of the last inserted listen.
-    pub fn equalize_counters(&mut self) {
+    ///
+    /// This makes the counters comparable, hence we can return [`PlayCounts`].
+    pub fn into_counts(mut self) -> PlayCounts {
         self.advance_counters(self.last_counted_at);
+        PlayCounts { counter: self }
+    }
+}
+
+impl PlayCounts {
+    pub fn into_counter(self) -> PlayCounter {
+        self.counter
     }
 
     /// Return the top `n` elements for the given expression.
@@ -440,26 +483,10 @@ impl PlayCounter {
         }
 
         (
-            get_top_n(n_top, &mut expr, &self.artists),
-            get_top_n(n_top, &mut expr, &self.albums),
-            get_top_n(n_top, &mut expr, &self.tracks),
+            get_top_n(n_top, &mut expr, &self.counter.artists),
+            get_top_n(n_top, &mut expr, &self.counter.albums),
+            get_top_n(n_top, &mut expr, &self.counter.tracks),
         )
-    }
-
-    /// Traverse all listens in the `listens` table and count them.
-    // TODO: Make it incremental from the last imported time.
-    pub fn count_from_database(
-        &mut self,
-        index: &MemoryMetaIndex,
-        tx: &mut Transaction,
-    ) -> database::Result<()> {
-        for listen_opt in database::iter_listens(tx)? {
-            let listen = listen_opt?;
-            let at = Instant::from_posix_timestamp(listen.started_at_second);
-            let track_id = TrackId(listen.track_id as u64);
-            self.count(index, at.into(), track_id);
-        }
-        Ok(())
     }
 
     /// Return the _discover_ ranking of the albums.
@@ -479,19 +506,23 @@ impl PlayCounter {
         // tracks. Often they coincide, but sometimes there is one track that
         // stands out on the album, so we take both into account.
         let mut albums: [Vec<(RevNotNan, AlbumId)>; 4] = [
-            self.albums
+            self.counter
+                .albums
                 .iter()
                 .map(|(album_id, counter)| (score_trending(counter), *album_id))
                 .collect(),
-            self.albums
+            self.counter
+                .albums
                 .iter()
                 .map(|(album_id, counter)| (score_falling(counter), *album_id))
                 .collect(),
-            self.tracks
+            self.counter
+                .tracks
                 .iter()
                 .map(|(track_id, counter)| (score_trending(counter), track_id.album_id()))
                 .collect(),
-            self.tracks
+            self.counter
+                .tracks
                 .iter()
                 .map(|(track_id, counter)| (score_falling(counter), track_id.album_id()))
                 .collect(),
@@ -630,14 +661,13 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
     let mut tx = db.begin()?;
     counter.count_from_database(index, &mut tx)?;
     tx.commit()?;
-
-    counter.equalize_counters();
+    let counts = counter.into_counts();
 
     for timescale in 0..5 {
         let n_days = ExpCounter::HALF_LIFE_EPOCHS[timescale] * 0.1896;
 
         let (top_artists, top_albums, top_tracks) =
-            counter.get_top_by(150, |counter: &ExpCounter| RevNotNan(counter.n[timescale]));
+            counts.get_top_by(150, |counter: &ExpCounter| RevNotNan(counter.n[timescale]));
         print_ranking(
             "TOP",
             format!("timescale {}, {:.0} days", timescale, n_days),
@@ -649,7 +679,7 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
     }
 
     let (trending_artists, trending_albums, trending_tracks) =
-        counter.get_top_by(350, score_trending);
+        counts.get_top_by(350, score_trending);
     print_ranking(
         "TRENDING",
         format!("14d vs. 57d (2mo) + 228d (7.5mo) + 913d (2.5y)"),
@@ -659,7 +689,7 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         &trending_tracks,
     );
 
-    let (falling_artists, falling_albums, falling_tracks) = counter.get_top_by(350, score_falling);
+    let (falling_artists, falling_albums, falling_tracks) = counts.get_top_by(350, score_falling);
     print_ranking(
         "FALLING",
         format!("2 months vs. 2.5 years + 14 days vs. 7.5 months"),
@@ -669,7 +699,7 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         &falling_tracks,
     );
 
-    let discover_ranks = counter.get_discover_rank();
+    let discover_ranks = counts.get_discover_rank();
     println!("\nDISCOVERY RANK\n");
     for (i, album_id) in discover_ranks.iter().take(250).enumerate() {
         let album = index.get_album(*album_id).unwrap();
