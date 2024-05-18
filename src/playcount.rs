@@ -526,7 +526,7 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
     }
 
     let (trending_artists, trending_albums, trending_tracks) = counter.get_top_by(
-        250,
+        350,
         |counter: &ExpCounter| RevNotNan(
             3.0 * counter.n[4] / (counter.n[3] + counter.n[2] + counter.n[1])
         ),
@@ -563,6 +563,31 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         &falling_albums,
         &falling_tracks,
     );
+
+    // For the "Discovery" ranking, we interleave trending and falling albums.
+    // We also take into account the tracks. Usually the album is already there,
+    // but when one particular track on the album stands out, it can make a
+    // difference.
+    let mut album_ranks: HashMap<AlbumId, u32> = HashMap::new();
+    for i in 0..falling_albums.len().min(trending_albums.len()) {
+        let a1 = trending_albums[i].1;
+        let a3 = falling_albums[i].1;
+        let a2 = trending_tracks[i].1.album_id();
+        let a4 = falling_tracks[i].1.album_id();
+        for album_id in [a1, a2, a3, a4] {
+            let rank = album_ranks.len() as u32;
+            album_ranks.entry(album_id).or_insert(rank);
+        }
+    }
+    let mut ranks_vec: Vec<(u32, AlbumId)> = album_ranks.iter().map(|(album_id, rank)| (*rank, *album_id)).collect();
+    ranks_vec.sort();
+    println!("\nDISCOVERY RANK\n");
+    for (rank, album_id) in ranks_vec.iter() {
+        let album = index.get_album(*album_id).unwrap();
+        let album_title = index.get_string(album.title);
+        let album_artist = index.get_string(album.artist);
+        println!("  {:3} {} {:25}  {}", rank, album_id, album_title, album_artist);
+    }
 
     Ok(())
 }
