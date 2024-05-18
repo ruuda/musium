@@ -40,10 +40,10 @@ pub fn write_brief_album_json<W: Write>(
     serde_json::to_writer(&mut w, index.get_string(album.artist))?;
     write!(
         w,
-        r#","release_date":"{}","first_seen":"{}","discover_rank":{}}}"#,
+        r#","release_date":"{}","first_seen":"{}","discover_score":{}}}"#,
         album.original_release_date,
         album.first_seen.format_iso8601(),
-        user_data.get_album_discover_rank(album_id),
+        user_data.get_album_discover_score(album_id),
     )?;
     Ok(())
 }

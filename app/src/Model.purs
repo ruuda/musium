@@ -134,7 +134,7 @@ newtype Album = Album
   , artistIds :: NonEmptyArray ArtistId
   , releaseDate :: String
   , firstSeen :: String
-  , discoverRank :: Int
+  , discoverScore :: Int
   }
 
 instance decodeJsonAlbum :: DecodeJson Album where
@@ -146,11 +146,11 @@ instance decodeJsonAlbum :: DecodeJson Album where
     artistIds  <- case NonEmptyArray.fromArray artistIdsM of
       Just xs -> pure xs
       Nothing -> Left $ AtKey "artist_ids" MissingValue
-    artist       <- Json.getField obj "artist"
-    releaseDate  <- Json.getField obj "release_date"
-    firstSeen    <- Json.getField obj "first_seen"
-    discoverRank <- Json.getField obj "discover_rank"
-    pure $ Album { id, title, artist, artistIds, releaseDate, firstSeen, discoverRank }
+    artist        <- Json.getField obj "artist"
+    releaseDate   <- Json.getField obj "release_date"
+    firstSeen     <- Json.getField obj "first_seen"
+    discoverScore <- Json.getField obj "discover_score"
+    pure $ Album { id, title, artist, artistIds, releaseDate, firstSeen, discoverScore }
 
 getAlbums :: Aff (Array Album)
 getAlbums = do

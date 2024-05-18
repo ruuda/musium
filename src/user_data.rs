@@ -78,10 +78,9 @@ pub struct AlbumState {
     /// Ranking for the _discover_ sorting method.
     ///
     /// The discovery sorting is a mix of trending and falling albums, see the
-    /// [`playcount`] module for more details. A lower rank means the album
-    /// should be sorted near the beginning, a higher rank means it should be
-    /// sorted near the end.
-    discover_rank: u32,
+    /// [`playcount`] module for more details. A higher score means that the
+    /// album is a better discovery.
+    discover_score: u32,
     // TODO: Add playcount.
 }
 
@@ -133,7 +132,7 @@ impl UserData {
         let mut counter = PlayCounter::new();
         counter.count_from_database(index, tx)?;
         let counts = counter.into_counts();
-        stats.replace_discover_rank(&counts.get_discover_rank());
+        stats.replace_discover_score(&counts.get_discover_rank());
 
         Ok(stats)
     }
@@ -146,13 +145,15 @@ impl UserData {
         self.tracks.get(&track_id).map(|t| t.rating).unwrap_or_default()
     }
 
-    pub fn get_album_discover_rank(&self, album_id: AlbumId) -> u32 {
+    pub fn get_album_discover_score(&self, album_id: AlbumId) -> u32 {
         match self.albums.get(album_id) {
-            Some(state) => state.discover_rank,
-            // If an album is not present, we don't have playcounts, so it's
-            // ranking number should be higher than the ranked albums, so we set
-            // it to a number higher than the number of albums.
-            None => self.albums.capacity() as u32,
+            Some(state) => state.discover_score,
+            // If an album is not present, we don't have playcounts, so it is
+            // ranked as low as possible for discoveries. (Arguably it should be
+            // high, but it's more likely that a count of 0 is that the plays
+            // have not been imported, than that the album is really
+            // undiscovered).
+            None => 0,
         }
     }
 
@@ -160,14 +161,14 @@ impl UserData {
     ///
     /// The albums that are more important discoveries should be at the start of
     /// the slice, the less important ones at the end.
-    pub fn replace_discover_rank(&mut self, ranking: &[AlbumId]) {
+    pub fn replace_discover_score(&mut self, ranking: &[AlbumId]) {
         // At this point the album state holds nothing more than the playcounts
         // rankings, so just replace the entire thing.
         self.albums = AlbumTable::new(ranking.len(), AlbumState::default());
 
         for (i, album_id) in ranking.iter().enumerate() {
             let state = AlbumState {
-                discover_rank: i as u32,
+                discover_score: (ranking.len() - i) as u32,
             };
             self.albums.insert(*album_id, state);
         }
