@@ -517,6 +517,34 @@ fn print_ranking(
     }
 }
 
+/// Score for sorting entries by _trending_.
+///
+/// Trending entries (tracks, albums, artists) are entries where the recent
+/// playcount is high compared to the long-term playcount.
+fn score_trending(counter: &ExpCounter) -> RevNotNan {
+    RevNotNan(3.0 * counter.n[4] / (counter.n[3] + counter.n[2] + counter.n[1]))
+}
+
+/// Score for sorting entries by _falling_.
+///
+/// Falling entries (tracks, albums, artists) are entries that have a high
+/// playcount on a long-term timescale, but low playcount recently.
+fn score_falling(counter: &ExpCounter) -> RevNotNan {
+    // Falling at timescale 1 (2.5 years) vs. 3 (2 months).
+    // We apply a logarithm to avoid having extremely large counts,
+    // it doesn't affect the ranking (though we add a term below,
+    // and adding the logarithm is equal to multiplying the ratios,
+    // so in a sense, we take falling entries on *both* timescales).
+    let fall_t1 = (counter.n[1] / counter.n[3]).ln();
+
+    // Falling at timescale 2 (7.5 months) vs. 4 (14 days).
+    let fall_t2 = (counter.n[2] / counter.n[4]).ln();
+
+    // The log values of t2 tend to be 4× higher than those of t1, so multiply
+    // by 1/4 to put them on a comparable scale.
+    RevNotNan(fall_t2.mul_add(0.25, fall_t1))
+}
+
 /// Print playcount statistics about the library.
 ///
 /// This is mostly for debugging and development purposes, playcounts should be
@@ -548,9 +576,7 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
     }
 
     let (trending_artists, trending_albums, trending_tracks) =
-        counter.get_top_by(350, |counter: &ExpCounter| {
-            RevNotNan(3.0 * counter.n[4] / (counter.n[3] + counter.n[2] + counter.n[1]))
-        });
+        counter.get_top_by(350, score_trending);
     print_ranking(
         "TRENDING",
         format!("14d vs. 57d (2mo) + 228d (7.5mo) + 913d (2.5y)"),
@@ -560,22 +586,7 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         &trending_tracks,
     );
 
-    let (falling_artists, falling_albums, falling_tracks) =
-        counter.get_top_by(350, |counter: &ExpCounter| {
-            RevNotNan(
-                // Falling at timescale 1 (2.5 years) vs. 3 (2 months).
-                // We apply a logarithm to avoid having extremely large counts,
-                // it doesn't affect the ranking (though we add a term below,
-                // and adding the logarithm is equal to multiplying the ratios,
-                // so in a sense, we take falling entries on *both* timescales).
-                (counter.n[1] / counter.n[3]).ln() +
-                // Falling at timescale 2 (7.5 months) vs. 4 (14 days).
-                // The log values here tend to be 4× higher than on the other
-                // timescale, so multiply by 1/4 to put them on a comparable
-                // scale.
-                (counter.n[2] / counter.n[4]).ln() * 0.25,
-            )
-        });
+    let (falling_artists, falling_albums, falling_tracks) = counter.get_top_by(350, score_falling);
     print_ranking(
         "FALLING",
         format!("2 months vs. 2.5 years + 14 days vs. 7.5 months"),
