@@ -268,7 +268,13 @@ impl MetaServer {
 
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        serialization::write_artist_json(index, &mut w, artist, albums).unwrap();
+        serialization::write_artist_json(
+            index,
+            &self.user_data.lock().unwrap(),
+            &mut w,
+            artist,
+            albums,
+        ).unwrap();
 
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
@@ -279,7 +285,11 @@ impl MetaServer {
         let index = &*self.index_var.get();
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        serialization::write_albums_json(index, &mut w).unwrap();
+        serialization::write_albums_json(
+            index,
+            &self.user_data.lock().unwrap(),
+            &mut w,
+        ).unwrap();
 
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))

@@ -22,6 +22,7 @@ use crate::{Album, AlbumId, Artist, ArtistId, MetaIndex, TrackId};
 /// Used for the list of all albums, and for the list of albums by artist.
 pub fn write_brief_album_json<W: Write>(
     index: &dyn MetaIndex,
+    user_data: &UserData,
     mut w: W,
     album_id: AlbumId,
     album: &Album,
@@ -39,22 +40,25 @@ pub fn write_brief_album_json<W: Write>(
     serde_json::to_writer(&mut w, index.get_string(album.artist))?;
     write!(
         w,
-        r#","release_date":"{}","first_seen":"{}"}}"#,
+        r#","release_date":"{}","first_seen":"{}","discover_rank":{}}}"#,
         album.original_release_date,
-        // TODO: Should this be a string, or integer? Integer is more efficient,
-        // but worse for interpretability.
         album.first_seen.format_iso8601(),
+        user_data.get_album_discover_rank(album_id),
     )?;
     Ok(())
 }
 
 /// Write a json representation of the album list to the writer.
-pub fn write_albums_json<W: Write>(index: &dyn MetaIndex, mut w: W) -> io::Result<()> {
+pub fn write_albums_json<W: Write>(
+    index: &dyn MetaIndex,
+    user_data: &UserData,
+    mut w: W,
+) -> io::Result<()> {
     write!(w, "[")?;
     let mut first = true;
     for kv in index.get_albums() {
         if !first { write!(w, ",")?; }
-        write_brief_album_json(index, &mut w, kv.album_id, &kv.album)?;
+        write_brief_album_json(index, user_data, &mut w, kv.album_id, &kv.album)?;
         first = false;
     }
     write!(w, "]")
@@ -111,6 +115,7 @@ pub fn write_album_json<W: Write>(
 /// Write a json representation of the artist and its albums.
 pub fn write_artist_json<W: Write>(
     index: &dyn MetaIndex,
+    user_data: &UserData,
     mut w: W,
     artist: &Artist,
     albums: &[(ArtistId, AlbumId)],
@@ -127,7 +132,7 @@ pub fn write_artist_json<W: Write>(
         // itself, not user input, so the album should be present.
         let album = index.get_album(album_id).unwrap();
         if !first { write!(w, ",")?; }
-        write_brief_album_json(index, &mut w, album_id, album)?;
+        write_brief_album_json(index, user_data, &mut w, album_id, album)?;
         first = false;
     }
     write!(w, "]}}")
