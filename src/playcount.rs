@@ -533,7 +533,7 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
     );
     print_ranking(
         "TRENDING",
-        format!("14d vs. 57d"), 
+        format!("14d vs. 57d (2mo) + 228d (7.5mo) + 913d (2.5y)"),
         index,
         &trending_artists,
         &trending_albums,
@@ -543,19 +543,21 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
     let (falling_artists, falling_albums, falling_tracks) = counter.get_top_by(
         350,
         |counter: &ExpCounter| RevNotNan(
-            // The playcount is high either at timescale 1 (2.5 years)
-            // or 2 (8 months) -- the addition ensures the "either" here.
-            // If there is a playcount at either timescale 3 (2 months)
-            // or 4 (2 weeks) then the rank goes down again.
-            // Empirically, this works reasonably well to pick out forgotten
-            // albums. We take the logarithm to avoid very large numbers, it
-            // does not affect the sorting.
-            ((counter.n[1] * 0.5 + counter.n[2]) / (counter.n[3] + counter.n[4] * 2.0)).ln()
+            // Falling at timescale 1 (2.5 years) vs. 3 (2 months).
+            // We apply a logarithm to avoid having extremely large counts,
+            // it doesn't affect the ranking (though we add a term below, and
+            // adding the logarithm is equal to multiplying the ratios, so in
+            // a sense, we take falling entries on *both* timescales).
+            (counter.n[1] / counter.n[3]).ln() +
+            // Falling at timescale 2 (7.5 months) vs. 4 (14 days).
+            // The log values here tend to be 4× higher than on the other
+            // timescale, so multiply by 1/4 to put them on a comparable scale.
+            (counter.n[2] / counter.n[4]).ln() * 0.25
         ),
     );
     print_ranking(
         "FALLING",
-        format!("228+ days vs. 14/57 days"), 
+        format!("2 months vs. 2.5 years + 14 days vs. 7.5 months"), 
         index,
         &falling_artists,
         &falling_albums,
