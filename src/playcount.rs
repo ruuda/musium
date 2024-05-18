@@ -8,7 +8,7 @@
 //! Computation of playcounts and other statistics.
 
 use std::collections::BinaryHeap;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use crate::database::{self, Transaction};
@@ -470,19 +470,67 @@ impl PlayCounter {
     /// Be sure to call [`equalize_counters`] before calling this to ensure the
     /// counts are comparable.
     ///
-    /// This calls the closure 
-    pub fn get_discover_rank<F>(&self) {
-        let _albums: Vec<(AlbumId, RevNotNan, RevNotNan)> = self
-            .albums
-            .iter()
-            .map(|(album_id, counter)| (*album_id, score_trending(counter), score_falling(counter)))
-            .collect();
-        let _tracks: Vec<(AlbumId, RevNotNan, RevNotNan)> = self
-            .tracks
-            .iter()
-            .map(|(track_id, counter)| (track_id.album_id(), score_trending(counter), score_falling(counter)))
-            .collect();
-        // TODO: How to best expose this with minimal memory overhead?
+    /// Returns the album ids, with higher ranked albums at the start, and lower
+    /// ranked albums at the end.
+    pub fn get_discover_rank(&self) -> Vec<AlbumId> {
+        // For the discovery rank, we interleave the trending and falling
+        // entries for albums as well as albums that contain trending/falling
+        // tracks. Often they coincide, but sometimes there is one track that
+        // stands out on the album, so we take both into account.
+        let mut albums: [Vec<(RevNotNan, AlbumId)>; 4] = [
+            self.albums
+                .iter()
+                .map(|(album_id, counter)| (score_trending(counter), *album_id))
+                .collect(),
+            self.albums
+                .iter()
+                .map(|(album_id, counter)| (score_falling(counter), *album_id))
+                .collect(),
+            self.tracks
+                .iter()
+                .map(|(track_id, counter)| (score_trending(counter), track_id.album_id()))
+                .collect(),
+            self.tracks
+                .iter()
+                .map(|(track_id, counter)| (score_falling(counter), track_id.album_id()))
+                .collect(),
+        ];
+        for albums in albums.iter_mut() {
+            albums.sort();
+        }
+        let mut iters = [
+            albums[0].iter().rev(),
+            albums[1].iter().rev(),
+            albums[2].iter().rev(),
+            albums[3].iter().rev(),
+        ];
+
+        // All the above counters are for all the playcounts, and all tracks are
+        // on an album, so the size of the result is equal to the number of
+        // albums we counted plays for.
+        let mut processed = HashSet::with_capacity(albums[0].len());
+        let mut result = Vec::with_capacity(albums[0].len());
+
+        loop {
+            let mut made_progress = false;
+            for iter in &mut iters {
+                match iter.next() {
+                    None => continue,
+                    Some((_, album_id)) => {
+                        made_progress = true;
+                        let is_new = processed.insert(album_id);
+                        if is_new {
+                            result.push(*album_id);
+                        }
+                    }
+                }
+            }
+            if !made_progress {
+                break;
+            }
+        }
+
+        result
     }
 }
 
@@ -620,34 +668,15 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         &falling_tracks,
     );
 
-    // For the "Discovery" ranking, we interleave trending and falling albums.
-    // We also take into account the tracks. Usually the album is already there,
-    // but when one particular track on the album stands out, it can make a
-    // difference.
-    let mut album_ranks: HashMap<AlbumId, u32> = HashMap::new();
-    for i in 0..falling_albums.len().min(trending_albums.len()) {
-        let a1 = trending_albums[i].1;
-        let a3 = falling_albums[i].1;
-        let a2 = trending_tracks[i].1.album_id();
-        let a4 = falling_tracks[i].1.album_id();
-        for album_id in [a1, a2, a3, a4] {
-            let rank = album_ranks.len() as u32;
-            album_ranks.entry(album_id).or_insert(rank);
-        }
-    }
-    let mut ranks_vec: Vec<(u32, AlbumId)> = album_ranks
-        .iter()
-        .map(|(album_id, rank)| (*rank, *album_id))
-        .collect();
-    ranks_vec.sort();
+    let discover_ranks = counter.get_discover_rank();
     println!("\nDISCOVERY RANK\n");
-    for (rank, album_id) in ranks_vec.iter() {
+    for (i, album_id) in discover_ranks.iter().take(250).enumerate() {
         let album = index.get_album(*album_id).unwrap();
         let album_title = index.get_string(album.title);
         let album_artist = index.get_string(album.artist);
         println!(
             "  {:3} {} {:25}  {}",
-            rank, album_id, album_title, album_artist
+            i, album_id, album_title, album_artist
         );
     }
 
