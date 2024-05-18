@@ -305,11 +305,11 @@ sortAlbums {field, direction} albums =
     applyDir = case direction of
       SortIncreasing -> identity
       SortDecreasing -> Array.reverse
-    getField = case field of
-      SortReleaseDate -> \(Album album) -> album.releaseDate
-      SortFirstSeen   -> \(Album album) -> album.firstSeen
   in
-    applyDir $ Array.sortWith getField albums
+    applyDir $ case field of
+      SortReleaseDate -> Array.sortWith (\(Album album) -> album.releaseDate)  albums
+      SortFirstSeen   -> Array.sortWith (\(Album album) -> album.firstSeen)    albums
+      SortDiscover    -> Array.sortWith (\(Album album) -> album.discoverRank) albums
 
 toggleSortDirection :: SortDirection -> SortDirection
 toggleSortDirection = case _ of

@@ -24,6 +24,7 @@ data HistoryMode
 data SortField
   = SortReleaseDate
   | SortFirstSeen
+  | SortDiscover
 
 derive instance sortFieldEq :: Eq SortField
 
