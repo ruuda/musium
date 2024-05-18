@@ -285,8 +285,7 @@ impl PartialOrd for RevNotNan {
 
 impl Ord for RevNotNan {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other)
-            .expect("Counts must not be NaN.")
+        self.partial_cmp(other).expect("Counts must not be NaN.")
     }
 }
 
@@ -301,7 +300,9 @@ pub struct PlayCounter {
 impl PlayCounter {
     pub fn new() -> PlayCounter {
         PlayCounter {
-            last_counted_at: Instant { seconds_since_jan_2000: 0 },
+            last_counted_at: Instant {
+                seconds_since_jan_2000: 0,
+            },
             artists: HashMap::new(),
             albums: HashMap::new(),
             tracks: HashMap::new(),
@@ -340,7 +341,10 @@ impl PlayCounter {
     };
 
     pub fn count(&mut self, index: &MemoryMetaIndex, at: Instant, track_id: TrackId) {
-        debug_assert!(at >= self.last_counted_at, "Counts must be done in ascending order.");
+        debug_assert!(
+            at >= self.last_counted_at,
+            "Counts must be done in ascending order."
+        );
         let album_id = track_id.album_id();
         let album = match index.get_album(album_id) {
             Some(album) => album,
@@ -398,14 +402,14 @@ impl PlayCounter {
     pub fn get_top_by<F>(
         &self,
         n_top: usize,
-        mut expr: F
+        mut expr: F,
     ) -> (
         Vec<(RevNotNan, ArtistId)>,
         Vec<(RevNotNan, AlbumId)>,
         Vec<(RevNotNan, TrackId)>,
     )
     where
-        F: FnMut(&ExpCounter) -> RevNotNan
+        F: FnMut(&ExpCounter) -> RevNotNan,
     {
         fn get_top_n<K: Copy + Ord, F: FnMut(&ExpCounter) -> RevNotNan>(
             n_top: usize,
@@ -471,7 +475,13 @@ fn print_ranking(
         let artist = index.get_artist(*artist_id).unwrap();
         let artist_name = index.get_string(artist.name);
 
-        println!("  {:2} {:7.3} {} {}", i + 1, count.0, artist_id, artist_name);
+        println!(
+            "  {:2} {:7.3} {} {}",
+            i + 1,
+            count.0,
+            artist_id,
+            artist_name
+        );
     }
 
     println!("\n{title} ALBUMS ({description})\n");
@@ -480,7 +490,14 @@ fn print_ranking(
         let album_title = index.get_string(album.title);
         let album_artist = index.get_string(album.artist);
 
-        println!("  {:2} {:7.3} {} {:25}  {}", i + 1, count.0, album_id, album_title, album_artist);
+        println!(
+            "  {:2} {:7.3} {} {:25}  {}",
+            i + 1,
+            count.0,
+            album_id,
+            album_title,
+            album_artist
+        );
     }
 
     println!("\n{title} TRACKS ({description})\n");
@@ -489,7 +506,14 @@ fn print_ranking(
         let track_title = index.get_string(track.title);
         let track_artist = index.get_string(track.artist);
 
-        println!("  {:2} {:7.3} {} {:25}  {}", i + 1, count.0, track_id, track_title, track_artist);
+        println!(
+            "  {:2} {:7.3} {} {:25}  {}",
+            i + 1,
+            count.0,
+            track_id,
+            track_title,
+            track_artist
+        );
     }
 }
 
@@ -511,10 +535,8 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
     for timescale in 0..5 {
         let n_days = ExpCounter::HALF_LIFE_EPOCHS[timescale] * 0.1896;
 
-        let (top_artists, top_albums, top_tracks) = counter.get_top_by(
-            150,
-            |counter: &ExpCounter| RevNotNan(counter.n[timescale]),
-        );
+        let (top_artists, top_albums, top_tracks) =
+            counter.get_top_by(150, |counter: &ExpCounter| RevNotNan(counter.n[timescale]));
         print_ranking(
             "TOP",
             format!("timescale {}, {:.0} days", timescale, n_days),
@@ -525,12 +547,10 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         );
     }
 
-    let (trending_artists, trending_albums, trending_tracks) = counter.get_top_by(
-        350,
-        |counter: &ExpCounter| RevNotNan(
-            3.0 * counter.n[4] / (counter.n[3] + counter.n[2] + counter.n[1])
-        ),
-    );
+    let (trending_artists, trending_albums, trending_tracks) =
+        counter.get_top_by(350, |counter: &ExpCounter| {
+            RevNotNan(3.0 * counter.n[4] / (counter.n[3] + counter.n[2] + counter.n[1]))
+        });
     print_ranking(
         "TRENDING",
         format!("14d vs. 57d (2mo) + 228d (7.5mo) + 913d (2.5y)"),
@@ -540,24 +560,25 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         &trending_tracks,
     );
 
-    let (falling_artists, falling_albums, falling_tracks) = counter.get_top_by(
-        350,
-        |counter: &ExpCounter| RevNotNan(
-            // Falling at timescale 1 (2.5 years) vs. 3 (2 months).
-            // We apply a logarithm to avoid having extremely large counts,
-            // it doesn't affect the ranking (though we add a term below, and
-            // adding the logarithm is equal to multiplying the ratios, so in
-            // a sense, we take falling entries on *both* timescales).
-            (counter.n[1] / counter.n[3]).ln() +
-            // Falling at timescale 2 (7.5 months) vs. 4 (14 days).
-            // The log values here tend to be 4× higher than on the other
-            // timescale, so multiply by 1/4 to put them on a comparable scale.
-            (counter.n[2] / counter.n[4]).ln() * 0.25
-        ),
-    );
+    let (falling_artists, falling_albums, falling_tracks) =
+        counter.get_top_by(350, |counter: &ExpCounter| {
+            RevNotNan(
+                // Falling at timescale 1 (2.5 years) vs. 3 (2 months).
+                // We apply a logarithm to avoid having extremely large counts,
+                // it doesn't affect the ranking (though we add a term below,
+                // and adding the logarithm is equal to multiplying the ratios,
+                // so in a sense, we take falling entries on *both* timescales).
+                (counter.n[1] / counter.n[3]).ln() +
+                // Falling at timescale 2 (7.5 months) vs. 4 (14 days).
+                // The log values here tend to be 4× higher than on the other
+                // timescale, so multiply by 1/4 to put them on a comparable
+                // scale.
+                (counter.n[2] / counter.n[4]).ln() * 0.25,
+            )
+        });
     print_ranking(
         "FALLING",
-        format!("2 months vs. 2.5 years + 14 days vs. 7.5 months"), 
+        format!("2 months vs. 2.5 years + 14 days vs. 7.5 months"),
         index,
         &falling_artists,
         &falling_albums,
@@ -579,14 +600,20 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
             album_ranks.entry(album_id).or_insert(rank);
         }
     }
-    let mut ranks_vec: Vec<(u32, AlbumId)> = album_ranks.iter().map(|(album_id, rank)| (*rank, *album_id)).collect();
+    let mut ranks_vec: Vec<(u32, AlbumId)> = album_ranks
+        .iter()
+        .map(|(album_id, rank)| (*rank, *album_id))
+        .collect();
     ranks_vec.sort();
     println!("\nDISCOVERY RANK\n");
     for (rank, album_id) in ranks_vec.iter() {
         let album = index.get_album(*album_id).unwrap();
         let album_title = index.get_string(album.title);
         let album_artist = index.get_string(album.artist);
-        println!("  {:3} {} {:25}  {}", rank, album_id, album_title, album_artist);
+        println!(
+            "  {:3} {} {:25}  {}",
+            rank, album_id, album_title, album_artist
+        );
     }
 
     Ok(())
