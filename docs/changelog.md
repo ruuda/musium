@@ -35,6 +35,9 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
  * The SQLite <abbr>WAL</abbr> is now flushed after playback ends, to ensure
    that the database file is self-contained when the player is in an idle state.
    This makes it easier to back up the database.
+ * There is a new playcount module that is used to power a new _discover_
+   sorting mode. Discoveries are a mix of currently trending albums, and albums
+   that were popular in the past but have few recent listens.
 
 ## 0.13.0
 
