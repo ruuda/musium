@@ -72,7 +72,14 @@ pub struct TrackState {
 
 #[derive(Default)]
 pub struct AlbumState {
-    // TODO: Add playcount and last/first seen/played.
+    /// Ranking for the _discover_ sorting method.
+    ///
+    /// The discovery sorting is a mix of trending and falling albums, see the
+    /// [`playcount`] module for more details. A lower rank means the album
+    /// should be sorted near the beginning, a higher rank means it should be
+    /// sorted near the end.
+    discover_rank: u32,
+    // TODO: Add playcount.
 }
 
 #[derive(Default)]

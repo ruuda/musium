@@ -460,6 +460,30 @@ impl PlayCounter {
         }
         Ok(())
     }
+
+    /// Return the _discover_ ranking of the albums.
+    ///
+    /// The discovery sorting method is a mix of trending albums (by album and
+    /// albums that contain trending tracks) and falling albums. See also
+    /// [`score_trending`] and [`score_falling`].
+    ///
+    /// Be sure to call [`equalize_counters`] before calling this to ensure the
+    /// counts are comparable.
+    ///
+    /// This calls the closure 
+    pub fn get_discover_rank<F>(&self) {
+        let _albums: Vec<(AlbumId, RevNotNan, RevNotNan)> = self
+            .albums
+            .iter()
+            .map(|(album_id, counter)| (*album_id, score_trending(counter), score_falling(counter)))
+            .collect();
+        let _tracks: Vec<(AlbumId, RevNotNan, RevNotNan)> = self
+            .tracks
+            .iter()
+            .map(|(track_id, counter)| (track_id.album_id(), score_trending(counter), score_falling(counter)))
+            .collect();
+        // TODO: How to best expose this with minimal memory overhead?
+    }
 }
 
 fn print_ranking(

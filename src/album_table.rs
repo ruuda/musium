@@ -131,6 +131,31 @@ impl<T: Copy> AlbumTable<T> {
     pub fn max_probe_len(&self) -> usize {
         self.max_probe_len
     }
+
+    /// Iterate the occupied entries in the table.
+    pub fn iter_mut(&mut self) -> IterMut<T> {
+        IterMut {
+            iter: self.elements.iter_mut(),
+        }
+    }
+}
+
+pub struct IterMut<'a, T: Copy> {
+    iter: std::slice::IterMut<'a, (AlbumId, T)>,
+}
+
+impl<'a, T: Copy> Iterator for IterMut<'a, T> {
+    type Item = (AlbumId, &'a mut T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            match self.iter.next() {
+                None => return None,
+                Some((album_id, _)) if *album_id == AlbumId(0) => continue,
+                Some((album_id, v)) => return Some((*album_id, v)),
+            }
+        }
+    }
 }
 
 #[cfg(test)]
