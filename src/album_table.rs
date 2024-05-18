@@ -33,7 +33,7 @@ impl<T: Copy> AlbumTable<T> {
     ///
     /// We need to provide a dummy value to initialize unused slots. The dummy
     /// value is never exposed on lookups, so it does not have to be a sentinel
-    /// value, it can be a value that would normally be valid.
+    /// value, it can be a value that would not normally be valid.
     pub fn new(n: usize, dummy: T) -> AlbumTable<T> {
         let num_slots = n.next_power_of_two();
         AlbumTable {
