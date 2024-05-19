@@ -294,7 +294,7 @@ fn main() -> Result<()> {
             println!("Index loaded.");
 
             println!("Loading user data and playcounts ...");
-            let user_data = UserData::load_from_database(&index, &mut tx)?;
+            let (user_data, counts) = UserData::load_from_database(&index, &mut tx)?;
             let user_data_arc = Arc::new(Mutex::new(user_data));
             println!("User data loaded.");
 
@@ -315,6 +315,7 @@ fn main() -> Result<()> {
             let player = musium::player::Player::new(
                 index_var.clone(),
                 user_data_arc.clone(),
+                counts.into_counter(),
                 &config,
             );
             let service = MetaServer::new(

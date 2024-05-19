@@ -24,6 +24,7 @@ use crate::error::Error;
 use crate::exec_pre_post;
 use crate::filter::StateVariableFilter;
 use crate::history::PlaybackEvent;
+use crate::playcount::PlayCounter;
 use crate::history;
 use crate::mvar::Var;
 use crate::playback;
@@ -1081,6 +1082,7 @@ impl Player {
     pub fn new(
         index_var: Var<MemoryMetaIndex>,
         user_data: Arc<Mutex<UserData>>,
+        counter: PlayCounter,
         config: &Config,
     ) -> Player {
         // Build the channel to send playback events to the history thread. That
@@ -1138,6 +1140,7 @@ impl Player {
                     &db_path,
                     index_for_history,
                     user_data,
+                    counter,
                     hist_receiver,
                 );
                 // The history thread should not exit. When it does, that's a

@@ -27,7 +27,7 @@ use std::convert::TryFrom;
 
 use crate::MemoryMetaIndex;
 use crate::album_table::AlbumTable;
-use crate::playcount::PlayCounter;
+use crate::playcount::{PlayCounter, PlayCounts};
 use crate::prim::{AlbumId, ArtistId, TrackId};
 use crate::{database as db};
 
@@ -119,7 +119,7 @@ impl UserData {
     pub fn load_from_database(
         index: &MemoryMetaIndex,
         tx: &mut db::Transaction,
-    ) -> db::Result<Self> {
+    ) -> db::Result<(Self, PlayCounts)> {
         let mut stats = Self::default();
 
         for opt_rating in db::iter_ratings(tx)? {
@@ -134,7 +134,7 @@ impl UserData {
         let counts = counter.into_counts();
         stats.replace_discover_score(&counts.get_discover_rank());
 
-        Ok(stats)
+        Ok((stats, counts))
     }
 
     pub fn set_track_rating(&mut self, track_id: TrackId, rating: Rating) {

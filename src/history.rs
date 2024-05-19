@@ -20,6 +20,7 @@ use crate::mvar::Var;
 use crate::player::QueueId;
 use crate::{MetaIndex, MemoryMetaIndex, TrackId};
 use crate::user_data::{Rating, UserData};
+use crate::playcount::PlayCounter;
 
 /// Changes in the playback state or library to be recorded.
 pub enum PlaybackEvent {
@@ -39,6 +40,7 @@ pub fn main(
     db_path: &Path,
     index_var: Var<MemoryMetaIndex>,
     user_data: Arc<Mutex<UserData>>,
+    mut counter: PlayCounter,
     events: Receiver<PlaybackEvent>,
 ) -> Result<()> {
     let connection = database_utils::connect_read_write(db_path)?;
@@ -104,6 +106,29 @@ pub fn main(
                 // of having to sync the WAL as well. We checkpoint after
                 // the queue ends, before the post-playback program runs.
                 connection.execute("PRAGMA wal_checkpoint(PASSIVE);")?;
+
+                // Recompute the playcounts as well. We load these from the
+                // database rather than updating the counts on the go for two
+                // reasons:
+                // 1. We need to anyway at startup, so this way there is only
+                //    one code path.
+                // 2. We can pick up imported listens, though only when they
+                //    are not backdated to before our last update there. When
+                //    they are backdated, it requires an application restart.
+                // The count import is incremental. Computing the ranking is
+                // not, but that's fast enough anyway. (The full import +
+                // ranking is 140ms on a Raspberry Pi for ~22k tracks.)
+                let index = index_var.get();
+                let mut tx = db.begin()?;
+                counter.count_from_database(&index, &mut tx)?;
+                tx.commit()?;
+                let counts = counter.into_counts();
+                let rank = counts.get_discover_rank();
+                user_data
+                    .lock()
+                    .unwrap()
+                    .replace_discover_score(&rank);
+                counter = counts.into_counter();
             }
             PlaybackEvent::Rated { track_id, rating } => {
                 let mut tx = db.begin()?;
