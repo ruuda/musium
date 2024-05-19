@@ -896,7 +896,10 @@ pub struct ListenAt {
 }
 
 /// Iterate the listens in chronological order.
-pub fn iter_listens<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<Iter<'i, 'a, ListenAt>> {
+///
+/// Visits only the listens whose timestamp is after the minimum start second
+/// (in POSIX time), exclusive, so this can be used for incremental import.
+pub fn iter_listens_since<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>, min_started_second: i64) -> Result<Iter<'i, 'a, ListenAt>> {
     let sql = r#"
         select
             track_id,
@@ -906,7 +909,8 @@ pub fn iter_listens<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<Iter<
         from
             listens
         where
-            completed_at is not null
+            (completed_at is not null)
+            and (started_at_second > :min_started_second)
         order by
             started_at_second asc;
         "#;
@@ -915,6 +919,7 @@ pub fn iter_listens<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<Iter<
         Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
     };
     statement.reset()?;
+    statement.bind(1, min_started_second)?;
     let decode_row = |statement: &Statement| Ok(ListenAt {
         track_id: statement.read(0)?,
         started_at_second: statement.read(1)?,

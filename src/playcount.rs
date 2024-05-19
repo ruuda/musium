@@ -69,13 +69,18 @@ pub struct EpochDuration {
 }
 
 impl Instant {
+    /// 2000-01-01T00:00:00Z as a Posix timestamp.
+    const JAN_2000_POSIX_SECONDS: i64 = 946684800;
+
     #[inline(always)]
     pub fn from_posix_timestamp(timestamp: i64) -> Instant {
-        // 2000-01-01T00:00:00Z as a Posix timestamp.
-        let jan_2000_posix_seconds = 946684800;
         Instant {
-            seconds_since_jan_2000: (timestamp - jan_2000_posix_seconds) as u32,
+            seconds_since_jan_2000: (timestamp - Instant::JAN_2000_POSIX_SECONDS) as u32,
         }
+    }
+
+    pub fn to_posix_timestamp(&self) -> i64 {
+        self.seconds_since_jan_2000 as i64 + Instant::JAN_2000_POSIX_SECONDS
     }
 
     /// Return the epoch that this instant falls in (rounds the time down).
@@ -402,13 +407,16 @@ impl PlayCounter {
     }
 
     /// Traverse all listens in the `listens` table and count them.
-    // TODO: Make it incremental from the last imported time.
+    ///
+    /// This imports only the listens that are newer than the most recently
+    /// counted one, so per session this is incremental.
     pub fn count_from_database(
         &mut self,
         index: &MemoryMetaIndex,
         tx: &mut Transaction,
     ) -> database::Result<()> {
-        for listen_opt in database::iter_listens(tx)? {
+        let start_second = self.last_counted_at.to_posix_timestamp();
+        for listen_opt in database::iter_listens_since(tx, start_second)? {
             let listen = listen_opt?;
             let at = Instant::from_posix_timestamp(listen.started_at_second);
             let track_id = TrackId(listen.track_id as u64);

@@ -313,7 +313,10 @@ group by
   album_id;
 
 -- Iterate the listens in chronological order.
--- @query iter_listens() ->* ListenAt
+--
+-- Visits only the listens whose timestamp is after the minimum start second
+-- (in POSIX time), exclusive, so this can be used for incremental import.
+-- @query iter_listens_since(min_started_second: i64) ->* ListenAt
 select
     track_id /* :i64 */,
     -- Note that we have an index on this expression, so this should be just an
@@ -322,7 +325,8 @@ select
 from
     listens
 where
-    completed_at is not null
+    (completed_at is not null)
+    and (started_at_second > :min_started_second)
 order by
     started_at_second asc;
 
