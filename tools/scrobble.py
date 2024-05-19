@@ -296,6 +296,8 @@ def cmd_scrobble(db_file: str) -> None:
         print('LAST_FM_SESSION_KEY is not set, authentication will fail.')
 
     with sqlite3.connect(db_file) as connection:
+        connection.cursor().execute("PRAGMA journal_mode = WAL;")
+
         # Last.fm allows submitting scrobbles up to 14 days after their timestamp.
         # Any later, there is no point in submitting the scrobble any more.
         listens = get_listens_to_scrobble(connection, since=now - timedelta(days=14))
