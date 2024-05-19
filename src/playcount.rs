@@ -416,12 +416,15 @@ impl PlayCounter {
         tx: &mut Transaction,
     ) -> database::Result<()> {
         let start_second = self.last_counted_at.to_posix_timestamp();
+        let mut n = 0;
         for listen_opt in database::iter_listens_since(tx, start_second)? {
             let listen = listen_opt?;
             let at = Instant::from_posix_timestamp(listen.started_at_second);
             let track_id = TrackId(listen.track_id as u64);
             self.count(index, at.into(), track_id);
+            n += 1;
         }
+        println!("Imported {n} new listens from database.");
         Ok(())
     }
 
