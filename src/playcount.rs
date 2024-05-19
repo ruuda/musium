@@ -730,11 +730,21 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         );
     }
 
+    // Experiment. Compute the factor f such that multiplied by f, the a
+    // playcount at timescale 2 after 1 year is equal to the playcount at
+    // timescale 4.
+    let n_epochs = (365 * 24 * 3600) >> 14;
+    let factor = 0.5_f32.powf(
+        (n_epochs as f32) * (
+            ExpCounter::HALF_LIFE_EPOCHS[4].recip() -
+            ExpCounter::HALF_LIFE_EPOCHS[2].recip()
+        )
+    );
+
     let (disco_artists, disco_albums, disco_tracks) = counts.get_top_by(350, |counter| {
-        let c0 = counter.n[4].ln();
-        let c1 = counter.n[1].ln();
-        let n = counter.n[0].sqrt();
-        RevNotNan((c1 - c0) * n)
+        let c0 = counter.n[4];
+        let c1 = counter.n[2];
+        RevNotNan(c1 - c0 / factor)
     });
     print_ranking(
         "DISCOVER V2 [WIP]",
@@ -744,6 +754,19 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         &disco_albums,
         &disco_tracks,
     );
+
+    let n_epochs = (365 * 24 * 3600) >> 14;
+    let factor = 0.5_f32.powf(
+        (n_epochs as f32) * (
+            ExpCounter::HALF_LIFE_EPOCHS[4].recip() -
+            ExpCounter::HALF_LIFE_EPOCHS[2].recip()
+        )
+    );
+
+    let c1 = 1337.0 * 0.5_f32.powf(n_epochs as f32 / ExpCounter::HALF_LIFE_EPOCHS[4]);
+    let c2 = 1337.0 * 0.5_f32.powf(n_epochs as f32 / ExpCounter::HALF_LIFE_EPOCHS[2]);
+    let k = c2 * factor;
+    println!("{c1:.5} {c2:.5} {k:.5} {factor:.5}");
 
     Ok(())
 }
