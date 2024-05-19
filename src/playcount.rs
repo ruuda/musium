@@ -541,11 +541,12 @@ impl PlayCounts {
         for albums in albums.iter_mut() {
             albums.sort();
         }
+
         let mut iters = [
-            albums[0].iter().rev(),
-            albums[1].iter().rev(),
-            albums[2].iter().rev(),
-            albums[3].iter().rev(),
+            albums[0].iter(),
+            albums[1].iter(),
+            albums[2].iter(),
+            albums[3].iter(),
         ];
 
         // All the above counters are for all the playcounts, and all tracks are
@@ -645,19 +646,26 @@ fn score_trending(counter: &ExpCounter) -> RevNotNan {
 /// Falling entries (tracks, albums, artists) are entries that have a high
 /// playcount on a long-term timescale, but low playcount recently.
 fn score_falling(counter: &ExpCounter) -> RevNotNan {
-    // Falling at timescale 1 (2.5 years) vs. 3 (2 months).
-    // We apply a logarithm to avoid having extremely large counts,
-    // it doesn't affect the ranking (though we add a term below,
-    // and adding the logarithm is equal to multiplying the ratios,
-    // so in a sense, we take falling entries on *both* timescales).
-    let fall_t1 = (counter.n[1] / counter.n[3]).ln();
+    // The formula is in essece -(c1 / c0). Let's say that c{0,1} =
+    // n*exp(-{a,b}t), where n is the playcount (let's assume all plays are at
+    // one moment) and a and b are decay rates. Then the n cancels out, and what
+    // we are left with is an age counter; the ratio is close to 1 for recent
+    // plays (so the difference in logs close to 0), the ratio is close to 0
+    // for old plays.
+    //
+    // So that is something that measures how old the listens are, but because
+    // the n cancelled out, it applies equally to a track we listened once as to
+    // something we listened on repeat. To make it proportional to listens
+    // again, multiply with the playcount on the longest time scale. From
+    // experimentation, multiplying with the count directly makes it too much
+    // proportional to just popularity; multiplying by log count makes it too
+    // arbitrary and biased to albums that were not listened that much,
+    // multiplying by the square root of count seems a good middle ground.
 
-    // Falling at timescale 2 (7.5 months) vs. 4 (14 days).
-    let fall_t2 = (counter.n[2] / counter.n[4]).ln();
-
-    // The log values of t2 tend to be 4× higher than those of t1, so multiply
-    // by 1/4 to put them on a comparable scale.
-    RevNotNan(fall_t2.mul_add(0.25, fall_t1))
+    let c0 = counter.n[4].ln();
+    let c1 = counter.n[2].ln();
+    let n = counter.n[0].sqrt();
+    RevNotNan((c1 - c0) * n)
 }
 
 /// Print playcount statistics about the library.
@@ -721,6 +729,21 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
             i, album_id, album_title, album_artist
         );
     }
+
+    let (disco_artists, disco_albums, disco_tracks) = counts.get_top_by(350, |counter| {
+        let c0 = counter.n[4].ln();
+        let c1 = counter.n[1].ln();
+        let n = counter.n[0].sqrt();
+        RevNotNan((c1 - c0) * n)
+    });
+    print_ranking(
+        "DISCOVER V2 [WIP]",
+        format!("2 months vs. 2.5 years + 14 days vs. 7.5 months"),
+        index,
+        &disco_artists,
+        &disco_albums,
+        &disco_tracks,
+    );
 
     Ok(())
 }
