@@ -516,7 +516,7 @@ impl PlayCounts {
         // entries for albums as well as albums that contain trending/falling
         // tracks. Often they coincide, but sometimes there is one track that
         // stands out on the album, so we take both into account.
-        let mut albums: [Vec<(RevNotNan, AlbumId)>; 4] = [
+        let mut albums: [Vec<(RevNotNan, AlbumId)>; 3] = [
             self.counter
                 .albums
                 .iter()
@@ -532,11 +532,12 @@ impl PlayCounts {
                 .iter()
                 .map(|(track_id, counter)| (score_trending(counter), track_id.album_id()))
                 .collect(),
-            self.counter
-                .tracks
-                .iter()
-                .map(|(track_id, counter)| (score_falling(counter), track_id.album_id()))
-                .collect(),
+            // We don't take the albums of falling tracks though, because then
+            // the album shows up as a discovery, you listen to a part of it,
+            // and it stays there even though you listened to it recently. It
+            // stays because there is a popular track on it that you did not
+            // listen to, but I don't have a way to indicate this, so opt for no
+            // falling tracks albums here.
         ];
         for albums in albums.iter_mut() {
             albums.sort();
@@ -546,7 +547,6 @@ impl PlayCounts {
             albums[0].iter(),
             albums[1].iter(),
             albums[2].iter(),
-            albums[3].iter(),
         ];
 
         // All the above counters are for all the playcounts, and all tracks are
