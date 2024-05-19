@@ -646,26 +646,34 @@ fn score_trending(counter: &ExpCounter) -> RevNotNan {
 /// Falling entries (tracks, albums, artists) are entries that have a high
 /// playcount on a long-term timescale, but low playcount recently.
 fn score_falling(counter: &ExpCounter) -> RevNotNan {
-    // The formula is in essece -(c1 / c0). Let's say that c{0,1} =
-    // n*exp(-{a,b}t), where n is the playcount (let's assume all plays are at
-    // one moment) and a and b are decay rates. Then the n cancels out, and what
-    // we are left with is an age counter; the ratio is close to 1 for recent
-    // plays (so the difference in logs close to 0), the ratio is close to 0
-    // for old plays.
-    //
-    // So that is something that measures how old the listens are, but because
-    // the n cancelled out, it applies equally to a track we listened once as to
-    // something we listened on repeat. To make it proportional to listens
-    // again, multiply with the playcount on the longest time scale. From
-    // experimentation, multiplying with the count directly makes it too much
-    // proportional to just popularity; multiplying by log count makes it too
-    // arbitrary and biased to albums that were not listened that much,
-    // multiplying by the square root of count seems a good middle ground.
+    // Compute the factor f such that multiplied by f, the a
+    // playcount at timescale 2 after 1 year is equal to the playcount at
+    // timescale 4.
+    let n_epochs: f32 = ((365 * 24 * 3600) >> 14) as f32;
+    let f_4_2 = 0.5_f32.powf(
+        n_epochs * (
+            ExpCounter::HALF_LIFE_EPOCHS[2].recip() -
+            ExpCounter::HALF_LIFE_EPOCHS[4].recip()
+        )
+    );
+    let f_3_1 = 0.5_f32.powf(
+        (n_epochs as f32) * (
+            ExpCounter::HALF_LIFE_EPOCHS[1].recip() -
+            ExpCounter::HALF_LIFE_EPOCHS[3].recip()
+        )
+    );
+    let f_4_1 = 0.5_f32.powf(
+        (n_epochs as f32) * (
+            ExpCounter::HALF_LIFE_EPOCHS[1].recip() -
+            ExpCounter::HALF_LIFE_EPOCHS[4].recip()
+        )
+    );
 
-    let c0 = counter.n[4].ln();
-    let c1 = counter.n[2].ln();
+    let b_4_2 = counter.n[2] - counter.n[4] * f_4_2;
+    let b_3_1 = counter.n[1] - counter.n[3] * f_3_1;
+    let b_4_1 = counter.n[1] - counter.n[4] * f_4_1;
     let n = counter.n[0].sqrt();
-    RevNotNan((c1 - c0) * n)
+    RevNotNan((b_4_1 + b_4_2 + b_3_1) * n)
 }
 
 /// Print playcount statistics about the library.
@@ -734,17 +742,31 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
     // playcount at timescale 2 after 1 year is equal to the playcount at
     // timescale 4.
     let n_epochs = (365 * 24 * 3600) >> 14;
-    let factor = 0.5_f32.powf(
+    let f_4_2 = 0.5_f32.powf(
         (n_epochs as f32) * (
             ExpCounter::HALF_LIFE_EPOCHS[4].recip() -
             ExpCounter::HALF_LIFE_EPOCHS[2].recip()
         )
     );
+    let f_3_1 = 0.5_f32.powf(
+        (n_epochs as f32) * (
+            ExpCounter::HALF_LIFE_EPOCHS[3].recip() -
+            ExpCounter::HALF_LIFE_EPOCHS[1].recip()
+        )
+    );
+    let f_4_1 = 0.5_f32.powf(
+        (n_epochs as f32) * (
+            ExpCounter::HALF_LIFE_EPOCHS[4].recip() -
+            ExpCounter::HALF_LIFE_EPOCHS[1].recip()
+        )
+    );
 
     let (disco_artists, disco_albums, disco_tracks) = counts.get_top_by(350, |counter| {
-        let c0 = counter.n[4];
-        let c1 = counter.n[2];
-        RevNotNan(c1 - c0 / factor)
+        let b_4_2 = counter.n[2] - counter.n[4] / f_4_2;
+        let b_3_1 = counter.n[1] - counter.n[3] / f_3_1;
+        let b_4_1 = counter.n[1] - counter.n[4] / f_4_1;
+        let n = counter.n[0].sqrt();
+        RevNotNan((b_4_1 + b_4_2 + b_3_1) * n)
     });
     print_ranking(
         "DISCOVER V2 [WIP]",
