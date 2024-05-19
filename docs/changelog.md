@@ -20,7 +20,9 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
    or a migration of the database).
  * The patch version is bumped for bugfixes and other small changes.
 
-## Unreleased
+## v0.14.0
+
+Released 2024-05-19.
 
  * **Breaking:** Musium now uses Rust 1.70 (up from 1.57) to build the server,
    and the Spago build tool to build the client. The Nix development environment
@@ -37,7 +39,8 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
    This makes it easier to back up the database.
  * There is a new playcount module that is used to power a new _discover_
    sorting mode. Discoveries are a mix of currently trending albums, and albums
-   that were popular in the past but have few recent listens.
+   that were popular in the past but have few recent listens. The new `musium
+   count` subcommand prints statistics for debugging.
 
 ## 0.13.0
 
