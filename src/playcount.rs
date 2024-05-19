@@ -646,34 +646,18 @@ fn score_trending(counter: &ExpCounter) -> RevNotNan {
 /// Falling entries (tracks, albums, artists) are entries that have a high
 /// playcount on a long-term timescale, but low playcount recently.
 fn score_falling(counter: &ExpCounter) -> RevNotNan {
-    // Compute the factor f such that multiplied by f, the a
-    // playcount at timescale 2 after 1 year is equal to the playcount at
-    // timescale 4.
-    let n_epochs: f32 = ((365 * 24 * 3600) >> 14) as f32;
-    let f_4_2 = 0.5_f32.powf(
-        n_epochs * (
-            ExpCounter::HALF_LIFE_EPOCHS[2].recip() -
-            ExpCounter::HALF_LIFE_EPOCHS[4].recip()
-        )
-    );
-    let f_3_1 = 0.5_f32.powf(
-        (n_epochs as f32) * (
-            ExpCounter::HALF_LIFE_EPOCHS[1].recip() -
-            ExpCounter::HALF_LIFE_EPOCHS[3].recip()
-        )
-    );
-    let f_4_1 = 0.5_f32.powf(
-        (n_epochs as f32) * (
-            ExpCounter::HALF_LIFE_EPOCHS[1].recip() -
-            ExpCounter::HALF_LIFE_EPOCHS[4].recip()
-        )
-    );
-
-    let b_4_2 = counter.n[2] - counter.n[4] * f_4_2;
-    let b_3_1 = counter.n[1] - counter.n[3] * f_3_1;
-    let b_4_1 = counter.n[1] - counter.n[4] * f_4_1;
-    let n = counter.n[0].sqrt();
-    RevNotNan((b_4_1 + b_4_2 + b_3_1) * n)
+    let age_12 = counter.n[1].ln() - counter.n[2].ln();
+    let age_13 = counter.n[1].ln() - counter.n[3].ln();
+    let n4 = counter.n[4];
+    // Empirically, age_13 and age_12 tend to correspond best to what I
+    // think of as "forgotten" tracks. But that doesn't discount one when
+    // you listen to it in recent listens, so we mix in counter (the shortest
+    // timescale) as a penalty.
+    // Counts for age_13 tend to be about 5x as large as for age_12, so to get a
+    // balanced mix, we take only 1/10 of age_13.
+    let age_mix = age_12 + age_13 * 0.1 - n4 * 0.5;
+    let countish = (1.0 + counter.n[0]).ln();
+    RevNotNan(age_mix * countish)
 }
 
 /// Print playcount statistics about the library.
@@ -738,35 +722,13 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         );
     }
 
-    // Experiment. Compute the factor f such that multiplied by f, the a
-    // playcount at timescale 2 after 1 year is equal to the playcount at
-    // timescale 4.
-    let n_epochs = (365 * 24 * 3600) >> 14;
-    let f_4_2 = 0.5_f32.powf(
-        (n_epochs as f32) * (
-            ExpCounter::HALF_LIFE_EPOCHS[4].recip() -
-            ExpCounter::HALF_LIFE_EPOCHS[2].recip()
-        )
-    );
-    let f_3_1 = 0.5_f32.powf(
-        (n_epochs as f32) * (
-            ExpCounter::HALF_LIFE_EPOCHS[3].recip() -
-            ExpCounter::HALF_LIFE_EPOCHS[1].recip()
-        )
-    );
-    let f_4_1 = 0.5_f32.powf(
-        (n_epochs as f32) * (
-            ExpCounter::HALF_LIFE_EPOCHS[4].recip() -
-            ExpCounter::HALF_LIFE_EPOCHS[1].recip()
-        )
-    );
-
     let (disco_artists, disco_albums, disco_tracks) = counts.get_top_by(350, |counter| {
-        let b_4_2 = counter.n[2] - counter.n[4] / f_4_2;
-        let b_3_1 = counter.n[1] - counter.n[3] / f_3_1;
-        let b_4_1 = counter.n[1] - counter.n[4] / f_4_1;
-        let n = counter.n[0].sqrt();
-        RevNotNan((b_4_1 + b_4_2 + b_3_1) * n)
+        let age_12 = counter.n[1].ln() - counter.n[2].ln();
+        let age_13 = counter.n[1].ln() - counter.n[3].ln();
+        let n4 = counter.n[4];
+        let age_mix = age_12 + age_13 * 0.1 - n4 * 0.5;
+        let countish = (1.0 + counter.n[0]).ln();
+        RevNotNan(age_mix * countish)
     });
     print_ranking(
         "DISCOVER V2 [WIP]",
@@ -776,19 +738,6 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         &disco_albums,
         &disco_tracks,
     );
-
-    let n_epochs = (365 * 24 * 3600) >> 14;
-    let factor = 0.5_f32.powf(
-        (n_epochs as f32) * (
-            ExpCounter::HALF_LIFE_EPOCHS[4].recip() -
-            ExpCounter::HALF_LIFE_EPOCHS[2].recip()
-        )
-    );
-
-    let c1 = 1337.0 * 0.5_f32.powf(n_epochs as f32 / ExpCounter::HALF_LIFE_EPOCHS[4]);
-    let c2 = 1337.0 * 0.5_f32.powf(n_epochs as f32 / ExpCounter::HALF_LIFE_EPOCHS[2]);
-    let k = c2 * factor;
-    println!("{c1:.5} {c2:.5} {k:.5} {factor:.5}");
 
     Ok(())
 }
