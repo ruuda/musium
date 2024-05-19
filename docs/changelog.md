@@ -20,7 +20,7 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
    or a migration of the database).
  * The patch version is bumped for bugfixes and other small changes.
 
-## v0.14.0
+## 0.14.0
 
 Released 2024-05-19.
 
