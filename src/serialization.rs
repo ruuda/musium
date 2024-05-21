@@ -41,7 +41,11 @@ pub fn write_brief_album_json<W: Write>(
     let scores = user_data.get_album_scores(album_id);
     write!(
         w,
-        r#","release_date":"{}","first_seen":"{}","discover_score":{:.3},"trending_score":{:.3}}}"#,
+        // The discover score can have large-ish magnitude and ranges from negative
+        // to positive, it does not need a lot of precision. The trending score
+        // is always between 0 and 1 though, it needs more digits for precision
+        // near the end of the ranking.
+        r#","release_date":"{}","first_seen":"{}","discover_score":{:.2},"trending_score":{:.4}}}"#,
         album.original_release_date,
         album.first_seen.format_iso8601(),
         scores.discover_score,

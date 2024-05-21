@@ -576,7 +576,16 @@ fn print_ranking(
 /// Trending entries (tracks, albums, artists) are entries where the recent
 /// playcount is high compared to the long-term playcount.
 fn score_trending(counter: &ExpCounter) -> f32 {
-    3.0 * counter.n[4] / (counter.n[3] + counter.n[2] + counter.n[1])
+    // The trend ratio is the ratio of recent vs. older plays, it is 1.0 for new
+    // tracks that we just played, and tends to 0.0 for tracks that we played in
+    // the past but not recently.
+    let trend = 3.0 * counter.n[4] / (counter.n[3] + counter.n[2] + counter.n[1]);
+
+    // On its own though, the trend counter ignores popularity. The playcount is
+    // both in the numerator and denominator, it only counts recency. I tried
+    // various ways of mixing in a recent playcount, but in the end, I find just
+    // the recency more useful.
+    trend
 }
 
 /// Score for sorting entries by _falling_.
