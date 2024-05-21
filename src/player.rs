@@ -995,10 +995,6 @@ fn decode_burst(index: &MemoryMetaIndex, state_mutex: &Mutex<PlayerState>, filte
         let decode_bytes_per_ms = 44_100 * 4 * 5 / 1000;
         let decode_bytes_budget = decode_bytes_per_ms * pending_duration_ms as usize;
         let bytes_left = decode_bytes_budget.min(stop_after_bytes - bytes_used);
-        println!("Pending buffer stats:");
-        println!("  Duration: {:.3} seconds", pending_duration_ms as f32 / 1000.0);
-        println!("  Memory:   {:.3} / {:.3} MB", bytes_used as f32 * 1e-6, stop_after_bytes as f32 * 1e-6);
-        println!("  Budget:   {:.3} MB", bytes_left as f32 * 1e-6);
         // Decode at most 10 MB at a time. This ensures that we produce the data
         // in blocks of at most 10 MB, which in turn ensures that we can free
         // the memory early when we are done playing. Without this, when the
@@ -1007,7 +1003,14 @@ fn decode_burst(index: &MemoryMetaIndex, state_mutex: &Mutex<PlayerState>, filte
         // already-played samples in a large block where the playhead is at the
         // end of the block.
         let result = task.run(index, filters, bytes_left.min(10_000_000));
-        println!("Decoded {:.3} MB.", result.block.size_bytes() as f32 * 1e-6);
+        println!(
+            "Buffer: duration={:.3}s, memory={:.3}/{:.3} MB, budget={:.3} MB, decoded={:.3} MB",
+            pending_duration_ms as f32 / 1000.0,
+            bytes_used as f32 * 1e-6,
+            stop_after_bytes as f32 * 1e-6,
+            bytes_left as f32 * 1e-6,
+            result.block.size_bytes() as f32 * 1e-6,
+        );
         previous_result = Some(result);
     }
 }
