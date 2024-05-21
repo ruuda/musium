@@ -38,12 +38,14 @@ pub fn write_brief_album_json<W: Write>(
     }
     write!(w, r#"],"artist":"#)?;
     serde_json::to_writer(&mut w, index.get_string(album.artist))?;
+    let scores = user_data.get_album_scores(album_id);
     write!(
         w,
-        r#","release_date":"{}","first_seen":"{}","discover_score":{}}}"#,
+        r#","release_date":"{}","first_seen":"{}","discover_score":{:.3},"trending_score":{:.3}}}"#,
         album.original_release_date,
         album.first_seen.format_iso8601(),
-        user_data.get_album_discover_score(album_id),
+        scores.discover_score,
+        scores.trending_score,
     )?;
     Ok(())
 }

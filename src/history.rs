@@ -123,11 +123,8 @@ pub fn main(
                 counter.count_from_database(&index, &mut tx)?;
                 tx.commit()?;
                 let counts = counter.into_counts();
-                let rank = counts.get_discover_rank();
-                user_data
-                    .lock()
-                    .unwrap()
-                    .replace_discover_score(&rank);
+                let album_user_data = counts.compute_album_user_data();
+                user_data.lock().unwrap().set_albums(album_user_data);
                 counter = counts.into_counter();
             }
             PlaybackEvent::Rated { track_id, rating } => {

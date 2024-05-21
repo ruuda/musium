@@ -77,11 +77,12 @@ pub struct TrackState {
 pub struct AlbumState {
     /// Ranking for the _discover_ sorting method.
     ///
-    /// The discovery sorting is a mix of trending and falling albums, see the
-    /// [`playcount`] module for more details. A higher score means that the
-    /// album is a better discovery.
-    discover_score: u32,
-    // TODO: Add playcount.
+    /// The discovery sorting methods identifies albums that were popular in the
+    /// past, but not recently. See the [`playcount`] module for more details.
+    pub discover_score: f32,
+
+    // Playcount on the shortest timescale.
+    pub trending_score: f32,
 }
 
 #[derive(Default)]
@@ -132,7 +133,7 @@ impl UserData {
         let mut counter = PlayCounter::new();
         counter.count_from_database(index, tx)?;
         let counts = counter.into_counts();
-        stats.replace_discover_score(&counts.get_discover_rank());
+        stats.set_albums(counts.compute_album_user_data());
 
         Ok((stats, counts))
     }
@@ -145,32 +146,16 @@ impl UserData {
         self.tracks.get(&track_id).map(|t| t.rating).unwrap_or_default()
     }
 
-    pub fn get_album_discover_score(&self, album_id: AlbumId) -> u32 {
-        match self.albums.get(album_id) {
-            Some(state) => state.discover_score,
-            // If an album is not present, we don't have playcounts, so it is
-            // ranked as low as possible for discoveries. (Arguably it should be
-            // high, but it's more likely that a count of 0 is that the plays
-            // have not been imported, than that the album is really
-            // undiscovered).
-            None => 0,
-        }
+    pub fn get_album_scores(&self, album_id: AlbumId) -> AlbumState {
+        // If an album is not present, we don't have playcounts, so it is
+        // ranked as low as possible for all scores.
+        self.albums.get(album_id).unwrap_or_default()
     }
 
-    /// Replace the album states with the new ranking.
+    /// Replace the album scores with new scores.
     ///
-    /// The albums that are more important discoveries should be at the start of
-    /// the slice, the less important ones at the end.
-    pub fn replace_discover_score(&mut self, ranking: &[AlbumId]) {
-        // At this point the album state holds nothing more than the playcounts
-        // rankings, so just replace the entire thing.
-        self.albums = AlbumTable::new(ranking.len(), AlbumState::default());
-
-        for (i, album_id) in ranking.iter().enumerate() {
-            let state = AlbumState {
-                discover_score: (ranking.len() - i) as u32,
-            };
-            self.albums.insert(*album_id, state);
-        }
+    /// This should be tied to the computations [`PlayCounts::compute_album_user_data`].
+    pub fn set_albums(&mut self, albums: AlbumTable<AlbumState>) {
+        self.albums = albums;
     }
 }

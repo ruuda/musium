@@ -8,13 +8,15 @@
 //! Computation of playcounts and other statistics.
 
 use std::collections::BinaryHeap;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 
 use crate::database::{self, Transaction};
 use crate::database_utils::connect_readonly;
 use crate::prim::{AlbumId, ArtistId, TrackId};
 use crate::{MemoryMetaIndex, MetaIndex};
+use crate::album_table::AlbumTable;
+use crate::user_data::AlbumState;
 
 /// A point in time with second granularity.
 ///
@@ -500,81 +502,17 @@ impl PlayCounts {
         )
     }
 
-    /// Return the _discover_ ranking of the albums.
-    ///
-    /// The discovery sorting method is a mix of trending albums (by album and
-    /// albums that contain trending tracks) and falling albums. See also
-    /// [`score_trending`] and [`score_falling`].
-    ///
-    /// Be sure to call [`equalize_counters`] before calling this to ensure the
-    /// counts are comparable.
-    ///
-    /// Returns the album ids, with more important discoveries at the start, and
-    /// less important discoveries at the end.
-    pub fn get_discover_rank(&self) -> Vec<AlbumId> {
-        // For the discovery rank, we interleave the trending and falling
-        // entries for albums as well as albums that contain trending/falling
-        // tracks. Often they coincide, but sometimes there is one track that
-        // stands out on the album, so we take both into account.
-        let mut albums: [Vec<(RevNotNan, AlbumId)>; 3] = [
-            self.counter
-                .albums
-                .iter()
-                .map(|(album_id, counter)| (score_trending(counter), *album_id))
-                .collect(),
-            self.counter
-                .albums
-                .iter()
-                .map(|(album_id, counter)| (score_falling(counter), *album_id))
-                .collect(),
-            self.counter
-                .tracks
-                .iter()
-                .map(|(track_id, counter)| (score_trending(counter), track_id.album_id()))
-                .collect(),
-            // We don't take the albums of falling tracks though, because then
-            // the album shows up as a discovery, you listen to a part of it,
-            // and it stays there even though you listened to it recently. It
-            // stays because there is a popular track on it that you did not
-            // listen to, but I don't have a way to indicate this, so opt for no
-            // falling tracks albums here.
-        ];
-        for albums in albums.iter_mut() {
-            albums.sort();
+    /// Recompute the albums table for the mutable user data.
+    pub fn compute_album_user_data(&self) -> AlbumTable<AlbumState> {
+        let mut albums = AlbumTable::new(self.counter.albums.len(), AlbumState::default());
+        for (album_id, counter) in self.counter.albums.iter() {
+            let state = AlbumState {
+                discover_score: score_falling(counter),
+                trending_score: score_trending(counter),
+            };
+            albums.insert(*album_id, state);
         }
-
-        let mut iters = [
-            albums[0].iter(),
-            albums[1].iter(),
-            albums[2].iter(),
-        ];
-
-        // All the above counters are for all the playcounts, and all tracks are
-        // on an album, so the size of the result is equal to the number of
-        // albums we counted plays for.
-        let mut processed = HashSet::with_capacity(albums[0].len());
-        let mut result = Vec::with_capacity(albums[0].len());
-
-        loop {
-            let mut made_progress = false;
-            for iter in &mut iters {
-                match iter.next() {
-                    None => continue,
-                    Some((_, album_id)) => {
-                        made_progress = true;
-                        let is_new = processed.insert(album_id);
-                        if is_new {
-                            result.push(*album_id);
-                        }
-                    }
-                }
-            }
-            if !made_progress {
-                break;
-            }
-        }
-
-        result
+        albums
     }
 }
 
@@ -637,15 +575,15 @@ fn print_ranking(
 ///
 /// Trending entries (tracks, albums, artists) are entries where the recent
 /// playcount is high compared to the long-term playcount.
-fn score_trending(counter: &ExpCounter) -> RevNotNan {
-    RevNotNan(3.0 * counter.n[4] / (counter.n[3] + counter.n[2] + counter.n[1]))
+fn score_trending(counter: &ExpCounter) -> f32 {
+    3.0 * counter.n[4] / (counter.n[3] + counter.n[2] + counter.n[1])
 }
 
 /// Score for sorting entries by _falling_.
 ///
 /// Falling entries (tracks, albums, artists) are entries that have a high
 /// playcount on a long-term timescale, but low playcount recently.
-fn score_falling(counter: &ExpCounter) -> RevNotNan {
+fn score_falling(counter: &ExpCounter) -> f32 {
     let age_12 = counter.n[1].ln() - counter.n[2].ln();
     let age_13 = counter.n[1].ln() - counter.n[3].ln();
     let n4 = counter.n[4];
@@ -657,7 +595,7 @@ fn score_falling(counter: &ExpCounter) -> RevNotNan {
     // balanced mix, we take only 1/10 of age_13.
     let age_mix = age_12 + age_13 * 0.1 - n4 * 0.5;
     let countish = (1.0 + counter.n[0]).ln();
-    RevNotNan(age_mix * countish)
+    age_mix * countish
 }
 
 /// Print playcount statistics about the library.
@@ -690,7 +628,7 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
     }
 
     let (trending_artists, trending_albums, trending_tracks) =
-        counts.get_top_by(350, score_trending);
+        counts.get_top_by(350, |c| RevNotNan(score_trending(c)));
     print_ranking(
         "TRENDING",
         format!("14d vs. 57d (2mo) + 228d (7.5mo) + 913d (2.5y)"),
@@ -700,7 +638,7 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         &trending_tracks,
     );
 
-    let (falling_artists, falling_albums, falling_tracks) = counts.get_top_by(350, score_falling);
+    let (falling_artists, falling_albums, falling_tracks) = counts.get_top_by(350, |c| RevNotNan(score_falling(c)));
     print_ranking(
         "FALLING",
         format!("2 months vs. 2.5 years + 14 days vs. 7.5 months"),
@@ -709,18 +647,6 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         &falling_albums,
         &falling_tracks,
     );
-
-    let discover_ranks = counts.get_discover_rank();
-    println!("\nDISCOVERY RANK\n");
-    for (i, album_id) in discover_ranks.iter().take(250).enumerate() {
-        let album = index.get_album(*album_id).unwrap();
-        let album_title = index.get_string(album.title);
-        let album_artist = index.get_string(album.artist);
-        println!(
-            "  {:3} {} {:25}  {}",
-            i, album_id, album_title, album_artist
-        );
-    }
 
     let (disco_artists, disco_albums, disco_tracks) = counts.get_top_by(350, |counter| {
         let age_12 = counter.n[1].ln() - counter.n[2].ln();
@@ -731,8 +657,8 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         RevNotNan(age_mix * countish)
     });
     print_ranking(
-        "DISCOVER V2 [WIP]",
-        format!("2 months vs. 2.5 years + 14 days vs. 7.5 months"),
+        "DISCOVER",
+        "2 months vs. 2.5 years + 14 days vs. 7.5 months".to_string(),
         index,
         &disco_artists,
         &disco_albums,
