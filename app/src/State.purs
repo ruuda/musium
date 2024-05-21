@@ -310,6 +310,7 @@ sortAlbums {field, direction} albums =
       SortReleaseDate -> Array.sortWith (\(Album album) -> album.releaseDate)   albums
       SortFirstSeen   -> Array.sortWith (\(Album album) -> album.firstSeen)     albums
       SortDiscover    -> Array.sortWith (\(Album album) -> album.discoverScore) albums
+      SortTrending    -> Array.sortWith (\(Album album) -> album.trendingScore) albums
 
 toggleSortDirection :: SortDirection -> SortDirection
 toggleSortDirection = case _ of

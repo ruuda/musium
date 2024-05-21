@@ -211,16 +211,22 @@ renderSortOptions postEvent = Html.div $ do
     Html.text "Discover"
     onClickPost SortDiscover
     ask
+  optTrending <- Html.div $ do
+    Html.addClass "config-option"
+    Html.text "Trending"
+    onClickPost SortTrending
+    ask
 
   pure $ case _ of
     SortReleaseDate -> optReleaseDate
     SortFirstSeen   -> optFirstSeen
     SortDiscover    -> optDiscover
+    SortTrending    -> optTrending
 
 setSortMode :: SortMode -> AlbumListView -> Effect Unit
 setSortMode { field, direction } state =
   let
-    allFields = [SortReleaseDate, SortFirstSeen, SortDiscover]
+    allFields = [SortReleaseDate, SortFirstSeen, SortDiscover, SortTrending]
     unsort = do
       Html.removeClass "increasing"
       Html.removeClass "decreasing"

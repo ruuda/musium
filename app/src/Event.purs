@@ -25,6 +25,7 @@ data SortField
   = SortReleaseDate
   | SortFirstSeen
   | SortDiscover
+  | SortTrending
 
 derive instance sortFieldEq :: Eq SortField
 
