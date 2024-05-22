@@ -18,7 +18,7 @@ available in the `LISTENBRAINZ_USER_TOKEN` environment variable, for example:
 With this set up, we can run the submission script located in the `tools`
 directory of the repository:
 
-    tools/scrobble.py submit-listens /db_path/musium.sqlite3
+    tools/scrobble.py listenbrainz submit-listens /db_path/musium.sqlite3
 
 The file to pass is the [`db_path` as configured](configuration.md#db_path);
 this is where Musium tracks listens.
@@ -33,7 +33,8 @@ Systemd timers can be useful for submitting listens periodically. This works the
 same as [Last.fm scrobbling with systemd](scrobbling.md#with-systemd), with two
 small differences:
 
- * The command is `scrobble.py submit-listens`, not `scrobble.py scrobble`.
+ * The command is `scrobble.py listenbrainz submit-listens`,
+   not `scrobble.py lastfm scrobble`.
  * The environment variable to set is `LISTENBRAINZ_USER_TOKEN`, the
    `LAST_FM_*` variables are not needed.
 

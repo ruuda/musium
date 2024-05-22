@@ -17,7 +17,7 @@ as `LAST_FM_API_KEY` and `LAST_FM_SECRET`.
 Next, you need to authorize the script to submit scrobbles to your account. In
 the repository, run
 
-    tools/scrobble.py authenticate
+    tools/scrobble.py lastfm authenticate
 
 This will print a `LAST_FM_SESSION_KEY`, which you also need to put in the
 environment to be able to submit scrobbles.
@@ -27,7 +27,7 @@ environment to be able to submit scrobbles.
 With the environment variables set up, run the `scrobble` command in the
 repository:
 
-    tools/scrobble.py scrobble /db_path/musium.sqlite3
+    tools/scrobble.py lastfm scrobble /db_path/musium.sqlite3
 
 The file to pass is the [`db_path` as configured](configuration.md#db_path);
 this is where Musium tracks listens.
@@ -48,7 +48,7 @@ Description=Musium Scrobbler
 
 [Service]
 Type=oneshot
-ExecStart=/checkouts/musium/tools/scrobble.py scrobble /var/lib/musium/musium.sqlite3
+ExecStart=/checkouts/musium/tools/scrobble.py lastfm scrobble /var/lib/musium/musium.sqlite3
 
 # The values below are randomly generated examples, they are not real secrets.
 # Replace them with your personal secrets.

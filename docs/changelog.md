@@ -20,6 +20,12 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
    or a migration of the database).
  * The patch version is bumped for bugfixes and other small changes.
 
+## Unreleased
+
+ * **Breaking:** In `scrobble.py`, all commands are now prefixed by `lastfm` or
+   `listenbrainz`. In particular, `scrobble.py scrobble` is now `scrobble.py
+   lastfm scrobble`.
+
 ## 0.14.0
 
 Released 2024-05-19.

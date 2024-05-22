@@ -13,8 +13,9 @@ scrobble.py -- Scrobble listens to Last.fm or Listenbrainz.
 Last.fm Usage
 -------------
 
-    scrobble.py authenticate
-    scrobble.py scrobble musium.sqlite3
+    scrobble.py lastfm authenticate
+    scrobble.py lastfm scrobble musium.sqlite3
+    scrobble.py lastfm import musium.sqlite3
 
 The following environment variables are expected to be set:
 
@@ -28,7 +29,7 @@ You can create an API key and secret at https://www.last.fm/api/account/create.
 Listenbrainz Usage
 ------------------
 
-    scrobble.py submit-listens musium.sqlite
+    scrobble.py listenbrainz submit-listens musium.sqlite
 
 The following environment variables are expected to be set:
 
@@ -486,18 +487,18 @@ def cmd_submit_listens(db_file: str) -> None:
 
 
 if __name__ == '__main__':
-    command = ''
-    if len(sys.argv) > 1:
-        command = sys.argv[1]
+    command = []
+    if len(sys.argv) > 2:
+        command = sys.argv[1:3]
 
-    if command == 'authenticate' and len(sys.argv) == 2:
+    if command == ['lastfm', 'authenticate'] and len(sys.argv) == 3:
         cmd_authenticate()
 
-    elif command == 'scrobble' and len(sys.argv) == 3:
-        cmd_scrobble(sys.argv[2])
+    elif command == ['lastfm', 'scrobble'] and len(sys.argv) == 4:
+        cmd_scrobble(sys.argv[3])
 
-    elif command == 'submit-listens' and len(sys.argv) == 3:
-        cmd_submit_listens(sys.argv[2])
+    elif command == ['listenbrainz', 'submit-listens'] and len(sys.argv) == 4:
+        cmd_submit_listens(sys.argv[3])
 
     else:
         print(__doc__)
