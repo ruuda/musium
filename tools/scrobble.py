@@ -59,10 +59,10 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
-LAST_FM_API_KEY = os.getenv('LAST_FM_API_KEY', '')
-LAST_FM_SECRET = os.getenv('LAST_FM_SECRET', '')
-LAST_FM_SESSION_KEY = os.getenv('LAST_FM_SESSION_KEY', '')
-LISTENBRAINZ_USER_TOKEN = os.getenv('LISTENBRAINZ_USER_TOKEN', '')
+LAST_FM_API_KEY = os.getenv("LAST_FM_API_KEY", "")
+LAST_FM_SECRET = os.getenv("LAST_FM_SECRET", "")
+LAST_FM_SESSION_KEY = os.getenv("LAST_FM_SESSION_KEY", "")
+LISTENBRAINZ_USER_TOKEN = os.getenv("LISTENBRAINZ_USER_TOKEN", "")
 
 # Listenbrainz enforces a max request body size.
 # See https://listenbrainz.readthedocs.io/en/production/dev/api/,
@@ -92,19 +92,20 @@ class Listen:
         Format as parameters for a form/url-encoded request to scrobble the
         track to the Last.fm API.
         """
+
         def indexed(key: str) -> str:
-            return f'{key}[{index}]'
+            return f"{key}[{index}]"
 
         result = {
-            indexed('artist'): self.track_artist,
-            indexed('track'): self.track_title,
-            indexed('timestamp'): str(int(self.started_at.timestamp())),
-            indexed('album'): self.album_title,
-            indexed('trackNumber'): str(self.track_number),
-            indexed('duration'): str(self.duration_seconds),
+            indexed("artist"): self.track_artist,
+            indexed("track"): self.track_title,
+            indexed("timestamp"): str(int(self.started_at.timestamp())),
+            indexed("album"): self.album_title,
+            indexed("trackNumber"): str(self.track_number),
+            indexed("duration"): str(self.duration_seconds),
             # Last.fm says "The album artist - if this differs from the track artist."
             # But if we don't include it, it echos back empty string in the response.
-            indexed('albumArtist'): self.album_artist,
+            indexed("albumArtist"): self.album_artist,
         }
 
         return result
@@ -115,11 +116,11 @@ class Listen:
         See also https://listenbrainz.readthedocs.io/en/production/dev/json/#json-doc.
         """
         return {
-            'listened_at': int(self.started_at.timestamp()),
-            'track_metadata': {
-                'additional_info': {
-                    'listening_from': 'Musium',
-                    'tracknumber': self.track_number,
+            "listened_at": int(self.started_at.timestamp()),
+            "track_metadata": {
+                "additional_info": {
+                    "listening_from": "Musium",
+                    "tracknumber": self.track_number,
                     # TODO: Include Musicbrainz ids, once we track those in the
                     # listens database. In particular:
                     # * artist_mbids
@@ -128,10 +129,10 @@ class Listen:
                     # * track_mbid
                     # * ISRC
                 },
-                'artist_name': self.track_artist,
-                'track_name': self.track_title,
-                'release_name': self.album_title,
-            }
+                "artist_name": self.track_artist,
+                "track_name": self.track_title,
+                "release_name": self.album_title,
+            },
         }
 
 
@@ -145,10 +146,9 @@ def get_listens_to_scrobble(
     is set, we select only listens that happened within after that instant.
     This is needed for Last.fm, which does not allow backdating scrobbles further.
     """
-    assert since is None or since.tzinfo is not None, 'since must have tzinfo'
+    assert since is None or since.tzinfo is not None, "since must have tzinfo"
 
-    common = (
-        """
+    common = """
         select
           id,
           started_at,
@@ -174,7 +174,6 @@ def get_listens_to_scrobble(
           and cast(strftime('%s', completed_at) as integer) -
               cast(strftime('%s', started_at) as integer) > 30
         """
-    )
 
     if since is not None:
         results = connection.cursor().execute(
@@ -184,16 +183,16 @@ def get_listens_to_scrobble(
             -- for uniqueness already, so this comparison can leverage that index.
             and cast(strftime('%s', started_at) as integer) > ?;
             """,
-            (since.timestamp(),)
+            (since.timestamp(),),
         )
 
     else:
-        results = connection.cursor().execute(f'{common};')
+        results = connection.cursor().execute(f"{common};")
 
     for row in results:
         values = list(row)
-        values[1] = datetime.fromisoformat(row[1].replace('Z', '+00:00'))
-        values[2] = datetime.fromisoformat(row[2].replace('Z', '+00:00'))
+        values[1] = datetime.fromisoformat(row[1].replace("Z", "+00:00"))
+        values[2] = datetime.fromisoformat(row[2].replace("Z", "+00:00"))
         yield Listen(*values)
 
 
@@ -217,7 +216,8 @@ def set_scrobbled(
     connection.commit()
 
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 def iter_chunks(events: Iterator[T], n: int) -> Iterator[List[T]]:
     """
@@ -240,17 +240,17 @@ def format_batch_request_last_fm(listens: List[Listen]) -> Request:
     """
     Format a POST request to scrobble the given listens to Last.fm.
     """
-    assert len(listens) <= 50, 'Last.fm allows at most 50 scrobbles per batch.'
+    assert len(listens) <= 50, "Last.fm allows at most 50 scrobbles per batch."
 
     params = {
-        'method': 'track.scrobble',
-        'sk': LAST_FM_SESSION_KEY,
+        "method": "track.scrobble",
+        "sk": LAST_FM_SESSION_KEY,
     }
 
     for i, listen in enumerate(listens):
         params.update(listen.format_lastfm_scrobble(i))
 
-    return format_signed_request(http_method='POST', data=params)
+    return format_signed_request(http_method="POST", data=params)
 
 
 def format_signed_request(
@@ -262,40 +262,40 @@ def format_signed_request(
     """
     params = {
         **data,
-        'api_key': LAST_FM_API_KEY,
+        "api_key": LAST_FM_API_KEY,
     }
 
     # Sort alphabetically by key, as required for the signature.
     params = {k: v for k, v in sorted(params.items())}
 
-    sign_input = ''.join(f'{k}{v}' for k, v in params.items()) + LAST_FM_SECRET
-    params['api_sig'] = hashlib.md5(sign_input.encode('utf-8')).hexdigest()
+    sign_input = "".join(f"{k}{v}" for k, v in params.items()) + LAST_FM_SECRET
+    params["api_sig"] = hashlib.md5(sign_input.encode("utf-8")).hexdigest()
 
     # The "format" key is not part of the signature input, we need to add it
     # later.
-    params['format'] = 'json'
+    params["format"] = "json"
 
     # Encode the parameters as key=value separated by ampersands, percent-escape
     # characters where necessary. Encode space as %20, do escape the slash by
     # marking no character as safe.
-    body_str = urlencode(params, quote_via=urllib.parse.quote, safe='')
+    body_str = urlencode(params, quote_via=urllib.parse.quote, safe="")
 
     return Request(
-        url='https://ws.audioscrobbler.com/2.0/',
+        url="https://ws.audioscrobbler.com/2.0/",
         method=http_method,
-        data=body_str.encode('utf-8'),
+        data=body_str.encode("utf-8"),
     )
 
 
 def cmd_scrobble(db_file: str) -> None:
     now = datetime.now(tz=timezone.utc)
 
-    if LAST_FM_API_KEY == '':
-        print('LAST_FM_API_KEY is not set, authentication will fail.')
-    if LAST_FM_SECRET == '':
-        print('LAST_FM_SECRET is not set, authentication will fail.')
-    if LAST_FM_SESSION_KEY == '':
-        print('LAST_FM_SESSION_KEY is not set, authentication will fail.')
+    if LAST_FM_API_KEY == "":
+        print("LAST_FM_API_KEY is not set, authentication will fail.")
+    if LAST_FM_SECRET == "":
+        print("LAST_FM_SECRET is not set, authentication will fail.")
+    if LAST_FM_SESSION_KEY == "":
+        print("LAST_FM_SESSION_KEY is not set, authentication will fail.")
 
     with sqlite3.connect(db_file) as connection:
         # Last.fm allows submitting scrobbles up to 14 days after their timestamp.
@@ -307,7 +307,7 @@ def cmd_scrobble(db_file: str) -> None:
             req = format_batch_request_last_fm(batch)
             response = json.load(urlopen(req))
 
-            num_accepted = response['scrobbles']['@attr']['accepted']
+            num_accepted = response["scrobbles"]["@attr"]["accepted"]
             ids_accepted = []
 
             # The Last.fm API uses heuristics to convert their xml-oriented API
@@ -315,7 +315,7 @@ def cmd_scrobble(db_file: str) -> None:
             # list, but when there is a single one, the list is omitted. This
             # means that if the batch happened to contain a single listen, then
             # we now get an object instead of a list. Make that uniform again.
-            scrobbles = response['scrobbles']['scrobble']
+            scrobbles = response["scrobbles"]["scrobble"]
             if not isinstance(scrobbles, list):
                 scrobbles = [scrobbles]
 
@@ -325,12 +325,12 @@ def cmd_scrobble(db_file: str) -> None:
             # figure out what was wrong. See also
             # https://support.last.fm/t/all-scrobbles-ignored-with-code-1-artist-ignored-why/6754
             for listen, scrobble in zip(batch, scrobbles):
-                was_accepted = scrobble['ignoredMessage']['code'] == '0'
+                was_accepted = scrobble["ignoredMessage"]["code"] == "0"
                 if was_accepted:
                     ids_accepted.append(listen.id)
                 else:
                     print(
-                        f'ERROR: Last.fm rejected {listen}, response:',
+                        f"ERROR: Last.fm rejected {listen}, response:",
                         json.dumps(scrobble),
                     )
 
@@ -340,38 +340,38 @@ def cmd_scrobble(db_file: str) -> None:
             assert len(ids_accepted) == num_accepted
             # Flush, even when stdout is not a terminal, such as when running
             # under systemd, so we get accurate timestamps in the journal.
-            print(f'Scrobbled {num_accepted} listens.', flush=True)
+            print(f"Scrobbled {num_accepted} listens.", flush=True)
 
 
 def cmd_authenticate() -> None:
     req = format_signed_request(
-        http_method='GET',
-        data={'method': 'auth.getToken'},
+        http_method="GET",
+        data={"method": "auth.getToken"},
     )
     response = json.load(urlopen(req))
-    token = response['token']
+    token = response["token"]
 
-    print('Please authorize the application at the following page:\n')
-    print(f'https://www.last.fm/api/auth/?api_key={LAST_FM_API_KEY}&token={token}\n')
-    input('Press Enter to continue.')
+    print("Please authorize the application at the following page:\n")
+    print(f"https://www.last.fm/api/auth/?api_key={LAST_FM_API_KEY}&token={token}\n")
+    input("Press Enter to continue.")
 
     req = format_signed_request(
-        http_method='GET',
-        data={'method': 'auth.getSession', 'token': token},
+        http_method="GET",
+        data={"method": "auth.getSession", "token": token},
     )
     response = json.load(urlopen(req))
-    username = response['session']['name']
-    session_key = response['session']['key']
-    print(f'\nScrobbling authorized by user {username}.')
-    print('Please set the following environment variable when scrobbling:\n')
-    print(f'LAST_FM_SESSION_KEY={session_key}')
+    username = response["session"]["name"]
+    session_key = response["session"]["key"]
+    print(f"\nScrobbling authorized by user {username}.")
+    print("Please set the following environment variable when scrobbling:\n")
+    print(f"LAST_FM_SESSION_KEY={session_key}")
 
 
 def cmd_lastfm_import(db_file: str, username: str) -> None:
     now = datetime.now(tz=timezone.utc)
 
-    if LAST_FM_API_KEY == '':
-        print('LAST_FM_API_KEY is not set, authentication will fail.')
+    if LAST_FM_API_KEY == "":
+        print("LAST_FM_API_KEY is not set, authentication will fail.")
 
     timeout_seconds = 5.5
     client = HTTPSConnection("ws.audioscrobbler.com", 443, timeout=timeout_seconds)
@@ -388,7 +388,7 @@ def cmd_lastfm_import(db_file: str, username: str) -> None:
                 "api_key": LAST_FM_API_KEY,
                 "format": "json",
             }
-            params_str = urlencode(params, quote_via=urllib.parse.quote, safe='')
+            params_str = urlencode(params, quote_via=urllib.parse.quote, safe="")
             client.request("GET", "/2.0/?" + params_str)
             resp = client.getresponse()
             assert resp.status == 200
@@ -408,20 +408,20 @@ def format_batch_request_listenbrainz(listens: List[Listen]) -> Optional[Request
     """
 
     body_dict = {
-        'listen_type': 'import',
-        'payload': [listen.format_listenbrainz_listen() for listen in listens],
+        "listen_type": "import",
+        "payload": [listen.format_listenbrainz_listen() for listen in listens],
     }
-    body_bytes = json.dumps(body_dict).encode('utf-8')
+    body_bytes = json.dumps(body_dict).encode("utf-8")
 
     if len(body_bytes) > LISTENBRAINZ_MAX_BODY_BYTES:
         return None
 
     return Request(
-        url='https://api.listenbrainz.org/1/submit-listens',
-        method='POST',
+        url="https://api.listenbrainz.org/1/submit-listens",
+        method="POST",
         headers={
-            'Authorization': f'Token {LISTENBRAINZ_USER_TOKEN}',
-            'Content-Type': 'application/json; charset=utf-8',
+            "Authorization": f"Token {LISTENBRAINZ_USER_TOKEN}",
+            "Content-Type": "application/json; charset=utf-8",
         },
         data=body_bytes,
     )
@@ -433,7 +433,9 @@ class ListenbrainzBatch:
     request: Request
 
 
-def iter_requests_listenbrainz(listens: Iterator[Listen]) -> Iterator[ListenbrainzBatch]:
+def iter_requests_listenbrainz(
+    listens: Iterator[Listen],
+) -> Iterator[ListenbrainzBatch]:
     """
     Break up the stream of listens into submission requests.
     """
@@ -478,15 +480,15 @@ def iter_requests_listenbrainz(listens: Iterator[Listen]) -> Iterator[Listenbrai
         else:
             # The batch is too big, reduce the size and try again.
             listens_remaining = batch + listens_remaining
-            assert n > 1, 'A listen is too big to submit'
+            assert n > 1, "A listen is too big to submit"
             n = n - 1
 
 
 def cmd_submit_listens(db_file: str) -> None:
     now = datetime.now(tz=timezone.utc)
 
-    if LISTENBRAINZ_USER_TOKEN == '':
-        print('LISTENBRAINZ_USER_TOKEN is not set, authorization will fail.')
+    if LISTENBRAINZ_USER_TOKEN == "":
+        print("LISTENBRAINZ_USER_TOKEN is not set, authorization will fail.")
 
     with sqlite3.connect(db_file) as connection:
         listens = get_listens_to_scrobble(connection)
@@ -499,17 +501,19 @@ def cmd_submit_listens(db_file: str) -> None:
                 set_scrobbled(connection, now, ids_accepted)
                 # Flush, even when stdout is not a terminal, such as when running
                 # under systemd, so we get accurate timestamps in the journal.
-                print(f'Submitted {len(batch.listens)} listens.', flush=True)
+                print(f"Submitted {len(batch.listens)} listens.", flush=True)
 
                 # Try to avoid exceeding the rate limit, never let the number of
                 # calls remaining go to 0. See also
                 # https://listenbrainz.readthedocs.io/en/production/dev/api/#rate-limiting.
-                if int(response.headers.get('X-RateLimit-Remaining', '10')) <= 1:
-                    sleep_seconds = float(response.headers.get('X-RateLimit-Reset-In', '1'))
+                if int(response.headers.get("X-RateLimit-Remaining", "10")) <= 1:
+                    sleep_seconds = float(
+                        response.headers.get("X-RateLimit-Reset-In", "1")
+                    )
                     time.sleep(sleep_seconds)
 
             except HTTPError as err:
-                print(f'Unexpected response, status {err.status}.')
+                print(f"Unexpected response, status {err.status}.")
                 # Re-format the body for easier debugging. If the body is not
                 # json this fails, but we already printed the error. If the
                 # error is temporary, like a 503, then we just fail, and the
@@ -518,21 +522,21 @@ def cmd_submit_listens(db_file: str) -> None:
                 sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     command = []
     if len(sys.argv) > 2:
         command = sys.argv[1:3]
 
-    if command == ['lastfm', 'authenticate'] and len(sys.argv) == 3:
+    if command == ["lastfm", "authenticate"] and len(sys.argv) == 3:
         cmd_authenticate()
 
-    elif command == ['lastfm', 'scrobble'] and len(sys.argv) == 4:
+    elif command == ["lastfm", "scrobble"] and len(sys.argv) == 4:
         cmd_scrobble(sys.argv[3])
 
-    elif command == ['lastfm', 'import'] and len(sys.argv) == 5:
+    elif command == ["lastfm", "import"] and len(sys.argv) == 5:
         cmd_lastfm_import(sys.argv[3], sys.argv[4])
 
-    elif command == ['listenbrainz', 'submit-listens'] and len(sys.argv) == 4:
+    elif command == ["listenbrainz", "submit-listens"] and len(sys.argv) == 4:
         cmd_submit_listens(sys.argv[3])
 
     else:
