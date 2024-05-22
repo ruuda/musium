@@ -15,7 +15,7 @@ Last.fm Usage
 
     scrobble.py lastfm authenticate
     scrobble.py lastfm scrobble musium.sqlite3
-    scrobble.py lastfm import musium.sqlite3
+    scrobble.py lastfm import musium.sqlite3 <username>
 
 The following environment variables are expected to be set:
 
@@ -52,10 +52,11 @@ import urllib
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+from http.client import HTTPSConnection
+from typing import Any, Dict, Iterator, List, Optional, Union, TypeVar
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
-from typing import Any, Dict, Iterator, List, Optional, Union, TypeVar
 
 
 LAST_FM_API_KEY = os.getenv('LAST_FM_API_KEY', '')
@@ -297,8 +298,6 @@ def cmd_scrobble(db_file: str) -> None:
         print('LAST_FM_SESSION_KEY is not set, authentication will fail.')
 
     with sqlite3.connect(db_file) as connection:
-        connection.cursor().execute("PRAGMA journal_mode = WAL;")
-
         # Last.fm allows submitting scrobbles up to 14 days after their timestamp.
         # Any later, there is no point in submitting the scrobble any more.
         listens = get_listens_to_scrobble(connection, since=now - timedelta(days=14))
@@ -366,6 +365,39 @@ def cmd_authenticate() -> None:
     print(f'\nScrobbling authorized by user {username}.')
     print('Please set the following environment variable when scrobbling:\n')
     print(f'LAST_FM_SESSION_KEY={session_key}')
+
+
+def cmd_lastfm_import(db_file: str, username: str) -> None:
+    now = datetime.now(tz=timezone.utc)
+
+    if LAST_FM_API_KEY == '':
+        print('LAST_FM_API_KEY is not set, authentication will fail.')
+
+    timeout_seconds = 5.5
+    client = HTTPSConnection("ws.audioscrobbler.com", 443, timeout=timeout_seconds)
+
+    with sqlite3.connect(db_file) as connection:
+        page = 1
+
+        while True:
+            params = {
+                "method": "user.getRecentTracks",
+                "user": username,
+                "page": page,
+                "limit": 20,
+                "api_key": LAST_FM_API_KEY,
+                "format": "json",
+            }
+            params_str = urlencode(params, quote_via=urllib.parse.quote, safe='')
+            client.request("GET", "/2.0/?" + params_str)
+            resp = client.getresponse()
+            assert resp.status == 200
+            data = json.load(resp)["recenttracks"]
+            attrs = data["@attr"]
+            print(attrs)
+            for track in data["track"]:
+                json.dump(track, sys.stdout, indent=2)
+            return
 
 
 def format_batch_request_listenbrainz(listens: List[Listen]) -> Optional[Request]:
@@ -496,6 +528,9 @@ if __name__ == '__main__':
 
     elif command == ['lastfm', 'scrobble'] and len(sys.argv) == 4:
         cmd_scrobble(sys.argv[3])
+
+    elif command == ['lastfm', 'import'] and len(sys.argv) == 5:
+        cmd_lastfm_import(sys.argv[3], sys.argv[4])
 
     elif command == ['listenbrainz', 'submit-listens'] and len(sys.argv) == 4:
         cmd_submit_listens(sys.argv[3])

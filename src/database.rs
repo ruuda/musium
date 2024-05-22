@@ -149,6 +149,26 @@ pub fn ensure_schema_exists(tx: &mut Transaction) -> Result<()> {
     }
 
     let sql = r#"
+        create table if not exist lastfm_listens
+        ( -- Seconds since epoch.
+        , started_at   integer primary key
+        , title        string not null
+        , track_artist string not null
+        , album        string not null
+        , album_mbid   string not null
+        );
+        "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    match statement.next()? {
+        Row => panic!("Query 'ensure_schema_exists' unexpectedly returned a row."),
+        Done => {}
+    }
+
+    let sql = r#"
         create table if not exists ratings
         ( id          integer primary key
         -- ISO-8601 time with UTC offset at which we rated the track.
