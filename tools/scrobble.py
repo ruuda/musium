@@ -53,7 +53,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from http.client import HTTPSConnection
-from typing import Any, Dict, Iterator, List, Optional, Union, TypeVar
+from typing import Any, Dict, Iterator, List, Optional, Union, Tuple, TypeVar
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -367,6 +367,70 @@ def cmd_authenticate() -> None:
     print(f"LAST_FM_SESSION_KEY={session_key}")
 
 
+@dataclass(frozen=True)
+class LastfmPageImport:
+    total_pages: int
+    total_listens: int
+    min_started_at: datetime
+
+
+def import_lastfm_page(
+    client: HTTPSConnection,
+    tx: sqlite3.Cursor,
+    username: str,
+    page: int,
+) -> Optional[LastfmPageImport]:
+    """
+    Import one page of listens from Last.fm. Returns the timestamp of the oldest
+    listen, and the number of pages in total.
+    """
+    params = {
+        "method": "user.getRecentTracks",
+        "user": username,
+        "page": page,
+        "limit": 200,
+        "api_key": LAST_FM_API_KEY,
+        "format": "json",
+    }
+    params_str = urlencode(params, quote_via=urllib.parse.quote, safe="")
+    client.request("GET", "/2.0/?" + params_str)
+    response = client.getresponse()
+
+    if response.status != 200:
+        print(f"Got {response.status}:", response.read())
+        return None
+
+    data = json.load(response)["recenttracks"]
+    attrs = data["@attr"]
+    started_at: int
+
+    for track in data["track"]:
+        started_at = int(track["date"]["uts"])
+        tx.execute(
+            """
+            insert into lastfm_listens
+              (started_at, title, track_artist, album, album_mbid)
+            values
+              (?, ?, ?, ?, ?)
+            on conflict
+              do nothing;
+            """,
+            (
+                started_at,
+                track["name"],
+                track["artist"]["#text"],
+                track["album"]["#text"],
+                track["album"]["mbid"],
+            )
+        )
+
+    return LastfmPageImport(
+        total_pages=int(attrs["totalPages"]),
+        total_listens=int(attrs["total"]),
+        min_started_at=datetime.fromtimestamp(started_at, tz=timezone.utc),
+    )
+
+
 def cmd_lastfm_import(db_file: str, username: str) -> None:
     now = datetime.now(tz=timezone.utc)
 
@@ -375,29 +439,45 @@ def cmd_lastfm_import(db_file: str, username: str) -> None:
 
     timeout_seconds = 5.5
     client = HTTPSConnection("ws.audioscrobbler.com", 443, timeout=timeout_seconds)
+    page = 1
+    n_errors = 0
+    n_have = 0
 
-    with sqlite3.connect(db_file) as connection:
-        page = 1
-
+    with sqlite3.connect(db_file) as db_conn:
+        # Import one page at a time, starting with the most recent listens.
+        # We know we are done when we have the same number of listens in the
+        # database as Last.fm claims to have. This assumes that scrobbles don't
+        # happen while the import is running.
         while True:
-            params = {
-                "method": "user.getRecentTracks",
-                "user": username,
-                "page": page,
-                "limit": 20,
-                "api_key": LAST_FM_API_KEY,
-                "format": "json",
-            }
-            params_str = urlencode(params, quote_via=urllib.parse.quote, safe="")
-            client.request("GET", "/2.0/?" + params_str)
-            resp = client.getresponse()
-            assert resp.status == 200
-            data = json.load(resp)["recenttracks"]
-            attrs = data["@attr"]
-            print(attrs)
-            for track in data["track"]:
-                json.dump(track, sys.stdout, indent=2)
-            return
+            tx = db_conn.cursor()
+            result = import_lastfm_page(client, tx, username, page)
+
+            if result is None:
+                db_conn.rollback()
+                n_errors += 1
+                assert n_errors < 10, "Bailing after 10 consecutive errors."
+                sleep_seconds = 5.0
+                time.sleep(sleep_seconds)
+                continue
+            else:
+                n_errors = 0
+                n_have, = tx.execute("select count(1) from lastfm_listens;").fetchone()
+                db_conn.commit()
+
+            print(
+                f"[{page} / {result.total_pages}] "
+                f"Have {n_have:,} of {result.total_listens:,} listens."
+            )
+
+            if n_have == result.total_listens:
+                print(f"Database has {n_have} listens, same as Last.fm, import is complete.")
+                break
+
+            if page == result.total_pages:
+                print(f"We imported page {page} of {page}, import is complete.")
+                break
+
+            page += 1
 
 
 def format_batch_request_listenbrainz(listens: List[Listen]) -> Optional[Request]:

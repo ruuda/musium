@@ -58,9 +58,9 @@ create table if not exists listens
 create unique index if not exists ix_listens_unique_second
 on listens (cast(strftime('%s', started_at) as integer));
 
-create table if not exist lastfm_listens
+create table if not exists lastfm_listens
 ( -- Seconds since epoch.
-, started_at   integer primary key
+  started_at   integer primary key
 , title        string not null
 , track_artist string not null
 , album        string not null

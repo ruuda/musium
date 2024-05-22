@@ -149,9 +149,9 @@ pub fn ensure_schema_exists(tx: &mut Transaction) -> Result<()> {
     }
 
     let sql = r#"
-        create table if not exist lastfm_listens
+        create table if not exists lastfm_listens
         ( -- Seconds since epoch.
-        , started_at   integer primary key
+          started_at   integer primary key
         , title        string not null
         , track_artist string not null
         , album        string not null
