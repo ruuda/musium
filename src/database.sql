@@ -370,3 +370,20 @@ order by
   -- Order by ascending creation time to ensure we can clamp to rating ranges,
   -- should we need to. We have an index on this expression.
   cast(strftime('%s', created_at) as integer) asc;
+
+-- TODO: For importing listens:
+select
+  *
+from
+  lastfm_listens
+where
+  not exists (
+    select
+      1
+    from
+      listens
+    where
+      cast(strftime('%s', started_at) as integer) = lastfm_listens.started_at
+  )
+order by
+  started_at desc;
