@@ -56,7 +56,7 @@ fn match_listen(
     if let Some(id) = album_id {
         for track_and_id in index.get_album_tracks(id) {
             let title = index.get_string(track_and_id.track.title);
-            if title == &listen.title {
+            if title.eq_ignore_ascii_case(&listen.title) {
                 return Match::MbidTitle(track_and_id.track_id);
             }
         }
