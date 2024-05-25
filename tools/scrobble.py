@@ -374,6 +374,16 @@ class LastfmPageImport:
     min_started_at: datetime
 
 
+def fix_misencodings(s: str) -> str:
+    """
+    Bad data ended up in Last.fm. But we can fix some known cases.
+    """
+    if "Ã©" in s:
+        return s.encode("latin-1").decode("utf-8")
+    else:
+        return s
+
+
 def import_lastfm_page(
     client: HTTPSConnection,
     tx: sqlite3.Cursor,
@@ -417,9 +427,9 @@ def import_lastfm_page(
             """,
             (
                 started_at,
-                track["name"],
-                track["artist"]["#text"],
-                track["album"]["#text"],
+                fix_misencodings(track["name"]),
+                fix_misencodings(track["artist"]["#text"]),
+                fix_misencodings(track["album"]["#text"]),
                 track["album"]["mbid"],
             )
         )
