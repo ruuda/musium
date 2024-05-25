@@ -15,7 +15,7 @@ Last.fm Usage
 
     scrobble.py lastfm authenticate
     scrobble.py lastfm scrobble musium.sqlite3
-    scrobble.py lastfm import musium.sqlite3 <full|incremental> <username>
+    scrobble.py lastfm import <full|incremental> musium.sqlite3 <username>
 
 The following environment variables are expected to be set:
 
@@ -447,7 +447,7 @@ def import_lastfm_page(
     )
 
 
-def cmd_lastfm_import(db_file: str, is_full: bool, username: str) -> None:
+def cmd_lastfm_import(is_full: bool, db_file: str, username: str) -> None:
     now = datetime.now(tz=timezone.utc)
 
     if LAST_FM_API_KEY == "":
@@ -670,9 +670,9 @@ if __name__ == "__main__":
         cmd_scrobble(sys.argv[3])
 
     elif command == ["lastfm", "import"] and len(sys.argv) == 6:
-        assert sys.argv[4] in ("full", "incremental")
-        is_full = sys.argv[4] == "full"
-        cmd_lastfm_import(sys.argv[3], is_full, sys.argv[5])
+        assert sys.argv[3] in ("full", "incremental")
+        is_full = sys.argv[3] == "full"
+        cmd_lastfm_import(is_full=is_full, db_file=sys.argv[4], username=sys.argv[5])
 
     elif command == ["listenbrainz", "submit-listens"] and len(sys.argv) == 4:
         cmd_submit_listens(sys.argv[3])
