@@ -24,6 +24,7 @@ nav:
     - Rating: rating.md
     - Scrobbling to Last.fm: scrobbling.md
     - Submitting to Listenbrainz: listenbrainz.md
+    - Importing from Last.fm: lastfm-import.md
     - Trådfri control: tradfri.md
     - Disks: disks.md
     - Changelog: changelog.md
