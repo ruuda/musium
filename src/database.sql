@@ -371,9 +371,15 @@ order by
   -- should we need to. We have an index on this expression.
   cast(strftime('%s', created_at) as integer) asc;
 
--- TODO: For importing listens:
+-- Iterate all listens that exist in the `lastfm_listens` table but not in the
+-- `listens` table itself.
+-- @query iter_lastfm_missing_listens() ->* LastfmListen
 select
-  *
+    started_at   -- :i64
+  , title        -- :str
+  , track_artist -- :str
+  , album        -- :str
+  , album_mbid   -- :str
 from
   lastfm_listens
 where

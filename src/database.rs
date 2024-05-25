@@ -1035,6 +1035,55 @@ pub fn iter_ratings<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<Iter<
     Ok(result)
 }
 
+#[derive(Debug)]
+pub struct LastfmListen {
+    pub started_at: i64,
+    pub title: String,
+    pub track_artist: String,
+    pub album: String,
+    pub album_mbid: String,
+}
+
+/// Iterate all listens that exist in the `lastfm_listens` table but not in the
+/// `listens` table itself.
+pub fn iter_lastfm_missing_listens<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>) -> Result<Iter<'i, 'a, LastfmListen>> {
+    let sql = r#"
+        select
+            started_at
+          , title
+          , track_artist
+          , album
+          , album_mbid
+        from
+          lastfm_listens
+        where
+          not exists (
+            select
+              1
+            from
+              listens
+            where
+              cast(strftime('%s', started_at) as integer) = lastfm_listens.started_at
+          )
+        order by
+          started_at desc;
+        "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    let decode_row = |statement: &Statement| Ok(LastfmListen {
+        started_at: statement.read(0)?,
+        title: statement.read(1)?,
+        track_artist: statement.read(2)?,
+        album: statement.read(3)?,
+        album_mbid: statement.read(4)?,
+    });
+    let result = Iter { statement, decode_row };
+    Ok(result)
+}
+
 // A useless main function, included only to make the example compile with
 // Cargo’s default settings for examples.
 #[allow(dead_code)]
