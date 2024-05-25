@@ -39,6 +39,7 @@ pub mod database;
 pub mod database_utils;
 pub mod error;
 pub mod history;
+pub mod matcher;
 pub mod mvar;
 pub mod playback;
 pub mod playcount;

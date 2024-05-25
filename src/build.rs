@@ -193,7 +193,7 @@ fn parse_uuid(uuid: &str) -> Option<u64> {
 /// internal id. We don't just shift the `parse_uuid` result, because then
 /// either the start or end of the hex-formatted id would no longer match the
 /// hex-formatted uuid.
-fn parse_uuid_52bits(uuid: &str) -> Option<u64> {
+pub fn parse_uuid_52bits(uuid: &str) -> Option<u64> {
     // See also the comments in `parse_uuid`
     if uuid.len() != 36 { return None }
     if uuid.as_bytes()[8] != b'-' { return None }

@@ -131,6 +131,8 @@ fn match_listens(
 ) -> Result<()> {
     let mut total = 0_u32;
     let mut matched = 0_u32;
+    let mut missed = 0_u32;
+    let mut ambiguous = 0_u32;
 
     for listen_opt in database::iter_lastfm_missing_listens(tx)? {
         let listen = listen_opt?;
@@ -156,20 +158,24 @@ fn match_listens(
                     matched += 1;
                 } else {
                     println!("AMBIGUOUS {listen:?}");
+                    ambiguous += 1;
                 }
             }
         }
 
         if !found {
             println!("MISSING: {listen:?}");
+            missed += 1;
         }
 
         total += 1;
     }
 
     println!(
-        "Matched {} out of {} listens. ({:.1}%)",
+        "Matched {} out of {} listens ({:.1}%), missed {} ({:.1}%), ambiguous {} ({:.1}%).",
         matched, total, (matched as f32 * 100.0) / (total as f32),
+        missed, (missed as f32 * 100.0) / (total as f32),
+        ambiguous, (ambiguous as f32 * 100.0) / (total as f32),
     );
 
     Ok(())
@@ -321,6 +327,14 @@ fn main() -> Result<()> {
             let index = make_index(&mut tx)?;
             tx.commit()?;
             match_listens(&index, &mut db.begin()?)
+        }
+        "match2" => {
+            let conn = database_utils::connect_read_write(&config.db_path)?;
+            let mut db = database::Connection::new(&conn);
+            let mut tx = db.begin()?;
+            let index = make_index(&mut tx)?;
+            tx.commit()?;
+            musium::matcher::match_listens(&index, &mut db.begin()?)
         }
         _ => {
             print_usage();
