@@ -21,7 +21,16 @@ enum Match {
     MbidTitle(TrackId),
 
     /// An exact match on track title and album, after searching on title and artist.
+    ///
+    /// “Exact” is still modulo ASCII case, so e.g. `of` vs. `Of` does not
+    /// affect the match.
     SearchExact(TrackId),
+
+    /// Like `SearchExact`, except the album title is not an exact match.
+    ///
+    /// * The listen album may have a suffix, e.g. `[Bonus Track]`.
+    /// * The match is case insensitive.
+    SearchAlbumLax(TrackId),
 
     /// Searching had results, but no exact match.
     SearchFail,
@@ -70,11 +79,25 @@ fn match_listen(
         let album = index.get_album(track_id.album_id()).expect("Track album should be in index.");
         let track_title = index.get_string(track.title);
         let album_title = index.get_string(album.title);
-        if &listen.title == track_title && &listen.album == album_title {
+
+        let track_exact = track_title.eq_ignore_ascii_case(&listen.title);
+        let album_exact = album_title.eq_ignore_ascii_case(&listen.album);
+
+        if track_exact && album_exact {
             return Match::SearchExact(track_id);
-        } else {
-            return Match::SearchFail;
         }
+
+        let prefix_len = album_title.len();
+        let listen_album = &listen.album.as_bytes()[..listen.album.len().min(prefix_len)];
+
+        // Sometimes the album in the listening history has "[Bonus Track]" or
+        // "[Deluxe Edition]" suffix or something, but in my collection I prefer
+        // to remove those. So try if we have a prefix match.
+        if track_exact && album_title.as_bytes().eq_ignore_ascii_case(listen_album) {
+            return Match::SearchAlbumLax(track_id);
+        }
+
+        return Match::SearchFail;
     }
 
     Match::None
@@ -88,6 +111,7 @@ pub fn match_listens(
     let mut ambiguous: u32 = 0;
     let mut match_mbid_title: u32 = 0;
     let mut match_search_exact: u32 = 0;
+    let mut match_search_album_lax: u32 = 0;
     let mut search_fail: u32 = 0;
 
     for listen_opt in db::iter_lastfm_missing_listens(tx)? {
@@ -95,6 +119,7 @@ pub fn match_listens(
         match match_listen(index, &listen) {
             Match::MbidTitle(..) => match_mbid_title += 1,
             Match::SearchExact(..) => match_search_exact += 1,
+            Match::SearchAlbumLax(..) => match_search_album_lax += 1,
             Match::Ambiguous => {
                 ambiguous += 1;
                 println!("AMBIGUOUS {listen:?}");
@@ -110,15 +135,16 @@ pub fn match_listens(
         }
     }
 
-    let matched = match_mbid_title + match_search_exact;
+    let matched = match_mbid_title + match_search_exact + match_search_album_lax;
     let total = matched + misses + ambiguous + search_fail;
 
     println!("Matched {} of {} ({:.1}%).", matched, total, (matched as f32 * 100.0) / total as f32);
-    println!(" - {} of {} ({:.1}%) missed.", misses, total, (misses as f32 * 100.0) / total as f32);
-    println!(" - {} of {} ({:.1}%) ambiguous.", ambiguous, total, (ambiguous as f32 * 100.0) / total as f32);
-    println!(" - {} of {} ({:.1}%) SearchFail.", search_fail, total, (search_fail as f32 * 100.0) / total as f32);
-    println!(" - {} of {} ({:.1}%) MbidTitle.", match_mbid_title, total, (match_mbid_title as f32 * 100.0) / total as f32);
-    println!(" - {} of {} ({:.1}%) Search.", match_search_exact, total, (match_search_exact as f32 * 100.0) / total as f32);
+    println!(" - {} of {} ({:.1}%) SearchExact", match_search_exact, total, (match_search_exact as f32 * 100.0) / total as f32);
+    println!(" - {} of {} ({:.1}%) MbidTitle", match_mbid_title, total, (match_mbid_title as f32 * 100.0) / total as f32);
+    println!(" - {} of {} ({:.1}%) SearchAlbumLax", match_search_album_lax, total, (match_search_album_lax as f32 * 100.0) / total as f32);
+    println!(" - {} of {} ({:.1}%) Miss", misses, total, (misses as f32 * 100.0) / total as f32);
+    println!(" - {} of {} ({:.1}%) Ambiguous", ambiguous, total, (ambiguous as f32 * 100.0) / total as f32);
+    println!(" - {} of {} ({:.1}%) SearchFail", search_fail, total, (search_fail as f32 * 100.0) / total as f32);
 
     Ok(())
 }
