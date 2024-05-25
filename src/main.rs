@@ -127,35 +127,18 @@ fn equals_normalized(x1: &str, x2: &str) -> bool {
 
 fn match_listens(
     index: &MemoryMetaIndex,
-    in_path: String,
-    out_path: String,
+    tx: &mut database::Transaction,
 ) -> Result<()> {
-    let fi = fs::File::open(in_path)?;
-    let r = io::BufReader::new(fi);
-    let mut lines = r.lines();
-
-    let fo = fs::File::create(out_path)?;
-    let mut w = io::BufWriter::new(fo);
-
-    // Skip the header row for reading, print the header row for writing.
-    lines.next();
-    writeln!(w, "seconds_since_epoch\ttrack_id")?;
-
     let mut total = 0_u32;
     let mut matched = 0_u32;
 
-    for opt_line in lines {
-        let line = opt_line?;
-        let mut parts = line.split('\t');
-        let time_str = parts.next().expect("Expected seconds_since_epoch");
-        let track_title = parts.next().expect("Expected track");
-        let artist_name = parts.next().expect("Expected artist");
-        let album_name = parts.next().expect("Expected album");
+    for listen_opt in database::iter_lastfm_missing_listens(tx)? {
+        let listen = listen_opt?;
 
         let mut words = Vec::new();
         let mut tracks = Vec::new();
-        normalize_words(track_title, &mut words);
-        normalize_words(artist_name, &mut words);
+        normalize_words(&listen.title, &mut words);
+        normalize_words(&listen.track_artist, &mut words);
         // TODO: Add a way to turn off prefix search for the last word.
         index.search_track(&words[..], &mut tracks);
 
@@ -164,28 +147,21 @@ fn match_listens(
         for track_id in tracks {
             let track = index.get_track(track_id).expect("Search result should be in index.");
             let album = index.get_album(track_id.album_id()).expect("Track album should be in index.");
-            let track_ok = equals_normalized(index.get_string(track.title), track_title);
-            let artist_ok = equals_normalized(index.get_string(track.artist), artist_name);
-            let album_ok = equals_normalized(index.get_string(album.title), album_name);
+            let track_ok = equals_normalized(index.get_string(track.title), &listen.title);
+            let artist_ok = equals_normalized(index.get_string(track.artist), &listen.track_artist);
+            let album_ok = equals_normalized(index.get_string(album.title), &listen.album);
             if track_ok && artist_ok && album_ok {
                 if !found {
-                    writeln!(w, "{}\t{}", time_str, track_id)?;
                     found = true;
                     matched += 1;
                 } else {
-                    println!(
-                        "AMBIGUOUS {}: at {} listened {} by {} from {}",
-                        track_id, time_str, track_title, artist_name, album_name,
-                    );
+                    println!("AMBIGUOUS {listen:?}");
                 }
             }
         }
 
         if !found {
-            println!(
-                "MISSING: at {} listened {} by {} from {}",
-                time_str, track_title, artist_name, album_name,
-            );
+            println!("MISSING: {listen:?}");
         }
 
         total += 1;
@@ -242,7 +218,7 @@ Usage:
 
   musium scan musium.conf
   musium serve musium.conf
-  musium match musium.conf listenbrainz.tsv matched.tsv
+  musium match musium.conf
   musium count musium.conf
 
 SCAN
@@ -339,13 +315,12 @@ fn main() -> Result<()> {
             musium::playcount::main(&index, &config.db_path)
         }
         "match" => {
-            let in_path = env::args().nth(3).unwrap();
-            let out_path = env::args().nth(4).unwrap();
-            let conn = database_utils::connect_readonly(&config.db_path)?;
+            let conn = database_utils::connect_read_write(&config.db_path)?;
             let mut db = database::Connection::new(&conn);
             let mut tx = db.begin()?;
             let index = make_index(&mut tx)?;
-            match_listens(&index, in_path, out_path)
+            tx.commit()?;
+            match_listens(&index, &mut db.begin()?)
         }
         _ => {
             print_usage();
