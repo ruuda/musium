@@ -15,7 +15,7 @@ Last.fm Usage
 
     scrobble.py lastfm authenticate
     scrobble.py lastfm scrobble musium.sqlite3
-    scrobble.py lastfm import musium.sqlite3 <username>
+    scrobble.py lastfm import musium.sqlite3 <full|incremental> <username>
 
 The following environment variables are expected to be set:
 
@@ -389,6 +389,7 @@ def import_lastfm_page(
     tx: sqlite3.Cursor,
     username: str,
     page: int,
+    after_timestamp: Optional[datetime],
 ) -> Optional[LastfmPageImport]:
     """
     Import one page of listens from Last.fm. Returns the timestamp of the oldest
@@ -402,6 +403,11 @@ def import_lastfm_page(
         "api_key": LAST_FM_API_KEY,
         "format": "json",
     }
+
+    if after_timestamp is not None:
+        assert after_timestamp.tzinfo is not None
+        params["from"] = int(after_timestamp.timestamp())
+
     params_str = urlencode(params, quote_via=urllib.parse.quote, safe="")
     client.request("GET", "/2.0/?" + params_str)
     response = client.getresponse()
@@ -431,7 +437,7 @@ def import_lastfm_page(
                 fix_misencodings(track["artist"]["#text"]),
                 fix_misencodings(track["album"]["#text"]),
                 track["album"]["mbid"],
-            )
+            ),
         )
 
     return LastfmPageImport(
@@ -441,7 +447,7 @@ def import_lastfm_page(
     )
 
 
-def cmd_lastfm_import(db_file: str, username: str) -> None:
+def cmd_lastfm_import(db_file: str, is_full: bool, username: str) -> None:
     now = datetime.now(tz=timezone.utc)
 
     if LAST_FM_API_KEY == "":
@@ -454,13 +460,41 @@ def cmd_lastfm_import(db_file: str, username: str) -> None:
     n_have = 0
 
     with sqlite3.connect(db_file) as db_conn:
+        # If we do a full import, then there is no lower bound on the scrobble
+        # timestamp. For some reason though, the number that Last.fm reports and
+        # the count we get in the database is different, so it looks like we are
+        # never done if we always did a full import. (Maybe Last.fm allows
+        # duplicates on a timestamp?) For an incremental import, we take the
+        # past 2 weeks (because that is how long you can still submit to Last.fm
+        # plus some slack), or if the most recent listen we have is older, then
+        # we use that as the lower bound.
+        after_timestamp: Optional[datetime]
+        if is_full:
+            after_timestamp = None
+            print("Doing a full import.")
+        else:
+            after_timestamp = now - timedelta(days=16)
+            tx = db_conn.cursor()
+            (newest_listen,) = tx.execute(
+                "select max(started_at) from lastfm_listens;"
+            ).fetchone()
+            db_conn.commit()
+            if newest_listen is not None:
+                after_timestamp = min(
+                    after_timestamp,
+                    datetime.fromtimestamp(newest_listen, tz=timezone.utc),
+                )
+                print(
+                    f"Doing an incremental import of listens as of {after_timestamp}."
+                )
+
         # Import one page at a time, starting with the most recent listens.
         # We know we are done when we have the same number of listens in the
         # database as Last.fm claims to have. This assumes that scrobbles don't
         # happen while the import is running.
         while True:
             tx = db_conn.cursor()
-            result = import_lastfm_page(client, tx, username, page)
+            result = import_lastfm_page(client, tx, username, page, after_timestamp)
 
             if result is None:
                 db_conn.rollback()
@@ -471,7 +505,17 @@ def cmd_lastfm_import(db_file: str, username: str) -> None:
                 continue
             else:
                 n_errors = 0
-                n_have, = tx.execute("select count(1) from lastfm_listens;").fetchone()
+                since = (
+                    after_timestamp.timestamp() if after_timestamp is not None else 0
+                )
+                (n_have,) = tx.execute(
+                    """
+                    select count(1)
+                    from lastfm_listens
+                    where (started_at > ?);
+                    """,
+                    (since,),
+                ).fetchone()
                 db_conn.commit()
 
             print(
@@ -480,7 +524,9 @@ def cmd_lastfm_import(db_file: str, username: str) -> None:
             )
 
             if n_have == result.total_listens:
-                print(f"Database has {n_have} listens, same as Last.fm, import is complete.")
+                print(
+                    f"Database has {n_have} listens, same as Last.fm, import is complete."
+                )
                 break
 
             if page == result.total_pages:
@@ -623,8 +669,10 @@ if __name__ == "__main__":
     elif command == ["lastfm", "scrobble"] and len(sys.argv) == 4:
         cmd_scrobble(sys.argv[3])
 
-    elif command == ["lastfm", "import"] and len(sys.argv) == 5:
-        cmd_lastfm_import(sys.argv[3], sys.argv[4])
+    elif command == ["lastfm", "import"] and len(sys.argv) == 6:
+        assert sys.argv[4] in ("full", "incremental")
+        is_full = sys.argv[4] == "full"
+        cmd_lastfm_import(sys.argv[3], is_full, sys.argv[5])
 
     elif command == ["listenbrainz", "submit-listens"] and len(sys.argv) == 4:
         cmd_submit_listens(sys.argv[3])
