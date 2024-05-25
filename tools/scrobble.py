@@ -381,6 +381,12 @@ def fix_misencodings(s: str) -> str:
     """
     if "Ã©" in s:
         return s.encode("latin-1").decode("utf-8")
+    elif "â€" in s:
+        return s.encode("windows-1252").decode("utf-8")
+    elif "\u0018n\u0019" in s:
+        # The quotes are U+2018 and U+2019, for some reason some system removed
+        # those 0x20 bytes but kept the 0x18 and 0x19, which are ASCII escapes.
+        return s.replace("\u0018n\u0019", "‘n’")
     else:
         return s
 
