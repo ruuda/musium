@@ -158,7 +158,18 @@ fn match_listen(
         let mut words_track_title = Vec::new();
         normalize_words(track_title, &mut words_track_title);
         simplify_normalized_words(&mut words_track_title);
-        let track_match = &words_track_title[..] == &words[..title_words_len];
+
+        // Sometimes one of the two titles contains a suffix such as "club mix"
+        // that even the simplification did not strip. I tried stripping that
+        // too, but it creates more new ambiguities than it helps to find
+        // tracks. However, if there is no risk of creating ambiguities in the
+        // first place, then we can try it.
+        let track_match = if n_candidates == 1 {
+            let title_min_len = words_track_title.len().min(title_words_len);
+            title_min_len > 0 && &words_track_title[..title_min_len] == &words[..title_min_len]
+        } else {
+            &words_track_title[..] == &words[..title_words_len]
+        };
 
         let mut words_album_entry = Vec::new();
         normalize_words(album_title, &mut words_album_entry);
@@ -171,6 +182,12 @@ fn match_listen(
 
         if track_match && album_match {
             results.push(Match::SearchFuzzy(track_id));
+        } else {
+            println!("MISMATCH: {listen:?}");
+            println!("  Title L: {:?}", &words[..title_words_len]);
+            println!("  Title R: {:?}", words_track_title);
+            println!("  Album L: {:?}", words_album_listen);
+            println!("  Album R: {:?}", words_album_entry);
         }
     }
 
