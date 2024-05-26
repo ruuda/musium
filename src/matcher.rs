@@ -204,9 +204,11 @@ fn simplify_normalized_words(words: &mut Vec<String>) {
     // edition" or something, at the risk of removing a legitimate occurence of
     // the word "bonus".
     let end_index = words.iter().enumerate().filter(|(_i, w)| match w.as_ref() {
+        "bonus" => true,
         "feat" => true,
         "featuring" => true,
-        "bonus" => true,
+        "vol" => true,
+        "volume" => true,
         _ => false,
     }).map(|(i, _w)| i).next();
     if let Some(i) = end_index {
