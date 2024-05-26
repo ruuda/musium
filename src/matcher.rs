@@ -114,6 +114,12 @@ fn match_listen(
             results.push(Match::SearchNormalized(track_id));
             continue;
         }
+
+        // TODO:
+        // Words to remove for fuzzier match:
+        // "the", "and", "&", "part", "pt", "!"
+        // everything after "feat."
+        // "bonus track"
     }
 
     match results.len() {
