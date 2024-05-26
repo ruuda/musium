@@ -26,11 +26,16 @@ enum Match {
     /// affect the match.
     SearchExact(TrackId),
 
-    /// Like `SearchExact`, except the album title is not an exact match.
+    /// Like `SearchExact`, except the matched album title is a prefix of the listen.
     ///
-    /// * The listen album may have a suffix, e.g. `[Bonus Track]`.
-    /// * The match is case insensitive.
-    SearchAlbumLax(TrackId),
+    /// In other words, the listen album may have a suffix, e.g. `[Bonus Track]`.
+    SearchAlbumPrefix(TrackId),
+
+    /// Like `SearchExact`, but the match is only after normalization.
+    ///
+    /// Normalization is the same as used for search. It removes various forms
+    /// of punctuation and diacritics.
+    SearchNormalized(TrackId),
 
     /// Searching had results, but no exact match.
     SearchFail,
@@ -94,13 +99,32 @@ fn match_listen(
         // "[Deluxe Edition]" suffix or something, but in my collection I prefer
         // to remove those. So try if we have a prefix match.
         if track_exact && album_title.as_bytes().eq_ignore_ascii_case(listen_album) {
-            return Match::SearchAlbumLax(track_id);
+            return Match::SearchAlbumPrefix(track_id);
+        }
+
+        // The most common reason for not finding an exact match is because I
+        // turn straight quotes into typographer's quotes (' -> ’), but the
+        // scrobble contains the straight one. To mitigate this kind of thing,
+        // use the same normalizer as the search function. This also makes the
+        // match case-insensitive.
+        let track_fuzzy = track_exact || equals_normalized(track_title, &listen.title);
+        let album_fuzzy = album_exact || equals_normalized(album_title, &listen.album);
+        if track_fuzzy && album_fuzzy {
+            return Match::SearchNormalized(track_id);
         }
 
         return Match::SearchFail;
     }
 
     Match::None
+}
+
+fn equals_normalized(x1: &str, x2: &str) -> bool {
+    let mut w1 = Vec::new();
+    let mut w2 = Vec::new();
+    normalize_words(x1, &mut w1);
+    normalize_words(x2, &mut w2);
+    w1 == w2
 }
 
 pub fn match_listens(
@@ -111,7 +135,8 @@ pub fn match_listens(
     let mut ambiguous: u32 = 0;
     let mut match_mbid_title: u32 = 0;
     let mut match_search_exact: u32 = 0;
-    let mut match_search_album_lax: u32 = 0;
+    let mut match_search_album_prefix: u32 = 0;
+    let mut match_search_normalized: u32 = 0;
     let mut search_fail: u32 = 0;
 
     for listen_opt in db::iter_lastfm_missing_listens(tx)? {
@@ -119,7 +144,8 @@ pub fn match_listens(
         match match_listen(index, &listen) {
             Match::MbidTitle(..) => match_mbid_title += 1,
             Match::SearchExact(..) => match_search_exact += 1,
-            Match::SearchAlbumLax(..) => match_search_album_lax += 1,
+            Match::SearchAlbumPrefix(..) => match_search_album_prefix += 1,
+            Match::SearchNormalized(..) => match_search_normalized += 1,
             Match::Ambiguous => {
                 ambiguous += 1;
                 println!("AMBIGUOUS {listen:?}");
@@ -135,16 +161,17 @@ pub fn match_listens(
         }
     }
 
-    let matched = match_mbid_title + match_search_exact + match_search_album_lax;
+    let matched = match_mbid_title + match_search_exact + match_search_album_prefix + match_search_normalized;
     let total = matched + misses + ambiguous + search_fail;
 
     println!("Matched {} of {} ({:.1}%).", matched, total, (matched as f32 * 100.0) / total as f32);
-    println!(" - {} of {} ({:.1}%) SearchExact", match_search_exact, total, (match_search_exact as f32 * 100.0) / total as f32);
-    println!(" - {} of {} ({:.1}%) MbidTitle", match_mbid_title, total, (match_mbid_title as f32 * 100.0) / total as f32);
-    println!(" - {} of {} ({:.1}%) SearchAlbumLax", match_search_album_lax, total, (match_search_album_lax as f32 * 100.0) / total as f32);
-    println!(" - {} of {} ({:.1}%) Miss", misses, total, (misses as f32 * 100.0) / total as f32);
-    println!(" - {} of {} ({:.1}%) Ambiguous", ambiguous, total, (ambiguous as f32 * 100.0) / total as f32);
-    println!(" - {} of {} ({:.1}%) SearchFail", search_fail, total, (search_fail as f32 * 100.0) / total as f32);
+    println!(" - {:6} of {:6} ({:4.1}%) SearchExact", match_search_exact, total, (match_search_exact as f32 * 100.0) / total as f32);
+    println!(" - {:6} of {:6} ({:4.1}%) MbidTitle", match_mbid_title, total, (match_mbid_title as f32 * 100.0) / total as f32);
+    println!(" - {:6} of {:6} ({:4.1}%) SearchAlbumPrefix", match_search_album_prefix, total, (match_search_album_prefix as f32 * 100.0) / total as f32);
+    println!(" - {:6} of {:6} ({:4.1}%) SearchNormalized", match_search_normalized, total, (match_search_normalized as f32 * 100.0) / total as f32);
+    println!(" - {:6} of {:6} ({:4.1}%) Miss", misses, total, (misses as f32 * 100.0) / total as f32);
+    println!(" - {:6} of {:6} ({:4.1}%) Ambiguous", ambiguous, total, (ambiguous as f32 * 100.0) / total as f32);
+    println!(" - {:6} of {:6} ({:4.1}%) SearchFail", search_fail, total, (search_fail as f32 * 100.0) / total as f32);
 
     Ok(())
 }
