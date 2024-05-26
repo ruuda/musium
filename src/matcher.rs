@@ -171,23 +171,28 @@ fn match_listen(
             &words_track_title[..] == &words[..title_words_len]
         };
 
-        let mut words_album_entry = Vec::new();
-        normalize_words(album_title, &mut words_album_entry);
-        simplify_normalized_words(&mut words_album_entry);
+        // We searched for track title and artist. If we got only a single
+        // candidate, then even if the album is not a match, it's either that
+        // track, or not a match at all. So in that case we might as well ignore
+        // the album and attribute a few more listens to something in the
+        // library, even if it is not the exact version. Maybe the listen is
+        // from a compliation album, but the library now contains the studio
+        // album, or something like this. If there is no ambiguity, go for it.
+        let album_match = if n_candidates == 1 {
+            true
+        } else {
+            let mut words_album_entry = Vec::new();
+            normalize_words(album_title, &mut words_album_entry);
+            simplify_normalized_words(&mut words_album_entry);
 
-        let mut words_album_listen = Vec::new();
-        normalize_words(&listen.album, &mut words_album_listen);
-        simplify_normalized_words(&mut words_album_listen);
-        let album_match = words_album_entry == words_album_listen;
+            let mut words_album_listen = Vec::new();
+            normalize_words(&listen.album, &mut words_album_listen);
+            simplify_normalized_words(&mut words_album_listen);
+            words_album_entry == words_album_listen
+        };
 
         if track_match && album_match {
             results.push(Match::SearchFuzzy(track_id));
-        } else {
-            println!("MISMATCH: {listen:?}");
-            println!("  Title L: {:?}", &words[..title_words_len]);
-            println!("  Title R: {:?}", words_track_title);
-            println!("  Album L: {:?}", words_album_listen);
-            println!("  Album R: {:?}", words_album_entry);
         }
     }
 
@@ -203,13 +208,14 @@ fn match_listen(
 fn simplify_normalized_words(words: &mut Vec<String>) {
     // Drop uninformative words and punctuation.
     words.retain(|w| match w.as_ref() {
-        "the" => false,
+        "!" => false,
+        "&" => false,
+        "a" => false,
         "and" => false,
+        "ov" => false,
         "part" => false,
         "pt" => false,
-        "a" => false,
-        "&" => false,
-        "!" => false,
+        "the" => false,
         _ => true,
     });
 
@@ -287,10 +293,10 @@ pub fn match_listens(
     println!(" - {:6} of {:6} ({:4.1}%) MbidTitle", match_mbid_title, total, (match_mbid_title as f32 * 100.0) / total as f32);
     println!(" - {:6} of {:6} ({:4.1}%) SearchAlbumPrefix", match_search_album_prefix, total, (match_search_album_prefix as f32 * 100.0) / total as f32);
     println!(" - {:6} of {:6} ({:4.1}%) SearchNormalized", match_search_normalized, total, (match_search_normalized as f32 * 100.0) / total as f32);
-    println!(" - {:6} of {:6} ({:4.1}%) Miss", misses, total, (misses as f32 * 100.0) / total as f32);
-    println!(" - {:6} of {:6} ({:4.1}%) Ambiguous", ambiguous, total, (ambiguous as f32 * 100.0) / total as f32);
-    println!(" - {:6} of {:6} ({:4.1}%) SearchFail", search_fail, total, (search_fail as f32 * 100.0) / total as f32);
     println!(" - {:6} of {:6} ({:4.1}%) SearchFuzzy", match_search_fuzzy, total, (match_search_fuzzy as f32 * 100.0) / total as f32);
+    println!(" - {:6} of {:6} ({:4.1}%) SearchFail", search_fail, total, (search_fail as f32 * 100.0) / total as f32);
+    println!(" - {:6} of {:6} ({:4.1}%) Ambiguous", ambiguous, total, (ambiguous as f32 * 100.0) / total as f32);
+    println!(" - {:6} of {:6} ({:4.1}%) Miss", misses, total, (misses as f32 * 100.0) / total as f32);
 
     Ok(())
 }
