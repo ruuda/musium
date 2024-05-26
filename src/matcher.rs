@@ -205,6 +205,8 @@ fn simplify_normalized_words(words: &mut Vec<String>) {
     // the word "bonus".
     let end_index = words.iter().enumerate().filter(|(_i, w)| match w.as_ref() {
         "bonus" => true,
+        "deluxe" => true,
+        "demo" => true,
         "feat" => true,
         "featuring" => true,
         "vol" => true,
