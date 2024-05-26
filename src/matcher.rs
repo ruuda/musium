@@ -75,9 +75,8 @@ fn match_listen(
     // TODO: Add a way to turn off prefix search for the last word.
     index.search_track(&words[..], &mut tracks);
 
-    if tracks.len() > 1 {
-        return Match::Ambiguous;
-    }
+    let n_candidates = tracks.len();
+    let mut results = Vec::with_capacity(n_candidates);
 
     for track_id in tracks {
         let track = index.get_track(track_id).expect("Search result should be in index.");
@@ -89,7 +88,8 @@ fn match_listen(
         let album_exact = album_title.eq_ignore_ascii_case(&listen.album);
 
         if track_exact && album_exact {
-            return Match::SearchExact(track_id);
+            results.push(Match::SearchExact(track_id));
+            continue;
         }
 
         let prefix_len = album_title.len();
@@ -99,7 +99,8 @@ fn match_listen(
         // "[Deluxe Edition]" suffix or something, but in my collection I prefer
         // to remove those. So try if we have a prefix match.
         if track_exact && album_title.as_bytes().eq_ignore_ascii_case(listen_album) {
-            return Match::SearchAlbumPrefix(track_id);
+            results.push(Match::SearchAlbumPrefix(track_id));
+            continue;
         }
 
         // The most common reason for not finding an exact match is because I
@@ -110,13 +111,17 @@ fn match_listen(
         let track_fuzzy = track_exact || equals_normalized(track_title, &listen.title);
         let album_fuzzy = album_exact || equals_normalized(album_title, &listen.album);
         if track_fuzzy && album_fuzzy {
-            return Match::SearchNormalized(track_id);
+            results.push(Match::SearchNormalized(track_id));
+            continue;
         }
-
-        return Match::SearchFail;
     }
 
-    Match::None
+    match results.len() {
+        0 if n_candidates > 0 => Match::SearchFail,
+        0 => Match::None,
+        1 => results.pop().unwrap(),
+        _ => Match::Ambiguous,
+    }
 }
 
 fn equals_normalized(x1: &str, x2: &str) -> bool {
