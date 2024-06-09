@@ -50,3 +50,9 @@ timer, or started as part of the [post-idle
 script](configuration.md#exec_post_idle_path). The setup would be the same as for
 scrobbling, except instead of calling `lastfm scrobble`, the unit’s
 `ExecStart=` would use `lastfm sync`.
+
+## Data
+
+All imported Last.fm scrobbles are stored in the `lastfm_listens` table in
+[the database](configuration.md#db_path). Aside for usage in Musium, this table
+acts as a local backup of your Last.fm listens. You own your data.

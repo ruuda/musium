@@ -25,6 +25,10 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
  * **Breaking:** In `scrobble.py`, all commands are now prefixed by `lastfm` or
    `listenbrainz`. In particular, `scrobble.py scrobble` is now `scrobble.py
    lastfm scrobble`.
+ * The scrobble script can now import listening history from Last.fm with the
+   new `import` and `sync` commands, see [the importing chapter](lastfm-import.md).
+   The imported history is not yet used for playcounts, but can already serve as
+   a way to back up listens from Last.fm into a database under your control.
  * Add support for normalizing the ring diacritic (as in å) in titles.
 
 ## 0.14.0
