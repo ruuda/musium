@@ -25,6 +25,7 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
  * **Breaking:** In `scrobble.py`, all commands are now prefixed by `lastfm` or
    `listenbrainz`. In particular, `scrobble.py scrobble` is now `scrobble.py
    lastfm scrobble`.
+ * Add support for normalizing the ring diacritic (as in å) in titles.
 
 ## 0.14.0
 
