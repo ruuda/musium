@@ -58,10 +58,6 @@ impl<'a> GenThumb<'a> {
     ///
     /// If no thumbnail exists for the item yet, then this returns the task for
     /// generating the thumbnail, in the [`GenThumb::Pending`] state.
-    ///
-    /// TODO: In the database we should record the file id that the thumbnail
-    /// was generated from, and when it no longer matches, delete the thumbnail
-    /// so we can regenerate it.
     pub fn new(
         tx: &mut Transaction,
         album_id: AlbumId,
@@ -107,7 +103,7 @@ impl<'a> GenThumb<'a> {
             // Give Imagemagick enough time to open the image, recent versions
             // are strict about it which leads to "time limit exceeded" error
             // from "fatal/cache.c". The unit is seconds.
-            .args(["-limit", "time", "90"])
+            .args(["-limit", "time", "120"])
             // Read from stdin.
             .arg("-")
             // Some cover arts have an alpha channel, but we are going to encode
@@ -257,20 +253,15 @@ struct GenThumbs<'a> {
 }
 
 impl<'a> GenThumbs<'a> {
-    /// Take a task out of the queue, to call [`GenThumb::advance`] on.
+    /// Take the next task out of the queue, to call [`GenThumb::advance`] on.
     fn pop(&mut self) -> Option<GenThumb<'a>> {
         self.tasks.pop()
     }
 
-    /// Handle the result of [`GenThumb::advance`].
-    fn put(&mut self, result: Option<GenThumb<'a>>) {
-        match result {
-            Some(next_task) => self.tasks.push(next_task),
-            None => {
-                self.status.files_processed_thumbnails += 1;
-                self.status_sender.send(*self.status).unwrap();
-            }
-        }
+    /// Mark one thumbnail generation as done.
+    fn increment_progress(&mut self) {
+        self.status.files_processed_thumbnails += 1;
+        self.status_sender.send(*self.status).unwrap();
     }
 }
 
@@ -322,8 +313,8 @@ pub fn generate_thumbnails(
     let mutex = Mutex::new(queue);
     let mutex_ref = &mutex;
 
-    // Start 1 + `num_cpus` worker threads. All these threads will do is block
-    // and wait on IO or the external process, but both `convert` and `guetzli`
+    // Start `num_cpus` worker threads. All these threads will do is block and
+    // wait on IO or the external process, but both `convert` and `cjpegli`
     // are CPU-bound, so this should keep the CPU busy. When thumbnailing many
     // albums with a cold page cache, IO to read the thumb from the file can be
     // a factor too, so add one additional thread to ensure we can keep the CPU
@@ -339,20 +330,39 @@ pub fn generate_thumbnails(
                 let raw_conn = database_utils::connect_read_write(db_path_ref)?;
                 let mut conn = Connection::new(&raw_conn);
 
-                while let Some(task) = {
+                let mut next_task = {
                     // This has to be in a scope, otherwise the program deadlocks.
                     let mut tasks = mutex_ref.lock().unwrap();
                     tasks.pop()
-                } {
-                    let result = task
-                        .advance(&mut conn)
-                        // There is no simple way with the current version of
-                        // Crossbeam to get a result out of the thread, so we
-                        // just panic on error, it's what we would do elsewhere
-                        // anyway if we could get the result out.
-                        .expect("Thumbnail generation failed.");
+                };
 
-                    mutex_ref.lock().unwrap().put(result);
+                while let Some(task) = next_task.take() {
+                    match task.advance(&mut conn) {
+                        Ok(Some(next)) => {
+                            next_task = Some(next);
+                            continue;
+                        }
+                        Ok(None) => {
+                            let mut tasks = mutex_ref.lock().unwrap();
+                            tasks.increment_progress();
+                            next_task = tasks.pop();
+                        }
+                        Err(Error::CommandError(msg, detail)) => {
+                            match detail {
+                                None => eprintln!("Thumbnail generation failed: {msg}"),
+                                Some(err) => eprintln!("Thumbnail generation failed: {msg} {err:?}"),
+                            }
+
+                            // We count failing as progress, because we did look
+                            // at one file that we were supposed to look at.
+                            // Without this, the final count may be lower than
+                            // the total.
+                            let mut tasks = mutex_ref.lock().unwrap();
+                            tasks.increment_progress();
+                            next_task = tasks.pop();
+                        }
+                        Err(fatal) => panic!("Error during thumbnail generation: {:?}", fatal),
+                    }
                 }
 
                 Ok(())
