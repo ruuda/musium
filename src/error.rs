@@ -18,7 +18,7 @@ pub enum Error {
     IncompleteConfig(&'static str),
 
     /// Running an external program ("command") failed.
-    CommandError(&'static str, io::Error),
+    CommandError(&'static str, Option<io::Error>),
 
     /// IO error.
     IoError(io::Error),

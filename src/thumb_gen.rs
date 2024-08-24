@@ -107,7 +107,7 @@ impl<'a> GenThumb<'a> {
             // Give Imagemagick enough time to open the image, recent versions
             // are strict about it which leads to "time limit exceeded" error
             // from "fatal/cache.c". The unit is seconds.
-            .args(["-limit", "time", "60"])
+            .args(["-limit", "time", "90"])
             // Read from stdin.
             .arg("-")
             // Some cover arts have an alpha channel, but we are going to encode
@@ -145,7 +145,7 @@ impl<'a> GenThumb<'a> {
             .arg(&out_path)
             .stdin(Stdio::piped())
             .spawn()
-            .map_err(|e| Error::CommandError("Failed to spawn ImageMagick.", e))?;
+            .map_err(|e| Error::CommandError("Failed to spawn ImageMagick.", Some(e)))?;
 
         {
             let stdin = convert
@@ -171,9 +171,15 @@ impl<'a> GenThumb<'a> {
             _ => panic!("Can only call start_compress in Resizing state."),
         };
 
-        convert
+        let exit_status = convert
             .wait()
-            .map_err(|e| Error::CommandError("Imagemagick's 'convert' failed.", e))?;
+            .map_err(|e| Error::CommandError("ImageMagick's 'magick' failed.", Some(e)))?;
+
+        if !exit_status.success() {
+            // Clean up the intermediate png file on error.
+            let _rm_result_ignored = std::fs::remove_file(out_path);
+            return Err(Error::CommandError("ImageMagick's 'magick' did not exit successfully.", None));
+        }
 
         let cjpegli = Command::new("cjpegli")
             .arg("--distance=0.459")
@@ -186,7 +192,7 @@ impl<'a> GenThumb<'a> {
             // Silence stderr because cjpegli prints by default.
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| Error::CommandError("Failed to spawn 'cjpegli'.", e))?;
+            .map_err(|e| Error::CommandError("Failed to spawn 'cjpegli'.", Some(e)))?;
 
         self.state = GenThumbState::Compressing {
             file_id: file_id,
@@ -214,12 +220,16 @@ impl<'a> GenThumb<'a> {
             } => self.start_resize(album_id, file_id, flac_filename),
             GenThumbState::Resizing { .. } => self.start_compress().map(Some),
             GenThumbState::Compressing { mut child, file_id, in_path } => {
-                child
+                let exit_status = child
                     .wait()
-                    .map_err(|e| Error::CommandError("Guetzli failed.", e))?;
+                    .map_err(|e| Error::CommandError("Thumbnail compression with 'cjpegli' failed.", Some(e)))?;
 
                 // Delete the intermediate png file.
                 std::fs::remove_file(in_path)?;
+
+                if !exit_status.success() {
+                    return Err(Error::CommandError("'cjpegli' did not exit successfully.", None));
+                }
 
                 let mut stdout = child
                     .stdout
