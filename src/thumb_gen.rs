@@ -103,7 +103,7 @@ impl<'a> GenThumb<'a> {
 
         let out_path = get_tmp_fname(album_id);
 
-        let mut convert = Command::new("convert")
+        let mut convert = Command::new("magick")
             // Give Imagemagick enough time to open the image, recent versions
             // are strict about it which leads to "time limit exceeded" error
             // from "fatal/cache.c". The unit is seconds.
@@ -145,7 +145,7 @@ impl<'a> GenThumb<'a> {
             .arg(&out_path)
             .stdin(Stdio::piped())
             .spawn()
-            .map_err(|e| Error::CommandError("Failed to spawn ImageMagick's 'convert'.", e))?;
+            .map_err(|e| Error::CommandError("Failed to spawn ImageMagick.", e))?;
 
         {
             let stdin = convert

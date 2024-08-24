@@ -25,6 +25,9 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
  * **Breaking:** In `scrobble.py`, all commands are now prefixed by `lastfm` or
    `listenbrainz`. In particular, `scrobble.py scrobble` is now `scrobble.py
    lastfm scrobble`.
+ * **Breaking:** Thumbnail generation now requires the `magick` command to be
+   present, which requires ImageMagick 7. Compression now uses `cjpegli` from
+   `libjxl` rather than Guetzli.
  * The scrobble script can now import listening history from Last.fm with the
    new `import` and `sync` commands, see [the importing chapter](lastfm-import.md).
    The imported history is not yet used for playcounts, but can already serve as
