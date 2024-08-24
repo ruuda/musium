@@ -177,22 +177,19 @@ impl<'a> GenThumb<'a> {
             return Err(Error::CommandError("ImageMagick's 'magick' did not exit successfully.", None));
         }
 
-        let cjpegli = Command::new("cjpegli")
-            .arg("--distance=0.459")
-            .arg("--progressive_level=1")
+        let guetzli = Command::new("guetzli")
+            .args(["--quality", "97"])
             // Input is the intermediate file.
             .arg(&out_path)
-            // Output to stdout.
+            // Output is stdout, but guetzli does not understand `-`.
             .stdout(Stdio::piped())
-            .arg("-")
-            // Silence stderr because cjpegli prints by default.
-            .stderr(Stdio::null())
+            .arg("/dev/fd/1")
             .spawn()
-            .map_err(|e| Error::CommandError("Failed to spawn 'cjpegli'.", Some(e)))?;
+            .map_err(|e| Error::CommandError("Failed to spawn 'guetzli'.", Some(e)))?;
 
         self.state = GenThumbState::Compressing {
             file_id: file_id,
-            child: cjpegli,
+            child: guetzli,
             // Input file for this step is the output of the previous command.
             in_path: out_path,
         };
@@ -218,13 +215,13 @@ impl<'a> GenThumb<'a> {
             GenThumbState::Compressing { mut child, file_id, in_path } => {
                 let exit_status = child
                     .wait()
-                    .map_err(|e| Error::CommandError("Thumbnail compression with 'cjpegli' failed.", Some(e)))?;
+                    .map_err(|e| Error::CommandError("Thumbnail compression with 'guetzli' failed.", Some(e)))?;
 
                 // Delete the intermediate png file.
                 std::fs::remove_file(in_path)?;
 
                 if !exit_status.success() {
-                    return Err(Error::CommandError("'cjpegli' did not exit successfully.", None));
+                    return Err(Error::CommandError("'guetzli' did not exit successfully.", None));
                 }
 
                 let mut stdout = child
@@ -314,7 +311,7 @@ pub fn generate_thumbnails(
     let mutex_ref = &mutex;
 
     // Start `num_cpus` worker threads. All these threads will do is block and
-    // wait on IO or the external process, but both `convert` and `cjpegli`
+    // wait on IO or the external process, but both `convert` and `guetzli`
     // are CPU-bound, so this should keep the CPU busy. When thumbnailing many
     // albums with a cold page cache, IO to read the thumb from the file can be
     // a factor too, so add one additional thread to ensure we can keep the CPU
