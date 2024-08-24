@@ -175,19 +175,22 @@ impl<'a> GenThumb<'a> {
             .wait()
             .map_err(|e| Error::CommandError("Imagemagick's 'convert' failed.", e))?;
 
-        let guetzli = Command::new("guetzli")
-            .args(["--quality", "97"])
+        let cjpegli = Command::new("cjpegli")
+            .arg("--distance=0.459")
+            .arg("--progressive_level=1")
             // Input is the intermediate file.
             .arg(&out_path)
-            // Output is stdout, but guetzli does not understand `-`.
+            // Output to stdout.
             .stdout(Stdio::piped())
-            .arg("/dev/fd/1")
+            .arg("-")
+            // Silence stderr because cjpegli prints by default.
+            .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| Error::CommandError("Failed to spawn 'guetzli'.", e))?;
+            .map_err(|e| Error::CommandError("Failed to spawn 'cjpegli'.", e))?;
 
         self.state = GenThumbState::Compressing {
             file_id: file_id,
-            child: guetzli,
+            child: cjpegli,
             // Input file for this step is the output of the previous command.
             in_path: out_path,
         };
