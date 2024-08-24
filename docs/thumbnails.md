@@ -110,7 +110,7 @@ disk. As long as Guetzli is faster than the disk, it is fast enough.
 
 We should compress thumbnails with Guetzli to minimize visible artefacts.
 
-## 2024 Update
+## Cjpegli (2024)
 
 [JPEG XL][jxl] exists nowadays, and it includes an improved encoder for
 traditional jpeg, `cjpegli`. It’s a _lot_ faster than `guetzli`, should we
@@ -177,3 +177,22 @@ as before (97 for Guetzli, distance 0.459 for cjpegli).
 
 The differences are subtle, but more visible to the human eye for the cases
 where Guetzli produces the larger image.
+
+Perhaps the `--progressive_level=1` has a large impact? We don’t need
+progressive images for the thumbnails, they get loaded before they scroll into
+view anyway. So let’s recalibrate with progressive scan disabled, maybe we can
+squeeze out some more quality.
+
+|Compressor| Quality | Total bytes | Avg. bytes | Size ratio |
+|----------|--------:| -----------:|-----------:|-----------:|
+| guetzli  | q=97    |   4,267,771 |     11,565 |     100.0% |
+| cjpegli  | d=0.460 |   4,254,462 |     11,529 |      99.7% |
+| cjpegli  | d=0.457 |   4,269,846 |     11,571 |     100.0% |
+| cjpegli  | d=0.430 |   4,376,419 |     11,860 |     102.5% |
+
+It turns out that at this level of detail, distance does not relate
+monotonically to output size. Either way, progressive or not does not
+seem to affect size meaningfully.
+
+Okay, with the difference being so difficult to observe, let’s go with the
+faster compressor and use cjpegli after all.
