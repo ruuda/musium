@@ -136,7 +136,8 @@ thumbnail, and the ratio to the Guetzli target. The total time is only a single
 measurement with no attempt to reduce variance, and it includes both resizing
 with ImageMagick as well as encoding. In the case of `cjpegli`, the time is
 dominated by resizing. Even without a proper benchmark it is clear that
-`cjpegli` is faster.
+`cjpegli` is faster. Cjpegli is configured with `--progressive=1`, one fewer
+scan than the default level.
 
 After picking `--distance=0.459` as the quality level, I re-encoded 1839 album
 covers with `cjpegli`. The average thumbnail size went from 11,583 bytes to
@@ -156,5 +157,23 @@ the ellipse. Guetzli creates smoother gradients and tighter edges. This is no
 surprise in this case, as the Guetzli image is 7,161 bytes whereas the cjpegli
 one is only 5,762 bytes. For the second thumbnail, Guetzli preserves more detail
 in the dark top-left corner. Again, the better quality is not entirely a
-surprise, as Guetzli’s output is 22% larger in this case. Still, this (very
-selective)
+surprise, as Guetzli’s output is 22% larger in this case.
+
+To confirm, we can look at the size differences for a given thumbnail. We can
+order the thumbnails by the size ratio of `cjpegli` to `guetzli`. Below are the
+top 8 and bottom 8 thumbnails, by size ratio. The quality settings are the same
+as before (97 for Guetzli, distance 0.459 for cjpegli).
+
+| Guetzli (smaller) | Cjpegli (larger) | Guetzli (larger) | Cjpegli (smaller) |
+|-------------------|------------------|------------------|-------------------|
+| ![guetzli](thumbnails/excess_cjpegli_1_guetzli.jpg) | ![cjpegli](thumbnails/excess_cjpegli_1_cjpegli.jpg) | ![guetzli](thumbnails/excess_guetzli_1_guetzli.jpg) | ![cjpegli](thumbnails/excess_guetzli_1_cjpegli.jpg) |
+| ![guetzli](thumbnails/excess_cjpegli_2_guetzli.jpg) | ![cjpegli](thumbnails/excess_cjpegli_2_cjpegli.jpg) | ![guetzli](thumbnails/excess_guetzli_2_guetzli.jpg) | ![cjpegli](thumbnails/excess_guetzli_2_cjpegli.jpg) |
+| ![guetzli](thumbnails/excess_cjpegli_3_guetzli.jpg) | ![cjpegli](thumbnails/excess_cjpegli_3_cjpegli.jpg) | ![guetzli](thumbnails/excess_guetzli_3_guetzli.jpg) | ![cjpegli](thumbnails/excess_guetzli_3_cjpegli.jpg) |
+| ![guetzli](thumbnails/excess_cjpegli_4_guetzli.jpg) | ![cjpegli](thumbnails/excess_cjpegli_4_cjpegli.jpg) | ![guetzli](thumbnails/excess_guetzli_4_guetzli.jpg) | ![cjpegli](thumbnails/excess_guetzli_4_cjpegli.jpg) |
+| ![guetzli](thumbnails/excess_cjpegli_5_guetzli.jpg) | ![cjpegli](thumbnails/excess_cjpegli_5_cjpegli.jpg) | ![guetzli](thumbnails/excess_guetzli_5_guetzli.jpg) | ![cjpegli](thumbnails/excess_guetzli_5_cjpegli.jpg) |
+| ![guetzli](thumbnails/excess_cjpegli_6_guetzli.jpg) | ![cjpegli](thumbnails/excess_cjpegli_6_cjpegli.jpg) | ![guetzli](thumbnails/excess_guetzli_6_guetzli.jpg) | ![cjpegli](thumbnails/excess_guetzli_6_cjpegli.jpg) |
+| ![guetzli](thumbnails/excess_cjpegli_7_guetzli.jpg) | ![cjpegli](thumbnails/excess_cjpegli_7_cjpegli.jpg) | ![guetzli](thumbnails/excess_guetzli_7_guetzli.jpg) | ![cjpegli](thumbnails/excess_guetzli_7_cjpegli.jpg) |
+| ![guetzli](thumbnails/excess_cjpegli_8_guetzli.jpg) | ![cjpegli](thumbnails/excess_cjpegli_8_cjpegli.jpg) | ![guetzli](thumbnails/excess_guetzli_8_guetzli.jpg) | ![cjpegli](thumbnails/excess_guetzli_8_cjpegli.jpg) |
+
+The differences are subtle, but more visible to the human eye for the cases
+where Guetzli produces the larger image.
