@@ -354,8 +354,8 @@ impl PlayCounter {
     /// some other tracks, and then the other half, would only count as slightly
     /// more than a single session.
     const LIMIT_ALBUM: RateLimit = RateLimit {
-        capacity: 2.5,
-        fill_rate_per_second: 1.0 / (3600.0 * 6.0),
+        capacity: 2.0,
+        fill_rate_per_second: 1.0 / (3600.0 * 13.0),
     };
 
     /// For tracks we don't want to rate limit, but to keep the code uniform
