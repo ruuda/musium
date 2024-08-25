@@ -178,7 +178,9 @@ impl ExpCounter {
     /// For exponential decay of the form `0.5^(t / half_life)`, the integral
     /// from `t=0` to `t=t_1` is given by
     ///
-    ///     half_life / ln(2) * [1 - 0.5^(t_1 / half_life)]
+    /// ```txt
+    /// half_life / ln(2) * [1 - 0.5^(t_1 / half_life)]
+    /// ```
     ///
     /// and if we plug in ∞ for `t_1` then we see the scale factors are just
     /// proportional to the half lives, so we can divide by that. (We care only
