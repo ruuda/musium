@@ -141,11 +141,16 @@ impl ExpCounter {
     ///
     /// The half lives quadruple every time (from short to long). This provides
     /// a nice logarithmic spacing on the “long half-life” to “short half-life”
-    /// spectrum, and most values work out to align close to a natural interval,
-    /// with the lowest bucket being ~14 days, and the next one two months.
+    /// spectrum, and most values work out to align close to a natural interval.
+    /// In the past we used ~14 days as the lowest bucket, and the next one two
+    /// months, but it turns out that half life lingers on for longer than what
+    /// I feel is “the past two weeks”, so we reduced all intervals to 7 days,
+    /// one month, 4 months, etc. 4 months is a good interval to capture “what
+    /// is hot this season”, while the double of 7-8 months shows you winter
+    /// music in summer and vice versa.
     ///
     /// This spacing also enables us to efficiently compute exponential decay
-    /// factors from the long-duration one: raise it to the fourth power to get
+    /// factors from the long-duration one: raise it to the fifth power to get
     /// the decay factor for the next half-life. There is some risk of
     /// accumulating numerical errors here (computing using powf directly is
     /// more precise than repeated multiplication), but even for a timestep of
@@ -161,7 +166,7 @@ impl ExpCounter {
     ///
     /// Table can be generated with the following program:
     /// ```python
-    /// xs = [(10 / 4**i) * (365.25 * 24 * 3600 / 2**14) for i in range(5)]
+    /// xs = [(5 / 4**i) * (365.25 * 24 * 3600 / 2**14) for i in range(5)]
     /// for x in xs:
     ///     print(f"        {x:.6f}, // {x * 2**14 / (3600 * 24):.0f} days")
     /// ```
@@ -190,11 +195,14 @@ impl ExpCounter {
     /// seen, then new albums don't have as much of a penalty in the
     /// long-running average.
     const HALF_LIFE_EPOCHS: [f32; 5] = [
-        19261.230469, // 10 years   / 3652 days
-        4815.307617,  // 2.5 years  / 913 days
-        1203.826904,  // 7.5 months / 228 days
-        300.956726,   // 2 months   / 57 days
-        75.239182,    // 2 weeks    / 14 days
+        // For the top two buckets we make an exception, that one we keep at 10
+        // years.
+        19260.0, // 3650 days / 10 years
+        // 9630.615234, // 1826 days / 5 years
+        2407.653809, // 457 days / 1.25 years
+        601.913452, // 114 days / ~3.75 months / 16 weeks
+        150.478363, // 29 days / 1 month
+        37.619591, // 7 days
     ];
 
     /// Return how much to decay the counters by after the elapsed time.
@@ -581,7 +589,7 @@ fn score_trending(counter: &ExpCounter) -> f32 {
     // The trend ratio is the ratio of recent vs. older plays, it is 1.0 for new
     // tracks that we just played, and tends to 0.0 for tracks that we played in
     // the past but not recently.
-    let trend = 3.0 * counter.n[4] / (counter.n[3] + counter.n[2] + counter.n[1]);
+    let trend = counter.n[4] / (counter.n[3] + counter.n[2] + counter.n[1]);
 
     // On its own though, the trend counter ignores popularity. The playcount is
     // both in the numerator and denominator, it only counts recency. I tried
@@ -598,6 +606,8 @@ fn score_falling(counter: &ExpCounter) -> f32 {
     let age_12 = counter.n[1].ln() - counter.n[2].ln();
     let age_13 = counter.n[1].ln() - counter.n[3].ln();
     let n4 = counter.n[4];
+    // NB: The comment below was true when all half lives were double the
+    // current values, this may need tweaking.
     // Empirically, age_13 and age_12 tend to correspond best to what I
     // think of as "forgotten" tracks. But that doesn't discount one when
     // you listen to it in recent listens, so we mix in counter (the shortest
@@ -625,12 +635,13 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
 
     for timescale in 0..5 {
         let n_days = ExpCounter::HALF_LIFE_EPOCHS[timescale] * 0.1896;
+        let n_months = ExpCounter::HALF_LIFE_EPOCHS[timescale] * 0.1896 * (12.0 / 365.25);
 
         let (top_artists, top_albums, top_tracks) =
             counts.get_top_by(150, |counter: &ExpCounter| RevNotNan(counter.n[timescale]));
         print_ranking(
             "TOP",
-            format!("timescale {}, {:.0} days", timescale, n_days),
+            format!("timescale {}, {:.0} days / {:.0} months", timescale, n_days, n_months),
             index,
             &top_artists,
             &top_albums,
@@ -642,7 +653,7 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         counts.get_top_by(350, |c| RevNotNan(score_trending(c)));
     print_ranking(
         "TRENDING",
-        format!("14d vs. 57d (2mo) + 228d (7.5mo) + 913d (2.5y)"),
+        "[0] / ([1] + [2] + [3] + [4])".to_string(),
         index,
         &trending_artists,
         &trending_albums,
@@ -652,28 +663,11 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
     let (falling_artists, falling_albums, falling_tracks) = counts.get_top_by(350, |c| RevNotNan(score_falling(c)));
     print_ranking(
         "FALLING",
-        format!("2 months vs. 2.5 years + 14 days vs. 7.5 months"),
+        "see code for formula".to_string(),
         index,
         &falling_artists,
         &falling_albums,
         &falling_tracks,
-    );
-
-    let (disco_artists, disco_albums, disco_tracks) = counts.get_top_by(350, |counter| {
-        let age_12 = counter.n[1].ln() - counter.n[2].ln();
-        let age_13 = counter.n[1].ln() - counter.n[3].ln();
-        let n4 = counter.n[4];
-        let age_mix = age_12 + age_13 * 0.1 - n4 * 0.5;
-        let countish = (1.0 + counter.n[0]).ln();
-        RevNotNan(age_mix * countish)
-    });
-    print_ranking(
-        "DISCOVER",
-        "2 months vs. 2.5 years + 14 days vs. 7.5 months".to_string(),
-        index,
-        &disco_artists,
-        &disco_albums,
-        &disco_tracks,
     );
 
     Ok(())
