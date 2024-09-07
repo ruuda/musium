@@ -583,19 +583,14 @@ fn print_ranking(
 
 /// Score for sorting entries by _trending_.
 ///
-/// Trending entries (tracks, albums, artists) are entries where the recent
-/// playcount is high compared to the long-term playcount.
+/// Trending entries (tracks, albums, artists) are entries that have a high
+/// playcount on a short timescale, while still mixing in a bit of a longer
+/// time horizon.
 fn score_trending(counter: &ExpCounter) -> f32 {
-    // The trend ratio is the ratio of recent vs. older plays, it is 1.0 for new
-    // tracks that we just played, and tends to 0.0 for tracks that we played in
-    // the past but not recently.
-    let trend = counter.n[4] / (counter.n[3] + counter.n[2] + counter.n[1]);
-
-    // On its own though, the trend counter ignores popularity. The playcount is
-    // both in the numerator and denominator, it only counts recency. I tried
-    // various ways of mixing in a recent playcount, but in the end, I find just
-    // the recency more useful.
-    trend
+    0.0
+    + (2.0 * counter.n[4])
+    + (0.5 * counter.n[3])
+    + (0.1 * counter.n[2])
 }
 
 /// Score for sorting entries by _falling_.
@@ -605,7 +600,7 @@ fn score_trending(counter: &ExpCounter) -> f32 {
 fn score_falling(counter: &ExpCounter) -> f32 {
     let age_12 = counter.n[1].ln() - counter.n[2].ln();
     let age_13 = counter.n[1].ln() - counter.n[3].ln();
-    let n4 = counter.n[4];
+    let recent_plays = counter.n[4] + counter.n[3] * 0.25;
     // NB: The comment below was true when all half lives were double the
     // current values, this may need tweaking.
     // Empirically, age_13 and age_12 tend to correspond best to what I
@@ -614,8 +609,8 @@ fn score_falling(counter: &ExpCounter) -> f32 {
     // timescale) as a penalty.
     // Counts for age_13 tend to be about 5x as large as for age_12, so to get a
     // balanced mix, we take only 1/10 of age_13.
-    let age_mix = age_12 + age_13 * 0.1 - n4 * 0.5;
-    let countish = (1.0 + counter.n[0]).ln();
+    let age_mix = age_12 + age_13 * 0.1 - recent_plays;
+    let countish = (1.5 + counter.n[0]).ln();
     age_mix * countish
 }
 
@@ -653,7 +648,7 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         counts.get_top_by(350, |c| RevNotNan(score_trending(c)));
     print_ranking(
         "TRENDING",
-        "[0] / ([1] + [2] + [3] + [4])".to_string(),
+        "see code for formula".to_string(),
         index,
         &trending_artists,
         &trending_albums,
