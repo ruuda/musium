@@ -1,0 +1,30 @@
+package:
+  dependencies:
+    - aff
+    - aff-bus
+    - affjax
+    - affjax-web
+    - argonaut-codecs
+    - argonaut-core
+    - arrays
+    - assert
+    - console
+    - datetime
+    - effect
+    - either
+    - exceptions
+    - foldable-traversable
+    - foreign-object
+    - functions
+    - integers
+    - maybe
+    - parallel
+    - prelude
+    - strings
+    - transformers
+    - tuples
+  name: musium
+workspace:
+  extraPackages: {}
+  packageSet:
+    url: https://raw.githubusercontent.com/purescript/package-sets/psc-0.15.9-20230718/packages.json

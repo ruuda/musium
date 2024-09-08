@@ -2,10 +2,12 @@
   description = "Musium";
 
   inputs.nixpkgs.url = "nixpkgs/nixos-24.05";
+  inputs.purescript-overlay.url = "github:thomashoneyman/purescript-overlay";
+  inputs.purescript-overlay.inputs.nixpkgs.follows = "nixpkgs";
   inputs.squiller.url = "github:ruuda/squiller?ref=v0.4.0";
   inputs.squiller.inputs.nixpkgs.follows = "nixpkgs";
 
-  outputs = { self, nixpkgs, squiller }:
+  outputs = { self, nixpkgs, purescript-overlay, squiller }:
     let
       supportedSystems = ["x86_64-linux" "aarch64-linux"];
       # Ridiculous boilerplate required to make flakes somewhat usable.
@@ -21,7 +23,10 @@
         let
           name = "musium";
           version = builtins.substring 0 8 self.lastModifiedDate;
-          pkgs = import nixpkgs { inherit system; };
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = [ purescript-overlay.overlays.default ];
+          };
           python = pkgs.python3.withPackages (ps: [
             ps.scipy
             ps.numpy
@@ -36,7 +41,7 @@
                 pkgs.mkdocs
                 pkgs.purescript
                 pkgs.rustup
-                pkgs.spago
+                pkgs.spago-unstable
                 pkgs.sqlite
                 python
                 squiller.packages.${system}.default
