@@ -339,6 +339,7 @@ img.thumb
   text-align: right;
   padding-right: 0.25em;
   color: #ccc;
+  font-variant-numeric: tabular-nums;
 }
 
 .track-number
