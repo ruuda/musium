@@ -20,6 +20,17 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
    or a migration of the database).
  * The patch version is bumped for bugfixes and other small changes.
 
+## Next
+
+ * Work around a regression in the Linux kernel that was introduced some time
+   after 5.10.94, which prevents changing the hw params of an <abbr>ALSA</abbr>
+   device. When switching playback between tracks that have a different sample
+   rate, on Linux 5.10.94 this would work fine, but on later versions,
+   `snd_pcm_hw_params` started returning error code 22 (invalid argument).
+   We work around this by re-opening the audio device if the sample format
+   changes, rather than trying to change the sample format of the existing
+   device.
+
 ## 0.15.0
 
 Released 2024-08-25.

@@ -7,7 +7,6 @@
 
 //! Logic for playing back audio using Alsa.
 
-use std::mem;
 use std::result;
 use std::ffi::CString;
 use std::sync::{Arc, Mutex, Condvar};
@@ -310,6 +309,15 @@ fn write_samples(
             pcm.resume()?;
             Ok(WriteResult::Continue)
         }
+        State::Open => {
+            // The device is in "Open" state if we haven't configured the sample
+            // format yet. We only know the format after there is a block, but
+            // when decode is in progress, the block is not yet there, so we yield.
+            match player.peek_mut() {
+                Some(block) => Ok(WriteResult::ChangeFormat(block.format())),
+                None => Ok(WriteResult::Yield),
+            }
+        }
         unexpected => panic!("Unexpected PCM state: {:?}", unexpected),
     }
 }
@@ -357,32 +365,56 @@ fn play_queue(
     state_mutex: &Mutex<PlayerState>,
     decode_thread: &Thread,
 ) {
-    let (device, mixer) = open_device(card_name).expect("TODO: Failed to open device.");
-    let vc = get_volume_control(&mixer, volume_name).expect("TODO: Failed to get volume control.");
+    let (mut device, mut mixer) = open_device(card_name).expect("TODO: Failed to open device.");
+    let mut vc = get_volume_control(&mixer, volume_name).expect("TODO: Failed to get volume control.");
     let mut fds = device.get().expect("TODO: Failed to get fds from device.");
 
     let mut volume = None;
-    let mut format = Format {
-        sample_rate: Hertz(44_100),
-        bits_per_sample: 16,
-    };
-    if let Err(err) = set_format(&device, format) {
-        panic!("Failed to set format for device {} to format {:?}: {:?}",
-            card_name, format, err,
-        );
-    }
 
-    // There is also "direct mode" that works with mmaps, but it is not
-    // supported by the kernel on ARM, and I want to run this on a Raspberry Pi,
-    // so for simplicity I will use the mode that is supported everywhere.
-    let mut io = device.io_bytes();
+    // Set a sentinel value at the start, so we are guaranteed that the first
+    // thing we do is change the format.
+    let mut current_format = Format {
+        sample_rate: Hertz(0),
+        bits_per_sample: 0,
+    };
+    let mut next_format = None;
 
     loop {
+        // If the sample format changed, then we re-open the device. Up to Linux
+        // 5.10.94, it was possible to change the format on an existing device,
+        // but later versions of Linux have a regression where if you call
+        // `snd_pcm_hw_params` a second time with a different sample rate, it
+        // always returns error code 22 (invalid argument). We work around this
+        // by closing and re-opening the device.
+        if let Some(format) = next_format.take() {
+            drop(fds);
+            drop(device);
+
+            (device, mixer) = open_device(card_name).expect("TODO: Failed to open device.");
+            vc = get_volume_control(&mixer, volume_name).expect("TODO: Failed to get volume control.");
+            fds = device.get().expect("TODO: Failed to get fds from device.");
+
+            match set_format(&device, format) {
+                Ok(()) => println!("Set format for device {card_name} to format {format:?}"),
+                Err(err) => panic!(
+                    "Failed to set format for device {} to format {:?}: {:?}",
+                    card_name, format, err,
+                ),
+            }
+
+            current_format = format;
+        }
+
+        // There is also "direct mode" that works with mmaps, but it is not
+        // supported by the kernel on ARM, and I want to run this on a Raspberry Pi,
+        // so for simplicity I will use the mode that is supported everywhere.
+        let mut io = device.io_bytes();
+
         let (result, target_volume, needs_decode) = {
             let mut state = state_mutex.lock().unwrap();
             let result = ensure_buffers_full(
                 &device,
-                format,
+                current_format,
                 &mut io,
                 &mut state
             );
@@ -417,11 +449,8 @@ fn play_queue(
                 alsa::poll::poll(&mut fds, max_sleep_ms).expect("TODO: Failed to wait for events.");
             }
             FillResult::ChangeFormat(new_format) => {
-                mem::drop(io);
-                set_format(&device, new_format).expect("TODO: Failed to set format.");
-                println!("Changed format to {:?}", new_format);
-                format = new_format;
-                io = device.io_bytes();
+                next_format = Some(new_format);
+                continue;
             }
         }
     }
