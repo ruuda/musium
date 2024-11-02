@@ -43,7 +43,7 @@ pub enum QueueEvent {
 }
 
 fn execute_program_with_timeout(exe_path: &Path, stage_name: &'static str) {
-    println!("Executing {} program {} ...", stage_name, exe_path.to_string_lossy());
+    println!("Execute: stage={stage_name}, cmd={}", exe_path.to_string_lossy());
     let mut proc = match Command::new(exe_path).spawn() {
         Ok(proc) => proc,
         Err(err) => {
@@ -62,14 +62,14 @@ fn execute_program_with_timeout(exe_path: &Path, stage_name: &'static str) {
     // is little more we can do then anyway.
     match proc.wait_timeout(Duration::from_secs(30)) {
         Ok(Some(_status)) => {
-            println!("The {} program exited.", stage_name);
+            println!("Execute: program exited, stage={stage_name}");
         }
         Ok(None) => {
             println!("The {} program did not exit within 30 seconds, killing it ...", stage_name);
             let _ignored_result = proc.kill();
         }
         Err(err) => {
-            println!("Failed to wait for the {} program: {}", stage_name, err);
+            println!("Execute: failed to wait for program, stage={stage_name}, err={err}");
         }
     }
 }

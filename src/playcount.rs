@@ -433,10 +433,10 @@ impl PlayCounter {
             let listen = listen_opt?;
             let at = Instant::from_posix_timestamp(listen.started_at_second);
             let track_id = TrackId(listen.track_id as u64);
-            self.count(index, at.into(), track_id);
+            self.count(index, at, track_id);
             n += 1;
         }
-        println!("Imported {n} new listens from database.");
+        println!("Playcount: imported new listens from database, n={n}");
         Ok(())
     }
 

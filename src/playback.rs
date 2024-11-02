@@ -395,7 +395,11 @@ fn play_queue(
             fds = device.get().expect("TODO: Failed to get fds from device.");
 
             match set_format(&device, format) {
-                Ok(()) => println!("Set format for device {card_name} to format {format:?}"),
+                Ok(()) => println!(
+                    "Set format: rate={}, bits_per_sample={}, card={card_name}",
+                    format.sample_rate,
+                    format.bits_per_sample,
+                ),
                 Err(err) => panic!(
                     "Failed to set format for device {} to format {:?}: {:?}",
                     card_name, format, err,
@@ -432,7 +436,7 @@ fn play_queue(
 
         if volume != target_volume {
             if let Some(Millibel(v)) = target_volume {
-                println!("Changing volume to {:.1} dB", v as f32 * 0.01);
+                println!("Set volume: {:.1} dB", v as f32 * 0.01);
                 vc.set_playback_db_all(alsa::mixer::MilliBel(v as i64), alsa::Round::Floor)
                     .expect("Failed to set volume. TODO: Make fn return Alsa error?");
                 volume = target_volume;
@@ -559,14 +563,12 @@ pub fn main(
                 ).unwrap();
             }
 
-            println!("Starting playback ...");
             play_queue(
                 &config.audio_device,
                 &config.audio_volume_control,
                 &state_mutex,
                 decode_thread,
             );
-            println!("Playback done, sleeping ...");
 
             // Inform the history thread that the queue ended, so it can
             // checkpoint the WAL.

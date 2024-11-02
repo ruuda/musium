@@ -391,8 +391,7 @@ impl DecodeTask {
             None => panic!("Track {} does not exist, how did it end up queued?", track_id),
         };
         let fname = index.get_filename(track.filename);
-        // TODO: Add a proper way to do logging.
-        println!("Opening {:?} for decode.", fname);
+        println!("Decode: opening file, file={:?}", fname);
 
         let reader = match open_with_readahead(fname) {
             Ok(r) => r,
@@ -972,7 +971,6 @@ fn decode_burst(index: &MemoryMetaIndex, state_mutex: &Mutex<PlayerState>, filte
 
             let bytes_used = state.pending_size_bytes();
             if bytes_used >= stop_after_bytes {
-                println!("Buffer full, stopping decode for now.");
                 return
             }
 
@@ -1039,9 +1037,7 @@ fn decode_main(
             decode_burst(&current_index, state_mutex, &mut filters);
         }
 
-        println!("Decoder going to sleep.");
         thread::park();
-        println!("Decoder woken up.");
     }
 }
 
