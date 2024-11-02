@@ -20,8 +20,12 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
    or a migration of the database).
  * The patch version is bumped for bugfixes and other small changes.
 
-## Next
+## 0.15.1
 
+Released 2024-11-02.
+
+ * Visual tweak: use tabular numbers for the track numbers in the <abbr>UI</abbr>.
+ * Tweak the coefficients used for the discovery ranking.
  * Work around a regression in the Linux kernel that was introduced some time
    after 5.10.94, which prevents changing the hw params of an <abbr>ALSA</abbr>
    device. When switching playback between tracks that have a different sample
