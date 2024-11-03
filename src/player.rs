@@ -196,13 +196,12 @@ impl Block {
 
     /// Return the duration of the unconsumed samples in milliseconds.
     pub fn duration_ms(&self) -> u64 {
-        // Multiply by 1000 to go from seconds to milliseconds, divide by 2
-        // because there are 2 channels. We need to work with u64 here, because
-        // around 100s of stereo 44.1 kHz audio, the sample count times 500
-        // overflows a u32 (and usize can be 32 bits). We can't move the 500
-        // into the denominator, because the common sample rate of 44.1 kHz is
-        // not a multiple of 500.
-        self.len() as u64 * 500 / self.sample_rate.0 as u64
+        // Multiply by 1000 to go from seconds to milliseconds. We need to
+        // work with u64 here, because around 100s of stereo 44.1 kHz audio,
+        // the sample count times 1000 overflows a u32 (and usize can be 32
+        // bits). We can't move the 1000 into the denominator, because the
+        // common sample rate of 44.1 kHz is not a multiple of 1000.
+        self.len() as u64 * 1000 / self.sample_rate.0 as u64
     }
 
     /// Return the size of the block (including consumed samples) in bytes.
@@ -288,13 +287,12 @@ impl QueuedTrack {
     /// Return the duration of the consumed samples in milliseconds.
     pub fn position_ms(&self) -> u64 {
         match self.sample_rate {
-            // Multiply by 1000 to go from seconds to milliseconds, divide by 2
-            // because there are 2 channels. We need to work with u64 here, because
-            // around 100s of stereo 44.1 kHz audio, the sample count times 500
-            // overflows a u32 (and usize can be 32 bits). We can't move the 500
-            // into the denominator, because the common sample rate of 44.1 kHz
-            // is not a multiple of 500.
-            Some(Hertz(hz)) => self.samples_played * 500 / (hz as u64),
+            // Multiply by 1000 to go from seconds to milliseconds. We need to
+            // work with u64 here, because around 100s of stereo 44.1 kHz audio,
+            // the sample count times 1000 overflows a u32 (and usize can be 32
+            // bits). We can't move the 1000 into the denominator, because the
+            // common sample rate of 44.1 kHz is not a multiple of 1000.
+            Some(Hertz(hz)) => self.samples_played * 1000 / (hz as u64),
             // When the sample rate is not known, we definitely have not started
             // playback.
             None => 0
