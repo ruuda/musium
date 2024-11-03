@@ -416,6 +416,15 @@ fn play_queue(
 
         let (result, target_volume, needs_decode) = {
             let mut state = state_mutex.lock().unwrap();
+
+            // Ensure that we use the latest cutoff frequency for the filter.
+            // Volume is managed by the Alsa mixer so it can be changed later,
+            // but the filter is baked into the decoded data.
+            if filters.get_cutoff() != state.target_high_pass_cutoff() {
+                println!("Set cutoff: {}", state.target_high_pass_cutoff());
+                filters.set_cutoff(state.target_high_pass_cutoff());
+            }
+
             let result = ensure_buffers_full(
                 &device,
                 &mut filters,

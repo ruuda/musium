@@ -163,6 +163,11 @@ impl Filters {
         self.sample_rate
     }
 
+    /// Return the cutoff frequency that this filter is currently configured for.
+    pub fn get_cutoff(&self) -> Hertz {
+        self.cutoff
+    }
+
     /// Update the filter parameters to work for a new format, if the sample rate changed.
     pub fn set_sample_rate(&mut self, sample_rate: Hertz) {
         for f in self.filters.iter_mut() {

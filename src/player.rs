@@ -542,6 +542,11 @@ pub struct PlayerState {
     /// entire duration of the track.
     current_track_loudness: Option<Lufs>,
 
+    /// Target cutoff frequency for the high-pass filter.
+    ///
+    /// Setting this to 0 effectively disables the high pass filter.
+    high_pass_cutoff: Hertz,
+
     /// The tracks pending playback. Element 0 is being played currently.
     ///
     /// Invariant: If the queued track at index i has no decoded blocks, then
@@ -561,14 +566,15 @@ pub struct PlayerState {
 
 
 impl PlayerState {
-    pub fn new(events: SyncSender<PlaybackEvent>) -> PlayerState {
+    pub fn new(high_pass_cutoff: Hertz, events: SyncSender<PlaybackEvent>) -> PlayerState {
         PlayerState {
             next_unused_id: QueueId(0),
-            volume: Millibel(-1500),
+            volume: Millibel(-10_00),
             target_loudness: Lufs::new(-2300),
             current_track_loudness: None,
+            high_pass_cutoff,
             queue: Vec::new(),
-            events: events,
+            events,
             rng: shuffle::Prng::new(),
         }
     }
@@ -625,6 +631,11 @@ impl PlayerState {
     /// Return whether the queue is empty.
     pub fn is_queue_empty(&self) -> bool {
         self.queue.is_empty()
+    }
+
+    /// Return the current cutoff frequency for the high pass filter.
+    pub fn target_high_pass_cutoff(&self) -> Hertz {
+        self.high_pass_cutoff
     }
 
     /// Return the desired playback volume relative to full scale.
@@ -976,7 +987,6 @@ fn decode_burst(index: &MemoryMetaIndex, state_mutex: &Mutex<PlayerState>) {
 fn decode_main(
     index: Var<MemoryMetaIndex>,
     state_mutex: &Mutex<PlayerState>,
-    high_pass_cutoff: Hertz,
 ) {
     loop {
         let should_decode = {
@@ -1045,13 +1055,15 @@ impl Player {
         // Same for playback start and end queue events, for the exec thread.
         let (queue_events_sender, queue_events_receiver) = mpsc::sync_channel(5);
 
-        let state = Arc::new(Mutex::new(PlayerState::new(hist_sender.clone())));
+        let state = Arc::new(Mutex::new(PlayerState::new(
+            config.high_pass_cutoff,
+            hist_sender.clone(),
+        )));
 
         // Start the decode thread. It runs indefinitely, but we do need to
         // periodically unpark it when there is new stuff to decode.
         let state_mutex_for_decode = state.clone();
         let index_for_decode = index_var.clone();
-        let high_pass_cutoff = config.high_pass_cutoff;
         let builder = std::thread::Builder::new();
         let decode_join_handle = builder
             .name("decoder".into())
@@ -1059,7 +1071,6 @@ impl Player {
                 decode_main(
                     index_for_decode,
                     &state_mutex_for_decode,
-                    high_pass_cutoff,
                 );
             }).unwrap();
 
