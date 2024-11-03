@@ -98,7 +98,7 @@ impl StateVariableFilter {
     /// This scales down the output by 6 dB and then clips, to prevent
     /// wrapping that might occasionally result from the filter producing higher
     /// peaks than were present in the original signal.
-    #[inline]
+    #[inline(always)]
     pub fn tick_highpass_clip(&mut self, x0: i32, bits_per_sample: u32) -> i32 {
         self.tick(x0 as f32);
         // A factor 0.5 in amplitude is about -6 dB in volume. We lose one bit

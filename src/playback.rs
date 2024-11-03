@@ -78,16 +78,10 @@ fn open_device(card_name: &str) -> Result<(alsa::PCM, alsa::Mixer)> {
     };
 
     // Select the card by index (":{}") to get direct access to the hardware,
-    // play back stereo on the front two speakers. Adding "plug:" in front makes
-    // Alsa take care of conversions where needed. This is bad on the one hand,
-    // because I would not want e.g. silent sample rate conversion, but on the
-    // other hand, I have a UCM404HD, and it supports exactly 4 channels in "hw"
-    // mode, so then I would have to manually fill the two other channels with
-    // silence, and I don't feel like doing that right now. Even when selecting
-    // "front" without "plug", the minimum number of channels is 4, even though
-    // https://alsa-project.org/wiki/DeviceNames claims that for "front" we
-    // would get stereo.
-    let device = format!("plug:hw:{}", card_index);
+    // without Alsa's "plug" devices doing sample rate conversion or converting
+    // the number of channels. If we need to fill out more than 2 channels, like
+    // the UMC404HD does, we'll do this ourselves.
+    let device = format!("hw:{}", card_index);
     let non_block = false;
     let pcm = match alsa::PCM::new(&device, alsa::Direction::Playback, non_block) {
         Ok(pcm) => pcm,
@@ -98,7 +92,6 @@ fn open_device(card_name: &str) -> Result<(alsa::PCM, alsa::Mixer)> {
         Err(error) => return Err(error),
     };
 
-    let device = format!("hw:{}", card_index);
     let non_block = false;
     let mixer = alsa::Mixer::new(&device, non_block)?;
 
@@ -113,50 +106,63 @@ fn get_volume_control<'a>(mixer: &'a alsa::Mixer, name: &str) -> Option<alsa::mi
     Some(selem)
 }
 
-fn set_format(pcm: &alsa::PCM, format: Format) -> Result<()> {
-    let sample_format = match format.bits_per_sample {
-        16 => alsa::pcm::Format::S16LE,
-        // Note the "3" in the format here: this means that every sample is 3
-        // bytes. The regular S24LE format uses 4 bytes per sample, with the
-        // most significant byte being zero.
-        24 => alsa::pcm::Format::S243LE,
-        // Files with unsupported bit depths are filtered out at index time.
-        // They could still occur here if the index is outdated, but that is not
-        // something that deserves special error handling, just crash it.
-        n  => panic!("Unsupported: {} bits per sample. Please re-index.", n),
+struct SelectedFormat {
+    n_channels: u32,
+    sample_rate: Hertz,
+}
+
+fn set_format(pcm: &alsa::PCM, format: Format) -> Result<SelectedFormat> {
+    let hwp = alsa::pcm::HwParams::any(pcm)?;
+
+    // We want an even number of channels (stereo), and the lowest we can
+    // get. You'd think this is just "2", but the Behringer UMC404HD has 4
+    // channels, and we have to fill all of them.
+    let n_channels = 2 * (hwp.get_channels_min()? / 2);
+    hwp.set_channels(n_channels)?;
+
+    hwp.set_rate(format.sample_rate.0, alsa::ValueOr::Nearest)?;
+
+    // We always output 16 bits per sample, regardless of the input bit depth,
+    // which is usually 16 bits but can be 24 occasionally. The Behringer
+    // UMC404HD that I use supports either 16 or 32 bits per sample in the
+    // hardware itself, so let's just truncate to 16 bits and simplify the
+    // output mode; for normal listening, what Musium is intended for, you
+    // will not hear the difference.
+    hwp.set_format(alsa::pcm::Format::S16LE)?;
+    hwp.set_access(alsa::pcm::Access::MMapInterleaved)?;
+
+    // Set the buffer and period size, in frames. The period is how often
+    // the hardware will interrupt; it is how often poll returns. The Alsa
+    // wiki says:
+    // > The buffer size always has to be greater than one period size.
+    // > Commonly this is 2*period size, but some hardware can do 8 periods
+    // > per buffer.
+    // 2048 frames at 44.1 kHz is 46ms, so that is how responsive we can be
+    // to stopping the music.
+    hwp.set_period_size_near(512, alsa::ValueOr::Nearest)?;
+    hwp.set_buffer_size_near(2048)?;
+
+    pcm.hw_params(&hwp)?;
+    drop(hwp);
+
+    let hwp = pcm.hw_params_current()?;
+    let swp = pcm.sw_params_current()?;
+    let buffer_len = hwp.get_buffer_size()?;
+    let period_len = hwp.get_period_size()?;
+    swp.set_start_threshold(buffer_len - period_len)?;
+    swp.set_avail_min(period_len)?;
+    pcm.sw_params(&swp)?;
+
+    // Double-check that we got the expected parameters.
+    assert_eq!(hwp.get_channels()?, n_channels);
+    assert_eq!(hwp.get_rate()?, format.sample_rate.0);
+    assert_eq!(hwp.get_format()?, alsa::pcm::Format::S16LE);
+
+    let result = SelectedFormat {
+        n_channels,
+        sample_rate: format.sample_rate,
     };
-
-    {
-        let hwp = alsa::pcm::HwParams::any(pcm)?;
-        // TODO: Confirm by first querying the device without "plug:" that it
-        // supports this sample rate and format without plugin involvement (to
-        // ensure that the plugin is only responsible for channel count
-        // conversion). Alternatively, do the channel conversion manually.
-        hwp.set_channels(2)?;
-        hwp.set_rate(format.sample_rate.0, alsa::ValueOr::Nearest)?;
-        hwp.set_format(sample_format)?;
-        hwp.set_access(alsa::pcm::Access::MMapInterleaved)?;
-        hwp.set_period_size_near(256, alsa::ValueOr::Nearest)?;
-        // TODO: Pick a good buffer size.
-        hwp.set_buffer_size_near(2048)?;
-        pcm.hw_params(&hwp)?;
-    }
-
-    {
-        let hwp = pcm.hw_params_current()?;
-        let swp = pcm.sw_params_current()?;
-        let buffer_len = hwp.get_buffer_size()?;
-        let period_len = hwp.get_period_size()?;
-        swp.set_start_threshold(buffer_len - period_len)?;
-        swp.set_avail_min(period_len)?;
-        pcm.sw_params(&swp)?;
-
-        assert_eq!(hwp.get_channels()?, 2);
-        assert_eq!(hwp.get_rate()?, format.sample_rate.0);
-        assert_eq!(hwp.get_format()?, sample_format);
-    }
-
-    Ok(())
+    Ok(result)
 }
 
 enum WriteResult {
