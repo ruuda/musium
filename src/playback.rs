@@ -7,21 +7,22 @@
 
 //! Logic for playing back audio using Alsa.
 
-use std::result;
 use std::ffi::CString;
-use std::sync::{Arc, Mutex, Condvar};
+use std::result;
 use std::sync::mpsc::SyncSender;
-use std::thread::Thread;
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
+use std::thread::Thread;
 
-use alsa::PollDescriptors;
 use alsa;
+use alsa::PollDescriptors;
 use libc;
 
 use crate::config::Config;
 use crate::exec_pre_post::QueueEvent;
+use crate::filter::Filters;
 use crate::history::PlaybackEvent;
-use crate::player::{Format, Millibel, PlayerState};
+use crate::player::{Millibel, PlayerState, SampleDataSlice};
 use crate::prim::Hertz;
 
 const EBUSY: i32 = 16;
@@ -106,12 +107,7 @@ fn get_volume_control<'a>(mixer: &'a alsa::Mixer, name: &str) -> Option<alsa::mi
     Some(selem)
 }
 
-struct SelectedFormat {
-    n_channels: u32,
-    sample_rate: Hertz,
-}
-
-fn set_format(pcm: &alsa::PCM, format: Format) -> Result<SelectedFormat> {
+fn set_format(pcm: &alsa::PCM, sample_rate: Hertz) -> Result<()> {
     let hwp = alsa::pcm::HwParams::any(pcm)?;
 
     // We want an even number of channels (stereo), and the lowest we can
@@ -120,7 +116,7 @@ fn set_format(pcm: &alsa::PCM, format: Format) -> Result<SelectedFormat> {
     let n_channels = 2 * (hwp.get_channels_min()? / 2);
     hwp.set_channels(n_channels)?;
 
-    hwp.set_rate(format.sample_rate.0, alsa::ValueOr::Nearest)?;
+    hwp.set_rate(sample_rate.0, alsa::ValueOr::Nearest)?;
 
     // We always output 16 bits per sample, regardless of the input bit depth,
     // which is usually 16 bits but can be 24 occasionally. The Behringer
@@ -155,22 +151,18 @@ fn set_format(pcm: &alsa::PCM, format: Format) -> Result<SelectedFormat> {
 
     // Double-check that we got the expected parameters.
     assert_eq!(hwp.get_channels()?, n_channels);
-    assert_eq!(hwp.get_rate()?, format.sample_rate.0);
+    assert_eq!(hwp.get_rate()?, sample_rate.0);
     assert_eq!(hwp.get_format()?, alsa::pcm::Format::S16LE);
 
-    let result = SelectedFormat {
-        n_channels,
-        sample_rate: format.sample_rate,
-    };
-    Ok(result)
+    Ok(())
 }
 
 enum WriteResult {
     /// We performed a state transition, but did not write; try again.
     Continue,
 
-    /// We need to change the format before we can continue playback.
-    ChangeFormat(Format),
+    /// We need to change the sample rate before we can continue playback.
+    ChangeSampleRate(Hertz),
 
     /// The queue is empty, playback is done for now.
     QueueEmpty,
@@ -187,53 +179,77 @@ enum WriteResult {
 
 fn write_samples(
     pcm: &alsa::PCM,
-    current_format: Format,
-    io: &mut alsa::pcm::IO<u8>,
+    filters: &mut Filters,
+    io: &mut alsa::pcm::IO<i16>,
     player: &mut PlayerState,
 ) -> Result<WriteResult> {
     use alsa::pcm::State;
 
-    let mut next_format = None;
+    let n_channels = pcm.hw_params_current()?.get_channels()? as usize;
+
+    let mut next_rate = None;
     let mut n_consumed = 0;
 
     // Query how many frames are available for writing. If the device is in a
     // failed state, for example because of an underrun, then this fails, and
     // we need to recover. Recover once, if that does not help, propagate the
     // error.
-    let n_available = match pcm.avail_update() {
-        Ok(n) => n,
-        Err(err) => {
-            println!("DEBUG: write_samples was in error, the error was {:?}.", err);
-            // Previously we used try_recover here, but all it does is call
-            // prepare, which we would do anyway below. See [1].
-            // [1]: https://git.alsa-project.org/?p=alsa-lib.git;a=blob;f=src/pcm/pcm.c;
-            // h=bc18954b92da124bafd3a67913bd3c8900dd012f;hb=HEAD#l7864
-            0
-        }
-    } as usize;
+    let n_available = pcm.avail_update().unwrap_or_else(|err| {
+        println!("DEBUG: write_samples was in error, the error was {:?}.", err);
+        // Previously we used try_recover here, but all it does is call
+        // prepare, which we would do anyway below. See [1].
+        // [1]: https://git.alsa-project.org/?p=alsa-lib.git;a=blob;f=src/pcm/pcm.c;
+        // h=bc18954b92da124bafd3a67913bd3c8900dd012f;hb=HEAD#l7864
+        0
+    }) as usize;
 
     if n_available > 0 {
         n_consumed = match player.peek_mut() {
-            Some(ref block) if current_format != block.format() => {
-                // Next block has a different sample rate or bit depth, finish
-                // what is still in the buffer, so we can switch afterwards.
+            Some(ref block) if filters.get_sample_rate() != block.sample_rate() => {
+                // Next block has a different sample rate, finish what is still
+                // in the buffer, so we can switch afterwards.
                 pcm.drain()?;
-                next_format = Some(block.format());
+                next_rate = Some(block.sample_rate());
                 0
             }
             Some(block) => {
-                let num_channels = 2;
-                let samples_written = num_channels * io.mmap(n_available, |dst| {
-                    let src = block.slice();
-                    let n = dst.len().min(src.len());
-                    dst[..n].copy_from_slice(&src[..n]);
-                    // We have to return the number of frames (count independent
-                    // of the number of channels), but we have bytes.
-                    n / (num_channels * current_format.bits_per_sample as usize / 8)
+                io.mmap(n_available, |dst| {
+                    let n = (dst.len() / n_channels).min(block.len());
+
+                    // Write left and right samples into the output buffer at sample i.
+                    let mut put_i = |i, l, r| {
+                        // Duplicate the left and right channels to as
+                        // many channels as we need. You'd think that is
+                        // only 2, but on the UMC404HD, it's 4 channels.
+                        for j in 0..n_channels / 2 {
+                            unsafe {
+                                *dst.get_unchecked_mut(i * n_channels + 2 * j + 0) = l;
+                                *dst.get_unchecked_mut(i * n_channels + 2 * j + 1) = r;
+                            }
+                        }
+                    };
+                    match block.slice() {
+                        SampleDataSlice::I16(src) => {
+                            for (i, s) in src.iter().take(n).enumerate() {
+                                let (l, r) = filters.tick_i16(s.0 as i32, s.1 as i32);
+                                put_i(i, l, r);
+                            }
+                        }
+                        SampleDataSlice::I24(src) => {
+                            for (i, s) in src.iter().take(n).enumerate() {
+                                let s_i32 = s.as_channels();
+                                let (l, r) = filters.tick_i24(s_i32.0, s_i32.1);
+                                put_i(i, l, r);
+                            }
+                        }
+                    }
+
+                    // We need to return the number of frames written.
+                    n
+
                 // TODO: This can apparently cause Error("snd_pcm_mmap_commit", Sys(EPIPE).
                 // How to handle it?
-                })?;
-                samples_written
+                })?
             }
             None => 0,
         };
@@ -266,13 +282,13 @@ fn write_samples(
         // available). Sleep until there is space in the buffer again.
         State::Running => Ok(WriteResult::Yield),
 
-        State::Draining => match next_format {
+        State::Draining => match next_rate {
             Some(_) => Ok(WriteResult::Yield),
             None if player.is_queue_empty() => Ok(WriteResult::QueueEmpty),
             None => panic!("PCM is unexpectedly in draining state."),
         }
-        State::Setup => match next_format {
-            Some(format) => Ok(WriteResult::ChangeFormat(format)),
+        State::Setup => match next_rate {
+            Some(rate) => Ok(WriteResult::ChangeSampleRate(rate)),
             None if player.is_queue_empty() => Ok(WriteResult::QueueEmpty),
             // The queue is not empty, but we have no data nonetheless, which
             // means the decoder is behind ... yield and hope that next round it
@@ -320,7 +336,7 @@ fn write_samples(
             // format yet. We only know the format after there is a block, but
             // when decode is in progress, the block is not yet there, so we yield.
             match player.peek_mut() {
-                Some(block) => Ok(WriteResult::ChangeFormat(block.format())),
+                Some(block) => Ok(WriteResult::ChangeSampleRate(block.sample_rate())),
                 None => Ok(WriteResult::Yield),
             }
         }
@@ -329,8 +345,8 @@ fn write_samples(
 }
 
 enum FillResult {
-    /// We need to change the format before we can continue playback.
-    ChangeFormat(Format),
+    /// We need to change the sample rate before we can continue playback.
+    ChangeSampleRate(Hertz),
 
     /// The queue is empty, playback is done for now.
     QueueEmpty,
@@ -341,19 +357,19 @@ enum FillResult {
 
 fn ensure_buffers_full(
     device: &alsa::PCM,
-    format: Format,
-    io: &mut alsa::pcm::IO<u8>,
+    filters: &mut Filters,
+    io: &mut alsa::pcm::IO<i16>,
     player: &mut PlayerState,
 ) -> FillResult {
     loop {
-        match write_samples(device, format, io, player) {
+        match write_samples(device, filters, io, player) {
             Err(err) => {
                 println!("Error while writing samples: {:?}", err);
                 println!("Resuming ...");
                 continue
             }
             Ok(WriteResult::Continue) => continue,
-            Ok(WriteResult::ChangeFormat(new_format)) => return FillResult::ChangeFormat(new_format),
+            Ok(WriteResult::ChangeSampleRate(rate)) => return FillResult::ChangeSampleRate(rate),
             Ok(WriteResult::Yield) => return FillResult::Yield,
             Ok(WriteResult::QueueEmpty) => return FillResult::QueueEmpty,
         }
@@ -379,11 +395,9 @@ fn play_queue(
 
     // Set a sentinel value at the start, so we are guaranteed that the first
     // thing we do is change the format.
-    let mut current_format = Format {
-        sample_rate: Hertz(0),
-        bits_per_sample: 0,
-    };
-    let mut next_format = None;
+    let cutoff = Hertz(0);
+    let mut filters = Filters::new(cutoff);
+    let mut next_rate = None;
 
     loop {
         // If the sample format changed, then we re-open the device. Up to Linux
@@ -392,7 +406,7 @@ fn play_queue(
         // `snd_pcm_hw_params` a second time with a different sample rate, it
         // always returns error code 22 (invalid argument). We work around this
         // by closing and re-opening the device.
-        if let Some(format) = next_format.take() {
+        if let Some(rate) = next_rate.take() {
             drop(fds);
             drop(device);
 
@@ -400,31 +414,28 @@ fn play_queue(
             vc = get_volume_control(&mixer, volume_name).expect("TODO: Failed to get volume control.");
             fds = device.get().expect("TODO: Failed to get fds from device.");
 
-            match set_format(&device, format) {
-                Ok(()) => println!(
-                    "Set format: rate={}, bits_per_sample={}, card={card_name}",
-                    format.sample_rate,
-                    format.bits_per_sample,
-                ),
+            match set_format(&device, rate) {
+                Ok(()) => {
+                    println!("Set format: rate={rate}, bits_per_sample=16, card={card_name}");
+                },
                 Err(err) => panic!(
-                    "Failed to set format for device {} to format {:?}: {:?}",
-                    card_name, format, err,
+                    "Failed to set format for device {card_name} to sample rate {rate}: {err:?}",
                 ),
             }
 
-            current_format = format;
+            filters.set_sample_rate(rate);
         }
 
         // There is also "direct mode" that works with mmaps, but it is not
         // supported by the kernel on ARM, and I want to run this on a Raspberry Pi,
         // so for simplicity I will use the mode that is supported everywhere.
-        let mut io = device.io_bytes();
+        let mut io = device.io_i16().expect("We know we use a compatible sample format.");
 
         let (result, target_volume, needs_decode) = {
             let mut state = state_mutex.lock().unwrap();
             let result = ensure_buffers_full(
                 &device,
-                current_format,
+                &mut filters,
                 &mut io,
                 &mut state
             );
@@ -458,8 +469,8 @@ fn play_queue(
                 let max_sleep_ms = 15;
                 alsa::poll::poll(&mut fds, max_sleep_ms).expect("TODO: Failed to wait for events.");
             }
-            FillResult::ChangeFormat(new_format) => {
-                next_format = Some(new_format);
+            FillResult::ChangeSampleRate(new_rate) => {
+                next_rate = Some(new_rate);
                 continue;
             }
         }
@@ -540,7 +551,7 @@ pub fn main(
     queue_events: SyncSender<QueueEvent>,
     history_events: SyncSender<PlaybackEvent>,
 ) {
-    use std::time::{Instant, Duration};
+    use std::time::{Duration, Instant};
 
     try_increase_thread_priority();
 

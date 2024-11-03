@@ -10,28 +10,26 @@
 use std::fmt;
 use std::fs;
 use std::mem;
-use std::sync::mpsc::SyncSender;
 use std::sync::mpsc;
+use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
 use std::thread;
-
-use claxon;
-use claxon::metadata::StreamInfo;
+use std::thread::JoinHandle;
 
 use crate::config::Config;
 use crate::error::Error;
 use crate::exec_pre_post;
-use crate::filter::StateVariableFilter;
-use crate::history::PlaybackEvent;
-use crate::playcount::PlayCounter;
 use crate::history;
+use crate::history::PlaybackEvent;
 use crate::mvar::Var;
 use crate::playback;
+use crate::playcount::PlayCounter;
 use crate::prim::Hertz;
 use crate::shuffle;
 use crate::user_data::{Rating, UserData};
-use crate::{AlbumId, Lufs, MetaIndex, MemoryMetaIndex, TrackId};
+use crate::{AlbumId, Lufs, MemoryMetaIndex, MetaIndex, TrackId};
+use claxon;
+use claxon::metadata::StreamInfo;
 
 type FlacReader = claxon::FlacReader<fs::File>;
 
@@ -89,46 +87,104 @@ impl Default for Format {
 /// A block of interleaved samples, queued for playback.
 pub struct Block {
     /// The samples, interleaved left, right.
-    ///
-    /// Samples are encoded in little endian (which is native both for x86,
-    /// and ARM on the Raspberry Pi) in the number of bits per sample specified
-    /// by the format.
-    sample_bytes: Box<[u8]>,
+    data: SampleData,
 
-    /// The number of bytes consumed.
+    /// The number of samples consumed.
     pos: usize,
 
-    /// The bit depth and sample rate of this block.
-    format: Format,
+    /// The sample rate of this block.
+    ///
+    /// The bit depth is already implied by the `data` enum.
+    sample_rate: Hertz,
+}
+
+/// A 16-bit stereo sample, left and right channels.
+pub struct SampleI16(pub i16, pub i16);
+
+/// A 24-bit stereo sample, left and right channels.
+pub struct SampleI24([i16; 3]);
+
+impl SampleI24 {
+    pub fn new(left: i32, right: i32) -> SampleI24 {
+        let mut data_i16 = [0_i16; 3];
+        let data: &mut [u8; 6] = unsafe { mem::transmute(&mut data_i16) };
+        data[0] = ((left >> 0) & 0xff) as u8;
+        data[1] = ((left >> 8) & 0xff) as u8;
+        data[2] = ((left >> 16) & 0xff) as u8;
+        data[3] = ((right >> 0) & 0xff) as u8;
+        data[4] = ((right >> 8) & 0xff) as u8;
+        data[5] = ((right >> 16) & 0xff) as u8;
+        SampleI24(data_i16)
+    }
+    pub fn as_channels(&self) -> (i32, i32) {
+        let data: &[u8; 6] = unsafe { mem::transmute(&self.0) };
+        let left = (data[0] as i32) | ((data[1] as i32) << 8) | ((data[2] as i32) << 16);
+        let right = (data[3] as i32) | ((data[4] as i32) << 8) | ((data[5] as i32) << 16);
+        (left, right)
+    }
+}
+
+/// Decoded stereo audio data, with left and right samples.
+pub enum SampleData {
+    /// Decoded 16 bits per sample stereo audio.
+    I16(Vec<SampleI16>),
+
+    /// Decoded 24 bits per sample stereo audio.
+    I24(Vec<SampleI24>),
+}
+
+/// Like [`SampleData`], but borrowed rather than owned.
+pub enum SampleDataSlice<'a> {
+    I16(&'a [SampleI16]),
+    I24(&'a [SampleI24]),
+}
+
+impl SampleData {
+    pub fn len(&self) -> usize {
+        match self {
+            SampleData::I16(data) => data.len(),
+            SampleData::I24(data) => data.len(),
+        }
+    }
 }
 
 impl Block {
-    pub fn new(format: Format, sample_bytes: Vec<u8>) -> Block {
+    pub fn new_i16(sample_rate: Hertz, data: Vec<SampleI16>) -> Block {
         Block {
-            sample_bytes: sample_bytes.into_boxed_slice(),
+            data: SampleData::I16(data),
             pos: 0,
-            format: format,
+            sample_rate,
         }
     }
 
-    /// Return a slice of the unconsumed samples.
-    pub fn slice(&self) -> &[u8] {
-        &self.sample_bytes[self.pos..]
+    pub fn new_i24(sample_rate: Hertz, data: Vec<SampleI24>) -> Block {
+        Block {
+            data: SampleData::I24(data),
+            pos: 0,
+            sample_rate,
+        }
     }
 
-    pub fn format(&self) -> Format {
-        self.format
+    pub fn slice(&self) -> SampleDataSlice {
+        match &self.data {
+            SampleData::I16(data) => SampleDataSlice::I16(&data[self.pos..]),
+            SampleData::I24(data) => SampleDataSlice::I24(&data[self.pos..]),
+        }
+    }
+
+    pub fn sample_rate(&self) -> Hertz {
+        self.sample_rate
     }
 
     /// Consume n samples.
     fn consume(&mut self, n: usize) {
-        self.pos += n * (self.format.bits_per_sample / 8) as usize;
-        debug_assert!(self.pos <= self.sample_bytes.len());
+        self.pos += n;
+        debug_assert!(self.pos <= self.data.len());
     }
 
     /// Return the number of unconsumed samples left.
     pub fn len(&self) -> usize {
-        (self.sample_bytes.len() - self.pos) / (self.format.bits_per_sample / 8) as usize
+        self.data.len() - self.pos
     }
 
     /// Return the duration of the unconsumed samples in milliseconds.
@@ -139,81 +195,15 @@ impl Block {
         // overflows a u32 (and usize can be 32 bits). We can't move the 500
         // into the denominator, because the common sample rate of 44.1 kHz is
         // not a multiple of 500.
-        self.len() as u64 * 500 / self.format.sample_rate.0 as u64
+        self.len() as u64 * 500 / self.sample_rate.0 as u64
     }
 
     /// Return the size of the block (including consumed samples) in bytes.
     pub fn size_bytes(&self) -> usize {
-        self.sample_bytes.len()
-    }
-}
-
-/// Holds high-pass filters, one for each channel.
-struct Filters {
-    /// One filter per channel.
-    filters: [StateVariableFilter; 2],
-
-    /// The current sample format.
-    format: Format,
-
-    /// The cutoff frequency.
-    cutoff: Hertz,
-}
-
-impl Filters {
-    pub fn new(cutoff: Hertz) -> Self {
-        // A q of sqrt(2) leads to the flattest possible pass-band.
-        let q = 2.0_f64.sqrt();
-
-        // The sample rate and cutoff will be adjusted later, these are just
-        // dummy values for now.
-        let sample_rate = Hertz(44_100);
-        let filter = StateVariableFilter::new(
-            sample_rate,
-            cutoff,
-            q,
-        );
-        Self {
-            filters: [filter.clone(), filter],
-            format: Format {
-                sample_rate: Hertz(44_100),
-                bits_per_sample: 16,
-            },
-            cutoff,
+        match &self.data {
+            SampleData::I16(data) => data.capacity() * 4,
+            SampleData::I24(data) => data.capacity() * 6,
         }
-    }
-
-    /// Update the filter parameters to work for a new format, if the format changed.
-    ///
-    /// Also clear the state if the format changed.
-    pub fn set_format(&mut self, format: &Format) {
-        // If the bit depth changes, we should reset the filter state, otherwise
-        // we get incorrect past feeding into our output. We could instead
-        // scale the state variables to keep the output continuous, but as a
-        // format change should only happen at album boundaries, I think it is
-        // better to start over clean.
-        if format.bits_per_sample != self.format.bits_per_sample {
-            for f in self.filters.iter_mut() {
-                f.reset();
-            }
-        }
-
-        if format.sample_rate == self.format.sample_rate {
-            for f in self.filters.iter_mut() {
-                f.set_cutoff(format.sample_rate, self.cutoff);
-            }
-        }
-
-        self.format = *format;
-    }
-
-    /// Feed one sample for both channels, return high-passed result.
-    #[inline]
-    pub fn tick(&mut self, left: i32, right: i32) -> (i32, i32) {
-        (
-            self.filters[0].tick_highpass_clip(left, self.format.bits_per_sample),
-            self.filters[1].tick_highpass_clip(right, self.format.bits_per_sample),
-        )
     }
 }
 
@@ -366,15 +356,14 @@ impl DecodeTask {
     pub fn run(
         self,
         index: &dyn MetaIndex,
-        filters: &mut Filters,
         stop_after_bytes: usize,
     ) -> DecodeResult {
         match self {
             DecodeTask::Continue(qid, reader) => {
-                DecodeTask::decode(qid, reader, filters, stop_after_bytes)
+                DecodeTask::decode(qid, reader, stop_after_bytes)
             }
             DecodeTask::Start(qid, track_id) => {
-                DecodeTask::start(index, qid, track_id, filters, stop_after_bytes)
+                DecodeTask::start(index, qid, track_id, stop_after_bytes)
             }
         }
     }
@@ -383,7 +372,6 @@ impl DecodeTask {
         index: &dyn MetaIndex,
         queue_id: QueueId,
         track_id: TrackId,
-        filters: &mut Filters,
         stop_after_bytes: usize,
     ) -> DecodeResult {
         let track = match index.get_track(track_id) {
@@ -398,21 +386,21 @@ impl DecodeTask {
             Err(err) => {
                 println!("Error in {:?}: {:?}", fname, err);
                 return DecodeResult {
-                    queue_id: queue_id,
-                    block: Block::new(Format::default(), Vec::new()),
+                    queue_id,
+                    block: Block::new_i16(Hertz(0), Vec::new()),
                     reader: None,
                 };
             }
         };
 
-        DecodeTask::decode(queue_id, reader, filters, stop_after_bytes)
+        DecodeTask::decode(queue_id, reader, stop_after_bytes)
     }
 
-    fn decode(queue_id: QueueId, reader: FlacReader, filters: &mut Filters, stop_after_bytes: usize) -> DecodeResult {
+    fn decode(queue_id: QueueId, reader: FlacReader, stop_after_bytes: usize) -> DecodeResult {
         let streaminfo = reader.streaminfo();
         match streaminfo.bits_per_sample {
-            16 => DecodeTask::decode_i16(queue_id, reader, streaminfo, filters, stop_after_bytes),
-            24 => DecodeTask::decode_i24(queue_id, reader, streaminfo, filters, stop_after_bytes),
+            16 => DecodeTask::decode_i16(queue_id, reader, streaminfo, stop_after_bytes),
+            24 => DecodeTask::decode_i24(queue_id, reader, streaminfo, stop_after_bytes),
             n  => panic!("Unsupported bit depth: {}", n),
         }
     }
@@ -421,24 +409,16 @@ impl DecodeTask {
         queue_id: QueueId,
         mut reader: FlacReader,
         streaminfo: StreamInfo,
-        filters: &mut Filters,
         stop_after_bytes: usize,
     ) -> DecodeResult {
         assert_eq!(streaminfo.bits_per_sample, 16);
         assert_eq!(streaminfo.channels, 2);
 
-        let format = Format {
-            sample_rate: Hertz(streaminfo.sample_rate),
-            bits_per_sample: 16,
-        };
-        filters.set_format(&format);
-
-        // The block size counts inter-channel samples, and we assume that all
-        // files are stereo, so multiply by two.
-        let max_samples_per_frame = streaminfo.max_block_size as usize * 2;
-        let max_bytes_per_frame = max_samples_per_frame * 2;
+        // The block size counts inter-channel samples, and our element is a
+        // stereo sample, so we don't need to multiply by two here!
+        let max_samples_per_frame = streaminfo.max_block_size as usize;
         let mut is_done = false;
-        let mut out = Vec::with_capacity(stop_after_bytes + max_bytes_per_frame);
+        let mut out = Vec::with_capacity(stop_after_bytes / 4 + max_samples_per_frame);
 
         {
             let mut frame_reader = reader.blocks();
@@ -457,28 +437,16 @@ impl DecodeTask {
                 };
 
                 for (l, r) in frame.stereo_samples() {
-                    let (l, r) = filters.tick(l, r);
-
-                    // Encode the samples in little endian.
-                    let bytes: [u8; 4] = [
-                        ((l >> 0) & 0xff) as u8,
-                        ((l >> 8) & 0xff) as u8,
-                        ((r >> 0) & 0xff) as u8,
-                        ((r >> 8) & 0xff) as u8,
-                    ];
-                    out.extend_from_slice(&bytes[..]);
+                    out.push(SampleI16(l as i16, r as i16));
                 }
 
                 buffer = frame.into_buffer();
             }
         }
 
-        out.shrink_to_fit();
-
-        let block = Block::new(format, out);
         DecodeResult {
-            queue_id: queue_id,
-            block: block,
+            queue_id,
+            block: Block::new_i16(Hertz(streaminfo.sample_rate), out),
             reader: if is_done { None } else { Some(reader) }
         }
     }
@@ -487,24 +455,16 @@ impl DecodeTask {
         queue_id: QueueId,
         mut reader: FlacReader,
         streaminfo: StreamInfo,
-        filters: &mut Filters,
         stop_after_bytes: usize,
     ) -> DecodeResult {
         assert_eq!(streaminfo.bits_per_sample, 24);
         assert_eq!(streaminfo.channels, 2);
 
-        let format = Format {
-            sample_rate: Hertz(streaminfo.sample_rate),
-            bits_per_sample: 24,
-        };
-        filters.set_format(&format);
-
-        // The block size counts inter-channel samples, and we assume that all
-        // files are stereo, so multiply by two.
-        let max_samples_per_frame = streaminfo.max_block_size as usize * 2;
-        let max_bytes_per_frame = max_samples_per_frame * 3;
+        // The block size counts inter-channel samples, and our element is a
+        // stereo sample, so we don't need to multiply by two here!
+        let max_samples_per_frame = streaminfo.max_block_size as usize;
         let mut is_done = false;
-        let mut out = Vec::with_capacity(stop_after_bytes + max_bytes_per_frame);
+        let mut out = Vec::with_capacity(stop_after_bytes / 6 + max_samples_per_frame);
 
         {
             let mut frame_reader = reader.blocks();
@@ -523,28 +483,16 @@ impl DecodeTask {
                 };
 
                 for (l, r) in frame.stereo_samples() {
-                    let (l, r) = filters.tick(l, r);
-
-                    // Encode the samples in little endian.
-                    let bytes: [u8; 6] = [
-                        ((l >>  0) & 0xff) as u8,
-                        ((l >>  8) & 0xff) as u8,
-                        ((l >> 16) & 0xff) as u8,
-                        ((r >>  0) & 0xff) as u8,
-                        ((r >>  8) & 0xff) as u8,
-                        ((r >> 16) & 0xff) as u8,
-                    ];
-                    out.extend_from_slice(&bytes[..]);
+                    out.push(SampleI24::new(l, r));
                 }
 
                 buffer = frame.into_buffer();
             }
         }
 
-        let block = Block::new(format, out);
         DecodeResult {
-            queue_id: queue_id,
-            block: block,
+            queue_id,
+            block: Block::new_i24(Hertz(streaminfo.sample_rate), out),
             reader: if is_done { None } else { Some(reader) }
         }
     }
@@ -918,7 +866,7 @@ impl PlayerState {
                     // the block, so we can compute the playback position in
                     // seconds even in case of a buffer underrun, when there are
                     // no blocks.
-                    queued_track.sample_rate = Some(result.block.format.sample_rate);
+                    queued_track.sample_rate = Some(result.block.sample_rate);
                     queued_track.blocks.push(result.block);
                     queued_track.decode = match result.reader {
                         Some(r) => Decode::Partial(r),
@@ -943,7 +891,7 @@ impl PlayerState {
 }
 
 /// Decode the queue until we reach a set memory limit.
-fn decode_burst(index: &MemoryMetaIndex, state_mutex: &Mutex<PlayerState>, filters: &mut Filters) {
+fn decode_burst(index: &MemoryMetaIndex, state_mutex: &Mutex<PlayerState>) {
     // The decode thread is a trade-off between power consumption and memory
     // usage: decoding a lot in one go and then sleeping for a long time is more
     // efficient than decoding a bit all the time, because the CPU can be
@@ -1000,7 +948,7 @@ fn decode_burst(index: &MemoryMetaIndex, state_mutex: &Mutex<PlayerState>, filte
         // to decode as much, because most of the memory is taken up by
         // already-played samples in a large block where the playhead is at the
         // end of the block.
-        let result = task.run(index, filters, bytes_left.min(10_000_000));
+        let result = task.run(index, bytes_left.min(10_000_000));
         println!(
             "Buffer: duration={:.3}s, memory={:.3}/{:.3} MB, budget={:.3} MB, decoded={:.3} MB",
             pending_duration_ms as f32 / 1000.0,
@@ -1023,8 +971,6 @@ fn decode_main(
     state_mutex: &Mutex<PlayerState>,
     high_pass_cutoff: Hertz,
 ) {
-    let mut filters = Filters::new(high_pass_cutoff);
-
     loop {
         let should_decode = {
             let state = state_mutex.lock().unwrap();
@@ -1034,7 +980,7 @@ fn decode_main(
 
         if should_decode {
             let current_index = index.get();
-            decode_burst(&current_index, state_mutex, &mut filters);
+            decode_burst(&current_index, state_mutex);
         }
 
         thread::park();

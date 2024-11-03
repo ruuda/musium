@@ -7,8 +7,8 @@
 
 //! Signal processing functions for high-pass filtering.
 
-use std::f64;
 use std::f32;
+use std::f64;
 
 use crate::prim::Hertz;
 
@@ -62,13 +62,6 @@ impl StateVariableFilter {
         self.f = (2.0 * (f64::consts::PI * cutoff.0 as f64 / sample_rate.0 as f64).sin()) as f32;
     }
 
-    /// Set all state variables to 0.
-    pub fn reset(&mut self) {
-        self.lowpass = 0.0;
-        self.highpass = 0.0;
-        self.bandpass = 0.0;
-    }
-
     /// Feed one sample into the filter.
     ///
     /// After this, the filtered signal is available in `self.lowpass` and
@@ -111,9 +104,10 @@ impl StateVariableFilter {
     /// This scales down the output by 6 dB and then clips, to prevent
     /// wrapping that might occasionally result from the filter producing higher
     /// peaks than were present in the original signal.
+    ///
+    /// Returns the output as 16 bits per sample, regardless of the input bit depth.
     #[inline(always)]
-    pub fn tick_highpass_clip(&mut self, x0: i32, bits_per_sample: u32) -> i32 {
-        self.tick(x0 as f32);
+    pub fn tick_highpass_clip_i16(&mut self, x0: i32, bits_per_sample: u32) -> i16 {
         // A factor 0.5 in amplitude is about -6 dB in volume. We lose one bit
         // of precision because of this, but we need to, because the filter can
         // produce values that are out of range. (One way to see this: imagine
@@ -121,11 +115,88 @@ impl StateVariableFilter {
         // the zero crossings of the sine ... the magnitudes of these samples
         // will be low. Now shift the sine by pi/2, so we sample the peaks.
         // Suddenly we need more range to represent the same wave!)
-        let y0 = self.highpass * 0.5;
+        // We correct for bit depth before feeding into the filter, so that we
+        // can mix inputs from different bit depths and reuse the filter state.
+        let x0_scaled = match bits_per_sample {
+            16 => (x0 as f32) * 0.5,
+            24 => (x0 as f32) * (0.5 / 256.0),
+            _ => unreachable!("Only 16 or 24 bits per sample are supported."),
+        };
+        self.tick(x0_scaled);
 
         // If the signal is still too large, clip it.
-        let max = (1_i32 << bits_per_sample) - 1;
-        let min = -max - 1;
-        (y0 as i32).max(min).min(max)
+        self.highpass.clamp(i16::MIN as f32, i16::MAX as f32) as i16
+    }
+}
+
+/// Holds high-pass filters, one for each channel.
+pub struct Filters {
+    /// One filter per channel.
+    filters: [StateVariableFilter; 2],
+
+    /// The current sample rate.
+    sample_rate: Hertz,
+
+    /// The cutoff frequency.
+    cutoff: Hertz,
+}
+
+impl Filters {
+    pub fn new(cutoff: Hertz) -> Self {
+        // A q of sqrt(2) leads to the flattest possible pass-band.
+        let q = 2.0_f64.sqrt();
+
+        // The sample rate and cutoff will be adjusted later, these are just
+        // dummy values for now.
+        let sample_rate = Hertz(44_100);
+        let filter = StateVariableFilter::new(
+            sample_rate,
+            cutoff,
+            q,
+        );
+        Self {
+            filters: [filter.clone(), filter],
+            sample_rate,
+            cutoff,
+        }
+    }
+
+    /// Return the sample rate that this filter is currently configured for.
+    pub fn get_sample_rate(&self) -> Hertz {
+        self.sample_rate
+    }
+
+    /// Update the filter parameters to work for a new format, if the sample rate changed.
+    pub fn set_sample_rate(&mut self, sample_rate: Hertz) {
+        for f in self.filters.iter_mut() {
+            f.set_cutoff(sample_rate, self.cutoff);
+        }
+        self.sample_rate = sample_rate;
+    }
+
+    /// Update the filter parameters to adjust the cutoff frequency.
+    pub fn set_cutoff(&mut self, cutoff: Hertz) {
+        for f in self.filters.iter_mut() {
+            f.set_cutoff(self.sample_rate, cutoff);
+        }
+        self.cutoff = cutoff;
+    }
+
+    /// Feed one 16-bit sample for both channels, return high-passed result.
+    #[inline]
+    pub fn tick_i16(&mut self, left: i32, right: i32) -> (i16, i16) {
+        (
+            self.filters[0].tick_highpass_clip_i16(left, 16),
+            self.filters[1].tick_highpass_clip_i16(right, 16),
+        )
+    }
+
+    /// Feed one 16-bit sample for both channels, return high-passed result.
+    #[inline]
+    pub fn tick_i24(&mut self, left: i32, right: i32) -> (i16, i16) {
+        (
+            self.filters[0].tick_highpass_clip_i16(left, 24),
+            self.filters[1].tick_highpass_clip_i16(right, 24),
+        )
     }
 }
