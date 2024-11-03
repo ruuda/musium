@@ -218,7 +218,7 @@ fn write_samples(
                     match block.slice() {
                         SampleDataSlice::I16(src) => {
                             for (i, s) in src.iter().take(n).enumerate() {
-                                let (l, r) = filters.tick_i16(s.0 as i32, s.1 as i32);
+                                let (l, r) = filters.tick_i16(s.0, s.1);
                                 put_i(i, l, r);
                             }
                         }

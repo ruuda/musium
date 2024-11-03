@@ -118,9 +118,16 @@ impl SampleI24 {
     }
     pub fn as_channels(&self) -> (i32, i32) {
         let data: &[u8; 6] = unsafe { mem::transmute(&self.0) };
-        let left = (data[0] as i32) | ((data[1] as i32) << 8) | ((data[2] as i32) << 16);
-        let right = (data[3] as i32) | ((data[4] as i32) << 8) | ((data[5] as i32) << 16);
-        (left, right)
+        let ul = (data[0] as i32) | ((data[1] as i32) << 8) | ((data[2] as i32) << 16);
+        let ur = (data[3] as i32) | ((data[4] as i32) << 8) | ((data[5] as i32) << 16);
+        // When we reconstruct into i32, we are missing the top byte. This means
+        // the value as i32 is incorrect, because it may be missing the sign bits.
+        // We can fix that with a double shift: the right-shift is sign-extending
+        // on i32.
+        (
+            (ul << 8) >> 8,
+            (ur << 8) >> 8,
+        )
     }
 }
 
