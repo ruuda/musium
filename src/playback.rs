@@ -89,9 +89,13 @@ fn set_format_get_channels(pcm: &alsa::PCM, sample_rate: Hertz) -> Result<u32> {
     let hwp = alsa::pcm::HwParams::any(pcm)?;
 
     // We want an even number of channels (stereo), and the lowest we can
-    // get. You'd think this is just "2", but the Behringer UMC404HD has 4
-    // channels, and we have to fill all of them.
-    let n_channels = 2 * (hwp.get_channels_min()? / 2);
+    // get, so round up to the nearest multiple of 2. You'd think this is just
+    // 2, but the Behringer UMC404HD has 4 channels as both the minimum and
+    // maximum, so we have to fill all of them.
+    let n_channels = match hwp.get_channels_min()? {
+        n if n & 1 == 0 => n,
+        n => n + 1,
+    };
     hwp.set_channels(n_channels)?;
 
     hwp.set_rate(sample_rate.0, alsa::ValueOr::Nearest)?;
@@ -440,9 +444,12 @@ fn play_queue(
 
         if volume != target_volume {
             if let Some(Millibel(v)) = target_volume {
-                println!("Set volume: {:.1} dB", v as f32 * 0.01);
-                vc.set_playback_db_all(alsa::mixer::MilliBel(v as i64), alsa::Round::Floor)
-                    .expect("Failed to set volume. TODO: Make fn return Alsa error?");
+                match vc.set_playback_db_all(alsa::mixer::MilliBel(v as i64), alsa::Round::Floor) {
+                    Ok(()) => println!("Set volume: {:.1} dB", v as f32 * 0.01),
+                    // Log when setting the volume fails, there is little more
+                    // we can do aside from crashing the entire application.
+                    Err(err) => println!("Failed to set volume to {:.1} dB: {err:?}", v as f32 * 0.01),
+                }
                 volume = target_volume;
             }
         }
