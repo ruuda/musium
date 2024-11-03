@@ -80,8 +80,21 @@ impl StateVariableFilter {
     /// avoid clipping.
     #[inline(always)]
     pub fn tick(&mut self, x0: f32) {
-        // See the image at https://www.earlevel.com/main/2003/03/02/the-digital-state-variable-filter/.
-        // TODO: Embed the diagram as ascii art, in case the page goes offline.
+        // Reproduced from https://www.earlevel.com/main/2003/03/02/the-digital-state-variable-filter/.
+        //            ┌────────────────────────────────────────────┐
+        //            │                                            │
+        //            ├──► Highpass   ┌───► Bandpass             ┌─┴─┐
+        //            │               │                          │ + ├───► Band reject
+        //            │   f           │              f           └─┬─┘
+        //      ┌───┐ │ ┌───┐   ┌───┐ │  ┌────┐    ┌───┐   ┌───┐   │
+        // ────►│ + ├─┴─┤ × ├───┤ + ├─┴─►│z^-1├─┬──┤ × ├───┤ + ├──┬┴┬────► Lowpass
+        //      └───┘   └───┘   └───┘    └────┘ │  └───┘   └───┘  │ │
+        //      ▲   ▲             ▲             │           ▲     │ │
+        //      │–  │–    q       └─────────────┤           │     │ │
+        //      │   │   ┌───┐                   │         ┌─┴──┐  │ │
+        //      │   └───┤ × ├───────────────────┘         │z^-1├──┘ │
+        //      │       └───┘                             └────┘    │
+        //      └───────────────────────────────────────────────────┘
         let bandpass_f = self.bandpass * self.f;
         let lowpass = bandpass_f + self.lowpass;
         let bandpass_q = self.bandpass * self.q;
