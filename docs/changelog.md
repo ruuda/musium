@@ -20,6 +20,15 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
    or a migration of the database).
  * The patch version is bumped for bugfixes and other small changes.
 
+## Next
+
+Not yet released.
+
+* **Breaking:** The `audio_device` configuration option now expects an
+  <abbr>Alsa</abbr> <abbr>PCM</abbr> name, rather than the name of the device.
+  This enables more control over how Musium outputs audio. See the [updated
+  configuration docs](configuration.md#audio_device) for how to set this value.
+
 ## 0.15.1
 
 Released 2024-11-02.

@@ -387,7 +387,7 @@ impl DecodeTask {
                 println!("Error in {:?}: {:?}", fname, err);
                 return DecodeResult {
                     queue_id,
-                    block: Block::new_i16(Hertz(0), Vec::new()),
+                    block: Block::new_i16(Hertz(44_100), Vec::new()),
                     reader: None,
                 };
             }

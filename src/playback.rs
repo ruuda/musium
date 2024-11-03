@@ -57,34 +57,9 @@ fn print_available_cards() -> Result<()> {
     Ok(())
 }
 
-fn open_device(card_name: &str) -> Result<(alsa::PCM, alsa::Mixer)> {
-    let cards = alsa::card::Iter::new();
-    let mut opt_card_index = None;
-
-    for res_card in cards {
-        let card = res_card?;
-        if card.get_name()? == card_name {
-            opt_card_index = Some(card.get_index());
-        }
-    }
-
-    let card_index = match opt_card_index {
-        Some(i) => i,
-        None => {
-            println!("Could not find a card with name '{}'.", card_name);
-            println!("Valid options:\n");
-            print_available_cards()?;
-            std::process::exit(1);
-        }
-    };
-
-    // Select the card by index (":{}") to get direct access to the hardware,
-    // without Alsa's "plug" devices doing sample rate conversion or converting
-    // the number of channels. If we need to fill out more than 2 channels, like
-    // the UMC404HD does, we'll do this ourselves.
-    let device = format!("hw:{}", card_index);
+fn open_device(alsa_name: &str) -> Result<(alsa::PCM, alsa::Mixer)> {
     let non_block = false;
-    let pcm = match alsa::PCM::new(&device, alsa::Direction::Playback, non_block) {
+    let pcm = match alsa::PCM::new(alsa_name, alsa::Direction::Playback, non_block) {
         Ok(pcm) => pcm,
         Err(error) if error.errno() == EBUSY => {
             println!("Could not open audio interface for exclusive access, it is already use.");
@@ -94,7 +69,7 @@ fn open_device(card_name: &str) -> Result<(alsa::PCM, alsa::Mixer)> {
     };
 
     let non_block = false;
-    let mixer = alsa::Mixer::new(&device, non_block)?;
+    let mixer = alsa::Mixer::new(alsa_name, non_block)?;
 
     Ok((pcm, mixer))
 }
@@ -107,7 +82,10 @@ fn get_volume_control<'a>(mixer: &'a alsa::Mixer, name: &str) -> Option<alsa::mi
     Some(selem)
 }
 
-fn set_format(pcm: &alsa::PCM, sample_rate: Hertz) -> Result<()> {
+/// Set the sample format to S16LE and the sample rate as given.
+///
+/// Returns the number of channels that the device needs us to fill.
+fn set_format_get_channels(pcm: &alsa::PCM, sample_rate: Hertz) -> Result<u32> {
     let hwp = alsa::pcm::HwParams::any(pcm)?;
 
     // We want an even number of channels (stereo), and the lowest we can
@@ -154,7 +132,7 @@ fn set_format(pcm: &alsa::PCM, sample_rate: Hertz) -> Result<()> {
     assert_eq!(hwp.get_rate()?, sample_rate.0);
     assert_eq!(hwp.get_format()?, alsa::pcm::Format::S16LE);
 
-    Ok(())
+    Ok(n_channels)
 }
 
 enum WriteResult {
@@ -180,12 +158,11 @@ enum WriteResult {
 fn write_samples(
     pcm: &alsa::PCM,
     filters: &mut Filters,
-    io: &mut alsa::pcm::IO<i16>,
+    n_channels: usize,
+    io: &mut alsa::pcm::IO<u8>,
     player: &mut PlayerState,
 ) -> Result<WriteResult> {
     use alsa::pcm::State;
-
-    let n_channels = pcm.hw_params_current()?.get_channels()? as usize;
 
     let mut next_rate = None;
     let mut n_consumed = 0;
@@ -214,17 +191,23 @@ fn write_samples(
             }
             Some(block) => {
                 io.mmap(n_available, |dst| {
-                    let n = (dst.len() / n_channels).min(block.len());
+                    // The destination buffer is in bytes, we have 2 * n_channels
+                    // bytes per frame (a left and right sample, both 16 bits).
+                    let n = (dst.len() / (2 * n_channels)).min(block.len());
 
-                    // Write left and right samples into the output buffer at sample i.
-                    let mut put_i = |i, l, r| {
+                    // Write left and right samples into the output buffer at frame i.
+                    let mut put_i = |i: usize, l: i16, r: i16| {
                         // Duplicate the left and right channels to as
                         // many channels as we need. You'd think that is
                         // only 2, but on the UMC404HD, it's 4 channels.
                         for j in 0..n_channels / 2 {
+                            let lb = l.to_le_bytes();
+                            let rb = r.to_le_bytes();
                             unsafe {
-                                *dst.get_unchecked_mut(i * n_channels + 2 * j + 0) = l;
-                                *dst.get_unchecked_mut(i * n_channels + 2 * j + 1) = r;
+                                *dst.get_unchecked_mut(i * n_channels * 2 + 4 * j + 0) = lb[0];
+                                *dst.get_unchecked_mut(i * n_channels * 2 + 4 * j + 1) = lb[1];
+                                *dst.get_unchecked_mut(i * n_channels * 2 + 4 * j + 2) = rb[0];
+                                *dst.get_unchecked_mut(i * n_channels * 2 + 4 * j + 3) = rb[1];
                             }
                         }
                     };
@@ -358,11 +341,12 @@ enum FillResult {
 fn ensure_buffers_full(
     device: &alsa::PCM,
     filters: &mut Filters,
-    io: &mut alsa::pcm::IO<i16>,
+    n_channels: usize,
+    io: &mut alsa::pcm::IO<u8>,
     player: &mut PlayerState,
 ) -> FillResult {
     loop {
-        match write_samples(device, filters, io, player) {
+        match write_samples(device, filters, n_channels, io, player) {
             Err(err) => {
                 println!("Error while writing samples: {:?}", err);
                 println!("Resuming ...");
@@ -382,16 +366,17 @@ fn ensure_buffers_full(
 /// released. An outer loop can call it again once there is new content in the
 /// queue.
 fn play_queue(
-    card_name: &str,
+    alsa_name: &str,
     volume_name: &str,
     state_mutex: &Mutex<PlayerState>,
     decode_thread: &Thread,
 ) {
-    let (mut device, mut mixer) = open_device(card_name).expect("TODO: Failed to open device.");
+    let (mut device, mut mixer) = open_device(alsa_name).expect("TODO: Failed to open device.");
     let mut vc = get_volume_control(&mixer, volume_name).expect("TODO: Failed to get volume control.");
     let mut fds = device.get().expect("TODO: Failed to get fds from device.");
 
     let mut volume = None;
+    let mut n_channels = 0;
 
     // Set a sentinel value at the start, so we are guaranteed that the first
     // thing we do is change the format.
@@ -410,18 +395,19 @@ fn play_queue(
             drop(fds);
             drop(device);
 
-            (device, mixer) = open_device(card_name).expect("TODO: Failed to open device.");
+            (device, mixer) = open_device(alsa_name).expect("TODO: Failed to open device.");
             vc = get_volume_control(&mixer, volume_name).expect("TODO: Failed to get volume control.");
             fds = device.get().expect("TODO: Failed to get fds from device.");
 
-            match set_format(&device, rate) {
-                Ok(()) => {
-                    println!("Set format: rate={rate}, bits_per_sample=16, card={card_name}");
+            n_channels = match set_format_get_channels(&device, rate) {
+                Ok(n) => {
+                    println!("Set format: bits_per_sample=16, rate={rate}, channels={n} pcm={alsa_name}");
+                    n
                 },
                 Err(err) => panic!(
-                    "Failed to set format for device {card_name} to sample rate {rate}: {err:?}",
+                    "Failed to set format for device {alsa_name} to sample rate {rate}: {err:?}",
                 ),
-            }
+            };
 
             filters.set_sample_rate(rate);
         }
@@ -429,13 +415,14 @@ fn play_queue(
         // There is also "direct mode" that works with mmaps, but it is not
         // supported by the kernel on ARM, and I want to run this on a Raspberry Pi,
         // so for simplicity I will use the mode that is supported everywhere.
-        let mut io = device.io_i16().expect("We know we use a compatible sample format.");
+        let mut io = device.io_bytes();
 
         let (result, target_volume, needs_decode) = {
             let mut state = state_mutex.lock().unwrap();
             let result = ensure_buffers_full(
                 &device,
                 &mut filters,
+                n_channels as usize,
                 &mut io,
                 &mut state
             );
