@@ -1068,7 +1068,7 @@ impl Player {
         let config_for_playback = config.clone();
         let hist_sender_for_playback = hist_sender.clone();
 
-        let builder = std::thread::Builder::new();
+        let builder = thread::Builder::new();
         let playback_join_handle = builder
             .name("playback".into())
             .spawn(move || {
@@ -1081,7 +1081,7 @@ impl Player {
                 );
             }).unwrap();
 
-        let builder = std::thread::Builder::new();
+        let builder = thread::Builder::new();
         let index_for_history = index_var;
 
         let db_path = config.db_path.clone();

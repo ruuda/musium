@@ -25,51 +25,44 @@ use crate::history::PlaybackEvent;
 use crate::player::{Millibel, PlayerState, SampleDataSlice};
 use crate::prim::Hertz;
 
-const EBUSY: i32 = 16;
-
 type Result<T> = result::Result<T, alsa::Error>;
-
-fn print_available_cards() -> Result<()> {
-    let cards = alsa::card::Iter::new();
-    let mut found_any = false;
-
-    for res_card in cards {
-        let card = res_card?;
-        println!("{}Name: {}", if found_any { "\n" } else { "" }, card.get_name()?);
-        println!("  Long name:  {}", card.get_longname()?);
-
-        let non_block = false;
-        let ctl = alsa::ctl::Ctl::from_card(&card, non_block)?;
-        let info = ctl.card_info()?;
-        println!("  Card id:    {}", info.get_id()?);
-        println!("  Driver:     {}", info.get_driver()?);
-        println!("  Components: {}", info.get_components()?);
-        println!("  Mixer name: {}", info.get_mixername()?);
-
-        found_any = true;
-    }
-
-    if !found_any {
-        println!("No cards found.");
-        println!("You may need to be a member of the 'audio' group.");
-    }
-
-    Ok(())
-}
 
 fn open_device(alsa_name: &str) -> Result<(alsa::PCM, alsa::Mixer)> {
     let non_block = false;
     let pcm = match alsa::PCM::new(alsa_name, alsa::Direction::Playback, non_block) {
         Ok(pcm) => pcm,
-        Err(error) if error.errno() == EBUSY => {
+        Err(error) if error.errno() == libc::EBUSY => {
             println!("Could not open audio interface for exclusive access, it is already use.");
+            return Err(error);
+        }
+        Err(error) if error.errno() == libc::ENOENT => {
+            println!("Failed to open audio interface, PCM '{alsa_name}' is unknown.");
+            println!("Try listing options with 'aplay --list-pcms'.");
             return Err(error);
         }
         Err(error) => return Err(error),
     };
 
+    // Now we have to find the mixer for the card that the PCM we have belongs
+    // to. If the PCM is (a wrapper around) a physical card, we can reference it
+    // by card index. However, if `alsa_name` is e.g. `pipewire`, then it will
+    // not have an associated card. In that case, we guess that the mixer name
+    // is equal to the PCM name. For `pipewire` or `hw:0`, this works.
+    let info = pcm.info()?;
+    let mixer_name = match info.get_card() {
+        n if n >= 0 => format!("hw:{}", n),
+        _ => alsa_name.to_string(),
+    };
+
     let non_block = false;
-    let mixer = alsa::Mixer::new(alsa_name, non_block)?;
+    let mixer = match alsa::Mixer::new(&mixer_name, non_block) {
+        Ok(mixer) => mixer,
+        Err(error) if error.errno() == libc::ENOENT => {
+            println!("Failed to find a mixer for '{alsa_name}'; '{mixer_name}' did not work.");
+            return Err(error);
+        }
+        Err(error) => return Err(error),
+    };
 
     Ok((pcm, mixer))
 }
