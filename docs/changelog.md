@@ -24,10 +24,15 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
 
 Not yet released.
 
-* **Breaking:** The `audio_device` configuration option now expects an
-  <abbr>Alsa</abbr> <abbr>PCM</abbr> name, rather than the name of the device.
-  This enables more control over how Musium outputs audio. See the [updated
-  configuration docs](configuration.md#audio_device) for how to set this value.
+ * **Breaking:** The `audio_device` configuration option now expects an
+   <abbr>Alsa</abbr> <abbr>PCM</abbr> name, rather than the name of the device.
+   This enables more control over how Musium outputs audio. See the [updated
+   configuration docs](configuration.md#audio_device) for how to set this value.
+ * The [high-pass filter](highpass.md) can now be adjusted at runtime, just like
+   the volume. The existing [`high_pass_cutoff` setting](configuration.md#high_pass_cutoff)
+   now controls the initial value at startup.
+ * The initial volume at startup is now configurable with the new [`volume`
+   setting](configuration.md#volume).
 
 ## 0.15.1
 

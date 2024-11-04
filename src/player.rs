@@ -10,6 +10,7 @@
 use std::fmt;
 use std::fs;
 use std::mem;
+use std::str::FromStr;
 use std::sync::mpsc;
 use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Mutex};
@@ -66,6 +67,21 @@ pub struct Millibel(pub i16);
 impl fmt::Display for Millibel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:.2} dB", (self.0 as f32) * 0.01)
+    }
+}
+
+impl FromStr for Millibel {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Millibel, &'static str> {
+        match s.strip_suffix(" dB") {
+            None => Err("Expected integer dB value of the form '10 dB', but the dB suffix is missing."),
+            Some(num) => match i16::from_str(num) {
+                Err(_) => Err("Expected integer dB value of the form '10 dB', but the number is invalid."),
+                // The value is decibel, but the representation millibel.
+                Ok(x) => Ok(Millibel(x * 100)),
+            }
+        }
     }
 }
 
@@ -564,10 +580,10 @@ pub struct PlayerState {
 
 
 impl PlayerState {
-    pub fn new(high_pass_cutoff: Hertz, events: SyncSender<PlaybackEvent>) -> PlayerState {
+    pub fn new(volume: Millibel, high_pass_cutoff: Hertz, events: SyncSender<PlaybackEvent>) -> PlayerState {
         PlayerState {
             next_unused_id: QueueId(0),
-            volume: Millibel(-10_00),
+            volume,
             target_loudness: Lufs::new(-2300),
             current_track_loudness: None,
             high_pass_cutoff,
@@ -1060,6 +1076,7 @@ impl Player {
         let (queue_events_sender, queue_events_receiver) = mpsc::sync_channel(5);
 
         let state = Arc::new(Mutex::new(PlayerState::new(
+            config.volume,
             config.high_pass_cutoff,
             hist_sender.clone(),
         )));

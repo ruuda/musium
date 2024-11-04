@@ -16,6 +16,7 @@ pairs with `=` separator, and support `#` for comments.
     audio_device = UMC404HD 192k
     audio_volume_control = UMC404HD 192k Output
 
+    volume = -10 dB
     high_pass_cutoff = 30 Hz
 
 ## Settings
@@ -52,7 +53,7 @@ MB.
 
 ### audio_device
 
-The <abbr>Alsa</abbr> <abbr>PCM<abbr> used for playback. This is a string that
+The <abbr>Alsa</abbr> <abbr>PCM</abbr> used for playback. This is a string that
 is interpreted by <abbr>Alsa</abbr>, and its format is unfortunately not well
 documented, though [there is some information about <abbr>PCM</abbr> naming
 conventions in the <abbr>Alsa</abbr> docs][alsa-names]. Values that should be
@@ -111,22 +112,19 @@ manipulate it manually with tools like Alsamixer after starting Musium. In
 particular, Musium adjusts the volume to perform loudness normalization, so even
 for a constant target playback volume, Musium will manipulate the mixer control.
 
+### volume
+
+Initial volume at startup. The value must be an integer and include the _dB_
+unit as suffix. This setting is optional and defaults to `-10 dB`. See also
+the [loudness normalization chapter](loudness.md) for the meaning of the value.
+The volume can be changed at runtime in the webinterface.
+
 ### high_pass_cutoff
 
-Apply a high-pass filter to the output, with the given cutoff frequency. The
+Initial filter cutoff frequency for the [high-pass filter](highpass.md). The
 value must be an integer and include the _Hz_ unit as suffix. This setting is
-optional and defaults to 0&nbsp;Hz (so no frequencies are filtered).
-
-A high-pass filter is useful in situations where your speakers reproduce low
-frequencies — perhaps even louder than intended due to suboptimal room
-acoustics — that are unpleasant or unwanted. Especially 2020s albums can be
-bass-heavy, and taking off the low end can help to allow greater playback volume
-without making the room sound saturated. Values around 50&nbsp;Hz are suitable
-for this use case.
-
-The high pass filter is not perfect. It has a gain of -3&nbsp;dB at the cutoff
-frequency, and a rolloff of -12&nbsp;dB per octave. For example, at a cutoff
-frequency of 50&nbsp;Hz, a 25&nbsp;Hz tone would be diminished by 15&nbsp;dB.
+optional and defaults to `0 Hz` (so no frequencies are filtered). The filter
+cutoff can be changed at runtime in the webinterface.
 
 ### exec_pre_playback_path
 
