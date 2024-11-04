@@ -91,7 +91,7 @@ fn set_format_get_channels(pcm: &alsa::PCM, sample_rate: Hertz) -> Result<u32> {
     };
     hwp.set_channels(n_channels)?;
 
-    hwp.set_rate(sample_rate.0, alsa::ValueOr::Nearest)?;
+    hwp.set_rate(sample_rate.0 as u32, alsa::ValueOr::Nearest)?;
 
     // We always output 16 bits per sample, regardless of the input bit depth,
     // which is usually 16 bits but can be 24 occasionally. The Behringer
@@ -126,7 +126,7 @@ fn set_format_get_channels(pcm: &alsa::PCM, sample_rate: Hertz) -> Result<u32> {
 
     // Double-check that we got the expected parameters.
     assert_eq!(hwp.get_channels()?, n_channels);
-    assert_eq!(hwp.get_rate()?, sample_rate.0);
+    assert_eq!(hwp.get_rate()?, sample_rate.0 as u32);
     assert_eq!(hwp.get_format()?, alsa::pcm::Format::S16LE);
 
     Ok(n_channels)

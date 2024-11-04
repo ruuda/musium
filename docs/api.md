@@ -56,16 +56,24 @@ Shuffle the queue. Returns the new queue.
 Clear the play queue. This does not affect the currently playing track. Returns
 the new queue.
 
-## Volume
+## Volume and high-pass filter
 
 ### `GET` /api/volume
-Return the current volume.
+Return the current volume and filter parameters.
 
 ### `POST` /api/volume/up
-Increase the volume by 1 dB. Returns the new volume.
+Increase the volume by 1 dB. Returns the new parameters.
 
 ### `POST` /api/volume/down
-Decrease the volume by 1 dB. Returns the new volume.
+Decrease the volume by 1 dB. Returns the new parameters.
+
+### `POST` /api/filter/up
+Increase the cutoff of the high-pass filter by 5 Hz. This reduces bass content.
+Returns the new parameters.
+
+### `POST` /api/filter/down
+Decrease the cutoff of the high-pass filter by 5 Hz. This increases bass content.
+Returns the new parameters.
 
 ## Rating
 

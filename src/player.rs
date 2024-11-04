@@ -451,7 +451,7 @@ impl DecodeTask {
 
         DecodeResult {
             queue_id,
-            block: Block::new_i16(Hertz(streaminfo.sample_rate), out),
+            block: Block::new_i16(Hertz(streaminfo.sample_rate as i32), out),
             reader: if is_done { None } else { Some(reader) }
         }
     }
@@ -497,7 +497,7 @@ impl DecodeTask {
 
         DecodeResult {
             queue_id,
-            block: Block::new_i24(Hertz(streaminfo.sample_rate), out),
+            block: Block::new_i24(Hertz(streaminfo.sample_rate as i32), out),
             reader: if is_done { None } else { Some(reader) }
         }
     }
@@ -1038,6 +1038,12 @@ pub struct QueueSnapshot {
     pub tracks: Vec<TrackSnapshot>,
 }
 
+/// Runtime playback parameters: volume and filter cutoff.
+pub struct Params {
+    pub volume: Millibel,
+    pub high_pass_cutoff: Hertz,
+}
+
 impl Player {
     pub fn new(
         index_var: Var<MemoryMetaIndex>,
@@ -1212,14 +1218,21 @@ impl Player {
         self.state.lock().unwrap().clear_queue();
     }
 
-    /// Return the current playback volume.
-    pub fn get_volume(&self) -> Millibel {
-        let state = self.state.lock().unwrap();
-        state.volume
+    fn get_params_internal(state: &PlayerState) -> Params {
+        Params {
+            volume: state.volume,
+            high_pass_cutoff: state.high_pass_cutoff,
+        }
     }
 
-    /// Add a (possibly negative) amount to the current volume, return the new volume.
-    pub fn change_volume(&self, add: Millibel) -> Millibel {
+    /// Return the current playback parameters.
+    pub fn get_params(&self) -> Params {
+        let state = self.state.lock().unwrap();
+        Self::get_params_internal(&state)
+    }
+
+    /// Add a (possibly negative) amount to the current volume, return the new params.
+    pub fn change_volume(&self, add: Millibel) -> Params {
         let mut state = self.state.lock().unwrap();
         state.volume.0 += add.0;
 
@@ -1232,6 +1245,14 @@ impl Player {
         // -60 dB is low enough to be pretty much silent.
         state.volume = state.volume.max(Millibel(-6000));
 
-        state.volume
+        Self::get_params_internal(&state)
+    }
+
+    /// Add a (possibly negative) amount to the high pass filter cutoff, return the new params.
+    pub fn change_cutoff(&self, add: Hertz) -> Params {
+        let mut state = self.state.lock().unwrap();
+        state.high_pass_cutoff.0 += add.0;
+        state.high_pass_cutoff.0 = state.high_pass_cutoff.0.max(0);
+        Self::get_params_internal(&state)
     }
 }

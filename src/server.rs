@@ -12,23 +12,23 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+use tiny_http::Method::{self, Delete, Get, Post, Put};
 use tiny_http::{Header, Request, Response, ResponseBox, Server};
-use tiny_http::Method::{Delete, Get, Post, Put, self};
 
 use crate::config::Config;
-use crate::database_utils;
 use crate::database as db;
 use crate::database::Connection;
+use crate::database_utils;
 use crate::mvar::Var;
 use crate::player::{Millibel, Player, QueueId};
-use crate::prim::{ArtistId, AlbumId, TrackId};
+use crate::prim::{AlbumId, ArtistId, Hertz, TrackId};
 use crate::scan::BackgroundScanner;
 use crate::serialization;
 use crate::string_utils::normalize_words;
 use crate::systemd;
 use crate::thumb_cache::ThumbCache;
 use crate::user_data::{Rating, UserData};
-use crate::{MetaIndex, MemoryMetaIndex};
+use crate::{MemoryMetaIndex, MetaIndex};
 
 fn header_content_type(content_type: &str) -> Header {
     Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes())
@@ -388,8 +388,8 @@ impl MetaServer {
     fn handle_get_volume(&self) -> ResponseBox {
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        let volume = self.player.get_volume();
-        serialization::write_volume_json(&mut w, volume).unwrap();
+        let params = self.player.get_params();
+        serialization::write_player_params_json(&mut w, &params).unwrap();
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
             .boxed()
@@ -398,8 +398,18 @@ impl MetaServer {
     fn handle_change_volume(&self, add: Millibel) -> ResponseBox {
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        let volume = self.player.change_volume(add);
-        serialization::write_volume_json(&mut w, volume).unwrap();
+        let params = self.player.change_volume(add);
+        serialization::write_player_params_json(&mut w, &params).unwrap();
+        Response::from_data(w.into_inner())
+            .with_header(header_content_type("application/json"))
+            .boxed()
+    }
+
+    fn handle_change_cutoff(&self, add: Hertz) -> ResponseBox {
+        let buffer = Vec::new();
+        let mut w = io::Cursor::new(buffer);
+        let params = self.player.change_cutoff(add);
+        serialization::write_player_params_json(&mut w, &params).unwrap();
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
             .boxed()
@@ -532,6 +542,8 @@ impl MetaServer {
             (&Get,  "volume", None)         => self.handle_get_volume(),
             (&Post, "volume", Some("up"))   => self.handle_change_volume(Millibel( 1_00)),
             (&Post, "volume", Some("down")) => self.handle_change_volume(Millibel(-1_00)),
+            (&Post, "filter", Some("up"))   => self.handle_change_cutoff(Hertz(5)),
+            (&Post, "filter", Some("down")) => self.handle_change_cutoff(Hertz(-5)),
 
             // Background library scanning.
             (&Get,  "scan", Some("status")) => self.handle_get_scan_status(),
