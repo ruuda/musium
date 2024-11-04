@@ -648,7 +648,7 @@ button.play-next::before {
 #current-pane {
   display: grid;
   grid-template-columns: auto;
-  grid-template-rows: auto 4em;
+  grid-template-rows: auto 8em;
   grid-template-areas:
     "current"
     "volume-controls"
@@ -727,6 +727,9 @@ button.play-next::before {
 
 .volume-controls {
   grid-area: volume-controls;
+}
+
+.volume-control {
   display: grid;
   grid-template-columns: 4em auto 4em;
   grid-template-rows: auto;
@@ -764,11 +767,13 @@ button.volume-up { grid-area: volume-up; }
 
 .volume-controls .volume-label {
   position: absolute;
-  top: -2rem;
+  top: -1.7rem;
   right: -2.5rem;
   width: 5rem;
   text-align: center;
   color: #bbb;
+  font-size: 0.9rem;
+  word-spacing: -0.1rem;
 }
 
 #about-pane {
@@ -887,7 +892,7 @@ button.scan-library::before {
 
   /* Limit the width of the volume bar, there is no point in stretching it out
    * too much. */
-  .volume-controls {
+  .volume-control {
     grid-template-columns: auto 4em 18em 4em auto;
     grid-template-areas:
       "pad-left volume-down volume-bar volume-up pad-right"
@@ -943,7 +948,7 @@ button.scan-library::before {
 
   /* For the now playing view, we can put the cover art and title side by side. */
   #current-pane {
-    grid-template-rows: auto auto auto 4em;
+    grid-template-rows: auto auto auto 8em;
     grid-template-areas:
       "pad-top"
       "current"

@@ -15,8 +15,9 @@ module NowPlaying
 
 import Control.Monad.Reader.Class (ask)
 import Data.Array.NonEmpty as NonEmptyArray
-import Effect.Aff (Aff, launchAff_)
+import Data.Int (round)
 import Effect (Effect)
+import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
 import Prelude
 import Dom (Element)
@@ -27,23 +28,55 @@ import Event (Event)
 import Event as Event
 import Html (Html)
 import Html as Html
-import Model (Decibel (Decibel), QueuedTrack (QueuedTrack), Rating (Rating), TrackId, Volume (Volume))
+import Model (Decibel (Decibel), Hertz (Hertz), PlayerParams (PlayerParams), QueuedTrack (QueuedTrack), Rating (Rating), TrackId)
 import Model as Model
 import Navigation as Navigation
 import StatusBar as StatusBar
 import Time as Time
 
-volumeControls :: Html Unit
-volumeControls = Html.div $ do
-  Html.addClass "volume-controls"
-  { volumeBar, label } <- Html.div $ do
+type Slider =
+  { bar :: Element
+  , label :: Element
+  , buttonDec :: Element
+  , buttonInc :: Element
+  }
+
+addSlider :: String -> String -> Html Slider
+addSlider textDec textInc = Html.div $ do
+  Html.addClass "volume-control"
+  elements <- Html.div $ do
     Html.addClass "indicator"
     Html.div $ do
       label <- Html.div $ do
         Html.addClass "volume-label"
         ask
-      volumeBar <- ask
-      pure $ { volumeBar, label }
+      bar <- ask
+      pure $ { bar, label }
+
+  buttonDec <- Html.button $ do
+    Html.addClass "volume-down"
+    Html.text textDec
+    ask
+
+  buttonInc <- Html.button $ do
+    Html.addClass "volume-up"
+    Html.text textInc
+    ask
+
+  pure { bar: elements.bar, label: elements.label, buttonDec, buttonInc }
+
+updateSlider :: Slider -> Number -> String -> Effect Unit
+updateSlider slider percentage label = do
+  Dom.setWidth (show percentage <> "%") slider.bar
+  Html.withElement slider.label $ do
+    Html.clear
+    Html.text label
+
+volumeControls :: Html Unit
+volumeControls = Html.div $ do
+  Html.addClass "volume-controls"
+  volumeSlider <- addSlider "V–" "V+"
+  cutoffSlider <- addSlider "B–" "B+"
 
   -- Now that we have the elements that display the current volume,
   -- define a function that alters those elements to display a certain volume.
@@ -53,28 +86,31 @@ volumeControls = Html.div $ do
       -- Set the minimum width to 1% so you can see that there is something that
       -- fills the volume bar.
       let percentage = max 1.0 $ min 100.0 $ (v + 20.0) / 0.3
-      Dom.setWidth (show percentage <> "%") volumeBar
-      Html.withElement label $ do
-        Html.clear
-        Html.text $ show v <> " dB"
+      updateSlider volumeSlider percentage (show v <> " dB")
 
-    changeVolume dir = liftEffect $ launchAff_ $ do
-      Volume newVolume <- Model.changeVolume dir
-      liftEffect $ setVolume newVolume.volume
+    setCutoff (Hertz cutoff) = do
+      -- Use 0 Hz as the "maximum" (maximum amount of bass, and volume),
+      -- and 100 Hz as the minimum for the slider.
+      let percentage = max 1.0 $ 100.0 - cutoff
+      updateSlider cutoffSlider percentage (show (round cutoff) <> " Hz")
 
-  -- Fetch the initial volume.
-  liftEffect $ launchAff_ $ do
-    Volume v <- Model.getVolume
-    liftEffect $ setVolume v.volume
+    updateSliders (PlayerParams params) = liftEffect $ do
+      setVolume params.volume
+      setCutoff params.highPassCutoff
 
-  Html.button $ do
-    Html.addClass "volume-down"
-    Html.text "V-"
-    Html.onClick $ changeVolume Model.VolumeDown
-  Html.button $ do
-    Html.addClass "volume-up"
-    Html.text "V+"
-    Html.onClick $ changeVolume Model.VolumeUp
+    changeVolume dir = liftEffect $ launchAff_ $ Model.changeVolume dir >>= updateSliders
+    changeCutoff dir = liftEffect $ launchAff_ $ Model.changeCutoff dir >>= updateSliders
+
+  liftEffect $ do
+    Html.withElement volumeSlider.buttonDec $ Html.onClick $ changeVolume Model.VolumeDown
+    Html.withElement volumeSlider.buttonInc $ Html.onClick $ changeVolume Model.VolumeUp
+    -- Note, for the "B" (Bass) slider, the direction is reversed.
+    -- If we increase the bass, we decrease the cutoff frequency.
+    Html.withElement cutoffSlider.buttonDec $ Html.onClick $ changeCutoff Model.VolumeUp
+    Html.withElement cutoffSlider.buttonInc $ Html.onClick $ changeCutoff Model.VolumeDown
+
+    -- Fetch the initial volume.
+    launchAff_ $ Model.getPlayerParams >>= updateSliders
 
 data NowPlayingState
   = StatePlaying { progressBar :: Element }
