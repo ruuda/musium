@@ -7,100 +7,62 @@
 
 //! Logic for playing back audio using Alsa.
 
-use std::result;
 use std::ffi::CString;
-use std::sync::{Arc, Mutex, Condvar};
+use std::result;
 use std::sync::mpsc::SyncSender;
-use std::thread::Thread;
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
+use std::thread::Thread;
 
-use alsa::PollDescriptors;
 use alsa;
+use alsa::PollDescriptors;
 use libc;
 
 use crate::config::Config;
 use crate::exec_pre_post::QueueEvent;
+use crate::filter::Filters;
 use crate::history::PlaybackEvent;
-use crate::player::{Format, Millibel, PlayerState};
+use crate::player::{Millibel, PlayerState, SampleDataSlice};
 use crate::prim::Hertz;
-
-const EBUSY: i32 = 16;
 
 type Result<T> = result::Result<T, alsa::Error>;
 
-fn print_available_cards() -> Result<()> {
-    let cards = alsa::card::Iter::new();
-    let mut found_any = false;
-
-    for res_card in cards {
-        let card = res_card?;
-        println!("{}Name: {}", if found_any { "\n" } else { "" }, card.get_name()?);
-        println!("  Long name:  {}", card.get_longname()?);
-
-        let non_block = false;
-        let ctl = alsa::ctl::Ctl::from_card(&card, non_block)?;
-        let info = ctl.card_info()?;
-        println!("  Card id:    {}", info.get_id()?);
-        println!("  Driver:     {}", info.get_driver()?);
-        println!("  Components: {}", info.get_components()?);
-        println!("  Mixer name: {}", info.get_mixername()?);
-
-        found_any = true;
-    }
-
-    if !found_any {
-        println!("No cards found.");
-        println!("You may need to be a member of the 'audio' group.");
-    }
-
-    Ok(())
-}
-
-fn open_device(card_name: &str) -> Result<(alsa::PCM, alsa::Mixer)> {
-    let cards = alsa::card::Iter::new();
-    let mut opt_card_index = None;
-
-    for res_card in cards {
-        let card = res_card?;
-        if card.get_name()? == card_name {
-            opt_card_index = Some(card.get_index());
-        }
-    }
-
-    let card_index = match opt_card_index {
-        Some(i) => i,
-        None => {
-            println!("Could not find a card with name '{}'.", card_name);
-            println!("Valid options:\n");
-            print_available_cards()?;
-            std::process::exit(1);
-        }
-    };
-
-    // Select the card by index (":{}") to get direct access to the hardware,
-    // play back stereo on the front two speakers. Adding "plug:" in front makes
-    // Alsa take care of conversions where needed. This is bad on the one hand,
-    // because I would not want e.g. silent sample rate conversion, but on the
-    // other hand, I have a UCM404HD, and it supports exactly 4 channels in "hw"
-    // mode, so then I would have to manually fill the two other channels with
-    // silence, and I don't feel like doing that right now. Even when selecting
-    // "front" without "plug", the minimum number of channels is 4, even though
-    // https://alsa-project.org/wiki/DeviceNames claims that for "front" we
-    // would get stereo.
-    let device = format!("plug:hw:{}", card_index);
+fn open_device(alsa_name: &str) -> Result<(alsa::PCM, alsa::Mixer)> {
     let non_block = false;
-    let pcm = match alsa::PCM::new(&device, alsa::Direction::Playback, non_block) {
+    let pcm = match alsa::PCM::new(alsa_name, alsa::Direction::Playback, non_block) {
         Ok(pcm) => pcm,
-        Err(error) if error.errno() == EBUSY => {
+        Err(error) if error.errno() == libc::EBUSY => {
             println!("Could not open audio interface for exclusive access, it is already use.");
+            return Err(error);
+        }
+        Err(error) if error.errno() == libc::ENOENT => {
+            println!("Failed to open audio interface, PCM '{alsa_name}' is unknown.");
+            println!("Try listing options with 'aplay --list-pcms'.");
             return Err(error);
         }
         Err(error) => return Err(error),
     };
 
-    let device = format!("hw:{}", card_index);
+    // Now we have to find the mixer for the card that the PCM we have belongs
+    // to. If the PCM is (a wrapper around) a physical card, we can reference it
+    // by card index. However, if `alsa_name` is e.g. `pipewire`, then it will
+    // not have an associated card. In that case, we guess that the mixer name
+    // is equal to the PCM name. For `pipewire` or `hw:0`, this works.
+    let info = pcm.info()?;
+    let mixer_name = match info.get_card() {
+        n if n >= 0 => format!("hw:{}", n),
+        _ => alsa_name.to_string(),
+    };
+
     let non_block = false;
-    let mixer = alsa::Mixer::new(&device, non_block)?;
+    let mixer = match alsa::Mixer::new(&mixer_name, non_block) {
+        Ok(mixer) => mixer,
+        Err(error) if error.errno() == libc::ENOENT => {
+            println!("Failed to find a mixer for '{alsa_name}'; '{mixer_name}' did not work.");
+            return Err(error);
+        }
+        Err(error) => return Err(error),
+    };
 
     Ok((pcm, mixer))
 }
@@ -113,58 +75,69 @@ fn get_volume_control<'a>(mixer: &'a alsa::Mixer, name: &str) -> Option<alsa::mi
     Some(selem)
 }
 
-fn set_format(pcm: &alsa::PCM, format: Format) -> Result<()> {
-    let sample_format = match format.bits_per_sample {
-        16 => alsa::pcm::Format::S16LE,
-        // Note the "3" in the format here: this means that every sample is 3
-        // bytes. The regular S24LE format uses 4 bytes per sample, with the
-        // most significant byte being zero.
-        24 => alsa::pcm::Format::S243LE,
-        // Files with unsupported bit depths are filtered out at index time.
-        // They could still occur here if the index is outdated, but that is not
-        // something that deserves special error handling, just crash it.
-        n  => panic!("Unsupported: {} bits per sample. Please re-index.", n),
+/// Set the sample format to S16LE and the sample rate as given.
+///
+/// Returns the number of channels that the device needs us to fill.
+fn set_format_get_channels(pcm: &alsa::PCM, sample_rate: Hertz) -> Result<u32> {
+    let hwp = alsa::pcm::HwParams::any(pcm)?;
+
+    // We want an even number of channels (stereo), and the lowest we can
+    // get, so round up to the nearest multiple of 2. You'd think this is just
+    // 2, but the Behringer UMC404HD has 4 channels as both the minimum and
+    // maximum, so we have to fill all of them.
+    let n_channels = match hwp.get_channels_min()? {
+        n if n & 1 == 0 => n,
+        n => n + 1,
     };
+    hwp.set_channels(n_channels)?;
 
-    {
-        let hwp = alsa::pcm::HwParams::any(pcm)?;
-        // TODO: Confirm by first querying the device without "plug:" that it
-        // supports this sample rate and format without plugin involvement (to
-        // ensure that the plugin is only responsible for channel count
-        // conversion). Alternatively, do the channel conversion manually.
-        hwp.set_channels(2)?;
-        hwp.set_rate(format.sample_rate.0, alsa::ValueOr::Nearest)?;
-        hwp.set_format(sample_format)?;
-        hwp.set_access(alsa::pcm::Access::MMapInterleaved)?;
-        hwp.set_period_size_near(256, alsa::ValueOr::Nearest)?;
-        // TODO: Pick a good buffer size.
-        hwp.set_buffer_size_near(2048)?;
-        pcm.hw_params(&hwp)?;
-    }
+    hwp.set_rate(sample_rate.0 as u32, alsa::ValueOr::Nearest)?;
 
-    {
-        let hwp = pcm.hw_params_current()?;
-        let swp = pcm.sw_params_current()?;
-        let buffer_len = hwp.get_buffer_size()?;
-        let period_len = hwp.get_period_size()?;
-        swp.set_start_threshold(buffer_len - period_len)?;
-        swp.set_avail_min(period_len)?;
-        pcm.sw_params(&swp)?;
+    // We always output 16 bits per sample, regardless of the input bit depth,
+    // which is usually 16 bits but can be 24 occasionally. The Behringer
+    // UMC404HD that I use supports either 16 or 32 bits per sample in the
+    // hardware itself, so let's just truncate to 16 bits and simplify the
+    // output mode; for normal listening, what Musium is intended for, you
+    // will not hear the difference.
+    hwp.set_format(alsa::pcm::Format::S16LE)?;
+    hwp.set_access(alsa::pcm::Access::MMapInterleaved)?;
 
-        assert_eq!(hwp.get_channels()?, 2);
-        assert_eq!(hwp.get_rate()?, format.sample_rate.0);
-        assert_eq!(hwp.get_format()?, sample_format);
-    }
+    // Set the buffer and period size, in frames. The period is how often
+    // the hardware will interrupt; it is how often poll returns. The Alsa
+    // wiki says:
+    // > The buffer size always has to be greater than one period size.
+    // > Commonly this is 2*period size, but some hardware can do 8 periods
+    // > per buffer.
+    // 2048 frames at 44.1 kHz is 46ms, so that is how responsive we can be
+    // to stopping the music.
+    hwp.set_period_size_near(512, alsa::ValueOr::Nearest)?;
+    hwp.set_buffer_size_near(2048)?;
 
-    Ok(())
+    pcm.hw_params(&hwp)?;
+    drop(hwp);
+
+    let hwp = pcm.hw_params_current()?;
+    let swp = pcm.sw_params_current()?;
+    let buffer_len = hwp.get_buffer_size()?;
+    let period_len = hwp.get_period_size()?;
+    swp.set_start_threshold(buffer_len - period_len)?;
+    swp.set_avail_min(period_len)?;
+    pcm.sw_params(&swp)?;
+
+    // Double-check that we got the expected parameters.
+    assert_eq!(hwp.get_channels()?, n_channels);
+    assert_eq!(hwp.get_rate()?, sample_rate.0 as u32);
+    assert_eq!(hwp.get_format()?, alsa::pcm::Format::S16LE);
+
+    Ok(n_channels)
 }
 
 enum WriteResult {
     /// We performed a state transition, but did not write; try again.
     Continue,
 
-    /// We need to change the format before we can continue playback.
-    ChangeFormat(Format),
+    /// We need to change the sample rate before we can continue playback.
+    ChangeSampleRate(Hertz),
 
     /// The queue is empty, playback is done for now.
     QueueEmpty,
@@ -181,53 +154,82 @@ enum WriteResult {
 
 fn write_samples(
     pcm: &alsa::PCM,
-    current_format: Format,
+    filters: &mut Filters,
+    n_channels: usize,
     io: &mut alsa::pcm::IO<u8>,
     player: &mut PlayerState,
 ) -> Result<WriteResult> {
     use alsa::pcm::State;
 
-    let mut next_format = None;
+    let mut next_rate = None;
     let mut n_consumed = 0;
 
     // Query how many frames are available for writing. If the device is in a
     // failed state, for example because of an underrun, then this fails, and
     // we need to recover. Recover once, if that does not help, propagate the
     // error.
-    let n_available = match pcm.avail_update() {
-        Ok(n) => n,
-        Err(err) => {
-            println!("DEBUG: write_samples was in error, the error was {:?}.", err);
-            // Previously we used try_recover here, but all it does is call
-            // prepare, which we would do anyway below. See [1].
-            // [1]: https://git.alsa-project.org/?p=alsa-lib.git;a=blob;f=src/pcm/pcm.c;
-            // h=bc18954b92da124bafd3a67913bd3c8900dd012f;hb=HEAD#l7864
-            0
-        }
-    } as usize;
+    let n_available = pcm.avail_update().unwrap_or_else(|err| {
+        println!("DEBUG: write_samples was in error, the error was {:?}.", err);
+        // Previously we used try_recover here, but all it does is call
+        // prepare, which we would do anyway below. See [1].
+        // [1]: https://git.alsa-project.org/?p=alsa-lib.git;a=blob;f=src/pcm/pcm.c;
+        // h=bc18954b92da124bafd3a67913bd3c8900dd012f;hb=HEAD#l7864
+        0
+    }) as usize;
 
     if n_available > 0 {
         n_consumed = match player.peek_mut() {
-            Some(ref block) if current_format != block.format() => {
-                // Next block has a different sample rate or bit depth, finish
-                // what is still in the buffer, so we can switch afterwards.
+            Some(ref block) if filters.get_sample_rate() != block.sample_rate() => {
+                // Next block has a different sample rate, finish what is still
+                // in the buffer, so we can switch afterwards.
                 pcm.drain()?;
-                next_format = Some(block.format());
+                next_rate = Some(block.sample_rate());
                 0
             }
             Some(block) => {
-                let num_channels = 2;
-                let samples_written = num_channels * io.mmap(n_available, |dst| {
-                    let src = block.slice();
-                    let n = dst.len().min(src.len());
-                    dst[..n].copy_from_slice(&src[..n]);
-                    // We have to return the number of frames (count independent
-                    // of the number of channels), but we have bytes.
-                    n / (num_channels * current_format.bits_per_sample as usize / 8)
+                io.mmap(n_available, |dst| {
+                    // The destination buffer is in bytes, we have 2 * n_channels
+                    // bytes per frame (a left and right sample, both 16 bits).
+                    let n = (dst.len() / (2 * n_channels)).min(block.len());
+
+                    // Write left and right samples into the output buffer at frame i.
+                    let mut put_i = |i: usize, l: i16, r: i16| {
+                        // Duplicate the left and right channels to as
+                        // many channels as we need. You'd think that is
+                        // only 2, but on the UMC404HD, it's 4 channels.
+                        for j in 0..n_channels / 2 {
+                            let lb = l.to_le_bytes();
+                            let rb = r.to_le_bytes();
+                            unsafe {
+                                *dst.get_unchecked_mut(i * n_channels * 2 + 4 * j + 0) = lb[0];
+                                *dst.get_unchecked_mut(i * n_channels * 2 + 4 * j + 1) = lb[1];
+                                *dst.get_unchecked_mut(i * n_channels * 2 + 4 * j + 2) = rb[0];
+                                *dst.get_unchecked_mut(i * n_channels * 2 + 4 * j + 3) = rb[1];
+                            }
+                        }
+                    };
+                    match block.slice() {
+                        SampleDataSlice::I16(src) => {
+                            for (i, s) in src.iter().take(n).enumerate() {
+                                let (l, r) = filters.tick_i16(s.0, s.1);
+                                put_i(i, l, r);
+                            }
+                        }
+                        SampleDataSlice::I24(src) => {
+                            for (i, s) in src.iter().take(n).enumerate() {
+                                let s_i32 = s.as_channels();
+                                let (l, r) = filters.tick_i24(s_i32.0, s_i32.1);
+                                put_i(i, l, r);
+                            }
+                        }
+                    }
+
+                    // We need to return the number of frames written.
+                    n
+
                 // TODO: This can apparently cause Error("snd_pcm_mmap_commit", Sys(EPIPE).
                 // How to handle it?
-                })?;
-                samples_written
+                })?
             }
             None => 0,
         };
@@ -260,13 +262,13 @@ fn write_samples(
         // available). Sleep until there is space in the buffer again.
         State::Running => Ok(WriteResult::Yield),
 
-        State::Draining => match next_format {
+        State::Draining => match next_rate {
             Some(_) => Ok(WriteResult::Yield),
             None if player.is_queue_empty() => Ok(WriteResult::QueueEmpty),
             None => panic!("PCM is unexpectedly in draining state."),
         }
-        State::Setup => match next_format {
-            Some(format) => Ok(WriteResult::ChangeFormat(format)),
+        State::Setup => match next_rate {
+            Some(rate) => Ok(WriteResult::ChangeSampleRate(rate)),
             None if player.is_queue_empty() => Ok(WriteResult::QueueEmpty),
             // The queue is not empty, but we have no data nonetheless, which
             // means the decoder is behind ... yield and hope that next round it
@@ -314,7 +316,7 @@ fn write_samples(
             // format yet. We only know the format after there is a block, but
             // when decode is in progress, the block is not yet there, so we yield.
             match player.peek_mut() {
-                Some(block) => Ok(WriteResult::ChangeFormat(block.format())),
+                Some(block) => Ok(WriteResult::ChangeSampleRate(block.sample_rate())),
                 None => Ok(WriteResult::Yield),
             }
         }
@@ -323,8 +325,8 @@ fn write_samples(
 }
 
 enum FillResult {
-    /// We need to change the format before we can continue playback.
-    ChangeFormat(Format),
+    /// We need to change the sample rate before we can continue playback.
+    ChangeSampleRate(Hertz),
 
     /// The queue is empty, playback is done for now.
     QueueEmpty,
@@ -335,19 +337,20 @@ enum FillResult {
 
 fn ensure_buffers_full(
     device: &alsa::PCM,
-    format: Format,
+    filters: &mut Filters,
+    n_channels: usize,
     io: &mut alsa::pcm::IO<u8>,
     player: &mut PlayerState,
 ) -> FillResult {
     loop {
-        match write_samples(device, format, io, player) {
+        match write_samples(device, filters, n_channels, io, player) {
             Err(err) => {
                 println!("Error while writing samples: {:?}", err);
                 println!("Resuming ...");
                 continue
             }
             Ok(WriteResult::Continue) => continue,
-            Ok(WriteResult::ChangeFormat(new_format)) => return FillResult::ChangeFormat(new_format),
+            Ok(WriteResult::ChangeSampleRate(rate)) => return FillResult::ChangeSampleRate(rate),
             Ok(WriteResult::Yield) => return FillResult::Yield,
             Ok(WriteResult::QueueEmpty) => return FillResult::QueueEmpty,
         }
@@ -360,24 +363,23 @@ fn ensure_buffers_full(
 /// released. An outer loop can call it again once there is new content in the
 /// queue.
 fn play_queue(
-    card_name: &str,
+    alsa_name: &str,
     volume_name: &str,
     state_mutex: &Mutex<PlayerState>,
     decode_thread: &Thread,
 ) {
-    let (mut device, mut mixer) = open_device(card_name).expect("TODO: Failed to open device.");
+    let (mut device, mut mixer) = open_device(alsa_name).expect("TODO: Failed to open device.");
     let mut vc = get_volume_control(&mixer, volume_name).expect("TODO: Failed to get volume control.");
     let mut fds = device.get().expect("TODO: Failed to get fds from device.");
 
     let mut volume = None;
+    let mut n_channels = 0;
 
     // Set a sentinel value at the start, so we are guaranteed that the first
     // thing we do is change the format.
-    let mut current_format = Format {
-        sample_rate: Hertz(0),
-        bits_per_sample: 0,
-    };
-    let mut next_format = None;
+    let cutoff = Hertz(0);
+    let mut filters = Filters::new(cutoff);
+    let mut next_rate = None;
 
     loop {
         // If the sample format changed, then we re-open the device. Up to Linux
@@ -386,27 +388,25 @@ fn play_queue(
         // `snd_pcm_hw_params` a second time with a different sample rate, it
         // always returns error code 22 (invalid argument). We work around this
         // by closing and re-opening the device.
-        if let Some(format) = next_format.take() {
+        if let Some(rate) = next_rate.take() {
             drop(fds);
             drop(device);
 
-            (device, mixer) = open_device(card_name).expect("TODO: Failed to open device.");
+            (device, mixer) = open_device(alsa_name).expect("TODO: Failed to open device.");
             vc = get_volume_control(&mixer, volume_name).expect("TODO: Failed to get volume control.");
             fds = device.get().expect("TODO: Failed to get fds from device.");
 
-            match set_format(&device, format) {
-                Ok(()) => println!(
-                    "Set format: rate={}, bits_per_sample={}, card={card_name}",
-                    format.sample_rate,
-                    format.bits_per_sample,
-                ),
+            n_channels = match set_format_get_channels(&device, rate) {
+                Ok(n) => {
+                    println!("Set format: bits_per_sample=16, rate={rate}, channels={n} pcm={alsa_name}");
+                    n
+                },
                 Err(err) => panic!(
-                    "Failed to set format for device {} to format {:?}: {:?}",
-                    card_name, format, err,
+                    "Failed to set format for device {alsa_name} to sample rate {rate}: {err:?}",
                 ),
-            }
+            };
 
-            current_format = format;
+            filters.set_sample_rate(rate);
         }
 
         // There is also "direct mode" that works with mmaps, but it is not
@@ -416,9 +416,19 @@ fn play_queue(
 
         let (result, target_volume, needs_decode) = {
             let mut state = state_mutex.lock().unwrap();
+
+            // Ensure that we use the latest cutoff frequency for the filter.
+            // Volume is managed by the Alsa mixer so it can be changed later,
+            // but the filter is baked into the decoded data.
+            if filters.get_cutoff() != state.target_high_pass_cutoff() {
+                println!("Set cutoff: {}", state.target_high_pass_cutoff());
+                filters.set_cutoff(state.target_high_pass_cutoff());
+            }
+
             let result = ensure_buffers_full(
                 &device,
-                current_format,
+                &mut filters,
+                n_channels as usize,
                 &mut io,
                 &mut state
             );
@@ -436,9 +446,12 @@ fn play_queue(
 
         if volume != target_volume {
             if let Some(Millibel(v)) = target_volume {
-                println!("Set volume: {:.1} dB", v as f32 * 0.01);
-                vc.set_playback_db_all(alsa::mixer::MilliBel(v as i64), alsa::Round::Floor)
-                    .expect("Failed to set volume. TODO: Make fn return Alsa error?");
+                match vc.set_playback_db_all(alsa::mixer::MilliBel(v as i64), alsa::Round::Floor) {
+                    Ok(()) => println!("Set volume: {:.1} dB", v as f32 * 0.01),
+                    // Log when setting the volume fails, there is little more
+                    // we can do aside from crashing the entire application.
+                    Err(err) => println!("Failed to set volume to {:.1} dB: {err:?}", v as f32 * 0.01),
+                }
                 volume = target_volume;
             }
         }
@@ -452,8 +465,8 @@ fn play_queue(
                 let max_sleep_ms = 15;
                 alsa::poll::poll(&mut fds, max_sleep_ms).expect("TODO: Failed to wait for events.");
             }
-            FillResult::ChangeFormat(new_format) => {
-                next_format = Some(new_format);
+            FillResult::ChangeSampleRate(new_rate) => {
+                next_rate = Some(new_rate);
                 continue;
             }
         }
@@ -534,7 +547,7 @@ pub fn main(
     queue_events: SyncSender<QueueEvent>,
     history_events: SyncSender<PlaybackEvent>,
 ) {
-    use std::time::{Instant, Duration};
+    use std::time::{Duration, Instant};
 
     try_increase_thread_priority();
 

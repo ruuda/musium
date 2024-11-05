@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use crate::error::{Error, Result};
+use crate::player::Millibel;
 use crate::prim::Hertz;
 
 #[derive(Debug, Clone)]
@@ -23,9 +24,9 @@ pub struct Config {
     pub listen: String,
     pub library_path: PathBuf,
     pub db_path: PathBuf,
-    // TODO: Make this optional; pick the first one by default.
     pub audio_device: String,
     pub audio_volume_control: String,
+    pub volume: Millibel,
     pub high_pass_cutoff: Hertz,
     pub exec_pre_playback_path: Option<PathBuf>,
     pub exec_post_idle_path: Option<PathBuf>,
@@ -39,6 +40,7 @@ impl fmt::Display for Config {
         writeln!(f, "  db_path                = {}", self.db_path.to_string_lossy())?;
         writeln!(f, "  audio_device           = {}", self.audio_device)?;
         writeln!(f, "  audio_volume_control   = {}", self.audio_volume_control)?;
+        writeln!(f, "  volume                 = {}", self.volume)?;
         writeln!(f, "  high_pass_cutoff       = {}", self.high_pass_cutoff)?;
         match self.exec_pre_playback_path.as_ref() {
             Some(path) => writeln!(f, "  exec_pre_playback_path = {}", path.to_string_lossy())?,
@@ -65,6 +67,7 @@ impl Config {
         let mut db_path = None;
         let mut audio_device = None;
         let mut audio_volume_control = None;
+        let mut volume = None;
         let mut high_pass_cutoff = None;
         let mut exec_pre_playback_path = None;
         let mut exec_post_idle_path = None;
@@ -92,6 +95,10 @@ impl Config {
                     "db_path" => db_path = Some(PathBuf::from(value)),
                     "audio_device" => audio_device = Some(String::from(value)),
                     "audio_volume_control" => audio_volume_control = Some(String::from(value)),
+                    "volume" => match Millibel::from_str(value) {
+                        Ok(vol) => volume = Some(vol),
+                        Err(msg) => return Err(Error::InvalidConfig(lineno, msg)),
+                    }
                     "high_pass_cutoff" => match Hertz::from_str(value) {
                         Ok(hz) => high_pass_cutoff = Some(hz),
                         Err(msg) => return Err(Error::InvalidConfig(lineno, msg)),
@@ -118,10 +125,7 @@ impl Config {
         }
 
         let config = Config {
-            listen: match listen {
-                Some(b) => b,
-                None => String::from("0.0.0.0:8233"),
-            },
+            listen: listen.unwrap_or_else(|| String::from("0.0.0.0:8233")),
             library_path: match library_path {
                 Some(p) => p,
                 None => return Err(Error::IncompleteConfig(
@@ -146,13 +150,11 @@ impl Config {
                     "Audio volume control not set. Expected 'audio_volume_control ='-line."
                 )),
             },
-            high_pass_cutoff: match high_pass_cutoff {
-                Some(hz) => hz,
-                None => Hertz(0),
-            },
-            exec_pre_playback_path: exec_pre_playback_path,
-            exec_post_idle_path: exec_post_idle_path,
-            idle_timeout_seconds: idle_timeout_seconds,
+            volume: volume.unwrap_or(Millibel(-10_00)),
+            high_pass_cutoff: high_pass_cutoff.unwrap_or(Hertz(0)),
+            exec_pre_playback_path,
+            exec_post_idle_path,
+            idle_timeout_seconds,
         };
 
         Ok(config)

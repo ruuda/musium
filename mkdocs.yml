@@ -21,6 +21,7 @@ nav:
     - Webinterface: webinterface.md
     - Tagging: tagging.md
     - Loudness normalization: loudness.md
+    - High-pass filter: highpass.md
     - Rating: rating.md
     - Scrobbling to Last.fm: scrobbling.md
     - Submitting to Listenbrainz: listenbrainz.md

@@ -11,6 +11,7 @@ module Model
   , Album (..)
   , AlbumId (..)
   , Decibel (..)
+  , Hertz (..)
   , QueueId (..)
   , QueuedTrack (..)
   , Rating (..)
@@ -23,20 +24,21 @@ module Model
   , Stats (..)
   , Track (..)
   , TrackId (..)
-  , Volume (..)
+  , PlayerParams (..)
   , VolumeChange (..)
   , coverUrl
+  , changeCutoff
   , changeVolume
   , enqueueTrack
   , formatDurationSeconds
   , getAlbums
   , getArtist
+  , getPlayerParams
   , getQueue
   , getScanStatus
   , getStats
   , getString
   , getTracks
-  , getVolume
   , originalReleaseYear
   , search
   , setRating
@@ -215,32 +217,40 @@ enqueueTrack (TrackId trackId) = do
         pure $ QueueId queueId
 
 newtype Decibel = Decibel Number
-
 derive instance decibelEq :: Eq Decibel
 derive instance decibelOrd :: Ord Decibel
 
+newtype Hertz = Hertz Number
+derive instance hertzEq :: Eq Hertz
+derive instance hertzOrd :: Ord Hertz
+
 data VolumeChange = VolumeUp | VolumeDown
 
-newtype Volume = Volume
+newtype PlayerParams = PlayerParams
   { volume :: Decibel
+  , highPassCutoff :: Hertz
   }
 
-instance decodeJsonVolume :: DecodeJson Volume where
+instance decodeJsonParams :: DecodeJson PlayerParams where
   decodeJson json = do
     obj        <- Json.decodeJson json
-    volDb      <- Json.getField obj "volume_db"
-    pure $ Volume { volume: Decibel volDb }
+    volume      <- Json.getField obj "volume_db"
+    cutoff      <- Json.getField obj "high_pass_cutoff_hz"
+    pure $ PlayerParams
+      { volume: Decibel volume
+      , highPassCutoff: Hertz cutoff
+      }
 
-getVolume :: Aff Volume
-getVolume = do
+getPlayerParams :: Aff PlayerParams
+getPlayerParams = do
   result <- Http.get Http.ResponseFormat.json "/api/volume"
   case result of
     Left err -> fatal $ "Failed to get volume: " <> Http.printError err
     Right response -> case Json.decodeJson response.body of
       Left err -> fatal $ "Failed to get volume: " <> printJsonDecodeError err
-      Right volume -> pure volume
+      Right ps -> pure ps
 
-changeVolume :: VolumeChange -> Aff Volume
+changeVolume :: VolumeChange -> Aff PlayerParams
 changeVolume change =
   let
     dir = case change of
@@ -252,7 +262,22 @@ changeVolume change =
       Left err -> fatal $ "Failed to change volume: " <> Http.printError err
       Right response -> case Json.decodeJson response.body of
         Left err -> fatal $ "Failed to change volume: " <> printJsonDecodeError err
-        Right newVolume -> pure newVolume
+        Right newParams -> pure newParams
+
+-- Change the cutoff of the high-pass filter. We ~~abuse~~ resue the `VolumeChange` type.
+changeCutoff :: VolumeChange -> Aff PlayerParams
+changeCutoff change =
+  let
+    dir = case change of
+      VolumeUp -> "up"
+      VolumeDown -> "down"
+  in do
+    result <- Http.post Http.ResponseFormat.json ("/api/filter/" <> dir) Nothing
+    case result of
+      Left err -> fatal $ "Failed to change filter cutoff: " <> Http.printError err
+      Right response -> case Json.decodeJson response.body of
+        Left err -> fatal $ "Failed to change filter cutoff: " <> printJsonDecodeError err
+        Right newParams -> pure newParams
 
 data ScanStage
   = ScanDiscovering

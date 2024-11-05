@@ -30,8 +30,6 @@ such as the ability to pause playback.*
  * Musium is not a tagger, it expects your files to be tagged correctly already.
  * Supports only flac, with no intention to support other audio formats.
  * Runs on Linux, with no intention to become cross-platform.
- * Uses raw <abbr>ALSA</abbr>, with no intention to support PulseAudio or
-   PipeWire.
 
 ## Getting started
 
@@ -41,7 +39,8 @@ Follow the [building](building.md) chapter to build from source. Then write a
     listen = 0.0.0.0:8233
     library_path = /home/user/music
     db_path = /home/user/.config/musium.sqlite3
-    audio_device = HDA Intel PCH
+    audio_device = front
+    audio_volume_control = PCM
 
 Index the library, compute loudness, and generate cover art thumbnails (requires
 Imagemagick and Guetzli). Computing loudness and generating thumbnails can take

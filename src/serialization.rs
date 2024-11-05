@@ -12,7 +12,7 @@ use serde_json;
 use std::io;
 use std::io::Write;
 
-use crate::player::{Millibel, TrackSnapshot};
+use crate::player::{Params, TrackSnapshot};
 use crate::scan;
 use crate::user_data::UserData;
 use crate::{Album, AlbumId, Artist, ArtistId, MetaIndex, TrackId};
@@ -283,8 +283,16 @@ pub fn write_queue_json<W: Write>(
     write!(w, "]")
 }
 
-pub fn write_volume_json<W: Write>(mut w: W, current_volume: Millibel) -> io::Result<()> {
-    write!(w, r#"{{"volume_db":{:.02}}}"#, current_volume.0 as f32 * 0.01)
+pub fn write_player_params_json<W: Write>(
+    mut w: W,
+    params: &Params,
+) -> io::Result<()> {
+    write!(
+        w,
+        r#"{{"volume_db":{:.02},"high_pass_cutoff_hz":{}}}"#,
+        params.volume.0 as f32 * 0.01,
+        params.high_pass_cutoff.0,
+    )
 }
 
 pub fn write_scan_status_json<W: Write>(

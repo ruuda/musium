@@ -211,7 +211,7 @@ impl FromStr for Lufs {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub struct Hertz(pub u32);
+pub struct Hertz(pub i32);
 
 impl FromStr for Hertz {
     type Err = &'static str;
@@ -219,7 +219,7 @@ impl FromStr for Hertz {
     fn from_str(s: &str) -> Result<Hertz, &'static str> {
         match s.strip_suffix(" Hz") {
             None => Err("Expected integer frequency value of the form '999 Hz', but the Hz suffix is missing."),
-            Some(num) => match u32::from_str(num) {
+            Some(num) => match i32::from_str(num) {
                 Err(_) => Err("Expected integer frequency value of the form '999 Hz', but the number is invalid."),
                 Ok(x) => Ok(Hertz(x)),
             }
