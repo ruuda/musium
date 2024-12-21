@@ -188,6 +188,8 @@ fn write_samples(
             }
             Some(block) => {
                 io.mmap(n_available, |dst| {
+                    assert_ne!(block.len(), 0, "Player should never have empty blocks.");
+
                     // The destination buffer is in bytes, we have 2 * n_channels
                     // bytes per frame (a left and right sample, both 16 bits).
                     let n = (dst.len() / (2 * n_channels)).min(block.len());
