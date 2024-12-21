@@ -173,7 +173,6 @@ impl SampleData {
 
 impl Block {
     pub fn new_i16(sample_rate: Hertz, data: Vec<SampleI16>) -> Block {
-        assert!(!data.is_empty(), "Blocks must not be empty.");
         Block {
             data: SampleData::I16(data),
             pos: 0,
@@ -182,7 +181,6 @@ impl Block {
     }
 
     pub fn new_i24(sample_rate: Hertz, data: Vec<SampleI24>) -> Block {
-        assert!(!data.is_empty(), "Blocks must not be empty.");
         Block {
             data: SampleData::I24(data),
             pos: 0,
@@ -901,7 +899,13 @@ impl PlayerState {
                     // seconds even in case of a buffer underrun, when there are
                     // no blocks.
                     queued_track.sample_rate = Some(result.block.sample_rate);
-                    queued_track.blocks.push(result.block);
+
+                    // The queued track must never contain empty blocks, because
+                    // that would make the playback thread go in an infinite loop.
+                    if result.block.len() > 0 {
+                        queued_track.blocks.push(result.block);
+                    }
+
                     queued_track.decode = match result.reader {
                         Some(r) => Decode::Partial(r),
                         None => Decode::Done,
