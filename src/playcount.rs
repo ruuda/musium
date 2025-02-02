@@ -598,20 +598,20 @@ fn score_trending(counter: &ExpCounter) -> f32 {
 /// Falling entries (tracks, albums, artists) are entries that have a high
 /// playcount on a long-term timescale, but low playcount recently.
 fn score_falling(counter: &ExpCounter) -> f32 {
-    let age_12 = counter.n[1].ln() - counter.n[2].ln();
-    let age_13 = counter.n[1].ln() - counter.n[3].ln();
-    let recent_plays = counter.n[4] + counter.n[3] * 0.25;
-    // NB: The comment below was true when all half lives were double the
-    // current values, this may need tweaking.
-    // Empirically, age_13 and age_12 tend to correspond best to what I
-    // think of as "forgotten" tracks. But that doesn't discount one when
-    // you listen to it in recent listens, so we mix in counter (the shortest
-    // timescale) as a penalty.
-    // Counts for age_13 tend to be about 5x as large as for age_12, so to get a
-    // balanced mix, we take only 1/10 of age_13.
-    let age_mix = age_12 + age_13 * 0.1 - recent_plays;
-    let countish = (1.5 + counter.n[0]).ln();
-    age_mix * countish
+    // The comments include some empirical data for albums from my own listening
+    // history.
+
+    // The top 50 ranges from ~3.3 to ~2.5, with #25 at ~2.7.
+    let f0 = counter.n[1].ln() - counter.n[3];
+
+    // The top 50 ranges from ~2.1 to ~1.1, with #25 at ~1.4.
+    let f1 = counter.n[2].ln() - counter.n[3];
+
+    // The top 50 ranges from ~3.3 to ~2.0, with #25 at ~2.4.
+    let f2 = counter.n[2].ln() - counter.n[4];
+
+    // Weights chosen empirically.
+    f0 + f1 * 0.2 + f2 * 0.6
 }
 
 /// Print playcount statistics about the library.
