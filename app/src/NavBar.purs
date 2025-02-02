@@ -58,7 +58,7 @@ new postEvent = Html.nav $ do
   tabLibrary    <- navTab "Library" $ navEvent Navigation.Library
   tabArtist     <- navTab "Artist"  $ Event.NavigateToArtist
   tabAlbum      <- navTab "Album"   $ Event.NavigateToAlbum
-  tabQueue      <- navTab "Queue"   $ navEvent Navigation.Library -- TODO
+  tabQueue      <- navTab "Queue"   $ navEvent Navigation.Queue
   tabNowPlaying <- navTab "Current" $ navEvent Navigation.NowPlaying
   tabSearch     <- navTab "Search"  $ navEvent Navigation.Search
   tabAbout      <- navTab "About"   $ navEvent Navigation.About
@@ -101,6 +101,7 @@ getTab location state = case location of
   Navigation.Library    -> state.tabLibrary
   Navigation.Artist _   -> state.tabArtist
   Navigation.Album _    -> state.tabAlbum
+  Navigation.Queue      -> state.tabQueue
   Navigation.NowPlaying -> state.tabNowPlaying
   Navigation.Search     -> state.tabSearch
   Navigation.About      -> state.tabAbout

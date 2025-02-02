@@ -52,6 +52,7 @@ import Navigation (Location)
 import Navigation as Navigation
 import NowPlaying (NowPlayingState (..))
 import NowPlaying as NowPlaying
+import QueueView as QueueView
 import Search (SearchElements)
 import Search as Search
 import StatusBar (StatusBarState)
@@ -130,11 +131,13 @@ setupElements postEvent = Html.withElement Dom.body $ do
       ask
     pure { paneAlbum, albumView }
 
-  paneQueue <- Html.div $ do
+  { paneQueue, queueView: _ } <- Html.div $ do
     Html.setId "queue-pane"
     Html.addClass "pane"
     Html.addClass "inactive"
-    ask
+    paneQueue <- ask
+    queueView <- QueueView.new postEvent
+    pure $ { paneQueue, queueView }
 
   { paneCurrent, currentView } <- Html.div $ do
     Html.setId "current-pane"
@@ -426,6 +429,9 @@ handleEvent event state = case event of
   Event.NavigateTo location@Navigation.Library mode ->
     navigateTo location mode state
 
+  Event.NavigateTo location@Navigation.Queue mode ->
+    navigateTo location mode state
+
   Event.NavigateTo location@Navigation.NowPlaying mode ->
     navigateTo location mode state
 
@@ -604,16 +610,18 @@ navigateTo newLocation historyMode state =
       Navigation.Library    -> state.elements.paneLibrary
       Navigation.Artist _   -> state.elements.paneArtist
       Navigation.Album _    -> state.elements.paneAlbum
+      Navigation.Queue      -> state.elements.paneQueue
       Navigation.NowPlaying -> state.elements.paneCurrent
       Navigation.Search     -> state.elements.paneSearch
       Navigation.About      -> state.elements.paneAbout
     paneBefore = getPane state.location
     paneAfter = getPane newLocation
     title = case newLocation of
-      Navigation.NowPlaying -> "Current"
-      Navigation.Search     -> "Search"
       Navigation.About      -> "About"
       Navigation.Library    -> "Library"
+      Navigation.NowPlaying -> "Current"
+      Navigation.Queue      -> "Queue"
+      Navigation.Search     -> "Search"
       Navigation.Album albumId -> case getAlbum albumId state of
         Just (Album album) -> album.title <> " by " <> album.artist
         Nothing            -> "Album " <> (show albumId) <> " does not exist"

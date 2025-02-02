@@ -21,6 +21,7 @@ data Location
   = Library
   | Artist ArtistId
   | Album AlbumId
+  | Queue
   | NowPlaying
   | Search
   | About
@@ -32,9 +33,10 @@ toUrl loc = case loc of
   Library -> "/"
   Artist (ArtistId id) -> "/?artist=" <> id
   Album (AlbumId id) -> "/?album=" <> id
+  Queue      -> "/?queue"
   NowPlaying -> "/?current"
-  Search -> "/?search"
-  About -> "/?about"
+  Search     -> "/?search"
+  About      -> "/?about"
 
 fromUrl :: String -> Location
 fromUrl url =
@@ -45,6 +47,7 @@ fromUrl url =
       Nothing       -> case url of
         "/?about"   -> About
         "/?current" -> NowPlaying
+        "/?queue"   -> Queue
         "/?search"  -> Search
         "/"         -> Library
         _           -> Library
