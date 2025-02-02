@@ -52,6 +52,7 @@ import Navigation (Location)
 import Navigation as Navigation
 import NowPlaying (NowPlayingState (..))
 import NowPlaying as NowPlaying
+import QueueView (QueueView)
 import QueueView as QueueView
 import Search (SearchElements)
 import Search as Search
@@ -69,6 +70,7 @@ type Elements =
   { libraryBrowser :: AlbumListView
   , artistBrowser :: AlbumListView
   , albumView :: Element
+  , queueView :: QueueView
   , currentView :: Element
   , search :: SearchElements
   , about :: AboutElements
@@ -131,7 +133,7 @@ setupElements postEvent = Html.withElement Dom.body $ do
       ask
     pure { paneAlbum, albumView }
 
-  { paneQueue, queueView: _ } <- Html.div $ do
+  { paneQueue, queueView } <- Html.div $ do
     Html.setId "queue-pane"
     Html.addClass "pane"
     Html.addClass "inactive"
@@ -172,6 +174,7 @@ setupElements postEvent = Html.withElement Dom.body $ do
     { libraryBrowser
     , artistBrowser
     , albumView
+    , queueView
     , currentView
     , search
     , about
@@ -376,12 +379,16 @@ handleEvent event state = case event of
 
   Event.UpdateQueue queue -> do
     statusBar' <- liftEffect $ StatusBar.updateStatusBar (Array.head queue) state.statusBar
-    -- TODO: Possibly update the queue, if it is in view.
 
     -- Update the number in the bubble on the queue tab. The number is one less
     -- than the length, because the queue here includes the currently playing
     -- track.
     liftEffect $ NavBar.setQueueSize state.navBar $ max 0 ((Array.length queue) - 1)
+
+    -- Update the queue view (unconditionally for now, we could optimize this
+    -- to only update it when visible, but then we need to redraw it when we
+    -- switch to it).
+    liftEffect $ QueueView.setQueue state.elements.queueView queue
 
     -- Update the "Current" / "Now Playing" page only if the current track
     -- changed. We don't want to rebuild the DOM nodes all the time if the track
