@@ -20,9 +20,9 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
    or a migration of the database).
  * The patch version is bumped for bugfixes and other small changes.
 
-## Next
+## 0.16.0
 
-Not yet released.
+Released 2025-02-02.
 
  * **Breaking:** The `audio_device` configuration option now expects an
    <abbr>Alsa</abbr> <abbr>PCM</abbr> name, rather than the name of the device.
@@ -33,6 +33,9 @@ Not yet released.
    now controls the initial value at startup.
  * The initial volume at startup is now configurable with the new [`volume`
    setting](configuration.md#volume).
+ * Fix a longstanding bug that could in rare cases cause the application to
+   hang.
+ * Add support for more Japanese diacritics in text normalization.
 
 ## 0.15.1
 
