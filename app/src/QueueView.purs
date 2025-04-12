@@ -26,6 +26,7 @@ import Event (Event)
 
 type QueueView =
   { queueView :: Element
+  , queueList :: Element
   , postEvent :: Event -> Aff Unit
   }
 
@@ -33,13 +34,23 @@ new :: (Event -> Aff Unit) -> Html QueueView
 new postEvent = Html.div $ do
   Html.setId "queue-view"
   queueView <- ask
+
+  Html.div $ do
+    Html.addClass "list-config"
+    Html.text "TODO: Queue config"
+
+  queueList <- Html.ul $ do
+    Html.setId "queue-list"
+    ask
+
   pure $
     { queueView
+    , queueList
     , postEvent
     }
 
 setQueue :: QueueView -> Array QueuedTrack -> Effect Unit
-setQueue self queue = Html.withElement self.queueView $ do
+setQueue self queue = Html.withElement self.queueList $ do
   Html.clear
   case queue of
     [] -> Html.p $ do
@@ -47,7 +58,7 @@ setQueue self queue = Html.withElement self.queueView $ do
     _ -> for_ queue renderAlbum
 
 renderAlbum :: QueuedTrack -> Html Unit
-renderAlbum (QueuedTrack track) = Html.div $ do
+renderAlbum (QueuedTrack track) = Html.li $ do
   Html.addClass "track"
   Html.img (Model.thumbUrl track.albumId) (track.album <> " by " <> track.artist) $ do
     Html.addClass "thumb"

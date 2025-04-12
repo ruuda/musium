@@ -167,6 +167,15 @@ body {
   ;
 }
 
+#queue-view {
+  height: 100%;
+  overflow-y: scroll;
+}
+
+#queue-list {
+  padding-bottom: 1em;
+}
+
 a
 {
   color: inherit;
