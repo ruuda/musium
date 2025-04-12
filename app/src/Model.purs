@@ -29,6 +29,7 @@ module Model
   , coverUrl
   , changeCutoff
   , changeVolume
+  , clearQueue
   , enqueueTrack
   , formatDurationSeconds
   , getAlbums
@@ -42,6 +43,7 @@ module Model
   , originalReleaseYear
   , search
   , setRating
+  , shuffleQueue
   , startScan
   , thumbUrl
   , timeLeft
@@ -547,10 +549,12 @@ instance decodeJsonQueuedTrackRaw :: DecodeJson QueuedTrackRaw where
       , isBuffering
       }
 
-getQueue :: Aff (Array QueuedTrack)
-getQueue = do
+getQueueGeneric
+  :: Aff (Either Http.Error (Http.Response Json))
+  -> Aff (Array QueuedTrack)
+getQueueGeneric doRequest = do
   t0 <- liftEffect $ Time.getCurrentInstant
-  result <- Http.get Http.ResponseFormat.json "/api/queue"
+  result <- doRequest
   t1 <- liftEffect $ Time.getCurrentInstant
 
   let
@@ -586,6 +590,18 @@ getQueue = do
     Right response -> case Json.decodeJson response.body of
       Left err -> fatal $ "Failed to parse queue: " <> printJsonDecodeError err
       Right results -> pure $ map makeTimeAbsolute results
+
+getQueue :: Aff (Array QueuedTrack)
+getQueue = getQueueGeneric $
+  Http.get Http.ResponseFormat.json "/api/queue"
+
+shuffleQueue :: Aff (Array QueuedTrack)
+shuffleQueue = getQueueGeneric $
+  Http.post Http.ResponseFormat.json "/api/queue/shuffle" Nothing
+
+clearQueue :: Aff (Array QueuedTrack)
+clearQueue = getQueueGeneric $
+  Http.post Http.ResponseFormat.json "/api/queue/clear" Nothing
 
 newtype Track = Track
   { id :: TrackId

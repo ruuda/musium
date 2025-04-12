@@ -49,6 +49,8 @@ data Event
   -- immediately bring the queue in sync without having to refresh it fully.
   -- It can kick off a full refresh in the usual way.
   | EnqueueTrack QueuedTrack
+  | ShuffleQueue
+  | ClearQueue
   -- Generated periodically when a track is playing to signal that we need to
   -- update the progress bar.
   | UpdateProgress

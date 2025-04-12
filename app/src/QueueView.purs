@@ -14,7 +14,7 @@ module QueueView
 import Control.Monad.Reader.Class (ask)
 import Data.Traversable (for_)
 import Effect (Effect)
-import Effect.Aff (Aff)
+import Effect.Aff (Aff, launchAff)
 import Prelude
 
 import Dom (Element)
@@ -23,6 +23,7 @@ import Html as Html
 import Model (QueuedTrack (..))
 import Model as Model
 import Event (Event)
+import Event as Event
 
 type QueueView =
   { queueView :: Element
@@ -70,11 +71,12 @@ renderAlbum (QueuedTrack track) = Html.li $ do
 renderQueueActions :: (Event -> Aff Unit) -> Html Unit
 renderQueueActions postEvent = Html.div $ do
   Html.addClass "list-config"
-  -- let onClickPost field = Html.onClick $ void $ launchAff $ postEvent $ Event.SetSortField field
+  let onClickPost event = Html.onClick $ void $ launchAff $ postEvent event
   Html.div $ do
     Html.addClass "config-option"
     Html.text "Shuffle"
-    -- todo: onclick
+    onClickPost Event.ShuffleQueue
   Html.div $ do
     Html.addClass "config-option"
     Html.text "Clear"
+    onClickPost Event.ClearQueue

@@ -25,7 +25,6 @@ import Effect.Aff as Aff
 import Effect.Aff.Bus (BusW)
 import Effect.Aff.Bus as Bus
 import Effect.Class (liftEffect)
-import Effect.Class.Console as Console
 import Effect.Exception (Error)
 import Effect.Exception as Exception
 import Foreign.Object (Object)
@@ -566,6 +565,14 @@ handleEvent event state = case event of
       (Event.UpdateQueue $ Array.snoc state.queue queuedTrack)
       state
 
+  Event.ShuffleQueue -> do
+    queue <- Model.shuffleQueue
+    handleEvent (Event.UpdateQueue queue) state
+
+  Event.ClearQueue -> do
+    queue <- Model.clearQueue
+    handleEvent (Event.UpdateQueue queue) state
+
   Event.SearchKeyPressed ->
     -- If we receive the search hotkey, navigate to the search pane if we aren't
     -- already there. If we are there, it could be input for the search field
@@ -692,7 +699,6 @@ scheduleFetchQueue fetchAt state = do
 
     -- Then fetch, and send an event with the new queue.
     queue <- Model.getQueue
-    Console.log "Loaded queue"
     state.postEvent $ Event.UpdateQueue queue
 
   pure $ state { nextQueueFetch = fiber }
