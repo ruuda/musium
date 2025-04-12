@@ -35,9 +35,7 @@ new postEvent = Html.div $ do
   Html.setId "queue-view"
   queueView <- ask
 
-  Html.div $ do
-    Html.addClass "list-config"
-    Html.text "TODO: Queue config"
+  renderQueueActions postEvent
 
   queueList <- Html.ul $ do
     Html.setId "queue-list"
@@ -68,3 +66,15 @@ renderAlbum (QueuedTrack track) = Html.li $ do
   Html.span $ do
     Html.addClass "artist"
     Html.text $ track.artist
+
+renderQueueActions :: (Event -> Aff Unit) -> Html Unit
+renderQueueActions postEvent = Html.div $ do
+  Html.addClass "list-config"
+  -- let onClickPost field = Html.onClick $ void $ launchAff $ postEvent $ Event.SetSortField field
+  Html.div $ do
+    Html.addClass "config-option"
+    Html.text "Shuffle"
+    -- todo: onclick
+  Html.div $ do
+    Html.addClass "config-option"
+    Html.text "Clear"
