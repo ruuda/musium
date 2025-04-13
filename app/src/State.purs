@@ -146,6 +146,7 @@ setupElements postEvent = Html.withElement Dom.body $ do
     Html.addClass "inactive"
     currentView <- Html.div $ do
       Html.addClass "current"
+      _ <- NowPlaying.nothingPlayingInfo
       ask
     NowPlaying.volumeControls
     paneCurrent <- ask

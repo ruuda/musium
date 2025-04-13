@@ -176,6 +176,12 @@ body {
   padding-bottom: 1em;
 }
 
+/* We toggle the visibility of the queue vs the nothing playing message using
+ * the queue-empty class on the view. */
+#queue-view .nothing-playing { display: none; }
+#queue-view.queue-empty .nothing-playing { display: block; }
+#queue-view.queue-empty #queue-container { display: none; }
+
 /* Add a pulsing "now playing" indicator on the first queue item.
    I'm not really happy with this visually.
    TODO: Find a better approach, maybe overlay it on the cover art.
@@ -691,7 +697,7 @@ button.play-next::before {
   margin-bottom: 2em;
 }
 
-.current .nothing-playing {
+.nothing-playing {
   text-align: center;
   color: #aaa;
   position: relative;

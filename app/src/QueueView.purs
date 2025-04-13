@@ -34,13 +34,20 @@ type QueueView =
 new :: (Event -> Aff Unit) -> Html QueueView
 new postEvent = Html.div $ do
   Html.setId "queue-view"
+  Html.addClass "queue-empty"
+
   queueView <- ask
 
-  renderQueueActions postEvent
+  queueList <- Html.div $ do
+    Html.setId "queue-container"
+    renderQueueActions postEvent
+    Html.ul $ do
+      Html.setId "queue-list"
+      ask
 
-  queueList <- Html.ul $ do
-    Html.setId "queue-list"
-    ask
+  Html.p $ do
+    Html.addClass "nothing-playing"
+    Html.text "The play queue is empty"
 
   pure $
     { queueView
@@ -49,12 +56,16 @@ new postEvent = Html.div $ do
     }
 
 setQueue :: QueueView -> Array QueuedTrack -> Effect Unit
-setQueue self queue = Html.withElement self.queueList $ do
-  Html.clear
+setQueue self queue = do
   case queue of
-    [] -> Html.p $ do
-      Html.text "The play queue is empty"
-    _ -> for_ queue renderAlbum
+    [] ->
+      Html.withElement self.queueView $ Html.addClass "queue-empty"
+
+    _ -> do
+      Html.withElement self.queueList $ do
+        Html.clear
+        for_ queue renderAlbum
+      Html.withElement self.queueView $ Html.removeClass "queue-empty"
 
 renderAlbum :: QueuedTrack -> Html Unit
 renderAlbum (QueuedTrack track) = Html.li $ do
