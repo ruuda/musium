@@ -176,6 +176,20 @@ body {
   padding-bottom: 1em;
 }
 
+/* Add a pulsing "now playing" indicator on the first queue item.
+   I'm not really happy with this visually.
+   TODO: Find a better approach, maybe overlay it on the cover art.
+*/
+#queue-list li.track:first-child span.title::before {
+  content: '⯈ ';
+  animation: 1.5s ease-in-out 0s infinite alternate play-pulsate;
+}
+
+@keyframes play-pulsate {
+  from { color: #444; }
+  to { color: #888; }
+}
+
 a
 {
   color: inherit;
