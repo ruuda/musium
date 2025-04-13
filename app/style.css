@@ -469,9 +469,16 @@ img.thumb
 #search-artists .discography img
 {
   height: 1.5em;
+  width: 1.5em;
   margin-right: 0.2em;
   position: relative;
   top: 0.1em;
+
+  /* Like for thumbs in the album list, in the search, when the network is a bit
+   * slow and the thumbs are still loading (which happens especially during
+   * search-as-you-type, when the results change quickly), it's distracting when
+   * the results flash in later, so add a placeholder colored rect. */
+  background-color: #f8f8f8;
 }
 
 .album-info {
