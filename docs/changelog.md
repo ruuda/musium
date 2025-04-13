@@ -20,6 +20,13 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
    or a migration of the database).
  * The patch version is bumped for bugfixes and other small changes.
 
+## Next
+
+ * The ranking behind the _discover_ sort mode now better balances past and
+   recent popularity to show you albums worth listening to again.
+ * The queue tab in the webinterface is now implemented, including buttons to
+   shuffle and clear the queue.
+
 ## 0.16.0
 
 Released 2025-02-02.
