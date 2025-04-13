@@ -30,15 +30,24 @@ struct GenThumb<'a> {
 
 /// The state of generating a single thumbnail.
 enum GenThumbState<'a> {
+    /// We haven't started this task, but we know the file we need to inspect.
     Pending {
         file_id: FileId,
         flac_filename: &'a Path,
     },
+    /// Imagemagick is downscaling the cover art to a temporary file.
     Resizing {
         file_id: FileId,
         child: process::Child,
         out_path: PathBuf,
     },
+    /// Imagemagick is analyzing the thumbnail to extract the dominant color.
+    Analyzing {
+        file_id: FileId,
+        child: process::Child,
+        path: PathBuf,
+    },
+    /// Cjpegli is compressing the thumbnail.
     Compressing {
         file_id: FileId,
         child: process::Child,
@@ -65,8 +74,11 @@ impl<'a> GenThumb<'a> {
         flac_filename: &'a Path,
     ) -> Result<Option<GenThumb<'a>>> {
         let task = GenThumb {
-            album_id: album_id,
-            state: GenThumbState::Pending { flac_filename, file_id },
+            album_id,
+            state: GenThumbState::Pending {
+                flac_filename,
+                file_id,
+            },
         };
 
         match database::select_thumbnail_exists(tx, album_id.0 as i64)? {
@@ -99,7 +111,7 @@ impl<'a> GenThumb<'a> {
 
         let out_path = get_tmp_fname(album_id);
 
-        let mut convert = Command::new("magick")
+        let mut magick = Command::new("magick")
             // Give Imagemagick enough time to open the image, recent versions
             // are strict about it which leads to "time limit exceeded" error
             // from "fatal/cache.c". The unit is seconds.
@@ -144,7 +156,7 @@ impl<'a> GenThumb<'a> {
             .map_err(|e| Error::CommandError("Failed to spawn ImageMagick.", Some(e)))?;
 
         {
-            let stdin = convert
+            let stdin = magick
                 .stdin
                 .as_mut()
                 .expect("Stdin should be there, we piped it.");
@@ -153,35 +165,132 @@ impl<'a> GenThumb<'a> {
 
         self.state = GenThumbState::Resizing {
             file_id: file_id,
-            child: convert,
+            child: magick,
             out_path: out_path,
         };
 
         Ok(Some(self))
     }
 
-    /// When in `Resizing` state, wait for that to complete, and start compressing.
-    fn start_compress(mut self) -> Result<GenThumb<'a>> {
-        let (mut convert, file_id, out_path) = match self.state {
-            GenThumbState::Resizing { file_id, child, out_path } => (child, file_id, out_path),
-            _ => panic!("Can only call start_compress in Resizing state."),
+    fn start_analyze(mut self) -> Result<GenThumb<'a>> {
+        let (mut magick, file_id, out_path) = match self.state {
+            GenThumbState::Resizing {
+                child,
+                file_id,
+                out_path,
+            } => (child, file_id, out_path),
+            _ => panic!("Can only call start_analyze in Resizing state."),
         };
 
-        let exit_status = convert
+        let exit_status = magick
             .wait()
             .map_err(|e| Error::CommandError("ImageMagick's 'magick' failed.", Some(e)))?;
 
         if !exit_status.success() {
             // Clean up the intermediate png file on error.
             let _rm_result_ignored = std::fs::remove_file(out_path);
-            return Err(Error::CommandError("ImageMagick's 'magick' did not exit successfully.", None));
+            return Err(Error::CommandError(
+                "ImageMagick's 'magick' did not exit successfully.",
+                None,
+            ));
         }
+
+        // We are going to use Imagemagick to find a dominant color in the image.
+        // The process below was tuned by hand on a set of thumbnails so it's
+        // optimized to work well on a wide range of cover art thumbnails, but
+        // especially those that contain one larger area of a solid color. We
+        // want to pick that one out.
+        let magick = Command::new("magick")
+            // Apply a timeout in seconds, like in the resize step.
+            .args(["-limit", "time", "120"])
+            .arg(&out_path)
+            // Downscaling and the k-means should happen in a linear color space.
+            .args(["-colorspace", "RGB"])
+            // For the mode filter, for pixels outside the canvas, tile and
+            // mirror the input. We want that rather than extend, otherwise the
+            // edge colors would weigh relatively more.
+            .args(["-virtual-pixel", "mirror"])
+            // We pick the sizes so we can downscale with a simple box filter
+            // where every pixel is the average of its four "parents".
+            .args(["-filter", "box"])
+            // We start with 72x72, it's close enough to half our 140x140 that
+            // we still get a good sense of the colors, but importantly it is
+            // 9 * 2 * 4, so we can downscale without creating blurry edges.
+            .args(["-resize", "72x72"])
+            // Pick out the 5 most important colors to work with from now on.
+            .args(["-kmeans", "5"])
+            // For every 18x18 area, pick the color that occurs most in that
+            // area. This has the effect of "blurring", and making prominent
+            // colors even more prominent. This is the main trick in the process.
+            // Often it already eliminates one or two of the five colors.
+            .args(["-statistic", "Mode", "18x18"])
+            // Then we downscale, but that mixes the colors again so now we can
+            // have more than 5, but if the source has a large-enough area of
+            // one color, it will be preserved exactly.
+            .args(["-resize", "18x18"])
+            // Now we do more passes of "blurring" making prominent colors more
+            // prominent, restricting colors, downscaling, etc.
+            .args(["-statistic", "Mode", "9x9"])
+            .args(["-kmeans", "3"])
+            .args(["-statistic", "Mode", "9x9"])
+            .args(["-statistic", "Mode", "9x9"])
+            .args(["-resize", "9x9"])
+            .args(["-kmeans", "3"])
+            // We end up with 3 colors on a 9x9 grid. It's on purpose odd, so
+            // in case of two dominant colors, there will be a winner, it can't
+            // be 50/50. It can be 3/3/3 though.
+            // For the final pick, we take the mode of a 9x9 region, so the
+            // center pixel at (4, 4) contains the mode of the image itself.
+            .args(["-statistic", "Mode", "9x9"])
+            .args(["-colorspace", "sRGB"])
+            // Print the color of the pixel at (4, 4) in hex to stdout.
+            .args(["-format", "%[hex:p{4,4}]"])
+            .stdout(Stdio::piped())
+            .arg("info:-")
+            .spawn()
+            .map_err(|e| Error::CommandError("Failed to spawn 'magick'.", Some(e)))?;
+
+        self.state = GenThumbState::Analyzing {
+            file_id,
+            // The input path to this step is the output of the previous step.
+            path: out_path,
+            child: magick,
+        };
+
+        Ok(self)
+    }
+
+    /// When in `Analyzing` state, wait for that to complete, and start compressing.
+    fn start_compress(mut self) -> Result<GenThumb<'a>> {
+        let (mut magick, file_id, path) = match self.state {
+            GenThumbState::Analyzing {
+                file_id,
+                child,
+                path,
+            } => (child, file_id, path),
+            _ => panic!("Can only call start_compress in Resizing state."),
+        };
+
+        let exit_status = magick
+            .wait()
+            .map_err(|e| Error::CommandError("ImageMagick's 'magick' failed.", Some(e)))?;
+
+        if !exit_status.success() {
+            // Clean up the intermediate png file on error.
+            let _rm_result_ignored = std::fs::remove_file(path);
+            return Err(Error::CommandError(
+                "ImageMagick's 'magick' did not exit successfully.",
+                None,
+            ));
+        }
+
+        // TODO: Read color from stdout.
 
         let cjpegli = Command::new("cjpegli")
             .arg("--distance=0.45")
             .arg("--progressive_level=0")
             // Input is the intermediate file.
-            .arg(&out_path)
+            .arg(&path)
             // Output to stdout.
             .stdout(Stdio::piped())
             .arg("-")
@@ -191,10 +300,10 @@ impl<'a> GenThumb<'a> {
             .map_err(|e| Error::CommandError("Failed to spawn 'cjpegli'.", Some(e)))?;
 
         self.state = GenThumbState::Compressing {
-            file_id: file_id,
+            file_id,
             child: cjpegli,
             // Input file for this step is the output of the previous command.
-            in_path: out_path,
+            in_path: path,
         };
 
         Ok(self)
@@ -214,17 +323,25 @@ impl<'a> GenThumb<'a> {
                 file_id,
                 flac_filename,
             } => self.start_resize(album_id, file_id, flac_filename),
-            GenThumbState::Resizing { .. } => self.start_compress().map(Some),
-            GenThumbState::Compressing { mut child, file_id, in_path } => {
-                let exit_status = child
-                    .wait()
-                    .map_err(|e| Error::CommandError("Thumbnail compression with 'cjpegli' failed.", Some(e)))?;
+            GenThumbState::Resizing { .. } => self.start_analyze().map(Some),
+            GenThumbState::Analyzing { .. } => self.start_compress().map(Some),
+            GenThumbState::Compressing {
+                mut child,
+                file_id,
+                in_path,
+            } => {
+                let exit_status = child.wait().map_err(|e| {
+                    Error::CommandError("Thumbnail compression with 'cjpegli' failed.", Some(e))
+                })?;
 
                 // Delete the intermediate png file.
                 std::fs::remove_file(in_path)?;
 
                 if !exit_status.success() {
-                    return Err(Error::CommandError("'cjpegli' did not exit successfully.", None));
+                    return Err(Error::CommandError(
+                        "'cjpegli' did not exit successfully.",
+                        None,
+                    ));
                 }
 
                 let mut stdout = child
@@ -236,7 +353,12 @@ impl<'a> GenThumb<'a> {
 
                 {
                     let mut tx = db.begin()?;
-                    database::insert_album_thumbnail(&mut tx, album_id.0 as i64, file_id.0, &jpeg_bytes[..])?;
+                    database::insert_album_thumbnail(
+                        &mut tx,
+                        album_id.0 as i64,
+                        file_id.0,
+                        &jpeg_bytes[..],
+                    )?;
                     tx.commit()?;
                 }
 
@@ -286,7 +408,8 @@ pub fn generate_thumbnails(
         let album_id = track_id.album_id();
         if album_id != prev_album_id {
             let fname = index.get_filename(kv.track.filename);
-            if let Some(task) = GenThumb::new(&mut tx, album_id, kv.track.file_id, fname.as_ref())? {
+            if let Some(task) = GenThumb::new(&mut tx, album_id, kv.track.file_id, fname.as_ref())?
+            {
                 pending_tasks.push(task);
                 status.files_to_process_thumbnails += 1;
 
@@ -314,7 +437,7 @@ pub fn generate_thumbnails(
     let mutex_ref = &mutex;
 
     // Start `num_cpus` worker threads. All these threads will do is block and
-    // wait on IO or the external process, but both `convert` and `cjpegli`
+    // wait on IO or the external process, but both `magick` and `cjpegli`
     // are CPU-bound, so this should keep the CPU busy. When thumbnailing many
     // albums with a cold page cache, IO to read the thumb from the file can be
     // a factor too, so add one additional thread to ensure we can keep the CPU
@@ -350,7 +473,9 @@ pub fn generate_thumbnails(
                         Err(Error::CommandError(msg, detail)) => {
                             match detail {
                                 None => eprintln!("Thumbnail generation failed: {msg}"),
-                                Some(err) => eprintln!("Thumbnail generation failed: {msg} {err:?}"),
+                                Some(err) => {
+                                    eprintln!("Thumbnail generation failed: {msg} {err:?}")
+                                }
                             }
 
                             // We count failing as progress, because we did look
