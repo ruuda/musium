@@ -38,7 +38,9 @@ impl StringDeduper {
         // inserted (12.6k out of 57.8k total strings).
         let next_id = self.strings.len() as u32;
         // TODO: Unicode-normalize the string.
-        if let Some(id) = self.strings_to_id.get(string) { return *id }
+        if let Some(id) = self.strings_to_id.get(string) {
+            return *id;
+        }
         self.strings_to_id.insert(string.to_string(), next_id);
         self.strings.push(string.to_string());
         next_id
@@ -73,7 +75,11 @@ impl StringDeduper {
                 let i = from + off;
 
                 let before = if i > 0 { s.as_bytes()[i - 1] } else { b' ' };
-                let after = if i < s.len() - 1 { s.as_bytes()[i + 1] } else { b' ' };
+                let after = if i < s.len() - 1 {
+                    s.as_bytes()[i + 1]
+                } else {
+                    b' '
+                };
 
                 let after_word = after == b' ' || after == b',' || after == b')';
                 let after_letter = before.is_ascii_alphabetic();
@@ -101,7 +107,7 @@ impl StringDeduper {
                     // Non-ascii letters are difficult to detect, and for the
                     // numbers, the straight quote is appropriate, so we'll
                     // leave it at this.
-                    _ => None
+                    _ => None,
                 };
 
                 if let Some(r) = replacement {
@@ -117,7 +123,7 @@ impl StringDeduper {
 
 fn push_word(dest: &mut Vec<String>, word: &mut String) {
     if word.len() == 0 {
-        return
+        return;
     }
 
     let mut w = String::new();
@@ -175,7 +181,7 @@ pub fn normalize_words(title: &str, dest: &mut Vec<String>) {
                     dest.push("...".to_string());
                     word = String::new();
                 }
-                continue
+                continue;
             }
             // Treat the upside-down question mark as a separator like the
             // regular one, but then do include the upright one as the word,
@@ -224,7 +230,12 @@ pub fn normalize_words(title: &str, dest: &mut Vec<String>) {
             // definitely care for.
             _ if drop.contains(ch) => {}
             _ if keep.contains(ch) || ch.is_alphanumeric() => word.push(ch),
-            _ => panic!("Unknown character {} ({}) in title: {}", ch, ch.escape_unicode(), title),
+            _ => panic!(
+                "Unknown character {} ({}) in title: {}",
+                ch,
+                ch.escape_unicode(),
+                title
+            ),
         }
 
         // Reset the ellipsis counter after every non-period character.
