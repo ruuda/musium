@@ -144,7 +144,7 @@ pub fn normalize_words(title: &str, dest: &mut Vec<String>) {
     // can go and use some normal titles next time.) We remove accents to make
     // searching easier without having to type the exact accent.
     // U+309a and U+3099 are Japanese diacritics.
-    let drop = "“”‘’'\"`()[]«»,❦|\u{300}\u{301}\u{302}\u{303}\u{304}\u{306}\u{307}\u{308}\u{30a}\u{323}\u{327}\u{328}\u{309a}\u{3099}";
+    let drop = "“”‘’'\"`()[]«»,❦|\u{300}\u{301}\u{302}\u{303}\u{304}\u{306}\u{307}\u{308}\u{30a}\u{30c}\u{323}\u{327}\u{328}\u{309a}\u{3099}";
     let keep = "$€#&=*%∆";
 
     // Cut words at the following punctuation characters, but still include them
