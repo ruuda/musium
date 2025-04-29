@@ -99,11 +99,16 @@ body {
   display: none;
 }
 
+.list-config {
+  white-space: nowrap;
+  overflow: hidden;
+}
+
 .list-config .config-option {
   display: inline-block;
   height: 1.5rem;
   line-height: 1.5rem;
-  padding: 1rem;
+  padding: 0.9rem;
   padding-bottom: 0;
   padding-top: 0;
   margin-top: 1rem;
