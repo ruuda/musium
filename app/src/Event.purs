@@ -26,6 +26,7 @@ data SortField
   | SortFirstSeen
   | SortDiscover
   | SortTrending
+  | SortForNow
 
 derive instance sortFieldEq :: Eq SortField
 

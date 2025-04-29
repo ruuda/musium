@@ -12,6 +12,7 @@ use serde_json;
 use std::io;
 use std::io::Write;
 
+use crate::playcount::TimeVector;
 use crate::player::{Params, TrackSnapshot};
 use crate::scan;
 use crate::user_data::UserData;
@@ -23,6 +24,7 @@ use crate::{Album, AlbumId, Artist, ArtistId, MetaIndex, TrackId};
 pub fn write_brief_album_json<W: Write>(
     index: &dyn MetaIndex,
     user_data: &UserData,
+    now_embed: &TimeVector,
     mut w: W,
     album_id: AlbumId,
     album: &Album,
@@ -32,24 +34,27 @@ pub fn write_brief_album_json<W: Write>(
     write!(w, r#","artist_ids":["#)?;
     let mut first = true;
     for artist_id in index.get_album_artists(album.artist_ids) {
-        if !first { write!(w, ",")?; }
+        if !first {
+            write!(w, ",")?;
+        }
         write!(w, r#""{}""#, artist_id)?;
         first = false;
     }
     write!(w, r#"],"artist":"#)?;
     serde_json::to_writer(&mut w, index.get_string(album.artist))?;
-    let scores = user_data.get_album_scores(album_id);
+    let scores = user_data.get_album_scores(album_id, now_embed);
     write!(
         w,
         // The discover score can have large-ish magnitude and ranges from negative
         // to positive, it does not need a lot of precision. The trending score
         // is always between 0 and 1 though, it needs more digits for precision
         // near the end of the ranking.
-        r#","release_date":"{}","first_seen":"{}","discover_score":{:.2},"trending_score":{:.4}}}"#,
+        r#","release_date":"{}","first_seen":"{}","discover_score":{:.2},"trending_score":{:.4},"for_now_score":{:.3}}}"#,
         album.original_release_date,
         album.first_seen.format_iso8601(),
-        scores.discover_score,
-        scores.trending_score,
+        scores.discover,
+        scores.trending,
+        scores.for_now,
     )?;
     Ok(())
 }
@@ -58,13 +63,16 @@ pub fn write_brief_album_json<W: Write>(
 pub fn write_albums_json<W: Write>(
     index: &dyn MetaIndex,
     user_data: &UserData,
+    now_embed: &TimeVector,
     mut w: W,
 ) -> io::Result<()> {
     write!(w, "[")?;
     let mut first = true;
     for kv in index.get_albums() {
-        if !first { write!(w, ",")?; }
-        write_brief_album_json(index, user_data, &mut w, kv.album_id, &kv.album)?;
+        if !first {
+            write!(w, ",")?;
+        }
+        write_brief_album_json(index, user_data, now_embed, &mut w, kv.album_id, &kv.album)?;
         first = false;
     }
     write!(w, "]")
@@ -86,17 +94,25 @@ pub fn write_album_json<W: Write>(
     write!(w, r#","artist_ids":["#)?;
     let mut first = true;
     for artist_id in index.get_album_artists(album.artist_ids) {
-        if !first { write!(w, ",")?; }
+        if !first {
+            write!(w, ",")?;
+        }
         write!(w, r#""{}""#, artist_id)?;
         first = false;
     }
     write!(w, r#"],"artist":"#)?;
     serde_json::to_writer(&mut w, index.get_string(album.artist))?;
-    write!(w, r#","release_date":"{}","tracks":["#, album.original_release_date)?;
+    write!(
+        w,
+        r#","release_date":"{}","tracks":["#,
+        album.original_release_date
+    )?;
     let mut first = true;
     for kv in index.get_album_tracks(id) {
         let track_id = kv.track_id;
-        if !first { write!(w, ",")?; }
+        if !first {
+            write!(w, ",")?;
+        }
         write!(
             w,
             r#"{{"id":"{}","disc_number":{},"track_number":{},"title":"#,
@@ -122,6 +138,7 @@ pub fn write_album_json<W: Write>(
 pub fn write_artist_json<W: Write>(
     index: &dyn MetaIndex,
     user_data: &UserData,
+    now_embed: &TimeVector,
     mut w: W,
     artist: &Artist,
     albums: &[(ArtistId, AlbumId)],
@@ -137,8 +154,10 @@ pub fn write_artist_json<W: Write>(
         // well-formed, it will never fail. The id is provided by the index
         // itself, not user input, so the album should be present.
         let album = index.get_album(album_id).unwrap();
-        if !first { write!(w, ",")?; }
-        write_brief_album_json(index, user_data, &mut w, album_id, album)?;
+        if !first {
+            write!(w, ",")?;
+        }
+        write_brief_album_json(index, user_data, now_embed, &mut w, album_id, album)?;
         first = false;
     }
     write!(w, "]}}")
@@ -154,28 +173,38 @@ pub fn write_search_results_json<W: Write>(
     write!(w, r#"{{"artists":["#)?;
     let mut first = true;
     for &aid in artists {
-        if !first { write!(w, ",")?; }
+        if !first {
+            write!(w, ",")?;
+        }
         write_search_artist_json(index, &mut w, aid)?;
         first = false;
     }
     write!(w, r#"],"albums":["#)?;
     let mut first = true;
     for &aid in albums {
-        if !first { write!(w, ",")?; }
+        if !first {
+            write!(w, ",")?;
+        }
         write_search_album_json(index, &mut w, aid)?;
         first = false;
     }
     write!(w, r#"],"tracks":["#)?;
     let mut first = true;
     for &tid in tracks {
-        if !first { write!(w, ",")?; }
+        if !first {
+            write!(w, ",")?;
+        }
         write_search_track_json(index, &mut w, tid)?;
         first = false;
     }
     write!(w, r#"]}}"#)
 }
 
-pub fn write_search_artist_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: ArtistId) -> io::Result<()> {
+pub fn write_search_artist_json<W: Write>(
+    index: &dyn MetaIndex,
+    mut w: W,
+    id: ArtistId,
+) -> io::Result<()> {
     let artist = index.get_artist(id).unwrap();
     let albums = index.get_albums_by_artist(id);
     write!(w, r#"{{"id":"{}","name":"#, id)?;
@@ -183,14 +212,20 @@ pub fn write_search_artist_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: A
     write!(w, r#","albums":["#)?;
     let mut first = true;
     for &(_artist_id, album_id) in albums {
-        if !first { write!(w, ",")?; }
+        if !first {
+            write!(w, ",")?;
+        }
         write!(w, r#""{}""#, album_id)?;
         first = false;
     }
     write!(w, r#"]}}"#)
 }
 
-pub fn write_search_album_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: AlbumId) -> io::Result<()> {
+pub fn write_search_album_json<W: Write>(
+    index: &dyn MetaIndex,
+    mut w: W,
+    id: AlbumId,
+) -> io::Result<()> {
     let album = index.get_album(id).unwrap();
     write!(w, r#"{{"id":"{}","title":"#, id)?;
     serde_json::to_writer(&mut w, index.get_string(album.title))?;
@@ -199,7 +234,11 @@ pub fn write_search_album_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: Al
     write!(w, r#","release_date":"{}"}}"#, album.original_release_date)
 }
 
-pub fn write_search_track_json<W: Write>(index: &dyn MetaIndex, mut w: W, id: TrackId) -> io::Result<()> {
+pub fn write_search_track_json<W: Write>(
+    index: &dyn MetaIndex,
+    mut w: W,
+    id: TrackId,
+) -> io::Result<()> {
     let track = index.get_track(id).unwrap();
     let album_id = id.album_id();
     let album = index.get_album(album_id).unwrap();
@@ -230,8 +269,7 @@ fn write_queued_track_json<W: Write>(
     write!(
         w,
         r#"{{"queue_id":"{}","track_id":"{}","title":"#,
-        queued_track.queue_id,
-        queued_track.track_id,
+        queued_track.queue_id, queued_track.track_id,
     )?;
     serde_json::to_writer(&mut w, index.get_string(track.title))?;
     write!(
@@ -243,7 +281,9 @@ fn write_queued_track_json<W: Write>(
     )?;
     let mut first = true;
     for artist_id in index.get_album_artists(album.artist_ids) {
-        if !first { write!(w, ",")?; }
+        if !first {
+            write!(w, ",")?;
+        }
         write!(w, r#""{}""#, artist_id)?;
         first = false;
     }
@@ -266,7 +306,6 @@ fn write_queued_track_json<W: Write>(
     write!(w, r#","is_buffering":{}}}"#, queued_track.is_buffering)
 }
 
-
 pub fn write_queue_json<W: Write>(
     index: &dyn MetaIndex,
     user_data: &UserData,
@@ -276,17 +315,16 @@ pub fn write_queue_json<W: Write>(
     write!(w, "[")?;
     let mut first = true;
     for queued_track in tracks.iter() {
-        if !first { write!(w, ",")?; }
+        if !first {
+            write!(w, ",")?;
+        }
         write_queued_track_json(index, user_data, &mut w, queued_track)?;
         first = false;
     }
     write!(w, "]")
 }
 
-pub fn write_player_params_json<W: Write>(
-    mut w: W,
-    params: &Params,
-) -> io::Result<()> {
+pub fn write_player_params_json<W: Write>(mut w: W, params: &Params) -> io::Result<()> {
     write!(
         w,
         r#"{{"volume_db":{:.02},"high_pass_cutoff_hz":{}}}"#,
@@ -318,7 +356,8 @@ pub fn write_scan_status_json<W: Write>(
         ScanStage::Done => "done",
     };
 
-    write!(w,
+    write!(
+        w,
         "{{\
         \"stage\":\"{}\",\
         \"files_discovered\":{},\
@@ -345,11 +384,9 @@ pub fn write_scan_status_json<W: Write>(
 }
 
 /// Write library statistics as json.
-pub fn write_stats_json<W: Write>(
-    index: &dyn MetaIndex,
-    mut w: W,
-) -> io::Result<()> {
-    write!(w,
+pub fn write_stats_json<W: Write>(index: &dyn MetaIndex, mut w: W) -> io::Result<()> {
+    write!(
+        w,
         "{{\
         \"tracks\":{},\
         \"albums\":{},\

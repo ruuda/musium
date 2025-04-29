@@ -20,6 +20,7 @@ use crate::database as db;
 use crate::database::Connection;
 use crate::database_utils;
 use crate::mvar::Var;
+use crate::playcount::TimeVector;
 use crate::player::{Millibel, Player, QueueId};
 use crate::prim::{AlbumId, ArtistId, Hertz, TrackId};
 use crate::scan::BackgroundScanner;
@@ -37,7 +38,9 @@ fn header_content_type(content_type: &str) -> Header {
 
 fn header_expires_seconds(age_seconds: i64) -> Header {
     let now = chrono::Utc::now();
-    let at = now.checked_add_signed(chrono::Duration::seconds(age_seconds)).unwrap();
+    let at = now
+        .checked_add_signed(chrono::Duration::seconds(age_seconds))
+        .unwrap();
     // The format from https://tools.ietf.org/html/rfc7234#section-5.3.
     let value = at.format("%a, %e %b %Y %H:%M:%S GMT").to_string();
     Header::from_bytes(&b"Expires"[..], value)
@@ -67,10 +70,7 @@ impl MetaServer {
             thumb_cache_var: thumb_cache_var.clone(),
             user_data: user_data,
             player: player,
-            scanner: BackgroundScanner::new(
-                index_var,
-                thumb_cache_var,
-            ),
+            scanner: BackgroundScanner::new(index_var, thumb_cache_var),
         }
     }
 
@@ -110,7 +110,10 @@ impl MetaServer {
 
         let index = &*self.index_var.get();
         let tracks = index.get_album_tracks(album_id);
-        let track = &tracks.first().expect("Albums have at least one track.").track;
+        let track = &tracks
+            .first()
+            .expect("Albums have at least one track.")
+            .track;
         let fname = index.get_filename(track.filename);
 
         let opts = claxon::FlacReaderOptions {
@@ -165,13 +168,11 @@ impl MetaServer {
             None => return self.handle_bad_request("Invalid track id."),
         };
 
-        let waveform = db
-            .begin()
-            .and_then(|mut tx| {
-                let result = db::select_track_waveform(&mut tx, track_id.0 as i64)?;
-                tx.commit()?;
-                Ok(result)
-            });
+        let waveform = db.begin().and_then(|mut tx| {
+            let result = db::select_track_waveform(&mut tx, track_id.0 as i64)?;
+            tx.commit()?;
+            Ok(result)
+        });
 
         let waveform = match waveform {
             Ok(Some(data)) => Waveform::from_bytes(data),
@@ -183,7 +184,9 @@ impl MetaServer {
         };
 
         let mut svg = Vec::new();
-        waveform.write_svg(&mut svg).expect("Write to memory does not fail.");
+        waveform
+            .write_svg(&mut svg)
+            .expect("Write to memory does not fail.");
 
         Response::from_data(svg)
             .with_header(header_content_type("image/svg+xml"))
@@ -194,7 +197,7 @@ impl MetaServer {
     fn handle_track(&self, path: &str) -> ResponseBox {
         // Track urls are of the form `/track/f7c153f2b16dc101.flac`.
         if !path.ends_with(".flac") {
-            return self.handle_bad_request("Expected a path ending in .flac.")
+            return self.handle_bad_request("Expected a path ending in .flac.");
         }
 
         let id_part = &path[..path.len() - ".flac".len()];
@@ -245,7 +248,8 @@ impl MetaServer {
             &mut w,
             album_id,
             album,
-        ).unwrap();
+        )
+        .unwrap();
 
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
@@ -265,16 +269,19 @@ impl MetaServer {
         };
 
         let albums = index.get_albums_by_artist(artist_id);
+        let now = TimeVector::now();
 
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
         serialization::write_artist_json(
             index,
             &self.user_data.lock().unwrap(),
+            &now,
             &mut w,
             artist,
             albums,
-        ).unwrap();
+        )
+        .unwrap();
 
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
@@ -283,13 +290,11 @@ impl MetaServer {
 
     fn handle_albums(&self) -> ResponseBox {
         let index = &*self.index_var.get();
+        let now = TimeVector::now();
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        serialization::write_albums_json(
-            index,
-            &self.user_data.lock().unwrap(),
-            &mut w,
-        ).unwrap();
+        serialization::write_albums_json(index, &self.user_data.lock().unwrap(), &now, &mut w)
+            .unwrap();
 
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
@@ -336,7 +341,8 @@ impl MetaServer {
             &self.user_data.lock().unwrap(),
             &mut w,
             &queue.tracks[..],
-        ).unwrap();
+        )
+        .unwrap();
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
             .boxed()
@@ -421,7 +427,7 @@ impl MetaServer {
             if k == "q" {
                 opt_query = Some(v);
             }
-        };
+        }
         let query = match opt_query {
             Some(q) => q,
             None => return self.handle_bad_request("Missing search query."),
@@ -456,7 +462,8 @@ impl MetaServer {
             &artists[..n_artists],
             &albums[..n_albums],
             &tracks[..n_tracks],
-        ).unwrap();
+        )
+        .unwrap();
 
         Response::from_data(w.into_inner())
             .with_status_code(200)
@@ -500,6 +507,7 @@ impl MetaServer {
     }
 
     /// Router function for all /api/«endpoint» calls.
+    #[rustfmt::skip]
     fn handle_api_request(
         &self,
         db: &mut Connection,
@@ -578,6 +586,7 @@ impl MetaServer {
         let query = url_iter.next().unwrap_or("");
 
         // A very basic router. See also docs/api.md for an overview.
+        #[rustfmt::skip]
         let response = match (request.method(), p0, p1) {
             // API endpoints go through the API router, to keep this match arm
             // a bit more concise.
@@ -600,7 +609,7 @@ impl MetaServer {
         };
 
         match request.respond(response) {
-            Ok(()) => {},
+            Ok(()) => {}
             Err(err) => println!("Error while responding to request: {:?}", err),
         }
     }
@@ -628,21 +637,23 @@ pub fn serve(bind: &str, service: Arc<MetaServer>) -> ! {
         let service_i = service.clone();
         let name = format!("http_server_{}", i);
         let builder = thread::Builder::new().name(name);
-        let join_handle = builder.spawn(move || {
-            let connection = database_utils::connect_readonly(&service_i.config.db_path)
-                .expect("Failed to connect to database.");
-            let mut db = Connection::new(&connection);
-            loop {
-                let request = match server_i.recv() {
-                    Ok(rq) => rq,
-                    Err(e) => {
-                        println!("Error: {:?}", e);
-                        break;
-                    }
-                };
-                service_i.handle_request(&mut db, request);
-            }
-        }).unwrap();
+        let join_handle = builder
+            .spawn(move || {
+                let connection = database_utils::connect_readonly(&service_i.config.db_path)
+                    .expect("Failed to connect to database.");
+                let mut db = Connection::new(&connection);
+                loop {
+                    let request = match server_i.recv() {
+                        Ok(rq) => rq,
+                        Err(e) => {
+                            println!("Error: {:?}", e);
+                            break;
+                        }
+                    };
+                    service_i.handle_request(&mut db, request);
+                }
+            })
+            .unwrap();
         threads.push(join_handle);
     }
 

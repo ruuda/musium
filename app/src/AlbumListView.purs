@@ -198,7 +198,7 @@ renderSortOptions postEvent = Html.div $ do
   let onClickPost field = Html.onClick $ void $ launchAff $ postEvent $ Event.SetSortField field
   optReleaseDate <- Html.div $ do
     Html.addClass "config-option"
-    Html.text "Release Date"
+    Html.text "Date"
     onClickPost SortReleaseDate
     ask
   optFirstSeen <- Html.div $ do
@@ -216,17 +216,23 @@ renderSortOptions postEvent = Html.div $ do
     Html.text "Trending"
     onClickPost SortTrending
     ask
+  optForNow <- Html.div $ do
+    Html.addClass "config-option"
+    Html.text "For Now"
+    onClickPost SortForNow
+    ask
 
   pure $ case _ of
     SortReleaseDate -> optReleaseDate
     SortFirstSeen   -> optFirstSeen
     SortDiscover    -> optDiscover
     SortTrending    -> optTrending
+    SortForNow      -> optForNow
 
 setSortMode :: SortMode -> AlbumListView -> Effect Unit
 setSortMode { field, direction } state =
   let
-    allFields = [SortReleaseDate, SortFirstSeen, SortDiscover, SortTrending]
+    allFields = [SortReleaseDate, SortFirstSeen, SortDiscover, SortTrending, SortForNow]
     unsort = do
       Html.removeClass "increasing"
       Html.removeClass "decreasing"

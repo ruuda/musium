@@ -25,11 +25,11 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
-use crate::MemoryMetaIndex;
 use crate::album_table::AlbumTable;
-use crate::playcount::{PlayCounter, PlayCounts};
+use crate::database as db;
+use crate::playcount::{PlayCounter, PlayCounts, TimeVector};
 use crate::prim::{AlbumId, ArtistId, TrackId};
-use crate::{database as db};
+use crate::MemoryMetaIndex;
 
 /// Track rating.
 ///
@@ -79,10 +79,58 @@ pub struct AlbumState {
     ///
     /// The discovery sorting methods identifies albums that were popular in the
     /// past, but not recently. See the [`playcount`] module for more details.
-    pub discover_score: f32,
+    pub score_discover: f32,
 
     // Playcount on the shortest timescale.
-    pub trending_score: f32,
+    pub score_trending: f32,
+
+    // Log playcount on the longer timescales.
+    //
+    // Could be used directly to sort by top albums, but in the UI this is not
+    // _that_ useful. Instead, we can mix it with the time embedding to provide
+    // a list of "for now" albums for this time of the day, where we don't
+    // suggest albums with a low playcount just because the one time we played
+    // them was at this time of the day.
+    pub score_longterm: f32,
+
+    // Vector embedding of the play times.
+    //
+    // Used to weigh the discover score, and compute the "for now" score.
+    pub time_embedding: TimeVector,
+}
+
+/// Scores (for ranking) evaluated at a given point in time.
+#[derive(Copy, Clone, Default)]
+pub struct ScoreSnapshot {
+    /// Trending score, see [`AlbumState::score_trending`].
+    pub trending: f32,
+
+    /// Discovery score, adjusted for the current moment.
+    pub discover: f32,
+
+    /// "For now" score, based on the time of day, week, and year.
+    pub for_now: f32,
+}
+
+impl AlbumState {
+    /// Evaluate scores for the current moment.
+    ///
+    /// The `at` time vector should be the embedding of the desired time to
+    /// evaluate at, and then normalized.
+    pub fn score(&self, at: &TimeVector) -> ScoreSnapshot {
+        // The cosine distance between our time vector and the query time vector.
+        // We put it in the range [0, 1] so that when we multiply with a negative
+        // discover score, it doesn't flip the sign.
+        debug_assert!(self.time_embedding.norm().is_finite());
+        let time_cos = self.time_embedding.dot(at) / self.time_embedding.norm();
+        let time_weight = time_cos.mul_add(0.5, 0.5);
+
+        ScoreSnapshot {
+            trending: self.score_trending,
+            discover: self.score_discover * time_weight,
+            for_now: self.score_longterm * time_weight * time_weight,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -108,7 +156,6 @@ impl Default for UserData {
             artists: HashMap::with_hasher(s),
         }
     }
-
 }
 
 impl UserData {
@@ -126,7 +173,8 @@ impl UserData {
         for opt_rating in db::iter_ratings(tx)? {
             let rating = opt_rating?;
             let tid = TrackId(rating.track_id as u64);
-            let rating = Rating::try_from(rating.rating).expect("Invalid rating value in the database.");
+            let rating =
+                Rating::try_from(rating.rating).expect("Invalid rating value in the database.");
             stats.set_track_rating(tid, rating);
         }
 
@@ -143,13 +191,22 @@ impl UserData {
     }
 
     pub fn get_track_rating(&self, track_id: TrackId) -> Rating {
-        self.tracks.get(&track_id).map(|t| t.rating).unwrap_or_default()
+        self.tracks
+            .get(&track_id)
+            .map(|t| t.rating)
+            .unwrap_or_default()
     }
 
-    pub fn get_album_scores(&self, album_id: AlbumId) -> AlbumState {
+    /// Take a snapshot of the scores for the given album, evaluated at the given query time.
+    ///
+    /// See also [`AlbumState::score`].
+    pub fn get_album_scores(&self, album_id: AlbumId, at: &TimeVector) -> ScoreSnapshot {
         // If an album is not present, we don't have playcounts, so it is
         // ranked as low as possible for all scores.
-        self.albums.get(album_id).unwrap_or_default()
+        self.albums
+            .get(album_id)
+            .map(|state| state.score(at))
+            .unwrap_or_default()
     }
 
     /// Replace the album scores with new scores.

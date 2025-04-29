@@ -22,10 +22,18 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
 
 ## Next
 
- * The ranking behind the _discover_ sort mode now better balances past and
-   recent popularity to show you albums worth listening to again.
+ * A new sort option is available in the album list: _For Now_. This ranking
+   shows you albums that you played at similar times of the day, week, and year
+   in the past. For example, if you tend to listen to more quiet music in the
+   morning, and more intense music on Friday nights, this will surface those
+   albums at the right times.
+ * The ranking behind the _Discover_ sort mode now better balances past and
+   recent popularity to show you albums worth listening to again. Like the
+   _For Now_ ranking, it takes into account the time of the day, week, and year,
+   to show the most relevant suggestions.
  * The queue tab in the webinterface is now implemented, including buttons to
    shuffle and clear the queue.
+ * Add support for Czech diacritics in text normalization.
 
 ## 0.16.0
 

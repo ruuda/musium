@@ -140,6 +140,7 @@ newtype Album = Album
   , firstSeen :: String
   , discoverScore :: Number
   , trendingScore :: Number
+  , forNowScore :: Number
   }
 
 instance decodeJsonAlbum :: DecodeJson Album where
@@ -156,6 +157,7 @@ instance decodeJsonAlbum :: DecodeJson Album where
     firstSeen     <- Json.getField obj "first_seen"
     discoverScore <- Json.getField obj "discover_score"
     trendingScore <- Json.getField obj "trending_score"
+    forNowScore <- Json.getField obj "for_now_score"
     pure $ Album
       { id
       , title
@@ -165,6 +167,7 @@ instance decodeJsonAlbum :: DecodeJson Album where
       , firstSeen
       , discoverScore
       , trendingScore
+      , forNowScore
       }
 
 getAlbums :: Aff (Array Album)

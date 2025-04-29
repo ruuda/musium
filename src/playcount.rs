@@ -11,12 +11,12 @@ use std::collections::BinaryHeap;
 use std::collections::HashMap;
 use std::path::Path;
 
+use crate::album_table::AlbumTable;
 use crate::database::{self, Transaction};
 use crate::database_utils::connect_readonly;
 use crate::prim::{AlbumId, ArtistId, TrackId};
-use crate::{MemoryMetaIndex, MetaIndex};
-use crate::album_table::AlbumTable;
 use crate::user_data::AlbumState;
+use crate::{MemoryMetaIndex, MetaIndex};
 
 /// A point in time with second granularity.
 ///
@@ -98,6 +98,67 @@ impl Instant {
             seconds: self.seconds_since_jan_2000 - t0.seconds_since_jan_2000,
         }
     }
+
+    /// Embed the instant into the time vector space, see also [`TimeVector`].
+    pub fn embed(&self) -> TimeVector {
+        use std::f32::consts::TAU;
+
+        const SECONDS_PER_YEAR: u32 = 365 * 24 * 3600 + 6 * 3600;
+        const SECONDS_PER_WEEK: u32 = 7 * 24 * 3600;
+        const SECONDS_PER_DAY: u32 = 24 * 3600;
+
+        // We convert to radians to map to the circle; precompute as much of
+        // the multiplication as we can.
+        const NORM_YEAR: f32 = TAU / (SECONDS_PER_YEAR as f32);
+        const NORM_DAY: f32 = TAU / (SECONDS_PER_DAY as f32);
+
+        let t = self.seconds_since_jan_2000;
+        let t_day = t % SECONDS_PER_DAY;
+        let t_year = t % SECONDS_PER_YEAR;
+        // The epoch we use, 2000-01-01, is a Saturday, but we want the week to
+        // start on Monday midnight to simplify the circle mapping below.
+        let t_week = (t + SECONDS_PER_DAY * 5) % SECONDS_PER_WEEK;
+
+        let r_day = (t_day as f32) * NORM_DAY;
+        let r_year = (t_year as f32) * NORM_YEAR;
+
+        // We map weekdays non-linearly around the circle. The first quadrant
+        // contains Mon-Thu, then the next three quadrants contain Fri, Sat, Sun
+        // respectively. This mapping has the following properties:
+        //
+        // - All weekdays lie above the x-axis, the weekend lies below, so the
+        //   time-weighed average vector of weekend vs. weekday have a dot
+        //   product close to -1, definitely below 0.
+        // - Saturday is diametrically opposite the "weekdays" excluding Friday.
+        //   The time-weighed average vector of Saturday vs. Mon-Thu have a dot
+        //   product of exactly -1.
+        // - "Party nights" (Friday and Saturday) lie left of the y-axis,
+        //   weekday + Sunday night all lie right of the y-axis. The dot product
+        //   of the time-weighed average vector of days with party nights vs.
+        //   days without is close to -1, definitely below 0.
+        //
+        // Hopefully this does a good job of mapping the time of the week into
+        // R^2 in a meaningful way.
+        let r_week = if t_week <= SECONDS_PER_DAY * 4 {
+            // One factor 0.25 for the quarter circle, one because we fit 4 days
+            // into this quadrant.
+            (t_week as f32) * (TAU * 0.25 * 0.25 / SECONDS_PER_DAY as f32)
+        } else {
+            // We subtract 3 full days, so `t_weekend` is 0.0 at the start of
+            // Thursday. Then we allocate a quarter of the circle to each day.
+            let t_weekend = t_week - SECONDS_PER_DAY * 3;
+            (t_weekend as f32) * (TAU * 0.25 / SECONDS_PER_DAY as f32)
+        };
+
+        TimeVector([
+            r_year.cos(),
+            r_year.sin(),
+            r_week.cos(),
+            r_week.sin(),
+            r_day.cos(),
+            r_day.sin(),
+        ])
+    }
 }
 
 impl Epoch {
@@ -122,6 +183,186 @@ pub struct RateLimit {
     pub fill_rate_per_second: f32,
 }
 
+/// A vector representation of the time of day, week, and year.
+///
+/// ## Summary
+///
+/// The rationale behind this is that we can compare how "similar" moments are
+/// using the cosine difference, which we can use to classify tracks as morning
+/// vs. evening, or weekend vs. weekday, or summer vs. winter. Based on this we
+/// hope to suggest better tracks to listen to based on the current moment. E.g.
+/// in the early morning we may suggest some chill jazz but not heavy dancefloor
+/// bangers.
+///
+/// Because years, weeks, and days are all cyclic, we treat them as circles, and
+/// we embed the moment as x, y coordinate on the circle. This ensures that
+/// taking the cosine distance is meaningful.
+///
+/// We populate the space as follows:
+/// - Dimension 0, 1: Time of year
+/// - Dimension 2, 3: Time of week[^1]
+/// - Dimension 4, 5: Time of day (24h)
+///
+/// [^1]: For the time of the week, we don't map the time uniformly to the
+/// circle. We care more about "weekday" vs. "weekend", so the weekdays are
+/// relatively squashed.
+///
+/// ## Local time
+///
+/// We map instants to time vectors based on UTC time, without regard for time
+/// zone. Ideally, we would do it based on local time, but that information is
+/// not available from historical Last.fm scrobbles, and even in Musium I made
+/// the mistake of saving listens always as UTC, not including time zone offset.
+/// For me this is not a big problem, the vast majority of my listens are in
+/// UTC + {0, 1, 2}, so the impact on the day shift is small. If I ever move to
+/// a very different time zone and I want to preserve the time of the day, I
+/// suppose we could try to infer the time zone from the median listen time or
+/// something like that.
+///
+/// ## Normalization
+///
+/// When we embed an instant, the length of the vector is sqrt(3). Each of the
+/// 3 components (year/week/day) has a length of 1 by construction, so the
+/// relative length of the components is equal. After adding time vectors
+/// together, this is no longer true. For example, if we listen a track on every
+/// weekday, but only in March, the day-of-week components will cancel each
+/// other out, while the time-of-year components will reinforce each other. If
+/// we normalize the result, the time-of-year component will be much larger. So
+/// naturally, when we add time vectors, they pick out which component an item
+/// is most seasonal in. When we take the cosine distance with the embedding
+/// of the current time to find tracks suitable for the current moment, because
+/// it's not sensitive to absolute length, that will naturally emphasize the
+/// right component.
+// TODO: Instead of deriving copy, make a quantized version that holds i8's.
+// It saves memory in the user data, and I hope it's faster to compute the inner
+// products as well, it could even be vectorized.
+#[derive(Copy, Clone)]
+pub struct TimeVector([f32; 6]);
+
+impl TimeVector {
+    pub const fn zero() -> TimeVector {
+        TimeVector([0.0; 6])
+    }
+
+    /// Return the normalized embedding of the current moment.
+    pub fn now() -> TimeVector {
+        use chrono::Utc;
+        let t = Instant::from_posix_timestamp(Utc::now().timestamp());
+        let v = t.embed();
+        let n = v.norm();
+        v * n.recip()
+    }
+
+    pub fn mul_add(&self, factor: f32, term: &TimeVector) -> TimeVector {
+        TimeVector([
+            self.0[0].mul_add(factor, term.0[0]),
+            self.0[1].mul_add(factor, term.0[1]),
+            self.0[2].mul_add(factor, term.0[2]),
+            self.0[3].mul_add(factor, term.0[3]),
+            self.0[4].mul_add(factor, term.0[4]),
+            self.0[5].mul_add(factor, term.0[5]),
+        ])
+    }
+
+    /// Return the L2-norm (Euclidean norm) of this vector.
+    pub fn norm(&self) -> f32 {
+        let w2_year = self.0[0] * self.0[0] + self.0[1] * self.0[1];
+        let w2_week = self.0[2] * self.0[2] + self.0[3] * self.0[3];
+        let w2_day = self.0[4] * self.0[4] + self.0[5] * self.0[5];
+        (w2_year + w2_week + w2_day).sqrt()
+    }
+
+    /// Return the dot product between the two vectors.
+    pub fn dot(&self, other: &TimeVector) -> f32 {
+        0.0 + ((self.0[0] * other.0[0]) + (self.0[1] * other.0[1]))
+            + ((self.0[2] * other.0[2]) + (self.0[3] * other.0[3]))
+            + ((self.0[4] * other.0[4]) + (self.0[5] * other.0[5]))
+    }
+
+    /// For debugging, format as human-readable direction that the vector points in.
+    ///
+    /// Note, this is only approximate. We assume for example that every month
+    /// is exactly 1/12 of a year, where a year is 365.25 days. It's about the
+    /// rough direction anyway so this is fine.
+    #[rustfmt::skip]
+    fn fmt_dir(&self) -> String {
+        use std::f32::consts::TAU;
+
+        let mut r_year = self.0[1].atan2(self.0[0]);
+        let mut r_week = self.0[3].atan2(self.0[2]);
+        let mut r_day = self.0[5].atan2(self.0[4]);
+
+        r_year += if r_year < 0.0 { TAU } else { 0.0 };
+        r_week += if r_week < 0.0 { TAU } else { 0.0 };
+        r_day += if r_day < 0.0 { TAU } else { 0.0 };
+
+        let month = (r_year * (11.999 / TAU)) as usize;
+        let hour = (r_day * (23.999 / TAU)) as usize;
+
+        // For the day, we don't bother to undo the non-linear mapping that
+        // [`Instant::embed`] applies, instead we factor this into the lookup
+        // table below.
+        let day = (r_week * (15.999 / TAU)) as usize;
+
+        const MONTHS: [&'static str; 12] = [
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        ];
+        // The inverse mapping of [`Instant::embed`].
+        const DAYS: [&'static str; 16] = [
+            "Mon", "Tue", "Wed", "Thu",
+            "Fri", "Fri", "Fri", "Fri",
+            "Sat", "Sat", "Sat", "Sat",
+            "Sun", "Sun", "Sun", "Sun",
+        ];
+
+        // The length of the embedding vector of an instant is by construction
+        // sqrt(3.0), and restricted to the year/week/day part, each of those
+        // parts has length 1.0. But when we add those embeddings together, the
+        // ones that point in the same direction reinforce while ones that point
+        // in different directions cancel out. So we play a track on every day
+        // of the week in one month, the year part becomes longer relative to
+        // the week part. We print those weights to classify an item in which of
+        // these three cycles it is most seasonal.
+        let w2_year = self.0[0] * self.0[0] + self.0[1] * self.0[1];
+        let w2_week = self.0[2] * self.0[2] + self.0[3] * self.0[3];
+        let w2_day = self.0[4] * self.0[4] + self.0[5] * self.0[5];
+        let inv_norm = (w2_year + w2_week + w2_day).sqrt().recip();
+        let w_year = w2_year.sqrt() * inv_norm;
+        let w_week = w2_week.sqrt() * inv_norm;
+        let w_day = w2_day.sqrt() * inv_norm;
+
+        format!(
+            "{} {} {:02}hZ Y{:1.0}-D{:1.0}-H{:1.0}",
+            MONTHS[month], DAYS[day], hour,
+            // We print these to 1 digit precision, and it would be wasteful to
+            // add the "0." in front, so we print as integer from 0 to 9.
+            w_year * 9.49, w_week * 9.49, w_day * 9.49,
+        )
+    }
+}
+
+impl Default for TimeVector {
+    fn default() -> Self {
+        TimeVector::zero()
+    }
+}
+
+impl std::ops::Mul<f32> for TimeVector {
+    type Output = TimeVector;
+
+    fn mul(self, rhs: f32) -> TimeVector {
+        TimeVector([
+            self.0[0] * rhs,
+            self.0[1] * rhs,
+            self.0[2] * rhs,
+            self.0[3] * rhs,
+            self.0[4] * rhs,
+            self.0[5] * rhs,
+        ])
+    }
+}
+
 /// Exponential moving averages at different timescales plus leaky bucket rate limiter.
 pub struct ExpCounter {
     /// Time at which the counts were last updated.
@@ -132,6 +373,9 @@ pub struct ExpCounter {
 
     /// Exponentially decaying counts for different half-lives.
     pub n: [f32; 5],
+
+    /// Exponential moving average of the time vector of each play.
+    pub time_embedding: TimeVector,
 }
 
 impl ExpCounter {
@@ -200,9 +444,9 @@ impl ExpCounter {
         19260.0, // 3650 days / 10 years
         // 9630.615234, // 1826 days / 5 years
         2407.653809, // 457 days / 1.25 years
-        601.913452, // 114 days / ~3.75 months / 16 weeks
-        150.478363, // 29 days / 1 month
-        37.619591, // 7 days
+        601.913452,  // 114 days / ~3.75 months / 16 weeks
+        150.478363,  // 29 days / 1 month
+        37.619591,   // 7 days
     ];
 
     /// Return how much to decay the counters by after the elapsed time.
@@ -222,6 +466,7 @@ impl ExpCounter {
             // have long replenished.
             bucket: 0.0,
             n: [0.0; 5],
+            time_embedding: TimeVector::zero(),
         }
     }
 
@@ -276,6 +521,14 @@ impl ExpCounter {
         }
 
         self.t = t1;
+
+        // In addition to updating the counters, we update the time vector for
+        // this item. I experimented with a decay factor of 1 - 0.1 * count,
+        // so when the rate limiter doesn't limit, a factor of 0.9, but that was
+        // decaying way too aggressively. Just adding without decay seems to
+        // work far better, even though it skews the item to the initial
+        // discovery phase.
+        self.time_embedding = t1.embed().mul_add(count, &self.time_embedding);
     }
 }
 
@@ -517,8 +770,10 @@ impl PlayCounts {
         let mut albums = AlbumTable::new(self.counter.albums.len(), AlbumState::default());
         for (album_id, counter) in self.counter.albums.iter() {
             let state = AlbumState {
-                discover_score: score_falling(counter),
-                trending_score: score_trending(counter),
+                score_discover: score_falling(counter),
+                score_trending: score_trending(counter),
+                score_longterm: score_longterm(counter),
+                time_embedding: counter.time_embedding,
             };
             albums.insert(*album_id, state);
         }
@@ -530,6 +785,7 @@ fn print_ranking(
     title: &'static str,
     description: String,
     index: &MemoryMetaIndex,
+    counts: &PlayCounts,
     top_artists: &[(RevNotNan, ArtistId)],
     top_albums: &[(RevNotNan, AlbumId)],
     top_tracks: &[(RevNotNan, TrackId)],
@@ -538,11 +794,13 @@ fn print_ranking(
     for (i, (count, artist_id)) in top_artists.iter().enumerate() {
         let artist = index.get_artist(*artist_id).unwrap();
         let artist_name = index.get_string(artist.name);
+        let counter = counts.counter.artists.get(artist_id).unwrap();
 
         println!(
-            "  {:2} {:7.3} {} {}",
+            "  {:2} {:7.3} {} {} {}",
             i + 1,
             count.0,
+            counter.time_embedding.fmt_dir(),
             artist_id,
             artist_name
         );
@@ -553,11 +811,13 @@ fn print_ranking(
         let album = index.get_album(*album_id).unwrap();
         let album_title = index.get_string(album.title);
         let album_artist = index.get_string(album.artist);
+        let counter = counts.counter.albums.get(album_id).unwrap();
 
         println!(
-            "  {:2} {:7.3} {} {:25}  {}",
+            "  {:2} {:7.3} {} {} {:25}  {}",
             i + 1,
             count.0,
+            counter.time_embedding.fmt_dir(),
             album_id,
             album_title,
             album_artist
@@ -569,11 +829,13 @@ fn print_ranking(
         let track = index.get_track(*track_id).unwrap();
         let track_title = index.get_string(track.title);
         let track_artist = index.get_string(track.artist);
+        let counter = counts.counter.tracks.get(track_id).unwrap();
 
         println!(
-            "  {:2} {:7.3} {} {:25}  {}",
+            "  {:2} {:7.3} {} {} {:25}  {}",
             i + 1,
             count.0,
+            counter.time_embedding.fmt_dir(),
             track_id,
             track_title,
             track_artist
@@ -587,10 +849,12 @@ fn print_ranking(
 /// playcount on a short timescale, while still mixing in a bit of a longer
 /// time horizon.
 fn score_trending(counter: &ExpCounter) -> f32 {
-    0.0
-    + (2.0 * counter.n[4])
-    + (0.5 * counter.n[3])
-    + (0.1 * counter.n[2])
+    (2.0 * counter.n[4]) + (0.5 * counter.n[3]) + (0.1 * counter.n[2])
+}
+
+/// Score for sorting by top on the longest two time scales.
+fn score_longterm(counter: &ExpCounter) -> f32 {
+    counter.n[0].ln() + counter.n[1].ln()
 }
 
 /// Score for sorting entries by _falling_.
@@ -612,6 +876,22 @@ fn score_falling(counter: &ExpCounter) -> f32 {
 
     // Weights chosen empirically.
     f0 + f1 * 0.2 + f2 * 0.6
+}
+
+/// Score for sorting entries as the most suitable for this time.
+///
+/// Based on time of the year, day of the week, and time of the day, when we
+/// played the item in the past.
+///
+/// Takes a normalized embedding of the current time as `now_embed`.
+fn score_for_now(now_embed: &TimeVector, counter: &ExpCounter) -> f32 {
+    // We take the cosine distance. We assume `now_embed` is already normalized,
+    // so we only need to normalize the counter's vector.
+    let cos_dist = counter.time_embedding.dot(now_embed) / counter.time_embedding.norm();
+
+    // Put the score in the range [0.0, 1.0], so we can easily use it as a
+    // multiplier for other scores.
+    cos_dist.mul_add(0.5, 0.5)
 }
 
 /// Print playcount statistics about the library.
@@ -636,8 +916,12 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
             counts.get_top_by(150, |counter: &ExpCounter| RevNotNan(counter.n[timescale]));
         print_ranking(
             "TOP",
-            format!("timescale {}, {:.0} days / {:.0} months", timescale, n_days, n_months),
+            format!(
+                "timescale {}, {:.0} days / {:.0} months",
+                timescale, n_days, n_months
+            ),
             index,
+            &counts,
             &top_artists,
             &top_albums,
             &top_tracks,
@@ -650,20 +934,79 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         "TRENDING",
         "see code for formula".to_string(),
         index,
+        &counts,
         &trending_artists,
         &trending_albums,
         &trending_tracks,
     );
 
-    let (falling_artists, falling_albums, falling_tracks) = counts.get_top_by(350, |c| RevNotNan(score_falling(c)));
+    let (falling_artists, falling_albums, falling_tracks) =
+        counts.get_top_by(350, |c| RevNotNan(score_falling(c)));
     print_ranking(
         "FALLING",
         "see code for formula".to_string(),
         index,
+        &counts,
+        &falling_artists,
+        &falling_albums,
+        &falling_tracks,
+    );
+
+    let now = Instant::from_posix_timestamp(chrono::Utc::now().timestamp());
+    let now_embed = now.embed() * (1.0 / now.embed().norm());
+
+    let (falling_artists, falling_albums, falling_tracks) =
+        counts.get_top_by(150, |c| RevNotNan(score_for_now(&now_embed, c)));
+    print_ranking(
+        "FOR NOW",
+        "time vector cosine distance".to_string(),
+        index,
+        &counts,
         &falling_artists,
         &falling_albums,
         &falling_tracks,
     );
 
     Ok(())
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::Instant;
+    use chrono::{DateTime, Utc};
+
+    fn fmt_dir(dt: DateTime<Utc>) -> String {
+        Instant::from_posix_timestamp(dt.timestamp())
+            .embed()
+            .fmt_dir()
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn time_vector_embed_format_works_as_expected() {
+        use chrono::{TimeZone, Utc};
+
+        // Month, day of week, hour of day.
+        // 2025-04-14 is a Monday.
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 14).and_hms( 9, 5, 0)), "Apr Mon 09hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 15).and_hms(11, 5, 0)), "Apr Tue 11hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 16).and_hms(13, 5, 0)), "Apr Wed 13hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 17).and_hms(15, 5, 0)), "Apr Thu 15hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 18).and_hms(17, 5, 0)), "Apr Fri 17hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 19).and_hms(19, 5, 0)), "Apr Sat 19hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 20).and_hms(21, 5, 0)), "Apr Sun 21hZ Y5-D5-H5");
+
+        assert_eq!(fmt_dir(Utc.ymd(2025,  1, 15).and_hms( 7, 5, 0)), "Jan Wed 07hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  2, 15).and_hms( 9, 5, 0)), "Feb Sat 09hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  3, 15).and_hms(11, 5, 0)), "Mar Sat 11hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  4, 15).and_hms(13, 5, 0)), "Apr Tue 13hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  5, 15).and_hms(15, 5, 0)), "May Thu 15hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  6, 15).and_hms(17, 5, 0)), "Jun Sun 17hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  7, 15).and_hms(19, 5, 0)), "Jul Tue 19hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  8, 15).and_hms(21, 5, 0)), "Aug Fri 21hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  9, 15).and_hms(23, 5, 0)), "Sep Mon 23hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 10, 15).and_hms( 1, 5, 0)), "Oct Wed 01hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 11, 15).and_hms( 2, 5, 0)), "Nov Sat 02hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 12, 15).and_hms( 6, 5, 0)), "Dec Mon 06hZ Y5-D5-H5");
+    }
 }
