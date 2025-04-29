@@ -142,6 +142,9 @@ impl Instant {
             _ => unreachable!("There are only 7 days in a week."),
         };
 
+        // TODO: Restore the above mapping.
+        let r_week = t_week as f32 * (std::f32::consts::TAU / SECONDS_PER_WEEK as f32);
+
         TimeVector([
             r_year.cos(),
             r_year.sin(),
@@ -221,6 +224,10 @@ impl TimeVector {
     }
 
     /// For debugging, format as human-readable direction that the vector points in.
+    ///
+    /// Note, this is only approximate. We assume for example that every month
+    /// is exactly 1/12 of a year, where a year is 365.25 days. It's about the
+    /// rough direction anyway so this is fine.
     #[rustfmt::skip]
     fn fmt_dir(&self) -> String {
         use std::f32::consts::TAU;
@@ -228,6 +235,10 @@ impl TimeVector {
         let mut r_year = self.0[1].atan2(self.0[0]);
         let mut r_week = self.0[3].atan2(self.0[2]);
         let mut r_day = self.0[5].atan2(self.0[4]);
+
+        // During embedding, we consider midnight the day boundary and we
+        // subtract half a day from the timestamp, so here we add it back.
+        r_week += std::f32::consts::TAU / 14.0;
 
         r_year += if r_year < 0.0 { TAU } else { 0.0 };
         r_week += if r_week < 0.0 { TAU } else { 0.0 };
@@ -243,7 +254,7 @@ impl TimeVector {
         ];
         // Days start on Saturday, see [`Instant::embed`].
         const DAYS: [&'static str; 7] = [
-            "Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"
+            "Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri",
         ];
         // Hours start at noon UTC, see [`Instant::embed`].
         const HOURS: [&'static str; 24] = [
@@ -851,4 +862,45 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
     );
 
     Ok(())
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::Instant;
+    use chrono::{DateTime, Utc};
+
+    fn fmt_dir(dt: DateTime<Utc>) -> String {
+        Instant::from_posix_timestamp(dt.timestamp())
+            .embed()
+            .fmt_dir()
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn time_vector_embed_format_works_as_expected() {
+        use chrono::{TimeZone, Utc};
+
+        // Month, day of week, hour of day.
+        // 2025-04-14 is a Monday.
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 14).and_hms( 9, 5, 0)), "Apr Mon 09:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 15).and_hms(11, 5, 0)), "Apr Tue 11:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 16).and_hms(13, 5, 0)), "Apr Wed 13:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 17).and_hms(15, 5, 0)), "Apr Thu 15:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 18).and_hms(17, 5, 0)), "Apr Fri 17:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 19).and_hms(19, 5, 0)), "Apr Sat 19:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 20).and_hms(21, 5, 0)), "Apr Sun 21:00Z");
+
+        assert_eq!(fmt_dir(Utc.ymd(2025,  1, 15).and_hms( 7, 5, 0)), "Jan Wed 07:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  2, 15).and_hms( 9, 5, 0)), "Feb Sat 09:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  3, 15).and_hms(11, 5, 0)), "Mar Sat 11:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  4, 15).and_hms(13, 5, 0)), "Apr Tue 13:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  5, 15).and_hms(15, 5, 0)), "May Thu 15:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  6, 15).and_hms(17, 5, 0)), "Jun Sun 17:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  7, 15).and_hms(19, 5, 0)), "Jul Tue 19:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  8, 15).and_hms(21, 5, 0)), "Aug Fri 21:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  9, 15).and_hms(23, 5, 0)), "Sep Mon 23:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 10, 15).and_hms( 1, 5, 0)), "Oct Wed 01:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 11, 15).and_hms( 2, 5, 0)), "Nov Sat 02:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 12, 15).and_hms( 6, 5, 0)), "Dec Mon 06:00Z");
+    }
 }
