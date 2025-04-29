@@ -98,6 +98,59 @@ impl Instant {
             seconds: self.seconds_since_jan_2000 - t0.seconds_since_jan_2000,
         }
     }
+
+    /// Embed the instant into the time vector space, see also [`TimeVector`].
+    pub fn embed(&self) -> TimeVector {
+        const SECONDS_PER_YEAR: u32 = 365 * 24 * 3600 + 6 * 3600;
+        const SECONDS_PER_WEEK: u32 = 7 * 24 * 3600;
+        const SECONDS_PER_DAY: u32 = 24 * 3600;
+
+        // We convert to radians to map to the circle; precompute as much of
+        // the multiplication as we can.
+        const NORM_YEAR: f32 = std::f32::consts::TAU / (SECONDS_PER_YEAR as f32);
+        const NORM_DAY: f32 = std::f32::consts::TAU / (SECONDS_PER_DAY as f32);
+
+        // We center the day transitions around noon UTC, this matters for how
+        // we map the weekdays below.
+        let t = self.seconds_since_jan_2000 - 12 * 3600;
+        let t_day = t % SECONDS_PER_DAY;
+        let t_week = t % SECONDS_PER_WEEK;
+        let t_year = t % SECONDS_PER_YEAR;
+
+        let r_day = (t_day as f32) * NORM_DAY;
+        let r_year = (t_year as f32) * NORM_YEAR;
+
+        // We map weekdays non-linearly, as follows (where the angle goes from
+        // 0 to 1 for a full rotation):
+        const MON: f32 = 7.5 / 9.0;
+        const TUE: f32 = 8.5 / 9.0;
+        const WED: f32 = 0.5 / 9.0;
+        const THU: f32 = 1.5 / 9.0;
+        const FRI: f32 = 1.1 / 4.0;
+        const SAT: f32 = 4.0 / 9.0;
+        const SUN: f32 = 6.0 / 9.0;
+        let r_week = match t_week / SECONDS_PER_DAY {
+            // Jan 1st 2000 was a Saturday,
+            0 => SAT + (SUN - SAT) * r_day,
+            1 => SUN + (MON - SUN) * r_day,
+            2 => MON + (TUE - MON) * r_day,
+            // Wrap around 0 happens between Tue and Wed.
+            3 => TUE + (1.0 + WED - TUE) * r_day,
+            4 => WED + (THU - WED) * r_day,
+            5 => THU + (FRI - THU) * r_day,
+            6 => FRI + (SAT - FRI) * r_day,
+            _ => unreachable!("There are only 7 days in a week."),
+        };
+
+        TimeVector([
+            r_year.cos(),
+            r_year.sin(),
+            r_week.cos(),
+            r_week.sin(),
+            r_day.cos(),
+            r_day.sin(),
+        ])
+    }
 }
 
 impl Epoch {
@@ -121,6 +174,35 @@ pub struct RateLimit {
     /// The rate at which the bucket refills until it reaches `capacity` again.
     pub fill_rate_per_second: f32,
 }
+
+/// A vector representation of the time of day, week, and year.
+///
+/// The rationale behind this is that we can compare how "similar" moments are
+/// using the cosine difference, which we can use to classify tracks as morning
+/// vs. evening, or weekend vs. weekday, or summer vs. winter. Based on this we
+/// hope to suggest better tracks to listen to based on the current moment. E.g.
+/// in the early morning we may suggest some chill jazz but not heavy dancefloor
+/// banger.
+///
+/// Because years, weeks, and days are all cyclic, we treat them as circles, and
+/// we embed the moment as x, y coordinate on the circle. This ensures that
+/// taking the cosine distance is meaningful.
+///
+/// We populate the space as follows:
+/// - Dimension 0, 1: Time of year
+/// - Dimension 2, 3: Time of week[^1]
+/// - Dimension 4, 5: Time of day (24h)
+///
+/// [^1]: For the time of the week, we don't map the time uniformly to the
+/// circle. We care more about "weekday" vs. "weekend", so the weekdays are
+/// relatively squashed.
+///
+/// We map instants to time vectors without regard for time zone. Local times
+/// are irrelevant as long as all listens are mostly in the same time zone, so
+/// that the morning/afternoon distinction makes sense. If you move time zones,
+/// we should adjust for that, but that's not a problem I have so I'm not
+/// solving it right now.
+pub struct TimeVector([f32; 6]);
 
 /// Exponential moving averages at different timescales plus leaky bucket rate limiter.
 pub struct ExpCounter {
