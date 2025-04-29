@@ -251,6 +251,21 @@ impl TimeVector {
         ])
     }
 
+    /// Return the L2-norm (Euclidean norm) of this vector.
+    fn norm(&self) -> f32 {
+        let w2_year = self.0[0] * self.0[0] + self.0[1] * self.0[1];
+        let w2_week = self.0[2] * self.0[2] + self.0[3] * self.0[3];
+        let w2_day = self.0[4] * self.0[4] + self.0[5] * self.0[5];
+        (w2_year + w2_week + w2_day).sqrt()
+    }
+
+    /// Return the dot product between the two vectors.
+    fn dot(&self, other: &TimeVector) -> f32 {
+        0.0 + ((self.0[0] * other.0[0]) + (self.0[1] * other.0[1]))
+            + ((self.0[2] * other.0[2]) + (self.0[3] * other.0[3]))
+            + ((self.0[4] * other.0[4]) + (self.0[5] * other.0[5]))
+    }
+
     /// For debugging, format as human-readable direction that the vector points in.
     ///
     /// Note, this is only approximate. We assume for example that every month
@@ -852,6 +867,22 @@ fn score_falling(counter: &ExpCounter) -> f32 {
     f0 + f1 * 0.2 + f2 * 0.6
 }
 
+/// Score for sorting entries as the most suitable for this time.
+///
+/// Based on time of the year, day of the week, and time of the day, when we
+/// played the item in the past.
+///
+/// Takes a normalized embedding of the current time as `now_embed`.
+fn score_for_now(now_embed: &TimeVector, counter: &ExpCounter) -> f32 {
+    // We take the cosine distance. We assume `now_embed` is already normalized,
+    // so we only need to normalize the counter's vector.
+    let cos_dist = counter.time_embedding.dot(now_embed) / counter.time_embedding.norm();
+
+    // Put the score in the range [0.0, 1.0], so we can easily use it as a
+    // multiplier for other scores.
+    cos_dist.mul_add(0.5, 0.5)
+}
+
 /// Print playcount statistics about the library.
 ///
 /// This is mostly for debugging and development purposes, playcounts should be
@@ -903,6 +934,21 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
     print_ranking(
         "FALLING",
         "see code for formula".to_string(),
+        index,
+        &counts,
+        &falling_artists,
+        &falling_albums,
+        &falling_tracks,
+    );
+
+    let now = Instant::from_posix_timestamp(chrono::Utc::now().timestamp());
+    let now_embed = now.embed() * (1.0 / now.embed().norm());
+
+    let (falling_artists, falling_albums, falling_tracks) =
+        counts.get_top_by(150, |c| RevNotNan(score_for_now(&now_embed, c)));
+    print_ranking(
+        "FOR NOW",
+        "time vector cosine distance".to_string(),
         index,
         &counts,
         &falling_artists,
