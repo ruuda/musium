@@ -11,12 +11,12 @@ use std::collections::BinaryHeap;
 use std::collections::HashMap;
 use std::path::Path;
 
+use crate::album_table::AlbumTable;
 use crate::database::{self, Transaction};
 use crate::database_utils::connect_readonly;
 use crate::prim::{AlbumId, ArtistId, TrackId};
-use crate::{MemoryMetaIndex, MetaIndex};
-use crate::album_table::AlbumTable;
 use crate::user_data::AlbumState;
+use crate::{MemoryMetaIndex, MetaIndex};
 
 /// A point in time with second granularity.
 ///
@@ -282,9 +282,9 @@ impl ExpCounter {
         19260.0, // 3650 days / 10 years
         // 9630.615234, // 1826 days / 5 years
         2407.653809, // 457 days / 1.25 years
-        601.913452, // 114 days / ~3.75 months / 16 weeks
-        150.478363, // 29 days / 1 month
-        37.619591, // 7 days
+        601.913452,  // 114 days / ~3.75 months / 16 weeks
+        150.478363,  // 29 days / 1 month
+        37.619591,   // 7 days
     ];
 
     /// Return how much to decay the counters by after the elapsed time.
@@ -669,10 +669,7 @@ fn print_ranking(
 /// playcount on a short timescale, while still mixing in a bit of a longer
 /// time horizon.
 fn score_trending(counter: &ExpCounter) -> f32 {
-    0.0
-    + (2.0 * counter.n[4])
-    + (0.5 * counter.n[3])
-    + (0.1 * counter.n[2])
+    (2.0 * counter.n[4]) + (0.5 * counter.n[3]) + (0.1 * counter.n[2])
 }
 
 /// Score for sorting entries by _falling_.
@@ -718,7 +715,10 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
             counts.get_top_by(150, |counter: &ExpCounter| RevNotNan(counter.n[timescale]));
         print_ranking(
             "TOP",
-            format!("timescale {}, {:.0} days / {:.0} months", timescale, n_days, n_months),
+            format!(
+                "timescale {}, {:.0} days / {:.0} months",
+                timescale, n_days, n_months
+            ),
             index,
             &top_artists,
             &top_albums,
@@ -737,7 +737,8 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         &trending_tracks,
     );
 
-    let (falling_artists, falling_albums, falling_tracks) = counts.get_top_by(350, |c| RevNotNan(score_falling(c)));
+    let (falling_artists, falling_albums, falling_tracks) =
+        counts.get_top_by(350, |c| RevNotNan(score_falling(c)));
     print_ranking(
         "FALLING",
         "see code for formula".to_string(),
