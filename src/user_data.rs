@@ -119,6 +119,7 @@ impl AlbumState {
         // The cosine distance between our time vector and the query time vector.
         // We put it in the range [0, 1] so that when we multiply with a negative
         // discover score, it doesn't flip the sign.
+        debug_assert!(self.time_embedding.norm().is_finite());
         let time_cos = self.time_embedding.dot(at) / self.time_embedding.norm();
         let time_weight = time_cos.mul_add(0.5, 0.5);
 
@@ -194,10 +195,16 @@ impl UserData {
             .unwrap_or_default()
     }
 
-    pub fn get_album_scores(&self, album_id: AlbumId) -> AlbumState {
+    /// Take a snapshot of the scores for the given album, evaluated at the given query time.
+    ///
+    /// See also [`AlbumState::score`].
+    pub fn get_album_scores(&self, album_id: AlbumId, at: &TimeVector) -> ScoreSnapshot {
         // If an album is not present, we don't have playcounts, so it is
         // ranked as low as possible for all scores.
-        self.albums.get(album_id).unwrap_or_default()
+        self.albums
+            .get(album_id)
+            .map(|state| state.score(at))
+            .unwrap_or_default()
     }
 
     /// Replace the album scores with new scores.

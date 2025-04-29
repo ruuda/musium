@@ -42,7 +42,7 @@ pub fn write_brief_album_json<W: Write>(
     }
     write!(w, r#"],"artist":"#)?;
     serde_json::to_writer(&mut w, index.get_string(album.artist))?;
-    let scores = user_data.get_album_scores(album_id).score(now_embed);
+    let scores = user_data.get_album_scores(album_id, now_embed);
     write!(
         w,
         // The discover score can have large-ish magnitude and ranges from negative
@@ -315,17 +315,16 @@ pub fn write_queue_json<W: Write>(
     write!(w, "[")?;
     let mut first = true;
     for queued_track in tracks.iter() {
-        if !first { write!(w, ",")?; }
+        if !first {
+            write!(w, ",")?;
+        }
         write_queued_track_json(index, user_data, &mut w, queued_track)?;
         first = false;
     }
     write!(w, "]")
 }
 
-pub fn write_player_params_json<W: Write>(
-    mut w: W,
-    params: &Params,
-) -> io::Result<()> {
+pub fn write_player_params_json<W: Write>(mut w: W, params: &Params) -> io::Result<()> {
     write!(
         w,
         r#"{{"volume_db":{:.02},"high_pass_cutoff_hz":{}}}"#,
