@@ -204,6 +204,87 @@ pub struct RateLimit {
 /// solving it right now.
 pub struct TimeVector([f32; 6]);
 
+impl TimeVector {
+    const fn zero() -> TimeVector {
+        TimeVector([0.0; 6])
+    }
+
+    fn mul_add(&self, factor: f32, term: TimeVector) -> TimeVector {
+        TimeVector([
+            self.0[0].mul_add(factor, term.0[0]),
+            self.0[1].mul_add(factor, term.0[1]),
+            self.0[2].mul_add(factor, term.0[2]),
+            self.0[3].mul_add(factor, term.0[3]),
+            self.0[4].mul_add(factor, term.0[4]),
+            self.0[5].mul_add(factor, term.0[5]),
+        ])
+    }
+
+    /// For debugging, format as human-readable direction that the vector points in.
+    #[rustfmt::skip]
+    fn fmt_dir(&self) -> String {
+        use std::f32::consts::TAU;
+
+        let mut r_year = self.0[1].atan2(self.0[0]);
+        let mut r_week = self.0[3].atan2(self.0[2]);
+        let mut r_day = self.0[5].atan2(self.0[4]);
+
+        r_year += if r_year < 0.0 { TAU } else { 0.0 };
+        r_week += if r_week < 0.0 { TAU } else { 0.0 };
+        r_day += if r_day < 0.0 { TAU } else { 0.0 };
+
+        let month = (r_year * (11.999 / TAU)) as usize;
+        let day = (r_week * (6.999 / TAU)) as usize;
+        let hour = (r_day * (23.999 / TAU)) as usize;
+
+        const MONTHS: [&'static str; 12] = [
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        ];
+        // Days start on Saturday, see [`Instant::embed`].
+        const DAYS: [&'static str; 7] = [
+            "Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"
+        ];
+        // Hours start at noon UTC, see [`Instant::embed`].
+        const HOURS: [&'static str; 24] = [
+            "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23",
+            "00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11",
+        ];
+
+        format!("{} {} {}:00Z", MONTHS[month], DAYS[day], HOURS[hour])
+    }
+}
+
+impl std::ops::Add<&TimeVector> for TimeVector {
+    type Output = TimeVector;
+
+    fn add(self, rhs: &TimeVector) -> TimeVector {
+        TimeVector([
+            self.0[0] + rhs.0[0],
+            self.0[1] + rhs.0[1],
+            self.0[2] + rhs.0[2],
+            self.0[3] + rhs.0[3],
+            self.0[4] + rhs.0[4],
+            self.0[5] + rhs.0[5],
+        ])
+    }
+}
+
+impl std::ops::Mul<f32> for TimeVector {
+    type Output = TimeVector;
+
+    fn mul(self, rhs: f32) -> TimeVector {
+        TimeVector([
+            self.0[0] * rhs,
+            self.0[1] * rhs,
+            self.0[2] * rhs,
+            self.0[3] * rhs,
+            self.0[4] * rhs,
+            self.0[5] * rhs,
+        ])
+    }
+}
+
 /// Exponential moving averages at different timescales plus leaky bucket rate limiter.
 pub struct ExpCounter {
     /// Time at which the counts were last updated.
@@ -214,6 +295,9 @@ pub struct ExpCounter {
 
     /// Exponentially decaying counts for different half-lives.
     pub n: [f32; 5],
+
+    /// Exponential moving average of the time vector of each play.
+    pub time_embedding: TimeVector,
 }
 
 impl ExpCounter {
@@ -304,6 +388,7 @@ impl ExpCounter {
             // have long replenished.
             bucket: 0.0,
             n: [0.0; 5],
+            time_embedding: TimeVector::zero(),
         }
     }
 
@@ -358,6 +443,13 @@ impl ExpCounter {
         }
 
         self.t = t1;
+
+        // In addition to updating the counters, we update the time vector for
+        // this item. We used a fixed decay factor of 0.9 (so every new play
+        // weighs 0.1), but we do take into account the rate limit.
+        let v = t1.embed();
+        let f = count * 0.1;
+        self.time_embedding = self.time_embedding.mul_add(1.0 - f, v * f);
     }
 }
 
@@ -612,6 +704,7 @@ fn print_ranking(
     title: &'static str,
     description: String,
     index: &MemoryMetaIndex,
+    counts: &PlayCounts,
     top_artists: &[(RevNotNan, ArtistId)],
     top_albums: &[(RevNotNan, AlbumId)],
     top_tracks: &[(RevNotNan, TrackId)],
@@ -620,11 +713,13 @@ fn print_ranking(
     for (i, (count, artist_id)) in top_artists.iter().enumerate() {
         let artist = index.get_artist(*artist_id).unwrap();
         let artist_name = index.get_string(artist.name);
+        let counter = counts.counter.artists.get(artist_id).unwrap();
 
         println!(
-            "  {:2} {:7.3} {} {}",
+            "  {:2} {:7.3} {} {} {}",
             i + 1,
             count.0,
+            counter.time_embedding.fmt_dir(),
             artist_id,
             artist_name
         );
@@ -635,11 +730,13 @@ fn print_ranking(
         let album = index.get_album(*album_id).unwrap();
         let album_title = index.get_string(album.title);
         let album_artist = index.get_string(album.artist);
+        let counter = counts.counter.albums.get(album_id).unwrap();
 
         println!(
-            "  {:2} {:7.3} {} {:25}  {}",
+            "  {:2} {:7.3} {} {} {:25}  {}",
             i + 1,
             count.0,
+            counter.time_embedding.fmt_dir(),
             album_id,
             album_title,
             album_artist
@@ -651,11 +748,13 @@ fn print_ranking(
         let track = index.get_track(*track_id).unwrap();
         let track_title = index.get_string(track.title);
         let track_artist = index.get_string(track.artist);
+        let counter = counts.counter.tracks.get(track_id).unwrap();
 
         println!(
-            "  {:2} {:7.3} {} {:25}  {}",
+            "  {:2} {:7.3} {} {} {:25}  {}",
             i + 1,
             count.0,
+            counter.time_embedding.fmt_dir(),
             track_id,
             track_title,
             track_artist
@@ -720,6 +819,7 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
                 timescale, n_days, n_months
             ),
             index,
+            &counts,
             &top_artists,
             &top_albums,
             &top_tracks,
@@ -732,6 +832,7 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         "TRENDING",
         "see code for formula".to_string(),
         index,
+        &counts,
         &trending_artists,
         &trending_albums,
         &trending_tracks,
@@ -743,6 +844,7 @@ pub fn main(index: &MemoryMetaIndex, db_path: &Path) -> crate::Result<()> {
         "FALLING",
         "see code for formula".to_string(),
         index,
+        &counts,
         &falling_artists,
         &falling_albums,
         &falling_tracks,
