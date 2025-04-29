@@ -212,7 +212,7 @@ impl TimeVector {
         TimeVector([0.0; 6])
     }
 
-    fn mul_add(&self, factor: f32, term: TimeVector) -> TimeVector {
+    fn mul_add(&self, factor: f32, term: &TimeVector) -> TimeVector {
         TimeVector([
             self.0[0].mul_add(factor, term.0[0]),
             self.0[1].mul_add(factor, term.0[1]),
@@ -266,10 +266,10 @@ impl TimeVector {
     }
 }
 
-impl std::ops::Add<&TimeVector> for TimeVector {
+impl std::ops::Add<TimeVector> for TimeVector {
     type Output = TimeVector;
 
-    fn add(self, rhs: &TimeVector) -> TimeVector {
+    fn add(self, rhs: TimeVector) -> TimeVector {
         TimeVector([
             self.0[0] + rhs.0[0],
             self.0[1] + rhs.0[1],
@@ -456,11 +456,12 @@ impl ExpCounter {
         self.t = t1;
 
         // In addition to updating the counters, we update the time vector for
-        // this item. We used a fixed decay factor of 0.9 (so every new play
-        // weighs 0.1), but we do take into account the rate limit.
-        let v = t1.embed();
-        let f = count * 0.1;
-        self.time_embedding = self.time_embedding.mul_add(1.0 - f, v * f);
+        // this item. I experimented with a decay factor of 1 - 0.1 * count,
+        // so when the rate limiter doesn't limit, a factor of 0.9, but that was
+        // decaying way too aggressively. Just adding without decay seems to
+        // work far better, even though it skews the item to the initial
+        // discovery phase.
+        self.time_embedding = t1.embed().mul_add(count, &self.time_embedding);
     }
 }
 
