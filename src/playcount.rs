@@ -101,49 +101,54 @@ impl Instant {
 
     /// Embed the instant into the time vector space, see also [`TimeVector`].
     pub fn embed(&self) -> TimeVector {
+        use std::f32::consts::TAU;
+
         const SECONDS_PER_YEAR: u32 = 365 * 24 * 3600 + 6 * 3600;
         const SECONDS_PER_WEEK: u32 = 7 * 24 * 3600;
         const SECONDS_PER_DAY: u32 = 24 * 3600;
 
         // We convert to radians to map to the circle; precompute as much of
         // the multiplication as we can.
-        const NORM_YEAR: f32 = std::f32::consts::TAU / (SECONDS_PER_YEAR as f32);
-        const NORM_DAY: f32 = std::f32::consts::TAU / (SECONDS_PER_DAY as f32);
+        const NORM_YEAR: f32 = TAU / (SECONDS_PER_YEAR as f32);
+        const NORM_DAY: f32 = TAU / (SECONDS_PER_DAY as f32);
 
-        // We center the day transitions around noon UTC, this matters for how
-        // we map the weekdays below.
-        let t = self.seconds_since_jan_2000 - 12 * 3600;
+        let t = self.seconds_since_jan_2000;
         let t_day = t % SECONDS_PER_DAY;
-        let t_week = t % SECONDS_PER_WEEK;
         let t_year = t % SECONDS_PER_YEAR;
+        // The epoch we use, 2000-01-01, is a Saturday, but we want the week to
+        // start on Monday midnight to simplify the circle mapping below.
+        let t_week = (t + SECONDS_PER_DAY * 5) % SECONDS_PER_WEEK;
 
         let r_day = (t_day as f32) * NORM_DAY;
         let r_year = (t_year as f32) * NORM_YEAR;
 
-        // We map weekdays non-linearly, as follows (where the angle goes from
-        // 0 to 1 for a full rotation):
-        const MON: f32 = 7.5 / 9.0;
-        const TUE: f32 = 8.5 / 9.0;
-        const WED: f32 = 0.5 / 9.0;
-        const THU: f32 = 1.5 / 9.0;
-        const FRI: f32 = 1.1 / 4.0;
-        const SAT: f32 = 4.0 / 9.0;
-        const SUN: f32 = 6.0 / 9.0;
-        let r_week = match t_week / SECONDS_PER_DAY {
-            // Jan 1st 2000 was a Saturday,
-            0 => SAT + (SUN - SAT) * r_day,
-            1 => SUN + (MON - SUN) * r_day,
-            2 => MON + (TUE - MON) * r_day,
-            // Wrap around 0 happens between Tue and Wed.
-            3 => TUE + (1.0 + WED - TUE) * r_day,
-            4 => WED + (THU - WED) * r_day,
-            5 => THU + (FRI - THU) * r_day,
-            6 => FRI + (SAT - FRI) * r_day,
-            _ => unreachable!("There are only 7 days in a week."),
+        // We map weekdays non-linearly around the circle. The first quadrant
+        // contains Mon-Thu, then the next three quadrants contain Fri, Sat, Sun
+        // respectively. This mapping has the following properties:
+        //
+        // - All weekdays lie above the x-axis, the weekend lies below, so the
+        //   time-weighed average vector of weekend vs. weekday have a dot
+        //   product close to -1, definitely below 0.
+        // - Saturday is diametrically opposite the "weekdays" excluding Friday.
+        //   The time-weighed average vector of Saturday vs. Mon-Thu have a dot
+        //   product of exactly -1.
+        // - "Party nights" (Friday and Saturday) lie left of the y-axis,
+        //   weekday + Sunday night all lie right of the y-axis. The dot product
+        //   of the time-weighed average vector of days with party nights vs.
+        //   days without is close to -1, definitely below 0.
+        //
+        // Hopefully this does a good job of mapping the time of the week into
+        // R^2 in a meaningful way.
+        let r_week = if t_week <= SECONDS_PER_DAY * 4 {
+            // One factor 0.25 for the quarter circle, one because we fit 4 days
+            // into this quadrant.
+            (t_week as f32) * (TAU * 0.25 * 0.25 / SECONDS_PER_DAY as f32)
+        } else {
+            // We subtract 3 full days, so `t_weekend` is 0.0 at the start of
+            // Thursday. Then we allocate a quarter of the circle to each day.
+            let t_weekend = t_week - SECONDS_PER_DAY * 3;
+            (t_weekend as f32) * (TAU * 0.25 / SECONDS_PER_DAY as f32)
         };
-
-        // TODO: Restore the above mapping.
-        let r_week = t_week as f32 * (std::f32::consts::TAU / SECONDS_PER_WEEK as f32);
 
         TimeVector([
             r_year.cos(),
@@ -236,33 +241,31 @@ impl TimeVector {
         let mut r_week = self.0[3].atan2(self.0[2]);
         let mut r_day = self.0[5].atan2(self.0[4]);
 
-        // During embedding, we consider midnight the day boundary and we
-        // subtract half a day from the timestamp, so here we add it back.
-        r_week += std::f32::consts::TAU / 14.0;
-
         r_year += if r_year < 0.0 { TAU } else { 0.0 };
         r_week += if r_week < 0.0 { TAU } else { 0.0 };
         r_day += if r_day < 0.0 { TAU } else { 0.0 };
 
         let month = (r_year * (11.999 / TAU)) as usize;
-        let day = (r_week * (6.999 / TAU)) as usize;
         let hour = (r_day * (23.999 / TAU)) as usize;
+
+        // For the day, we don't bother to undo the non-linear mapping that
+        // [`Instant::embed`] applies, instead we factor this into the lookup
+        // table below.
+        let day = (r_week * (15.999 / TAU)) as usize;
 
         const MONTHS: [&'static str; 12] = [
             "Jan", "Feb", "Mar", "Apr", "May", "Jun",
             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
         ];
-        // Days start on Saturday, see [`Instant::embed`].
-        const DAYS: [&'static str; 7] = [
-            "Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri",
-        ];
-        // Hours start at noon UTC, see [`Instant::embed`].
-        const HOURS: [&'static str; 24] = [
-            "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23",
-            "00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11",
+        // The inverse mapping of [`Instant::embed`].
+        const DAYS: [&'static str; 16] = [
+            "Mon", "Tue", "Wed", "Thu",
+            "Fri", "Fri", "Fri", "Fri",
+            "Sat", "Sat", "Sat", "Sat",
+            "Sun", "Sun", "Sun", "Sun",
         ];
 
-        format!("{} {} {}:00Z", MONTHS[month], DAYS[day], HOURS[hour])
+        format!("{} {} {:02}:00Z", MONTHS[month], DAYS[day], hour)
     }
 }
 
