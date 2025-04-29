@@ -185,6 +185,8 @@ pub struct RateLimit {
 
 /// A vector representation of the time of day, week, and year.
 ///
+/// ## Summary
+///
 /// The rationale behind this is that we can compare how "similar" moments are
 /// using the cosine difference, which we can use to classify tracks as morning
 /// vs. evening, or weekend vs. weekday, or summer vs. winter. Based on this we
@@ -205,11 +207,32 @@ pub struct RateLimit {
 /// circle. We care more about "weekday" vs. "weekend", so the weekdays are
 /// relatively squashed.
 ///
-/// We map instants to time vectors without regard for time zone. Local times
-/// are irrelevant as long as all listens are mostly in the same time zone, so
-/// that the morning/afternoon distinction makes sense. If you move time zones,
-/// we should adjust for that, but that's not a problem I have so I'm not
-/// solving it right now.
+/// ## Local time
+///
+/// We map instants to time vectors based on UTC time, without regard for time
+/// zone. Ideally, we would do it based on local time, but that information is
+/// not available from historical Last.fm scrobbles, and even in Musium I made
+/// the mistake of saving listens always as UTC, not including time zone offset.
+/// For me this is not a big problem, the vast majority of my listens are in
+/// UTC + {0, 1, 2}, so the impact on the day shift is small. If I ever move to
+/// a very different time zone and I want to preserve the time of the day, I
+/// suppose we could try to infer the time zone from the median listen time or
+/// something like that.
+///
+/// ## Normalization
+///
+/// When we embed an instant, the length of the vector is 3. Each of the
+/// 3 components (year/week/day) has a length of 1 by construction, so the
+/// relative length of the components is equal. After adding time vectors
+/// together, this is no longer true. For example, if we listen a track on every
+/// weekday, but only in March, the day-of-week components will cancel each
+/// other out, while the time-of-year components will reinforce each other. If
+/// we normalize the result, the time-of-year component will be much larger. So
+/// naturally, when we add time vectors, they pick out which component an item
+/// is most seasonal in. When we take the cosine distance with the embedding
+/// of the current time to find tracks suitable for the current moment, because
+/// it's not sensitive to absolute length, that will naturally emphasize the
+/// right component.
 pub struct TimeVector([f32; 6]);
 
 impl TimeVector {
@@ -265,7 +288,29 @@ impl TimeVector {
             "Sun", "Sun", "Sun", "Sun",
         ];
 
-        format!("{} {} {:02}:00Z", MONTHS[month], DAYS[day], hour)
+        // The length of the embedding vector of an instant is by construction
+        // 3.0, and restricted to the year/week/day part, each of those parts
+        // has length 1.0. But when we add those embeddings together, the ones
+        // that point in the same direction reinforce while ones that point in
+        // different directions cancel out. So we play a track on every day of
+        // the week in one month, the year part becomes longer relative to the
+        // week part. We print those weights to classify an item in which of
+        // these three cycles it is most seasonal.
+        let w2_year = self.0[0] * self.0[0] + self.0[1] * self.0[1];
+        let w2_week = self.0[2] * self.0[2] + self.0[3] * self.0[3];
+        let w2_day = self.0[4] * self.0[4] + self.0[5] * self.0[5];
+        let inv_norm = (w2_year + w2_week + w2_day).sqrt().recip();
+        let w_year = w2_year.sqrt() * inv_norm;
+        let w_week = w2_week.sqrt() * inv_norm;
+        let w_day = w2_day.sqrt() * inv_norm;
+
+        format!(
+            "{} {} {:02}hZ Y{:1.0}-D{:1.0}-H{:1.0}",
+            MONTHS[month], DAYS[day], hour,
+            // We print these to 1 digit precision, and it would be wasteful to
+            // add the "0." in front, so we print as integer from 0 to 9.
+            w_year * 9.49, w_week * 9.49, w_day * 9.49,
+        )
     }
 }
 
@@ -886,25 +931,25 @@ pub mod test {
 
         // Month, day of week, hour of day.
         // 2025-04-14 is a Monday.
-        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 14).and_hms( 9, 5, 0)), "Apr Mon 09:00Z");
-        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 15).and_hms(11, 5, 0)), "Apr Tue 11:00Z");
-        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 16).and_hms(13, 5, 0)), "Apr Wed 13:00Z");
-        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 17).and_hms(15, 5, 0)), "Apr Thu 15:00Z");
-        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 18).and_hms(17, 5, 0)), "Apr Fri 17:00Z");
-        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 19).and_hms(19, 5, 0)), "Apr Sat 19:00Z");
-        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 20).and_hms(21, 5, 0)), "Apr Sun 21:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 14).and_hms( 9, 5, 0)), "Apr Mon 09hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 15).and_hms(11, 5, 0)), "Apr Tue 11hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 16).and_hms(13, 5, 0)), "Apr Wed 13hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 17).and_hms(15, 5, 0)), "Apr Thu 15hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 18).and_hms(17, 5, 0)), "Apr Fri 17hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 19).and_hms(19, 5, 0)), "Apr Sat 19hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 4, 20).and_hms(21, 5, 0)), "Apr Sun 21hZ Y5-D5-H5");
 
-        assert_eq!(fmt_dir(Utc.ymd(2025,  1, 15).and_hms( 7, 5, 0)), "Jan Wed 07:00Z");
-        assert_eq!(fmt_dir(Utc.ymd(2025,  2, 15).and_hms( 9, 5, 0)), "Feb Sat 09:00Z");
-        assert_eq!(fmt_dir(Utc.ymd(2025,  3, 15).and_hms(11, 5, 0)), "Mar Sat 11:00Z");
-        assert_eq!(fmt_dir(Utc.ymd(2025,  4, 15).and_hms(13, 5, 0)), "Apr Tue 13:00Z");
-        assert_eq!(fmt_dir(Utc.ymd(2025,  5, 15).and_hms(15, 5, 0)), "May Thu 15:00Z");
-        assert_eq!(fmt_dir(Utc.ymd(2025,  6, 15).and_hms(17, 5, 0)), "Jun Sun 17:00Z");
-        assert_eq!(fmt_dir(Utc.ymd(2025,  7, 15).and_hms(19, 5, 0)), "Jul Tue 19:00Z");
-        assert_eq!(fmt_dir(Utc.ymd(2025,  8, 15).and_hms(21, 5, 0)), "Aug Fri 21:00Z");
-        assert_eq!(fmt_dir(Utc.ymd(2025,  9, 15).and_hms(23, 5, 0)), "Sep Mon 23:00Z");
-        assert_eq!(fmt_dir(Utc.ymd(2025, 10, 15).and_hms( 1, 5, 0)), "Oct Wed 01:00Z");
-        assert_eq!(fmt_dir(Utc.ymd(2025, 11, 15).and_hms( 2, 5, 0)), "Nov Sat 02:00Z");
-        assert_eq!(fmt_dir(Utc.ymd(2025, 12, 15).and_hms( 6, 5, 0)), "Dec Mon 06:00Z");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  1, 15).and_hms( 7, 5, 0)), "Jan Wed 07hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  2, 15).and_hms( 9, 5, 0)), "Feb Sat 09hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  3, 15).and_hms(11, 5, 0)), "Mar Sat 11hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  4, 15).and_hms(13, 5, 0)), "Apr Tue 13hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  5, 15).and_hms(15, 5, 0)), "May Thu 15hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  6, 15).and_hms(17, 5, 0)), "Jun Sun 17hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  7, 15).and_hms(19, 5, 0)), "Jul Tue 19hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  8, 15).and_hms(21, 5, 0)), "Aug Fri 21hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025,  9, 15).and_hms(23, 5, 0)), "Sep Mon 23hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 10, 15).and_hms( 1, 5, 0)), "Oct Wed 01hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 11, 15).and_hms( 2, 5, 0)), "Nov Sat 02hZ Y5-D5-H5");
+        assert_eq!(fmt_dir(Utc.ymd(2025, 12, 15).and_hms( 6, 5, 0)), "Dec Mon 06hZ Y5-D5-H5");
     }
 }
