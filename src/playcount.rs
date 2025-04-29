@@ -348,21 +348,6 @@ impl Default for TimeVector {
     }
 }
 
-impl std::ops::Add<TimeVector> for TimeVector {
-    type Output = TimeVector;
-
-    fn add(self, rhs: TimeVector) -> TimeVector {
-        TimeVector([
-            self.0[0] + rhs.0[0],
-            self.0[1] + rhs.0[1],
-            self.0[2] + rhs.0[2],
-            self.0[3] + rhs.0[3],
-            self.0[4] + rhs.0[4],
-            self.0[5] + rhs.0[5],
-        ])
-    }
-}
-
 impl std::ops::Mul<f32> for TimeVector {
     type Output = TimeVector;
 
