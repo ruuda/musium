@@ -233,14 +233,18 @@ pub struct RateLimit {
 /// of the current time to find tracks suitable for the current moment, because
 /// it's not sensitive to absolute length, that will naturally emphasize the
 /// right component.
+// TODO: Instead of deriving copy, make a quantized version that holds i8's.
+// It saves memory in the user data, and I hope it's faster to compute the inner
+// products as well, it could even be vectorized.
+#[derive(Copy, Clone)]
 pub struct TimeVector([f32; 6]);
 
 impl TimeVector {
-    const fn zero() -> TimeVector {
+    pub const fn zero() -> TimeVector {
         TimeVector([0.0; 6])
     }
 
-    fn mul_add(&self, factor: f32, term: &TimeVector) -> TimeVector {
+    pub fn mul_add(&self, factor: f32, term: &TimeVector) -> TimeVector {
         TimeVector([
             self.0[0].mul_add(factor, term.0[0]),
             self.0[1].mul_add(factor, term.0[1]),
@@ -252,7 +256,7 @@ impl TimeVector {
     }
 
     /// Return the L2-norm (Euclidean norm) of this vector.
-    fn norm(&self) -> f32 {
+    pub fn norm(&self) -> f32 {
         let w2_year = self.0[0] * self.0[0] + self.0[1] * self.0[1];
         let w2_week = self.0[2] * self.0[2] + self.0[3] * self.0[3];
         let w2_day = self.0[4] * self.0[4] + self.0[5] * self.0[5];
@@ -260,7 +264,7 @@ impl TimeVector {
     }
 
     /// Return the dot product between the two vectors.
-    fn dot(&self, other: &TimeVector) -> f32 {
+    pub fn dot(&self, other: &TimeVector) -> f32 {
         0.0 + ((self.0[0] * other.0[0]) + (self.0[1] * other.0[1]))
             + ((self.0[2] * other.0[2]) + (self.0[3] * other.0[3]))
             + ((self.0[4] * other.0[4]) + (self.0[5] * other.0[5]))
@@ -326,6 +330,12 @@ impl TimeVector {
             // add the "0." in front, so we print as integer from 0 to 9.
             w_year * 9.49, w_week * 9.49, w_day * 9.49,
         )
+    }
+}
+
+impl Default for TimeVector {
+    fn default() -> Self {
+        TimeVector::zero()
     }
 }
 
@@ -768,6 +778,7 @@ impl PlayCounts {
             let state = AlbumState {
                 discover_score: score_falling(counter),
                 trending_score: score_trending(counter),
+                time_embedding: counter.time_embedding,
             };
             albums.insert(*album_id, state);
         }

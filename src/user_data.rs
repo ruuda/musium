@@ -25,11 +25,11 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
-use crate::MemoryMetaIndex;
 use crate::album_table::AlbumTable;
-use crate::playcount::{PlayCounter, PlayCounts};
+use crate::database as db;
+use crate::playcount::{PlayCounter, PlayCounts, TimeVector};
 use crate::prim::{AlbumId, ArtistId, TrackId};
-use crate::{database as db};
+use crate::MemoryMetaIndex;
 
 /// Track rating.
 ///
@@ -83,6 +83,9 @@ pub struct AlbumState {
 
     // Playcount on the shortest timescale.
     pub trending_score: f32,
+
+    // Vector embedding of the play times, used to weigh the discover score.
+    pub time_embedding: TimeVector,
 }
 
 #[derive(Default)]
@@ -108,7 +111,6 @@ impl Default for UserData {
             artists: HashMap::with_hasher(s),
         }
     }
-
 }
 
 impl UserData {
@@ -126,7 +128,8 @@ impl UserData {
         for opt_rating in db::iter_ratings(tx)? {
             let rating = opt_rating?;
             let tid = TrackId(rating.track_id as u64);
-            let rating = Rating::try_from(rating.rating).expect("Invalid rating value in the database.");
+            let rating =
+                Rating::try_from(rating.rating).expect("Invalid rating value in the database.");
             stats.set_track_rating(tid, rating);
         }
 
@@ -143,7 +146,10 @@ impl UserData {
     }
 
     pub fn get_track_rating(&self, track_id: TrackId) -> Rating {
-        self.tracks.get(&track_id).map(|t| t.rating).unwrap_or_default()
+        self.tracks
+            .get(&track_id)
+            .map(|t| t.rating)
+            .unwrap_or_default()
     }
 
     pub fn get_album_scores(&self, album_id: AlbumId) -> AlbumState {
