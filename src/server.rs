@@ -20,6 +20,7 @@ use crate::database as db;
 use crate::database::Connection;
 use crate::database_utils;
 use crate::mvar::Var;
+use crate::playcount::TimeVector;
 use crate::player::{Millibel, Player, QueueId};
 use crate::prim::{AlbumId, ArtistId, Hertz, TrackId};
 use crate::scan::BackgroundScanner;
@@ -265,16 +266,19 @@ impl MetaServer {
         };
 
         let albums = index.get_albums_by_artist(artist_id);
+        let now = TimeVector::now();
 
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
         serialization::write_artist_json(
             index,
             &self.user_data.lock().unwrap(),
+            &now,
             &mut w,
             artist,
             albums,
-        ).unwrap();
+        )
+        .unwrap();
 
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
@@ -283,13 +287,11 @@ impl MetaServer {
 
     fn handle_albums(&self) -> ResponseBox {
         let index = &*self.index_var.get();
+        let now = TimeVector::now();
         let buffer = Vec::new();
         let mut w = io::Cursor::new(buffer);
-        serialization::write_albums_json(
-            index,
-            &self.user_data.lock().unwrap(),
-            &mut w,
-        ).unwrap();
+        serialization::write_albums_json(index, &self.user_data.lock().unwrap(), &now, &mut w)
+            .unwrap();
 
         Response::from_data(w.into_inner())
             .with_header(header_content_type("application/json"))
@@ -600,7 +602,7 @@ impl MetaServer {
         };
 
         match request.respond(response) {
-            Ok(()) => {},
+            Ok(()) => {}
             Err(err) => println!("Error while responding to request: {:?}", err),
         }
     }

@@ -79,10 +79,10 @@ pub struct AlbumState {
     ///
     /// The discovery sorting methods identifies albums that were popular in the
     /// past, but not recently. See the [`playcount`] module for more details.
-    pub discover_score: f32,
+    pub score_discover: f32,
 
     // Playcount on the shortest timescale.
-    pub trending_score: f32,
+    pub score_trending: f32,
 
     // Log playcount on the longer timescales.
     //
@@ -91,10 +91,43 @@ pub struct AlbumState {
     // a list of "for now" albums for this time of the day, where we don't
     // suggest albums with a low playcount just because the one time we played
     // them was at this time of the day.
-    pub top_score: f32,
+    pub score_longterm: f32,
 
     // Vector embedding of the play times, used to weigh the discover score.
     pub time_embedding: TimeVector,
+}
+
+/// Scores (for ranking) evaluated at a given point in time.
+#[derive(Copy, Clone, Default)]
+pub struct ScoreSnapshot {
+    /// Trending score, see [`AlbumState::score_trending`].
+    pub trending: f32,
+
+    /// Discovery score, adjusted for the current moment.
+    pub discover: f32,
+
+    /// "For now" score, based on the time of day, week, and year.
+    pub for_now: f32,
+}
+
+impl AlbumState {
+    /// Evaluate scores for the current moment.
+    ///
+    /// The `at` time vector should be the embedding of the desired time to
+    /// evaluate at, and then normalized.
+    pub fn score(&self, at: &TimeVector) -> ScoreSnapshot {
+        // The cosine distance between our time vector and the query time vector.
+        // We put it in the range [0, 1] so that when we multiply with a negative
+        // discover score, it doesn't flip the sign.
+        let time_cos = self.time_embedding.dot(at) / self.time_embedding.norm();
+        let time_weight = time_cos.mul_add(0.5, 0.5);
+
+        ScoreSnapshot {
+            trending: self.score_trending,
+            discover: self.score_discover * time_weight,
+            for_now: self.score_longterm * time_weight * time_weight,
+        }
+    }
 }
 
 #[derive(Default)]

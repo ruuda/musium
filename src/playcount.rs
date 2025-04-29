@@ -244,6 +244,15 @@ impl TimeVector {
         TimeVector([0.0; 6])
     }
 
+    /// Return the normalized embedding of the current moment.
+    pub fn now() -> TimeVector {
+        use chrono::Utc;
+        let t = Instant::from_posix_timestamp(Utc::now().timestamp());
+        let v = t.embed();
+        let n = v.norm();
+        v * n.recip()
+    }
+
     pub fn mul_add(&self, factor: f32, term: &TimeVector) -> TimeVector {
         TimeVector([
             self.0[0].mul_add(factor, term.0[0]),
@@ -776,9 +785,9 @@ impl PlayCounts {
         let mut albums = AlbumTable::new(self.counter.albums.len(), AlbumState::default());
         for (album_id, counter) in self.counter.albums.iter() {
             let state = AlbumState {
-                discover_score: score_falling(counter),
-                trending_score: score_trending(counter),
-                top_score: score_top(counter),
+                score_discover: score_falling(counter),
+                score_trending: score_trending(counter),
+                score_longterm: score_longterm(counter),
                 time_embedding: counter.time_embedding,
             };
             albums.insert(*album_id, state);
@@ -858,10 +867,8 @@ fn score_trending(counter: &ExpCounter) -> f32 {
     (2.0 * counter.n[4]) + (0.5 * counter.n[3]) + (0.1 * counter.n[2])
 }
 
-/// Score for sorting by top.
-///
-/// This is a mix of the longest two time scales.
-fn score_top(counter: &ExpCounter) -> f32 {
+/// Score for sorting by top on the longest two time scales.
+fn score_longterm(counter: &ExpCounter) -> f32 {
     counter.n[0].ln() + counter.n[1].ln()
 }
 
