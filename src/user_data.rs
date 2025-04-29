@@ -93,7 +93,9 @@ pub struct AlbumState {
     // them was at this time of the day.
     pub score_longterm: f32,
 
-    // Vector embedding of the play times, used to weigh the discover score.
+    // Vector embedding of the play times.
+    //
+    // Used to weigh the discover score, and compute the "for now" score.
     pub time_embedding: TimeVector,
 }
 

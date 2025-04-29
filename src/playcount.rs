@@ -192,7 +192,7 @@ pub struct RateLimit {
 /// vs. evening, or weekend vs. weekday, or summer vs. winter. Based on this we
 /// hope to suggest better tracks to listen to based on the current moment. E.g.
 /// in the early morning we may suggest some chill jazz but not heavy dancefloor
-/// banger.
+/// bangers.
 ///
 /// Because years, weeks, and days are all cyclic, we treat them as circles, and
 /// we embed the moment as x, y coordinate on the circle. This ensures that
@@ -221,7 +221,7 @@ pub struct RateLimit {
 ///
 /// ## Normalization
 ///
-/// When we embed an instant, the length of the vector is 3. Each of the
+/// When we embed an instant, the length of the vector is sqrt(3). Each of the
 /// 3 components (year/week/day) has a length of 1 by construction, so the
 /// relative length of the components is equal. After adding time vectors
 /// together, this is no longer true. For example, if we listen a track on every
@@ -317,12 +317,12 @@ impl TimeVector {
         ];
 
         // The length of the embedding vector of an instant is by construction
-        // 3.0, and restricted to the year/week/day part, each of those parts
-        // has length 1.0. But when we add those embeddings together, the ones
-        // that point in the same direction reinforce while ones that point in
-        // different directions cancel out. So we play a track on every day of
-        // the week in one month, the year part becomes longer relative to the
-        // week part. We print those weights to classify an item in which of
+        // sqrt(3.0), and restricted to the year/week/day part, each of those
+        // parts has length 1.0. But when we add those embeddings together, the
+        // ones that point in the same direction reinforce while ones that point
+        // in different directions cancel out. So we play a track on every day
+        // of the week in one month, the year part becomes longer relative to
+        // the week part. We print those weights to classify an item in which of
         // these three cycles it is most seasonal.
         let w2_year = self.0[0] * self.0[0] + self.0[1] * self.0[1];
         let w2_week = self.0[2] * self.0[2] + self.0[3] * self.0[3];
