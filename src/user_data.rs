@@ -84,6 +84,15 @@ pub struct AlbumState {
     // Playcount on the shortest timescale.
     pub trending_score: f32,
 
+    // Log playcount on the longer timescales.
+    //
+    // Could be used directly to sort by top albums, but in the UI this is not
+    // _that_ useful. Instead, we can mix it with the time embedding to provide
+    // a list of "for now" albums for this time of the day, where we don't
+    // suggest albums with a low playcount just because the one time we played
+    // them was at this time of the day.
+    pub top_score: f32,
+
     // Vector embedding of the play times, used to weigh the discover score.
     pub time_embedding: TimeVector,
 }

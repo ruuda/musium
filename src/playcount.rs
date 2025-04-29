@@ -778,6 +778,7 @@ impl PlayCounts {
             let state = AlbumState {
                 discover_score: score_falling(counter),
                 trending_score: score_trending(counter),
+                top_score: score_top(counter),
                 time_embedding: counter.time_embedding,
             };
             albums.insert(*album_id, state);
@@ -855,6 +856,13 @@ fn print_ranking(
 /// time horizon.
 fn score_trending(counter: &ExpCounter) -> f32 {
     (2.0 * counter.n[4]) + (0.5 * counter.n[3]) + (0.1 * counter.n[2])
+}
+
+/// Score for sorting by top.
+///
+/// This is a mix of the longest two time scales.
+fn score_top(counter: &ExpCounter) -> f32 {
+    counter.n[0].ln() + counter.n[1].ln()
 }
 
 /// Score for sorting entries by _falling_.
