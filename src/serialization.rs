@@ -49,12 +49,19 @@ pub fn write_brief_album_json<W: Write>(
         // to positive, it does not need a lot of precision. The trending score
         // is always between 0 and 1 though, it needs more digits for precision
         // near the end of the ranking.
-        r#","release_date":"{}","first_seen":"{}","discover_score":{:.2},"trending_score":{:.4},"for_now_score":{:.3}}}"#,
+        r#","release_date":"{}","first_seen":"{}","color":"{}""#,
         album.original_release_date,
         album.first_seen.format_iso8601(),
-        scores.discover,
-        scores.trending,
-        scores.for_now,
+        album.color,
+    )?;
+    write!(
+        w,
+        // The discover score can have large-ish magnitude and ranges from negative
+        // to positive, it does not need a lot of precision. The trending score
+        // is always between 0 and 1 though, it needs more digits for precision
+        // near the end of the ranking.
+        r#","discover_score":{:.2},"trending_score":{:.4},"for_now_score":{:.3}}}"#,
+        scores.discover, scores.trending, scores.for_now,
     )?;
     Ok(())
 }

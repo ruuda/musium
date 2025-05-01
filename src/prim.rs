@@ -333,7 +333,11 @@ impl Color {
 
 impl fmt::Display for Color {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:06x}", self.0)
+        if self.0 > 0xffffff {
+            write!(f, "{:06x}", self.0 >> 8)
+        } else {
+            write!(f, "{:06x}", self.0)
+        }
     }
 }
 
