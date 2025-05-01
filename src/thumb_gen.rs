@@ -292,6 +292,8 @@ impl<'a> GenThumb<'a> {
             .take(8)
             .read_to_string(&mut color_buf)?;
 
+        // TODO: Sometimes the color ends in ff, sometimes it does not. What
+        // gives? We need to normalize this.
         let color = Color::parse(&color_buf).ok_or(Error::CommandError(
             "ImageMagick did not return a valid color.",
             None,
