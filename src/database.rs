@@ -333,6 +333,11 @@ pub fn ensure_schema_exists(tx: &mut Transaction) -> Result<()> {
         create table if not exists thumbnails
         ( album_id integer primary key
         , file_id  integer not null references files (id) on delete cascade
+          -- We store the color as hex string, even though that's larger than just
+          -- storing the 24-bit integer. The data blob is kilobytes anyway, a few bytes
+          -- here makes little difference, and it makes the database more readable for
+          -- humans.
+        , color    string  not null
         , data     blob    not null
         );
         "#;
@@ -550,11 +555,11 @@ pub fn iter_file_tags<'i, 't, 'a>(tx: &'i mut Transaction<'t, 'a>, file_id: i64)
     Ok(result)
 }
 
-pub fn insert_album_thumbnail(tx: &mut Transaction, album_id: i64, file_id: i64, data: &[u8]) -> Result<()> {
+pub fn insert_album_thumbnail(tx: &mut Transaction, album_id: i64, file_id: i64, color: &str, data: &[u8]) -> Result<()> {
     let sql = r#"
-        insert into thumbnails (album_id, file_id, data)
-        values (:album_id, :file_id, :data)
-        on conflict (album_id) do update set data = :data;
+        insert into thumbnails (album_id, file_id, color, data)
+        values (:album_id, :file_id, :color, :data)
+        on conflict (album_id) do update set color = :color, data = :data;
         "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
         Occupied(entry) => entry.into_mut(),
@@ -563,7 +568,8 @@ pub fn insert_album_thumbnail(tx: &mut Transaction, album_id: i64, file_id: i64,
     statement.reset()?;
     statement.bind(1, album_id)?;
     statement.bind(2, file_id)?;
-    statement.bind(3, data)?;
+    statement.bind(3, color)?;
+    statement.bind(4, data)?;
     let result = match statement.next()? {
         Row => panic!("Query 'insert_album_thumbnail' unexpectedly returned a row."),
         Done => (),
@@ -740,6 +746,29 @@ pub fn update_listen_completed(tx: &mut Transaction, listen_id: i64, queue_id: i
         Row => panic!("Query 'update_listen_completed' unexpectedly returned a row."),
         Done => (),
     };
+    Ok(result)
+}
+
+pub fn select_album_color(tx: &mut Transaction, album_id: i64) -> Result<Option<String>> {
+    let sql = r#"
+        select color from thumbnails where album_id = :album_id;
+        "#;
+    let statement = match tx.statements.entry(sql.as_ptr()) {
+        Occupied(entry) => entry.into_mut(),
+        Vacant(vacancy) => vacancy.insert(tx.connection.prepare(sql)?),
+    };
+    statement.reset()?;
+    statement.bind(1, album_id)?;
+    let decode_row = |statement: &Statement| Ok(statement.read(0)?);
+    let result = match statement.next()? {
+        Row => Some(decode_row(statement)?),
+        Done => None,
+    };
+    if result.is_some() {
+        if statement.next()? != Done {
+            panic!("Query 'select_album_color' should return at most one row.");
+        }
+    }
     Ok(result)
 }
 

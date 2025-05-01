@@ -7,9 +7,9 @@
 
 //! Primitive data types for the music library.
 
+use chrono::{DateTime, Utc};
 use std::fmt;
 use std::str::FromStr;
-use chrono::{DateTime, Utc};
 
 // Stats of my personal music library at this point:
 //
@@ -320,19 +320,51 @@ pub struct AlbumArtistsRef {
     pub end: u32,
 }
 
+/// An sRGB color (used to approximate thumbnails).
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct Color(u32);
+
+impl Color {
+    #[inline]
+    pub fn parse(src: &str) -> Option<Color> {
+        u32::from_str_radix(src, 16).ok().map(Color)
+    }
+}
+
+impl fmt::Display for Color {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:06x}", self.0)
+    }
+}
+
+impl Default for Color {
+    fn default() -> Self {
+        // The default color for an album, when we don't have a thumbnail, is
+        // very light gray, which fits with the theme.
+        // TODO: It would be better to store an `Option<Color>` in the album
+        // instead of having a default. Maybe we can do a NonZeroU32 and store
+        // an alpha value in the color too, which makes it nonzero.
+        Color(0xf8f8f8)
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Album {
-    pub artist_ids: AlbumArtistsRef,
-    pub artist: StringRef,
-    pub title: StringRef,
-    pub original_release_date: Date,
-    pub loudness: Option<Lufs>,
+    pub artist_ids: AlbumArtistsRef, /* 8 bytes */
+    pub artist: StringRef,           /* 4 bytes */
+    pub title: StringRef,            /* 4 bytes */
+    pub original_release_date: Date, /* 4 bytes */
+
+    /// Dominant color in the cover art.
+    pub color: Color, /* 4 bytes */
 
     /// First time that we encountered this album, can be either:
     /// * The minimal `mtime` across the files in the album.
     /// * The first play of one of the tracks in the album. (TODO)
-    pub first_seen: Instant,
+    pub first_seen: Instant, /* 8 bytes */
+
+    pub loudness: Option<Lufs>, /* 2 bytes */
 }
 
 #[repr(C)]
@@ -405,14 +437,20 @@ mod test {
     fn struct_sizes_are_as_expected() {
         use std::mem;
         assert_eq!(mem::size_of::<Track>(), 24);
-        assert_eq!(mem::size_of::<Album>(), 32);
+        assert_eq!(mem::size_of::<Album>(), 40);
         assert_eq!(mem::size_of::<Artist>(), 8);
 
         assert_eq!(mem::size_of::<TrackWithId>(), 32);
         assert_eq!(mem::size_of::<ArtistWithId>(), 16);
 
-        assert_eq!(mem::size_of::<TrackWithId>(), mem::align_of::<TrackWithId>());
-        assert_eq!(mem::size_of::<ArtistWithId>(), mem::align_of::<ArtistWithId>());
+        assert_eq!(
+            mem::size_of::<TrackWithId>(),
+            mem::align_of::<TrackWithId>()
+        );
+        assert_eq!(
+            mem::size_of::<ArtistWithId>(),
+            mem::align_of::<ArtistWithId>()
+        );
 
         assert_eq!(mem::align_of::<Track>(), 8);
         assert_eq!(mem::align_of::<Album>(), 8);

@@ -18,7 +18,7 @@ use crate::database;
 use crate::database::{Connection, Transaction};
 use crate::database_utils;
 use crate::error::{Error, Result};
-use crate::prim::{AlbumId, FileId};
+use crate::prim::{AlbumId, Color, FileId};
 use crate::scan::{ScanStage, Status};
 use crate::{MemoryMetaIndex, MetaIndex};
 
@@ -50,6 +50,7 @@ enum GenThumbState<'a> {
     /// Cjpegli is compressing the thumbnail.
     Compressing {
         file_id: FileId,
+        color: Color,
         child: process::Child,
         in_path: PathBuf,
     },
@@ -284,7 +285,17 @@ impl<'a> GenThumb<'a> {
             ));
         }
 
-        // TODO: Read color from stdout.
+        let mut color_buf = String::with_capacity(8);
+        magick
+            .stdout
+            .expect("We piped stdout.")
+            .take(8)
+            .read_to_string(&mut color_buf)?;
+
+        let color = Color::parse(&color_buf).ok_or(Error::CommandError(
+            "ImageMagick did not return a valid color.",
+            None,
+        ))?;
 
         let cjpegli = Command::new("cjpegli")
             .arg("--distance=0.45")
@@ -301,6 +312,7 @@ impl<'a> GenThumb<'a> {
 
         self.state = GenThumbState::Compressing {
             file_id,
+            color,
             child: cjpegli,
             // Input file for this step is the output of the previous command.
             in_path: path,
@@ -327,6 +339,7 @@ impl<'a> GenThumb<'a> {
             GenThumbState::Analyzing { .. } => self.start_compress().map(Some),
             GenThumbState::Compressing {
                 mut child,
+                color,
                 file_id,
                 in_path,
             } => {
@@ -357,6 +370,7 @@ impl<'a> GenThumb<'a> {
                         &mut tx,
                         album_id.0 as i64,
                         file_id.0,
+                        &color.to_string(),
                         &jpeg_bytes[..],
                     )?;
                     tx.commit()?;
