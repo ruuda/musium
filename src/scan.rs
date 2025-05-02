@@ -56,7 +56,7 @@ struct FileMetaId(i64);
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum ScanStage {
     /// Discovering flac files in the library path.
-    Discovering= 0,
+    Discovering = 0,
 
     /// Determining which files to process.
     ///
@@ -98,8 +98,11 @@ pub enum ScanStage {
     /// `status.files_to_process_thumbnails` is now final.
     LoadingThumbnails = 8,
 
+    /// Reloading data computed by previous stages.
+    Reloading = 9,
+
     /// Done.
-    Done = 9,
+    Done = 10,
 }
 
 /// Counters to report progress during scanning.
@@ -203,6 +206,7 @@ impl fmt::Display for Status {
             "{} Loading thumbnails",
             indicator(ScanStage::LoadingThumbnails),
         )?;
+        writeln!(f, "{} Reloading new data", indicator(ScanStage::Reloading))?;
         Ok(())
     }
 }
@@ -673,6 +677,19 @@ pub fn run_scan_in_thread(
                 let thumb_cache_arc = Arc::new(thumb_cache);
                 thumb_cache_var.set(thumb_cache_arc);
             }
+
+            // At the end, we refresh the index itself *again*. This is because
+            // thumbnail generation and loudness measurement insert their
+            // results into the database "async" (the index is already usable),
+            // but they only get incorporated into the index at this stage.
+            // TODO: This is a bit wasteful, we could instead make a copy of the
+            // existing index, and reload only the loudness and thumbnail color
+            // fields from the database.
+            status.stage = ScanStage::Reloading;
+            tx.send(status).unwrap();
+            let mut db_tx = db.begin()?;
+            let (index, _builder) = MemoryMetaIndex::from_database(&mut db_tx)?;
+            index_var.set(Arc::new(index));
 
             status.stage = ScanStage::Done;
             tx.send(status).unwrap();

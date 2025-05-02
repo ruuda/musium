@@ -360,6 +360,7 @@ pub fn write_scan_status_json<W: Write>(
         ScanStage::PreProcessingThumbnails => "preprocessing_thumbnails",
         ScanStage::GeneratingThumbnails => "generating_thumbnails",
         ScanStage::LoadingThumbnails => "loading_thumbnails",
+        ScanStage::Reloading => "reloading",
         ScanStage::Done => "done",
     };
 
