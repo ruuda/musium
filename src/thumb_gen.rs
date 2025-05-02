@@ -292,9 +292,10 @@ impl<'a> GenThumb<'a> {
             .take(8)
             .read_to_string(&mut color_buf)?;
 
-        // TODO: Sometimes the color ends in ff, sometimes it does not. What
-        // gives? We need to normalize this.
-        let color = Color::parse(&color_buf).ok_or(Error::CommandError(
+        // Sometimes Magick returns the color in 8 hex digits (ending in ff),
+        // including alpha, sometimes it returns only 6 charactrs. RGB are the
+        // first three, so we ignore any trailer.
+        let color = Color::parse(&color_buf[..6]).ok_or(Error::CommandError(
             "ImageMagick did not return a valid color.",
             None,
         ))?;

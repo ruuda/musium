@@ -320,23 +320,27 @@ pub struct AlbumArtistsRef {
 }
 
 /// An sRGB color (used to approximate thumbnails).
+///
+/// The value is a 24-bit color, with R in the most significant bits and B in
+/// the least significant bits. The 8 most significant bits are unused and
+/// should be set to zero.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Color(u32);
 
 impl Color {
+    /// Parse an RGB hex string.
+    ///
+    /// The input should be 6 hex characters, we don't support alpha.
     #[inline]
     pub fn parse(src: &str) -> Option<Color> {
+        debug_assert_eq!(src.len(), 6);
         u32::from_str_radix(src, 16).ok().map(Color)
     }
 }
 
 impl fmt::Display for Color {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.0 > 0xffffff {
-            write!(f, "{:06x}", self.0 >> 8)
-        } else {
-            write!(f, "{:06x}", self.0)
-        }
+        write!(f, "{:06x}", self.0)
     }
 }
 
