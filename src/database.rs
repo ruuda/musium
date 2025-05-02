@@ -337,9 +337,9 @@ pub fn ensure_schema_exists(tx: &mut Transaction) -> Result<()> {
           -- storing the 24-bit integer. The data blob is kilobytes anyway, a few bytes
           -- here makes little difference, and it makes the database more readable for
           -- humans.
-        , color    string  not null
+        , color    text    not null
         , data     blob    not null
-        );
+        ) strict;
         "#;
     let statement = match tx.statements.entry(sql.as_ptr()) {
         Occupied(entry) => entry.into_mut(),

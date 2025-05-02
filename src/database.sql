@@ -147,9 +147,9 @@ create table if not exists thumbnails
   -- storing the 24-bit integer. The data blob is kilobytes anyway, a few bytes
   -- here makes little difference, and it makes the database more readable for
   -- humans.
-, color    string  not null
+, color    text    not null
 , data     blob    not null
-);
+) strict;
 -- @end ensure_schema_exists
 
 -- @query insert_file(metadata: InsertFile) ->1 i64
