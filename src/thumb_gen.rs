@@ -294,7 +294,17 @@ impl<'a> GenThumb<'a> {
 
         // Sometimes Magick returns the color in 8 hex digits (ending in ff),
         // including alpha, sometimes it returns only 6 charactrs. RGB are the
-        // first three, so we ignore any trailer.
+        // first three, so we ignore any trailer. Sometimes though, it returns
+        // only 3, presumably a shortcut like CSS allows, in that case we need
+        // to duplicate every byte.
+        if color_buf.len() == 3 {
+            let mut new_buf = String::with_capacity(6);
+            for ch in color_buf.chars() {
+                new_buf.push(ch);
+                new_buf.push(ch);
+            }
+            color_buf = new_buf;
+        }
         let color = Color::parse(&color_buf[..6]).ok_or(Error::CommandError(
             "ImageMagick did not return a valid color.",
             None,
