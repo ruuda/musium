@@ -162,6 +162,12 @@ renderSearchResults postEvent elements albumsById (SearchResults result) =
     setColor = setAlbumColor albumsById
   in
     Html.withElement elements.resultBox $ do
+      -- TODO: On low-power devices, there can be a brief 1-frame flicker for
+      -- images to load after extending the query, even if the results were
+      -- visible previously -- presumably because we delete the nodes, so
+      -- Chromium deallocates the images, and has to decode them again when we
+      -- promptly add the <img> nodes again. We could do better by reycling
+      -- those image nodes.
       Html.clear
       Html.div $ do
         Html.addClass "search-results-list"
