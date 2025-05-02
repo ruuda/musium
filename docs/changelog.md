@@ -22,6 +22,16 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
 
 ## Next
 
+**Compatibility:**
+
+ * The schema of the thumbnail table changed, it gained a `color` column.
+   The easiest way to deal with this is to drop the table with
+   `sqlite3 db.sqlite3 'drop table thumbnails;'` and then re-index with
+   `musium scan`. This will re-compute all thumbnails and analyze their colors,
+   which may take a while.
+
+Features:
+
  * A new sort option is available in the album list: _For Now_. This ranking
    shows you albums that you played at similar times of the day, week, and year
    in the past. For example, if you tend to listen to more quiet music in the
@@ -33,7 +43,20 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
    to show the most relevant suggestions.
  * The queue tab in the webinterface is now implemented, including buttons to
    shuffle and clear the queue.
+ * Musium now computes and saves the dominant color of album cover art. This
+   color is used as a placeholder in the webinterface, to reduce visual flicker
+   when thumbnails are loading.
  * Add support for Czech diacritics in text normalization.
+
+Bugfixes:
+
+ * When a scan discovered new files and computed loudness, that loudness data
+   would only be used after a subsequent scan or restart. Now we properly apply
+   the loudness measurement directly after the scan.
+ * When a search query in the webinterface was slow to load (which tends to be
+   the case initially during search, because short queries have many matches),
+   the results for an earlier query could in rare cases replace the search
+   results for a later query. Now such late results are properly discarded.
 
 ## 0.16.0
 
