@@ -39,7 +39,7 @@ import AlbumView (AlbumViewState)
 import AlbumView as AlbumView
 import Dom (Element)
 import Dom as Dom
-import Event (Event, HistoryMode, SortMode, SortField (..), SortDirection (..))
+import Event (Event, HistoryMode, SearchSeq (..), SortMode, SortField (..), SortDirection (..))
 import Event as Event
 import History as History
 import Html as Html
@@ -93,6 +93,7 @@ type AppState =
   , navBar :: NavBarState
   , statusBar :: StatusBarState
   , location :: Location
+  , lastSearchRendered :: SearchSeq
   , lastArtists :: Array ArtistId
   , lastAlbum :: Maybe AlbumId
   , currentTrack :: Maybe QueueId
@@ -213,6 +214,7 @@ new bus = do
     , statusBar: statusBar
     , location: Navigation.Library
     , lastArtists: []
+    , lastSearchRendered: SearchSeq 0
     , lastAlbum: Nothing
     , currentTrack: Nothing
     , prefetchedThumb: Nothing
@@ -583,6 +585,29 @@ handleEvent event state = case event of
       Navigation.Search -> pure state
       _notSearch ->
         handleEvent (Event.NavigateTo Navigation.Search Event.RecordHistory) state
+
+  Event.Search seq query -> do
+    -- We fork a fiber to run the search query and make it post an event when
+    -- it's done, we don't block the main event loop on it, so that other logic
+    -- can continue even when a search is in progress, and also so that multiple
+    -- search queries can run in parallel when the user is typing fast.
+    _fiber <- Aff.forkAff $ do
+      result <- Model.search query
+      state.postEvent $ Event.SearchResult seq result
+    pure state
+
+  Event.SearchResult seq results ->
+    -- We only render the search result if it is for a newer query than what
+    -- we already rendered. (But it still may not be for the latest query we
+    -- sent!) This ensures that slow responses get dropped, rather than
+    -- overwriting later results that we already displayed.
+    if seq <= state.lastSearchRendered then pure state else do
+      liftEffect $ Search.renderSearchResults
+        state.postEvent
+        state.elements.search
+        state.albumsById
+        results
+      pure $ state { lastSearchRendered = seq }
 
 beforeSwitchPane :: AppState -> Aff AppState
 beforeSwitchPane state =
