@@ -88,6 +88,7 @@ impl TrackId {
     }
 
     #[inline(always)]
+    #[rustfmt::skip]
     pub fn new(album_id: AlbumId, disc_number: u8, track_number: u8) -> TrackId {
         // Confirm that the numbers are in range so we don't discard anything.
         debug_assert_eq!(album_id.0 & 0xfff0_0000_0000_0000, 0);
@@ -163,17 +164,16 @@ impl Lufs {
     pub fn new(centi_loudness_units: i16) -> Lufs {
         Lufs(
             std::num::NonZeroI16::new(centi_loudness_units)
-            .expect("A value of 0.0 LUFS is not allowed, use -0.01 LUFS instead.")
+                .expect("A value of 0.0 LUFS is not allowed, use -0.01 LUFS instead."),
         )
     }
-
 
     /// Construct a LUFS value from a float. This is in LUFS, not in centi-LUFS
     /// like `Lufs::new` is.
     pub fn from_f64(loudness_units: f64) -> Lufs {
         Lufs(
             std::num::NonZeroI16::new((loudness_units * 100.0) as i16)
-            .expect("A value of 0.0 LUFS is not allowed, use -0.01 LUFS instead.")
+                .expect("A value of 0.0 LUFS is not allowed, use -0.01 LUFS instead."),
         )
     }
 }
@@ -275,11 +275,7 @@ impl Date {
         debug_assert!(year <= 9999);
         debug_assert!(month <= 12);
         debug_assert!(day <= 31);
-        Date {
-            year,
-            month,
-            day,
-        }
+        Date { year, month, day }
     }
 }
 
@@ -292,7 +288,9 @@ pub struct Instant {
 impl Instant {
     pub fn from_iso8601(t: &str) -> Option<Instant> {
         let dt = DateTime::parse_from_rfc3339(t).ok()?;
-        let result = Instant { posix_seconds_utc: dt.timestamp() };
+        let result = Instant {
+            posix_seconds_utc: dt.timestamp(),
+        };
         Some(result)
     }
 
@@ -306,7 +304,8 @@ impl Instant {
     pub fn format_iso8601(&self) -> String {
         use chrono::SecondsFormat;
         let use_z = true;
-        self.to_datetime().to_rfc3339_opts(SecondsFormat::Secs, use_z)
+        self.to_datetime()
+            .to_rfc3339_opts(SecondsFormat::Secs, use_z)
     }
 }
 
@@ -381,9 +380,13 @@ pub struct Artist {
 impl fmt::Display for Date {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:04}", self.year)?;
-        if self.month == 0 { return Ok(()) }
+        if self.month == 0 {
+            return Ok(());
+        }
         write!(f, "-{:02}", self.month)?;
-        if self.day == 0 { return Ok(()) }
+        if self.day == 0 {
+            return Ok(());
+        }
         write!(f, "-{:02}", self.day)
     }
 }
