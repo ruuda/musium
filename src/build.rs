@@ -95,6 +95,7 @@ pub struct Issue {
 }
 
 impl fmt::Display for Issue {
+    #[rustfmt::skip]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}:\n  ", self.filename)?;
         match self.detail {
@@ -138,7 +139,9 @@ impl fmt::Display for Issue {
 
 fn parse_date(date_str: &str) -> Option<Date> {
     // We expect at least a year.
-    if date_str.len() < 4 { return None }
+    if date_str.len() < 4 {
+        return None;
+    }
 
     let year = u16::from_str(&date_str[0..4]).ok()?;
     let mut month: u8 = 0;
@@ -147,16 +150,24 @@ fn parse_date(date_str: &str) -> Option<Date> {
     // If there is something following the year, it must be dash, and there must
     // be at least two digits for the month.
     if date_str.len() > 4 {
-        if date_str.as_bytes()[4] != b'-' { return None }
-        if date_str.len() < 7 { return None }
+        if date_str.as_bytes()[4] != b'-' {
+            return None;
+        }
+        if date_str.len() < 7 {
+            return None;
+        }
         month = u8::from_str(&date_str[5..7]).ok()?;
     }
 
     // If there is something following the month, it must be dash, and there
     // must be exactly two digits for the day.
     if date_str.len() > 7 {
-        if date_str.as_bytes()[7] != b'-' { return None }
-        if date_str.len() != 10 { return None }
+        if date_str.as_bytes()[7] != b'-' {
+            return None;
+        }
+        if date_str.len() != 10 {
+            return None;
+        }
         day = u8::from_str(&date_str[8..10]).ok()?;
     }
 
@@ -164,7 +175,7 @@ fn parse_date(date_str: &str) -> Option<Date> {
     // but it is something at least. Note that we do allow the month and day to
     // be zero, to indicate the entire month or entire year.
     if month > 12 || day > 31 {
-        return None
+        return None;
     }
 
     Some(Date::new(year, month, day))
@@ -174,11 +185,21 @@ fn parse_date(date_str: &str) -> Option<Date> {
 fn parse_uuid(uuid: &str) -> Option<u64> {
     // Validate that the textual format of the UUID is as expected.
     // E.g. `1070cbb2-ad74-44ce-90a4-7fa1dfd8164e`.
-    if uuid.len() != 36 { return None }
-    if uuid.as_bytes()[8] != b'-' { return None }
-    if uuid.as_bytes()[13] != b'-' { return None }
-    if uuid.as_bytes()[18] != b'-' { return None }
-    if uuid.as_bytes()[23] != b'-' { return None }
+    if uuid.len() != 36 {
+        return None;
+    }
+    if uuid.as_bytes()[8] != b'-' {
+        return None;
+    }
+    if uuid.as_bytes()[13] != b'-' {
+        return None;
+    }
+    if uuid.as_bytes()[18] != b'-' {
+        return None;
+    }
+    if uuid.as_bytes()[23] != b'-' {
+        return None;
+    }
     // We parse the first and last 4 bytes and use these as the 8-byte id.
     // See the comments above for the motivation for using only 64 of the 128
     // bits. We take the front and back of the string because it is easy, there
@@ -198,11 +219,21 @@ fn parse_uuid(uuid: &str) -> Option<u64> {
 /// hex-formatted uuid.
 pub fn parse_uuid_52bits(uuid: &str) -> Option<u64> {
     // See also the comments in `parse_uuid`
-    if uuid.len() != 36 { return None }
-    if uuid.as_bytes()[8] != b'-' { return None }
-    if uuid.as_bytes()[13] != b'-' { return None }
-    if uuid.as_bytes()[18] != b'-' { return None }
-    if uuid.as_bytes()[23] != b'-' { return None }
+    if uuid.len() != 36 {
+        return None;
+    }
+    if uuid.as_bytes()[8] != b'-' {
+        return None;
+    }
+    if uuid.as_bytes()[13] != b'-' {
+        return None;
+    }
+    if uuid.as_bytes()[18] != b'-' {
+        return None;
+    }
+    if uuid.as_bytes()[23] != b'-' {
+        return None;
+    }
     let high = u32::from_str_radix(&uuid[..8], 16).ok()? as u64;
     let low = u32::from_str_radix(&uuid[31..], 16).ok()? as u64;
     Some((high << 20) | low)
@@ -214,9 +245,8 @@ pub fn albums_different(
     album_artists: &AlbumArtistsDeduper,
     id: AlbumId,
     a: &Album,
-    b: &Album)
-    -> Option<IssueDetail>
-{
+    b: &Album,
+) -> Option<IssueDetail> {
     let title_a = strings.get(a.title.0);
     let title_b = strings.get(b.title.0);
 
@@ -238,9 +268,7 @@ pub fn albums_different(
 
     if a.loudness != b.loudness {
         return Some(IssueDetail::AlbumLoudnessMismatch(
-            id,
-            a.loudness,
-            b.loudness,
+            id, a.loudness, b.loudness,
         ));
     }
 
@@ -251,13 +279,13 @@ pub fn albums_different(
         match (a_artists.next(), b_artists.next()) {
             (Some(a_aid), Some(b_aid)) if *a_aid == *b_aid => continue,
             (None, None) => break,
-            (opt_a_id, opt_b_id) => return Some(
-                IssueDetail::AlbumArtistMismatch(
+            (opt_a_id, opt_b_id) => {
+                return Some(IssueDetail::AlbumArtistMismatch(
                     id,
                     opt_a_id.cloned(),
                     opt_b_id.cloned(),
-                )
-            ),
+                ))
+            }
         }
     }
 
@@ -269,9 +297,8 @@ pub fn artists_different(
     strings: &StringDeduper,
     id: ArtistId,
     a: &Artist,
-    b: &Artist)
-    -> Option<IssueDetail>
-{
+    b: &Artist,
+) -> Option<IssueDetail> {
     let name_a = strings.get(a.name.0);
     let name_b = strings.get(b.name.0);
     let sort_name_a = strings.get(a.name_for_sort.0);
@@ -394,10 +421,10 @@ pub struct BuildMetaIndex {
 }
 
 pub struct FileTask {
-  file_id: FileId,
-  filename: FilenameRef,
-  mtime: Instant,
-  duration_seconds: u16,
+    file_id: FileId,
+    filename: FilenameRef,
+    mtime: Instant,
+    duration_seconds: u16,
 }
 
 impl BuildMetaIndex {
@@ -468,9 +495,9 @@ impl BuildMetaIndex {
         match value {
             Some(v) => match parse(v) {
                 Some(result) => Ok(Some(result)),
-                None => self.error_parse_failed(field)
-            }
-            None => Ok(None)
+                None => self.error_parse_failed(field),
+            },
+            None => Ok(None),
         }
     }
 
@@ -499,16 +526,13 @@ impl BuildMetaIndex {
             // TODO: We could potentially make `strings` take the `String`
             // rather than the ref, now that we have this owned data.
             Some(v) => Ok(self.strings.insert(&v)),
-            None => self.error_missing_field(field)
+            None => self.error_missing_field(field),
         }
     }
 
     /// Perform the first step of insertion, based on only the information from
     /// the `files` table, not yet joined with other tables.
-    pub fn insert_meta(
-        &mut self,
-        file: FileMetadata,
-    ) -> Result<FileTask> {
+    pub fn insert_meta(&mut self, file: FileMetadata) -> Result<FileTask> {
         let filename_id = FilenameRef(self.filenames.len() as u32);
         self.filenames.push(file.filename);
         self.current_filename = filename_id;
@@ -545,7 +569,9 @@ impl BuildMetaIndex {
         let result = FileTask {
             file_id: FileId(file.id),
             filename: filename_id,
-            mtime: Instant { posix_seconds_utc: file.mtime },
+            mtime: Instant {
+                posix_seconds_utc: file.mtime,
+            },
             duration_seconds: seconds as u16,
         };
 
@@ -554,11 +580,8 @@ impl BuildMetaIndex {
 
     /// Complete inserting a file, now consulting the additional tables to get
     /// tags and loudness information.
-    pub fn insert_full(
-        &mut self,
-        tx: &mut Transaction,
-        file: FileTask,
-    ) -> Result<()> {
+    #[rustfmt::skip]
+    pub fn insert_full(&mut self, tx: &mut Transaction, file: FileTask) -> Result<()> {
         self.current_filename = file.filename;
         let file_id = file.file_id;
 
@@ -616,7 +639,7 @@ impl BuildMetaIndex {
         let mbid_album = self.require_and_parse(
             "musicbrainz_albumid",
             tag_musicbrainz_albumid.as_ref(),
-            |v| parse_uuid_52bits(v)
+            |v| parse_uuid_52bits(v),
         )?;
 
         let original_date = self.parse(
@@ -654,7 +677,7 @@ impl BuildMetaIndex {
             0 => match (tag_albumartists.len(), &tag_albumartistsort) {
                 (1, Some(aa_sort)) => vec![aa_sort.clone()],
                 _ => tag_albumartists.clone(),
-            }
+            },
             _ => tag_albumartistssort,
         };
 
@@ -671,13 +694,11 @@ impl BuildMetaIndex {
             )?;
             let aa_name = self.strings.insert(&tag_aa_name);
             let aa_name_sort = self.strings.insert(&tag_aa_name_sort);
-            album_artists.push(
-                (
-                    ArtistId(mbid_artist),
-                    StringRef(aa_name),
-                    StringRef(aa_name_sort),
-                )
-            );
+            album_artists.push((
+                ArtistId(mbid_artist),
+                StringRef(aa_name),
+                StringRef(aa_name_sort),
+            ));
         }
 
         // Warn about track titles containing "(feat. ", these should probably
@@ -836,7 +857,7 @@ impl BuildMetaIndex {
                     self.artists.insert(artist_id, artist);
                 }
             }
-        };
+        }
 
         let track = Track {
             file_id: file_id,
@@ -905,7 +926,10 @@ impl BuildMetaIndex {
             let album_id = AlbumId(album_id_i64 as u64);
             let started_at = match Instant::from_iso8601(&started_at_iso8601) {
                 Some(t) => t,
-                None => panic!("Encountered invalid started_at timestamp: {:?}", started_at_iso8601),
+                None => panic!(
+                    "Encountered invalid started_at timestamp: {:?}",
+                    started_at_iso8601
+                ),
             };
             self.album_first_listens.insert(album_id, started_at);
         }
@@ -916,14 +940,20 @@ impl BuildMetaIndex {
 
 #[cfg(test)]
 mod test {
-    use super::{ArtistId, AlbumArtistsDeduper};
-    use super::{Date, parse_date};
+    use super::{parse_date, Date};
     use super::{parse_uuid, parse_uuid_52bits};
+    use super::{AlbumArtistsDeduper, ArtistId};
 
     #[test]
     fn parse_uuid_parses_uuid() {
-        assert_eq!(parse_uuid("9c9f1380-2516-4fc9-a3e6-f9f61941d090"), Some(0x9c9f_1380_1941_d090));
-        assert_eq!(parse_uuid("056e4f3e-d505-4dad-8ec1-d04f521cbb56"), Some(0x056e_4f3e_521c_bb56));
+        assert_eq!(
+            parse_uuid("9c9f1380-2516-4fc9-a3e6-f9f61941d090"),
+            Some(0x9c9f_1380_1941_d090)
+        );
+        assert_eq!(
+            parse_uuid("056e4f3e-d505-4dad-8ec1-d04f521cbb56"),
+            Some(0x056e_4f3e_521c_bb56)
+        );
         assert_eq!(parse_uuid("nonsense"), None);
     }
 
@@ -931,8 +961,14 @@ mod test {
     #[allow(clippy::unusual_byte_groupings)]
     fn parse_uuid_52bit_parses_uuid() {
         // Same as above, but note that we removed three hex digits in the middle.
-        assert_eq!(parse_uuid_52bits("9c9f1380-2516-4fc9-a3e6-f9f61941d090"), Some(0x9c9f_1380_1_d090));
-        assert_eq!(parse_uuid_52bits("056e4f3e-d505-4dad-8ec1-d04f521cbb56"), Some(0x056e_4f3e_c_bb56));
+        assert_eq!(
+            parse_uuid_52bits("9c9f1380-2516-4fc9-a3e6-f9f61941d090"),
+            Some(0x9c9f_1380_1_d090)
+        );
+        assert_eq!(
+            parse_uuid_52bits("056e4f3e-d505-4dad-8ec1-d04f521cbb56"),
+            Some(0x056e_4f3e_c_bb56)
+        );
         assert_eq!(parse_uuid_52bits("nonsense"), None);
     }
 
