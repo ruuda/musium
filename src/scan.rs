@@ -25,22 +25,22 @@
 //! * We can do incremental updates. We don't have to read the tags from files
 //!   that haven't changed.
 
-use std::thread::JoinHandle;
 use std::ffi::OsStr;
 use std::fmt;
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender};
+use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
 
 use walkdir;
 
 use crate::config::Config;
-use crate::database_utils;
 use crate::database as db;
 use crate::database::{Connection, Transaction};
+use crate::database_utils;
 use crate::error;
 use crate::loudness;
 use crate::mvar::{MVar, Var};
@@ -260,13 +260,7 @@ pub fn scan(
     let use_zulu_suffix = true;
     let now_str = now.to_rfc3339_opts(chrono::SecondsFormat::Millis, use_zulu_suffix);
 
-    insert_file_metadata_for_paths(
-        &mut tx,
-        &paths_to_scan[..],
-        &now_str,
-        status_sender,
-        status,
-    )?;
+    insert_file_metadata_for_paths(&mut tx, &paths_to_scan[..], &now_str, status_sender, status)?;
 
     tx.commit()?;
 
@@ -327,13 +321,19 @@ pub fn enumerate_flac_files(
                         }
 
                         Some((entry.into_path(), Mtime(m.mtime())))
-                    },
+                    }
                     Ok(_not_flac) => None,
                     // TODO: Add a nicer way to report errors.
-                    Err(err) => { eprintln!("{}", err); None }
+                    Err(err) => {
+                        eprintln!("{}", err);
+                        None
+                    }
                 }
             }
-            Err(err) => { eprintln!("{}", err); None }
+            Err(err) => {
+                eprintln!("{}", err);
+                None
+            }
         })
         .collect();
 
@@ -357,14 +357,15 @@ fn get_updates(
     paths_to_scan: &mut Vec<(PathBuf, Mtime)>,
 ) -> db::Result<()> {
     let mut iter_curr = current_sorted.into_iter();
-    let mut iter_db = db::iter_file_mtime(tx)?
-        .map(|result|
-            result.map(|row| (
+    let mut iter_db = db::iter_file_mtime(tx)?.map(|result| {
+        result.map(|row| {
+            (
                 FileMetaId(row.id),
                 PathBuf::from(row.filename),
-                Mtime(row.mtime)
-            ))
-        );
+                Mtime(row.mtime),
+            )
+        })
+    });
 
     let mut val_curr = iter_curr.next();
     let mut val_db = iter_db.next();
@@ -401,7 +402,7 @@ fn get_updates(
                     val_db = iter_db.next();
                 }
             }
-            (None, Some(Ok((id, _, _, )))) => {
+            (None, Some(Ok((id, _, _)))) => {
                 rows_to_delete.push(id);
                 val_db = iter_db.next();
             }
@@ -485,7 +486,10 @@ pub fn insert_file_metadata_for_paths(
         // Sanity check: did we get everything? Every thread should have
         // incremented once without sending, and we have one increment per
         // processed file for files that did get processed.
-        assert_eq!(counter.load(Ordering::SeqCst), paths_to_scan.len() + num_threads);
+        assert_eq!(
+            counter.load(Ordering::SeqCst),
+            paths_to_scan.len() + num_threads
+        );
 
         // Send the final discovery status, we may have processed some files
         // since the last update.
@@ -536,7 +540,7 @@ fn insert_file_metadata(
         Some(s) => s,
         None => {
             eprintln!("Warning: Path {:?} is not valid UTF-8. Skipping.", path);
-            return Ok(())
+            return Ok(());
         }
     };
 
@@ -562,19 +566,19 @@ fn insert_file_metadata(
         let is_interesting_tag = matches!(
             tag_lower,
             "album"
-            | "albumartist"
-            | "albumartists"
-            | "albumartistsort"
-            | "albumartistssort"
-            | "artist"
-            | "date"
-            | "discnumber"
-            | "musicbrainz_albumartistid"
-            | "musicbrainz_albumid"
-            | "musicbrainz_trackid"
-            | "originaldate"
-            | "title"
-            | "tracknumber"
+                | "albumartist"
+                | "albumartists"
+                | "albumartistsort"
+                | "albumartistssort"
+                | "artist"
+                | "date"
+                | "discnumber"
+                | "musicbrainz_albumartistid"
+                | "musicbrainz_albumid"
+                | "musicbrainz_trackid"
+                | "originaldate"
+                | "title"
+                | "tracknumber"
         );
         if is_interesting_tag {
             db::insert_tag(tx, file_id, tag_lower, value)?;
@@ -588,10 +592,7 @@ pub fn run_scan_in_thread(
     config: &Config,
     index_var: Var<MemoryMetaIndex>,
     thumb_cache_var: Var<ThumbCache>,
-) -> (
-    JoinHandle<error::Result<()>>,
-    Receiver<Status>,
-) {
+) -> (JoinHandle<error::Result<()>>, Receiver<Status>) {
     // Status updates should print much faster than they are produced, so use
     // a small buffer for them.
     let (mut tx, rx) = std::sync::mpsc::sync_channel(15);
@@ -607,12 +608,7 @@ pub fn run_scan_in_thread(
             let connection = database_utils::connect_read_write(&db_path)?;
 
             // Scan all files, put the metadata in the database.
-            scan(
-                &connection,
-                &library_path,
-                &mut status,
-                &mut tx,
-            )?;
+            scan(&connection, &library_path, &mut status, &mut tx)?;
 
             status.stage = ScanStage::IndexingMetadata;
             tx.send(status).unwrap();
@@ -642,28 +638,22 @@ pub fn run_scan_in_thread(
                 status.stage = ScanStage::PreProcessingLoudness;
                 tx.send(status).unwrap();
 
-                let mut loudness_tasks = loudness::TaskQueue::new(
-                    &index_arc,
-                    &mut status,
-                    &mut tx,
-                );
+                let mut loudness_tasks = loudness::TaskQueue::new(&index_arc, &mut status, &mut tx);
                 let mut db_tx = db.begin()?;
                 loudness_tasks.push_tasks_missing(&mut db_tx)?;
                 db_tx.commit()?;
                 loudness_tasks.status.stage = ScanStage::AnalyzingLoudness;
-                loudness_tasks.status_sender.send(*loudness_tasks.status).unwrap();
+                loudness_tasks
+                    .status_sender
+                    .send(*loudness_tasks.status)
+                    .unwrap();
 
                 loudness_tasks.process_all_in_thread_pool(&db_path)?;
             }
 
             // If there are any new or updated albums, regenerate thumbnails for
             // those.
-            crate::thumb_gen::generate_thumbnails(
-                &index_arc,
-                &db_path,
-                &mut status,
-                &mut tx,
-            )?;
+            crate::thumb_gen::generate_thumbnails(&index_arc, &db_path, &mut status, &mut tx)?;
 
             status.stage = ScanStage::LoadingThumbnails;
             tx.send(status).unwrap();
@@ -728,11 +718,7 @@ impl BackgroundScan {
             .name("scan_supervisor".to_string())
             .spawn(move || {
                 let status = status_for_supervisor;
-                let (scan_thread, rx) = run_scan_in_thread(
-                    &config,
-                    index_var,
-                    thumb_cache_var,
-                );
+                let (scan_thread, rx) = run_scan_in_thread(&config, index_var, thumb_cache_var);
                 for new_status in rx {
                     status.set(new_status);
                 }
@@ -748,7 +734,7 @@ impl BackgroundScan {
                     "Final status update should be Done after scan thread exits.",
                 );
             })
-        .expect("Failed to spawn scan supervisor thread.");
+            .expect("Failed to spawn scan supervisor thread.");
 
         Self {
             status,
@@ -777,10 +763,7 @@ pub struct BackgroundScanner {
 }
 
 impl BackgroundScanner {
-    pub fn new(
-        index_var: Var<MemoryMetaIndex>,
-        thumb_cache_var: Var<ThumbCache>,
-    ) -> Self {
+    pub fn new(index_var: Var<MemoryMetaIndex>, thumb_cache_var: Var<ThumbCache>) -> Self {
         Self {
             background_scan: Mutex::new(None),
             index_var: index_var,
@@ -799,16 +782,13 @@ impl BackgroundScanner {
         if let Some(ref sc) = *bg_scan {
             let status = sc.get_status();
             match status.stage {
-                ScanStage::Done => { /* We need to start a new scan. */ },
+                ScanStage::Done => { /* We need to start a new scan. */ }
                 _ => return status,
             }
         }
 
-        let new_scan = BackgroundScan::new(
-            config,
-            self.index_var.clone(),
-            self.thumb_cache_var.clone(),
-        );
+        let new_scan =
+            BackgroundScan::new(config, self.index_var.clone(), self.thumb_cache_var.clone());
         let status = new_scan.get_status();
         *bg_scan = Some(new_scan);
 
@@ -817,14 +797,18 @@ impl BackgroundScanner {
 
     /// Return the status of the current scan, if any.
     pub fn get_status(&self) -> Option<Status> {
-        self.background_scan.lock().unwrap().as_ref().map(|sc| sc.get_status())
+        self.background_scan
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|sc| sc.get_status())
     }
 }
 
 #[cfg(test)]
 mod test {
+    use super::{get_updates, FileMetaId, Mtime};
     use crate::database::Connection;
-    use super::{Mtime, FileMetaId, get_updates};
     use std::path::PathBuf;
 
     fn ensure_schema_exists(db: &mut Connection) {
@@ -853,7 +837,8 @@ mod test {
             &mut db.begin().unwrap(),
             &mut rows_to_delete,
             &mut paths_to_scan,
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(
             &paths_to_scan[..],
@@ -872,23 +857,24 @@ mod test {
         let connection = sqlite::open(":memory:").unwrap();
         let mut db = Connection::new(&connection);
         ensure_schema_exists(&mut db);
-        connection.execute(
-            "
-            insert into
-              files
-                ( filename
-                , mtime
-                , imported_at
-                , streaminfo_channels
-                , streaminfo_bits_per_sample
-                , streaminfo_sample_rate
-                )
-            values
-              ('/foo/baz.flac', 1, 'N/A', 0, 0, 0),
-              ('/foo/bar.flac', 2, 'N/A', 0, 0, 0);
-            "
-        ).unwrap();
-
+        connection
+            .execute(
+                "
+                insert into
+                  files
+                    ( filename
+                    , mtime
+                    , imported_at
+                    , streaminfo_channels
+                    , streaminfo_bits_per_sample
+                    , streaminfo_sample_rate
+                    )
+                values
+                  ('/foo/baz.flac', 1, 'N/A', 0, 0, 0),
+                  ('/foo/bar.flac', 2, 'N/A', 0, 0, 0);
+                ",
+            )
+            .unwrap();
 
         let current_sorted = vec![
             (PathBuf::from("/foo/bar.flac"), Mtime(2)),
@@ -902,7 +888,8 @@ mod test {
             &mut db.begin().unwrap(),
             &mut rows_to_delete,
             &mut paths_to_scan,
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(&paths_to_scan, &Vec::<(PathBuf, Mtime)>::new());
         assert_eq!(&rows_to_delete, &Vec::<FileMetaId>::new());
@@ -914,25 +901,27 @@ mod test {
         let connection = sqlite::open(":memory:").unwrap();
         let mut db = Connection::new(&connection);
         ensure_schema_exists(&mut db);
-        connection.execute(
-            "
-            insert into
-              files
-                ( id
-                , filename
-                , mtime
-                , imported_at
-                , streaminfo_channels
-                , streaminfo_bits_per_sample
-                , streaminfo_sample_rate
-                )
-            values
-              (1, '/unchanged.flac', 1, 'N/A', 0, 0, 0),
-              (2, '/deleted.flac', 2, 'N/A', 0, 0, 0),
-              (3, '/also_deleted.flac', 3, 'N/A', 0, 0, 0),
-              (4, '/z.flac', 4, 'N/A', 0, 0, 0);
-            "
-        ).unwrap();
+        connection
+            .execute(
+                "
+                insert into
+                  files
+                    ( id
+                    , filename
+                    , mtime
+                    , imported_at
+                    , streaminfo_channels
+                    , streaminfo_bits_per_sample
+                    , streaminfo_sample_rate
+                    )
+                values
+                  (1, '/unchanged.flac', 1, 'N/A', 0, 0, 0),
+                  (2, '/deleted.flac', 2, 'N/A', 0, 0, 0),
+                  (3, '/also_deleted.flac', 3, 'N/A', 0, 0, 0),
+                  (4, '/z.flac', 4, 'N/A', 0, 0, 0);
+                ",
+            )
+            .unwrap();
 
         let current_sorted = vec![
             (PathBuf::from("/added.flac"), Mtime(3)),
@@ -946,10 +935,17 @@ mod test {
             &mut db.begin().unwrap(),
             &mut rows_to_delete,
             &mut paths_to_scan,
-        ).unwrap();
+        )
+        .unwrap();
 
-        assert_eq!(&paths_to_scan[..], &[(PathBuf::from("/added.flac"), Mtime(3))]);
-        assert_eq!(&rows_to_delete[..], &[FileMetaId(3), FileMetaId(2), FileMetaId(4)]);
+        assert_eq!(
+            &paths_to_scan[..],
+            &[(PathBuf::from("/added.flac"), Mtime(3))]
+        );
+        assert_eq!(
+            &rows_to_delete[..],
+            &[FileMetaId(3), FileMetaId(2), FileMetaId(4)]
+        );
     }
 
     #[test]
@@ -959,22 +955,24 @@ mod test {
         let connection = sqlite::open(":memory:").unwrap();
         let mut db = Connection::new(&connection);
         ensure_schema_exists(&mut db);
-        connection.execute(
-            "
-            insert into
-              files
-                ( id
-                , filename
-                , mtime
-                , imported_at
-                , streaminfo_channels
-                , streaminfo_bits_per_sample
-                , streaminfo_sample_rate
-                )
-            values
-              (1, '/file.flac', 100, 'N/A', 0, 0, 0);
-            "
-        ).unwrap();
+        connection
+            .execute(
+                "
+                insert into
+                  files
+                    ( id
+                    , filename
+                    , mtime
+                    , imported_at
+                    , streaminfo_channels
+                    , streaminfo_bits_per_sample
+                    , streaminfo_sample_rate
+                    )
+                values
+                  (1, '/file.flac', 100, 'N/A', 0, 0, 0);
+                ",
+            )
+            .unwrap();
 
         // Same path, but mtime is one more.
         let current_sorted = vec![(PathBuf::from("/file.flac"), Mtime(101))];
@@ -986,10 +984,14 @@ mod test {
             &mut db.begin().unwrap(),
             &mut rows_to_delete,
             &mut paths_to_scan,
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(&rows_to_delete[..], &[FileMetaId(1)]);
-        assert_eq!(&paths_to_scan[..], &[(PathBuf::from("/file.flac"), Mtime(101))]);
+        assert_eq!(
+            &paths_to_scan[..],
+            &[(PathBuf::from("/file.flac"), Mtime(101))]
+        );
     }
 
     #[test]
@@ -999,23 +1001,25 @@ mod test {
         let connection = sqlite::open(":memory:").unwrap();
         let mut db = Connection::new(&connection);
         ensure_schema_exists(&mut db);
-        connection.execute(
-            "
-            insert into
-              files
-                ( id
-                , filename
-                , mtime
-                , imported_at
-                , streaminfo_channels
-                , streaminfo_bits_per_sample
-                , streaminfo_sample_rate
-                )
-            values
-              (1, '/Étienne de Crécy/1.flac', 1, 'N/A', 0, 0, 0),
-              (2, '/Eidola/1.flac', 1, 'N/A', 0, 0, 0);
-            "
-        ).unwrap();
+        connection
+            .execute(
+                "
+                insert into
+                  files
+                    ( id
+                    , filename
+                    , mtime
+                    , imported_at
+                    , streaminfo_channels
+                    , streaminfo_bits_per_sample
+                    , streaminfo_sample_rate
+                    )
+                values
+                  (1, '/Étienne de Crécy/1.flac', 1, 'N/A', 0, 0, 0),
+                  (2, '/Eidola/1.flac', 1, 'N/A', 0, 0, 0);
+                ",
+            )
+            .unwrap();
 
         // Same path, but mtime is one more.
         let current_sorted = vec![
@@ -1030,7 +1034,8 @@ mod test {
             &mut db.begin().unwrap(),
             &mut rows_to_delete,
             &mut paths_to_scan,
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(&paths_to_scan, &Vec::<(PathBuf, Mtime)>::new());
         assert_eq!(&rows_to_delete, &Vec::<FileMetaId>::new());
@@ -1044,21 +1049,23 @@ mod test {
         let connection = sqlite::open(":memory:").unwrap();
         let mut db = Connection::new(&connection);
         ensure_schema_exists(&mut db);
-        connection.execute(
-            "
-            insert into
-              files
-                ( filename
-                , mtime
-                , imported_at
-                , streaminfo_channels
-                , streaminfo_bits_per_sample
-                , streaminfo_sample_rate
-                )
-            values
-              ('/foo/1/foo.flac', 1, 'N/A', 0, 0, 0);
-            "
-        ).unwrap();
+        connection
+            .execute(
+                "
+                insert into
+                  files
+                    ( filename
+                    , mtime
+                    , imported_at
+                    , streaminfo_channels
+                    , streaminfo_bits_per_sample
+                    , streaminfo_sample_rate
+                    )
+                values
+                  ('/foo/1/foo.flac', 1, 'N/A', 0, 0, 0);
+                ",
+            )
+            .unwrap();
 
         let current_sorted = vec![
             (PathBuf::from("/foo/1 take 2/bar.flac"), Mtime(2)),
@@ -1072,11 +1079,13 @@ mod test {
             &mut db.begin().unwrap(),
             &mut rows_to_delete,
             &mut paths_to_scan,
-        ).unwrap();
+        )
+        .unwrap();
 
-        assert_eq!(&paths_to_scan[..], &[
-            (PathBuf::from("/foo/1 take 2/bar.flac"), Mtime(2))
-        ]);
+        assert_eq!(
+            &paths_to_scan[..],
+            &[(PathBuf::from("/foo/1 take 2/bar.flac"), Mtime(2))]
+        );
         assert_eq!(&rows_to_delete[..], &[]);
     }
 }
