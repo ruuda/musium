@@ -13,17 +13,16 @@
 #![allow(clippy::new_without_default)]
 #![allow(clippy::nonminimal_bool)]
 #![allow(clippy::redundant_field_names)]
-
 // Harmful lint, see https://github.com/rust-lang/rust-clippy/issues/4295#issuecomment-1554996707.
 #![allow(clippy::mutex_atomic)]
 
 extern crate alsa;
+extern crate bs1770;
 extern crate claxon;
 extern crate crossbeam;
 extern crate libc;
 extern crate serde_json;
 extern crate unicode_normalization;
-extern crate bs1770;
 
 mod album_table;
 mod build;
@@ -155,7 +154,10 @@ struct Bookmarks {
 }
 
 impl Bookmarks {
-    pub fn new<I>(iter: I) -> Bookmarks where I: Iterator<Item = u64> {
+    pub fn new<I>(iter: I) -> Bookmarks
+    where
+        I: Iterator<Item = u64>,
+    {
         let mut bookmarks = [0; 257];
         let mut bc: i32 = -1;
         let mut len: u32 = 0;
@@ -173,7 +175,7 @@ impl Bookmarks {
             bookmarks[bc as usize] = len;
         }
         Bookmarks {
-            bookmarks: Box::new(bookmarks)
+            bookmarks: Box::new(bookmarks),
         }
     }
 
@@ -234,9 +236,8 @@ fn build_albums_by_artist_index(
         }
     }
 
-    entries_with_date.sort_by_key(|&(artist_id, album_id, release_date)|
-        (artist_id, release_date, album_id)
-    );
+    entries_with_date
+        .sort_by_key(|&(artist_id, album_id, release_date)| (artist_id, release_date, album_id));
 
     let mut entries = Vec::with_capacity(entries_with_date.len());
 
@@ -261,16 +262,15 @@ impl MemoryMetaIndex {
             let (id, mut track) = (*id, track.clone());
 
             // Give the track the final stringrefs, into the merged arrays.
-            track.title = StringRef(
-                strings.insert(builder.strings.get(track.title.0))
-            );
-            track.artist = StringRef(
-                strings.insert(builder.strings.get(track.artist.0))
-            );
+            track.title = StringRef(strings.insert(builder.strings.get(track.title.0)));
+            track.artist = StringRef(strings.insert(builder.strings.get(track.artist.0)));
             filenames.push(builder.filenames[track.filename.0 as usize].clone());
             track.filename = FilenameRef(filenames.len() as u32 - 1);
 
-            tracks.push(TrackWithId { track_id: id, track });
+            tracks.push(TrackWithId {
+                track_id: id,
+                track,
+            });
         }
 
         // This should be enforced by the repr(align), but confirm this at
@@ -278,33 +278,23 @@ impl MemoryMetaIndex {
         let tracks_addr = tracks[..].as_ptr() as *const u8;
         let align_off = tracks_addr.align_offset(32);
         assert_eq!(
-            align_off,
-            0,
+            align_off, 0,
             "Tracks table must align to 32 bytes so elements do not straddle cache lines."
         );
 
         for (id, album) in builder.albums.iter() {
             let (id, mut album) = (*id, album.clone());
 
-            album.title = StringRef(
-                strings.insert(builder.strings.get(album.title.0))
-            );
-            album.artist = StringRef(
-                strings.insert(builder.strings.get(album.artist.0))
-            );
+            album.title = StringRef(strings.insert(builder.strings.get(album.title.0)));
+            album.artist = StringRef(strings.insert(builder.strings.get(album.artist.0)));
 
             // We could simply copy the album artists vec from the builder, and
             // use the indices unmodified, but then the entries would be in
             // arbitrary order. We remap them here such that the data is in the
             // same order as the albums, so if you iterate the albums, this is
             // more cache efficient.
-            album.artist_ids = album_artists.insert(
-                builder
-                    .album_artists
-                    .get(album.artist_ids)
-                    .iter()
-                    .cloned()
-            );
+            album.artist_ids =
+                album_artists.insert(builder.album_artists.get(album.artist_ids).iter().cloned());
 
             // We may have edited a file after listening to it (for example to
             // fix some tags). In that case the mtime will be recent, and that
@@ -315,28 +305,28 @@ impl MemoryMetaIndex {
                 album.first_seen = album.first_seen.min(*first_listen);
             }
 
-            albums.push(AlbumWithId { album_id: id, album });
+            albums.push(AlbumWithId {
+                album_id: id,
+                album,
+            });
         }
 
         for (id, artist) in builder.artists.iter() {
             let (id, mut artist) = (*id, artist.clone());
 
-            artist.name = StringRef(
-                strings.insert(builder.strings.get(artist.name.0))
-            );
-            artist.name_for_sort = StringRef(
-                strings.insert(builder.strings.get(artist.name_for_sort.0))
-            );
+            artist.name = StringRef(strings.insert(builder.strings.get(artist.name.0)));
+            artist.name_for_sort =
+                StringRef(strings.insert(builder.strings.get(artist.name_for_sort.0)));
 
-            artists.push(ArtistWithId { artist_id: id, artist });
+            artists.push(ArtistWithId {
+                artist_id: id,
+                artist,
+            });
         }
 
         strings.upgrade_quotes();
 
-        let albums_by_artist = build_albums_by_artist_index(
-            &albums[..],
-            &album_artists,
-        );
+        let albums_by_artist = build_albums_by_artist_index(&albums[..], &album_artists);
 
         MemoryMetaIndex {
             artist_bookmarks: Bookmarks::new(artists.iter().map(|p| p.artist_id.0)),
@@ -384,7 +374,9 @@ impl MemoryMetaIndex {
     /// Also returns the intermediate builder. It contains any issues
     /// discovered, and the mtimes per album, which can be used to check if any
     /// thumbnails need updating.
-    pub fn from_database(tx: &mut database::Transaction) -> Result<(MemoryMetaIndex, BuildMetaIndex)> {
+    pub fn from_database(
+        tx: &mut database::Transaction,
+    ) -> Result<(MemoryMetaIndex, BuildMetaIndex)> {
         let mut builder = BuildMetaIndex::new();
         let mut tasks = Vec::new();
 
@@ -466,7 +458,9 @@ impl MetaIndex for MemoryMetaIndex {
 
     #[inline]
     fn get_album(&self, id: AlbumId) -> Option<&Album> {
-        let slice = self.album_bookmarks.range(&self.albums[..], id.for_bookmark());
+        let slice = self
+            .album_bookmarks
+            .range(&self.albums[..], id.for_bookmark());
         slice
             .binary_search_by_key(&id, |kv| kv.album_id)
             .ok()
@@ -503,10 +497,11 @@ impl MetaIndex for MemoryMetaIndex {
         // less tracks than that, and the linear scan has a very regular memory
         // access pattern.
         let next_album_tid = TrackId::new(AlbumId(id.0 + 1), 0, 0);
-        let end = begin + slice[begin..]
-            .iter()
-            .position(|kv| kv.track_id >= next_album_tid)
-            .unwrap_or(slice.len() - begin);
+        let end = begin
+            + slice[begin..]
+                .iter()
+                .position(|kv| kv.track_id >= next_album_tid)
+                .unwrap_or(slice.len() - begin);
 
         &slice[begin..end]
     }
