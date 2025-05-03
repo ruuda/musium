@@ -18,8 +18,8 @@ extern crate walkdir;
 
 use std::env;
 use std::fs;
-use std::io::{BufRead, Write};
 use std::io;
+use std::io::{BufRead, Write};
 use std::process;
 use std::sync::{Arc, Mutex};
 
@@ -28,11 +28,11 @@ use musium::database;
 use musium::database_utils;
 use musium::error::Result;
 use musium::mvar::MVar;
-use musium::server::{MetaServer, serve};
+use musium::server::{serve, MetaServer};
 use musium::string_utils::normalize_words;
 use musium::thumb_cache::ThumbCache;
 use musium::user_data::UserData;
-use musium::{MetaIndex, MemoryMetaIndex};
+use musium::{MemoryMetaIndex, MetaIndex};
 
 fn make_index(tx: &mut database::Transaction) -> Result<MemoryMetaIndex> {
     let (index, builder) = MemoryMetaIndex::from_database(tx)?;
@@ -72,7 +72,7 @@ fn make_index(tx: &mut database::Transaction) -> Result<MemoryMetaIndex> {
         );
         println!(
             "Track loudness p5, p50, p95: {}, {}, {}",
-            track_louds[ 5 * track_louds.len() / 100].0,
+            track_louds[5 * track_louds.len() / 100].0,
             track_louds[50 * track_louds.len() / 100].0,
             track_louds[95 * track_louds.len() / 100].0,
         );
@@ -102,7 +102,7 @@ fn make_index(tx: &mut database::Transaction) -> Result<MemoryMetaIndex> {
         );
         println!(
             "Album loudness p5, p50, p95: {}, {}, {}\n",
-            album_louds[ 5 * album_louds.len() / 100].0,
+            album_louds[5 * album_louds.len() / 100].0,
             album_louds[50 * album_louds.len() / 100].0,
             album_louds[95 * album_louds.len() / 100].0,
         );
@@ -125,10 +125,7 @@ fn equals_normalized(x1: &str, x2: &str) -> bool {
     w1 == w2
 }
 
-fn match_listens(
-    index: &MemoryMetaIndex,
-    tx: &mut database::Transaction,
-) -> Result<()> {
+fn match_listens(index: &MemoryMetaIndex, tx: &mut database::Transaction) -> Result<()> {
     let mut total = 0_u32;
     let mut matched = 0_u32;
     let mut missed = 0_u32;
@@ -147,8 +144,12 @@ fn match_listens(
         let mut found = false;
 
         for track_id in tracks {
-            let track = index.get_track(track_id).expect("Search result should be in index.");
-            let album = index.get_album(track_id.album_id()).expect("Track album should be in index.");
+            let track = index
+                .get_track(track_id)
+                .expect("Search result should be in index.");
+            let album = index
+                .get_album(track_id.album_id())
+                .expect("Track album should be in index.");
             let track_ok = equals_normalized(index.get_string(track.title), &listen.title);
             let artist_ok = equals_normalized(index.get_string(track.artist), &listen.track_artist);
             let album_ok = equals_normalized(index.get_string(album.title), &listen.album);
@@ -173,9 +174,13 @@ fn match_listens(
 
     println!(
         "Matched {} out of {} listens ({:.1}%), missed {} ({:.1}%), ambiguous {} ({:.1}%).",
-        matched, total, (matched as f32 * 100.0) / (total as f32),
-        missed, (missed as f32 * 100.0) / (total as f32),
-        ambiguous, (ambiguous as f32 * 100.0) / (total as f32),
+        matched,
+        total,
+        (matched as f32 * 100.0) / (total as f32),
+        missed,
+        (missed as f32 * 100.0) / (total as f32),
+        ambiguous,
+        (ambiguous as f32 * 100.0) / (total as f32),
     );
 
     Ok(())
@@ -191,11 +196,7 @@ fn run_scan(config: &Config) -> Result<()> {
     let index_var = Arc::new(MVar::new(Arc::new(dummy_index)));
     let thumb_cache_var = Arc::new(MVar::new(Arc::new(dummy_thumb_cache)));
 
-    let (scan_thread, rx) = musium::scan::run_scan_in_thread(
-        config,
-        index_var,
-        thumb_cache_var,
-    );
+    let (scan_thread, rx) = musium::scan::run_scan_in_thread(config, index_var, thumb_cache_var);
 
     {
         let stdout = io::stdout();
@@ -218,8 +219,7 @@ fn run_scan(config: &Config) -> Result<()> {
     scan_thread.join().unwrap()
 }
 
-fn print_usage() {
-    println!("\
+const USAGE: &'static str = "\
 Usage:
 
   musium scan musium.conf
@@ -242,7 +242,10 @@ MATCH
 
 COUNT
 
-  Print listen count statistics.");
+  Print listen count statistics.";
+
+fn print_usage() {
+    println!("{}", USAGE);
 }
 
 fn load_config(config_fname: &str) -> Result<Config> {
