@@ -28,6 +28,7 @@ module Html
   , p
   , removeClass
   , scrollIntoView
+  , setBackgroundColor
   , setHeight
   , setId
   , setMaskImage
@@ -134,6 +135,13 @@ onInput callback = ReaderT $ \container ->
 
 scrollIntoView :: Html Unit
 scrollIntoView = ReaderT Dom.scrollIntoView
+
+-- Set the background color to the given hex color. Should not include the
+-- leading `#`, we prepend that here, to avoid having to store and transfer
+-- the additional byte.
+setBackgroundColor :: String -> Html Unit
+setBackgroundColor hexColor = ReaderT $
+  \container -> Dom.setBackgroundColor ("#" <> hexColor) container
 
 setScrollTop :: Number -> Html Unit
 setScrollTop off = ReaderT $ \container -> Dom.setScrollTop off container

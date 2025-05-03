@@ -207,6 +207,12 @@ export const setMaskImageImpl = function(mask, element) {
   }
 }
 
+export const setBackgroundColorImpl = function(hexColor, element) {
+  return function() {
+    element.style.backgroundColor = hexColor;
+  }
+}
+
 export const setWidthImpl = function(width, element) {
   return function() {
     element.style.width = width;

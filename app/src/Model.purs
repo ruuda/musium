@@ -138,6 +138,7 @@ newtype Album = Album
   , artistIds :: NonEmptyArray ArtistId
   , releaseDate :: String
   , firstSeen :: String
+  , color :: String
   , discoverScore :: Number
   , trendingScore :: Number
   , forNowScore :: Number
@@ -155,6 +156,7 @@ instance decodeJsonAlbum :: DecodeJson Album where
     artist        <- Json.getField obj "artist"
     releaseDate   <- Json.getField obj "release_date"
     firstSeen     <- Json.getField obj "first_seen"
+    color         <- Json.getField obj "color"
     discoverScore <- Json.getField obj "discover_score"
     trendingScore <- Json.getField obj "trending_score"
     forNowScore <- Json.getField obj "for_now_score"
@@ -165,6 +167,7 @@ instance decodeJsonAlbum :: DecodeJson Album where
       , artistIds
       , releaseDate
       , firstSeen
+      , color
       , discoverScore
       , trendingScore
       , forNowScore
@@ -294,6 +297,7 @@ data ScanStage
   | ScanPreProcessingThumbnails
   | ScanGeneratingThumbnails
   | ScanLoadingThumbnails
+  | ScanReloading
   | ScanDone
 
 derive instance eqScanStage :: Eq ScanStage
@@ -312,6 +316,7 @@ instance decodeJsonScanStage :: DecodeJson ScanStage where
       "preprocessing_thumbnails" -> pure ScanPreProcessingThumbnails
       "generating_thumbnails"    -> pure ScanGeneratingThumbnails
       "loading_thumbnails"       -> pure ScanLoadingThumbnails
+      "reloading"                -> pure ScanReloading
       "done"                     -> pure ScanDone
       _ -> Left $ UnexpectedValue json
 

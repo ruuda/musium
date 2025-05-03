@@ -143,8 +143,13 @@ create table if not exists waveforms
 create table if not exists thumbnails
 ( album_id integer primary key
 , file_id  integer not null references files (id) on delete cascade
+  -- We store the color as hex string, even though that's larger than just
+  -- storing the 24-bit integer. The data blob is kilobytes anyway, a few bytes
+  -- here makes little difference, and it makes the database more readable for
+  -- humans.
+, color    text    not null
 , data     blob    not null
-);
+) strict;
 -- @end ensure_schema_exists
 
 -- @query insert_file(metadata: InsertFile) ->1 i64
@@ -217,10 +222,10 @@ order by
   -- we found them in the file.
   id asc;
 
--- @query insert_album_thumbnail(album_id: i64, file_id: i64, data: bytes)
-insert into thumbnails (album_id, file_id, data)
-values (:album_id, :file_id, :data)
-on conflict (album_id) do update set data = :data;
+-- @query insert_album_thumbnail(album_id: i64, file_id: i64, color: str, data: bytes)
+insert into thumbnails (album_id, file_id, color, data)
+values (:album_id, :file_id, :color, :data)
+on conflict (album_id) do update set color = :color, data = :data;
 
 -- @query insert_album_loudness(album_id: i64, file_id: i64, loudness: f64)
 insert into album_loudness (album_id, file_id, bs17704_loudness_lufs)
@@ -286,6 +291,9 @@ where
   id = :listen_id
   and queue_id = :queue_id
   and track_id = :track_id;
+
+-- @query select_album_color(album_id: i64) ->? str
+select color from thumbnails where album_id = :album_id;
 
 -- @query select_album_loudness_lufs(album_id: i64) ->? f64
 select bs17704_loudness_lufs from album_loudness where album_id = :album_id;

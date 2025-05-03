@@ -7,9 +7,9 @@
 
 //! Primitive data types for the music library.
 
+use chrono::{DateTime, Utc};
 use std::fmt;
 use std::str::FromStr;
-use chrono::{DateTime, Utc};
 
 // Stats of my personal music library at this point:
 //
@@ -88,6 +88,7 @@ impl TrackId {
     }
 
     #[inline(always)]
+    #[rustfmt::skip]
     pub fn new(album_id: AlbumId, disc_number: u8, track_number: u8) -> TrackId {
         // Confirm that the numbers are in range so we don't discard anything.
         debug_assert_eq!(album_id.0 & 0xfff0_0000_0000_0000, 0);
@@ -163,17 +164,16 @@ impl Lufs {
     pub fn new(centi_loudness_units: i16) -> Lufs {
         Lufs(
             std::num::NonZeroI16::new(centi_loudness_units)
-            .expect("A value of 0.0 LUFS is not allowed, use -0.01 LUFS instead.")
+                .expect("A value of 0.0 LUFS is not allowed, use -0.01 LUFS instead."),
         )
     }
-
 
     /// Construct a LUFS value from a float. This is in LUFS, not in centi-LUFS
     /// like `Lufs::new` is.
     pub fn from_f64(loudness_units: f64) -> Lufs {
         Lufs(
             std::num::NonZeroI16::new((loudness_units * 100.0) as i16)
-            .expect("A value of 0.0 LUFS is not allowed, use -0.01 LUFS instead.")
+                .expect("A value of 0.0 LUFS is not allowed, use -0.01 LUFS instead."),
         )
     }
 }
@@ -275,11 +275,7 @@ impl Date {
         debug_assert!(year <= 9999);
         debug_assert!(month <= 12);
         debug_assert!(day <= 31);
-        Date {
-            year,
-            month,
-            day,
-        }
+        Date { year, month, day }
     }
 }
 
@@ -292,7 +288,9 @@ pub struct Instant {
 impl Instant {
     pub fn from_iso8601(t: &str) -> Option<Instant> {
         let dt = DateTime::parse_from_rfc3339(t).ok()?;
-        let result = Instant { posix_seconds_utc: dt.timestamp() };
+        let result = Instant {
+            posix_seconds_utc: dt.timestamp(),
+        };
         Some(result)
     }
 
@@ -306,7 +304,8 @@ impl Instant {
     pub fn format_iso8601(&self) -> String {
         use chrono::SecondsFormat;
         let use_z = true;
-        self.to_datetime().to_rfc3339_opts(SecondsFormat::Secs, use_z)
+        self.to_datetime()
+            .to_rfc3339_opts(SecondsFormat::Secs, use_z)
     }
 }
 
@@ -320,19 +319,59 @@ pub struct AlbumArtistsRef {
     pub end: u32,
 }
 
+/// An sRGB color (used to approximate thumbnails).
+///
+/// The value is a 24-bit color, with R in the most significant bits and B in
+/// the least significant bits. The 8 most significant bits are unused and
+/// should be set to zero.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct Color(u32);
+
+impl Color {
+    /// Parse an RGB hex string.
+    ///
+    /// The input should be 6 hex characters, we don't support alpha.
+    #[inline]
+    pub fn parse(src: &str) -> Option<Color> {
+        debug_assert_eq!(src.len(), 6);
+        u32::from_str_radix(src, 16).ok().map(Color)
+    }
+}
+
+impl fmt::Display for Color {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:06x}", self.0)
+    }
+}
+
+impl Default for Color {
+    fn default() -> Self {
+        // The default color for an album, when we don't have a thumbnail, is
+        // very light gray, which fits with the theme.
+        // TODO: It would be better to store an `Option<Color>` in the album
+        // instead of having a default. Maybe we can do a NonZeroU32 and store
+        // an alpha value in the color too, which makes it nonzero.
+        Color(0xf8f8f8)
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Album {
-    pub artist_ids: AlbumArtistsRef,
-    pub artist: StringRef,
-    pub title: StringRef,
-    pub original_release_date: Date,
-    pub loudness: Option<Lufs>,
+    pub artist_ids: AlbumArtistsRef, /* 8 bytes */
+    pub artist: StringRef,           /* 4 bytes */
+    pub title: StringRef,            /* 4 bytes */
+    pub original_release_date: Date, /* 4 bytes */
+
+    /// Dominant color in the cover art.
+    pub color: Color, /* 4 bytes */
 
     /// First time that we encountered this album, can be either:
     /// * The minimal `mtime` across the files in the album.
     /// * The first play of one of the tracks in the album. (TODO)
-    pub first_seen: Instant,
+    pub first_seen: Instant, /* 8 bytes */
+
+    pub loudness: Option<Lufs>, /* 2 bytes */
 }
 
 #[repr(C)]
@@ -345,9 +384,13 @@ pub struct Artist {
 impl fmt::Display for Date {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:04}", self.year)?;
-        if self.month == 0 { return Ok(()) }
+        if self.month == 0 {
+            return Ok(());
+        }
         write!(f, "-{:02}", self.month)?;
-        if self.day == 0 { return Ok(()) }
+        if self.day == 0 {
+            return Ok(());
+        }
         write!(f, "-{:02}", self.day)
     }
 }
@@ -405,14 +448,20 @@ mod test {
     fn struct_sizes_are_as_expected() {
         use std::mem;
         assert_eq!(mem::size_of::<Track>(), 24);
-        assert_eq!(mem::size_of::<Album>(), 32);
+        assert_eq!(mem::size_of::<Album>(), 40);
         assert_eq!(mem::size_of::<Artist>(), 8);
 
         assert_eq!(mem::size_of::<TrackWithId>(), 32);
         assert_eq!(mem::size_of::<ArtistWithId>(), 16);
 
-        assert_eq!(mem::size_of::<TrackWithId>(), mem::align_of::<TrackWithId>());
-        assert_eq!(mem::size_of::<ArtistWithId>(), mem::align_of::<ArtistWithId>());
+        assert_eq!(
+            mem::size_of::<TrackWithId>(),
+            mem::align_of::<TrackWithId>()
+        );
+        assert_eq!(
+            mem::size_of::<ArtistWithId>(),
+            mem::align_of::<ArtistWithId>()
+        );
 
         assert_eq!(mem::align_of::<Track>(), 8);
         assert_eq!(mem::align_of::<Album>(), 8);

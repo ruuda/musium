@@ -9,9 +9,12 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::str::FromStr;
 
-use crate::database::{FileMetadata, Transaction, self as db};
-use crate::prim::{AlbumId, Album, AlbumArtistsRef, ArtistId, Artist, FileId, Instant, TrackId, Track, Date, Lufs, FilenameRef, StringRef};
-use crate::string_utils::{StringDeduper, normalize_words};
+use crate::database::{self as db, FileMetadata, Transaction};
+use crate::prim::{
+    Album, AlbumArtistsRef, AlbumId, Artist, ArtistId, Color, Date, FileId, FilenameRef, Instant,
+    Lufs, StringRef, Track, TrackId,
+};
+use crate::string_utils::{normalize_words, StringDeduper};
 use crate::word_index::WordMeta;
 
 pub enum BuildError {
@@ -801,13 +804,19 @@ impl BuildMetaIndex {
 
         // TODO: It's inefficient to query the database once per track for the
         // album loudness.
-        let track_loudness = db::select_track_loudness_lufs(tx, track_id.0 as i64)?.map(Lufs::from_f64);
-        let album_loudness = db::select_album_loudness_lufs(tx, album_id.0 as i64)?.map(Lufs::from_f64);
+        let track_loudness =
+            db::select_track_loudness_lufs(tx, track_id.0 as i64)?.map(Lufs::from_f64);
+        let album_loudness =
+            db::select_album_loudness_lufs(tx, album_id.0 as i64)?.map(Lufs::from_f64);
+        let album_color = db::select_album_color(tx, album_id.0 as i64)?
+            .map(|c| Color::parse(&c).expect("Database should store only valid colors"));
 
         // Insert all the album artists if no artist with the given id existed
         // yet. If one did exist, verify consistency. Also fill the vector of
         // album artists so the album can refer to this.
-        let album_artists_ref = self.album_artists.insert(album_artists.iter().map(|tuple| tuple.0));
+        let album_artists_ref = self
+            .album_artists
+            .insert(album_artists.iter().map(|tuple| tuple.0));
 
         for (artist_id, aa_name, aa_name_sort) in album_artists {
             let artist = Artist {
@@ -844,6 +853,7 @@ impl BuildMetaIndex {
             original_release_date: release_date,
             first_seen: file.mtime,
             loudness: album_loudness,
+            color: album_color.unwrap_or_default(),
         };
 
         let mut add_album = true;

@@ -141,6 +141,7 @@ renderAlbum :: (Event -> Aff Unit) -> Album -> Html Unit
 renderAlbum postEvent (Album album) = Html.div $ do
   Html.addClass "album"
   Html.img (Model.thumbUrl album.id) (album.title <> " by " <> album.artist) $ do
+    Html.setBackgroundColor album.color
     Html.addClass "thumb"
   Html.span $ do
     Html.addClass "title"
