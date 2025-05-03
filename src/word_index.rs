@@ -178,6 +178,7 @@ pub trait WordIndex {
     fn get_meta(&self, offset: u32) -> &WordMeta;
 }
 
+#[derive(Clone)]
 pub struct MemoryWordIndex<T> {
     key_slices: Vec<Key>,
     value_slices: Vec<Values>,

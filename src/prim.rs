@@ -419,6 +419,7 @@ impl fmt::Display for ArtistId {
 /// An aligned `(TrackId, Track)` tuple.
 ///
 /// Aligned to 32 bytes (same as its size) so these do not straddle cache lines.
+#[derive(Clone)]
 #[repr(align(32))]
 pub struct TrackWithId {
     pub track_id: TrackId,
@@ -426,6 +427,7 @@ pub struct TrackWithId {
 }
 
 /// An `(AlbumId, Album)` tuple.
+#[derive(Clone)]
 pub struct AlbumWithId {
     pub album_id: AlbumId,
     pub album: Album,
@@ -434,6 +436,7 @@ pub struct AlbumWithId {
 /// An aligned `(ArtistId, Artist)` tuple.
 ///
 /// Aligned to 16 bytes (same as its size) so these do not straddle cache lines.
+#[derive(Clone)]
 #[repr(align(16))]
 pub struct ArtistWithId {
     pub artist_id: ArtistId,

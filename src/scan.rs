@@ -668,17 +668,15 @@ pub fn run_scan_in_thread(
                 thumb_cache_var.set(thumb_cache_arc);
             }
 
-            // At the end, we refresh the index itself *again*. This is because
-            // thumbnail generation and loudness measurement insert their
-            // results into the database "async" (the index is already usable),
-            // but they only get incorporated into the index at this stage.
-            // TODO: This is a bit wasteful, we could instead make a copy of the
-            // existing index, and reload only the loudness and thumbnail color
-            // fields from the database.
+            // At the end, we refresh the fields of the index that thumbnail
+            // generation and loudness measurement inserted into the database.
+            // This makes a temporary clone of the full index, but that's still
+            // better than rebuilding the index from scratch.
             status.stage = ScanStage::Reloading;
             tx.send(status).unwrap();
             let mut db_tx = db.begin()?;
-            let (index, _builder) = MemoryMetaIndex::from_database(&mut db_tx)?;
+            let mut index = index_var.get().as_ref().clone();
+            index.reload_from_database(&mut db_tx)?;
             index_var.set(Arc::new(index));
 
             status.stage = ScanStage::Done;

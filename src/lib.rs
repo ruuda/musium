@@ -55,10 +55,12 @@ pub mod thumb_cache;
 pub mod thumb_gen;
 pub mod user_data;
 
-use crate::build::{AlbumArtistsDeduper, BuildMetaIndex, BuildError};
+use crate::build::{AlbumArtistsDeduper, BuildError, BuildMetaIndex};
 use crate::error::{Error, Result};
-use crate::prim::{ArtistId, Artist, AlbumArtistsRef, AlbumId, Album, TrackId, Track, Lufs, StringRef, FilenameRef};
-use crate::prim::{ArtistWithId, AlbumWithId, TrackWithId};
+use crate::prim::{
+    Album, AlbumArtistsRef, AlbumId, Artist, ArtistId, FilenameRef, Lufs, StringRef, Track, TrackId,
+};
+use crate::prim::{AlbumWithId, ArtistWithId, Color, TrackWithId};
 use crate::string_utils::StringDeduper;
 use crate::word_index::MemoryWordIndex;
 
@@ -147,6 +149,7 @@ pub trait MetaIndex {
 /// with that also the cache misses. Furthermore, because the bookmarks table is
 /// small unlike a full hash table, it is likely to be cached, so accessing it
 /// is essentially free.
+#[derive(Clone)]
 struct Bookmarks {
     bookmarks: Box<[u32; 257]>,
 }
@@ -183,6 +186,7 @@ impl Bookmarks {
     }
 }
 
+#[derive(Clone)]
 pub struct MemoryMetaIndex {
     artists: Vec<ArtistWithId>,
     albums: Vec<AlbumWithId>,
@@ -405,6 +409,32 @@ impl MemoryMetaIndex {
         let memory_index = MemoryMetaIndex::new(&builder);
 
         Ok((memory_index, builder))
+    }
+
+    /// Reload loudness data and thumbnail colors.
+    ///
+    /// When we do a scan, we first build the index, then in the background we can extract
+    /// thumbnails and analyze loudness, but that means that new data is not yet integrated into
+    /// the index. This method reloads that data.
+    pub fn reload_from_database(&mut self, tx: &mut database::Transaction) -> Result<()> {
+        // TODO: We do individual queries here, this could be more efficient if
+        // we select everything in order from the database, and then update in
+        // a merge-join fashion.
+        for item in self.albums.iter_mut() {
+            item.album.loudness = database::select_album_loudness_lufs(tx, item.album_id.0 as i64)?
+                .map(Lufs::from_f64);
+            item.album.color = database::select_album_color(tx, item.album_id.0 as i64)?
+                .as_deref()
+                .and_then(Color::parse)
+                .unwrap_or_default();
+        }
+
+        for item in self.tracks.iter_mut() {
+            item.track.loudness = database::select_track_loudness_lufs(tx, item.track_id.0 as i64)?
+                .map(Lufs::from_f64);
+        }
+
+        Ok(())
     }
 }
 
