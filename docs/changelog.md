@@ -24,14 +24,16 @@ Musium versions are named `MAJOR.MINOR.PATCH`.
 
 **Compatibility:**
 
- * The schema of the thumbnail table changed, it gained a `color` column.
-   The easiest way to deal with this is to drop the table with
-   `sqlite3 db.sqlite3 'drop table thumbnails;'` and then re-index with
-   `musium scan`. This will re-compute all thumbnails and analyze their colors,
-   which may take a while.
+ * The schema of the thumbnail table changed. The easiest way to deal with this
+   is to drop the table with `sqlite3 db.sqlite3 'drop table thumbnails;'` and
+   then re-index with `musium scan`, where `db.sqlite3` is your database [as
+   configured](configuration.md#db_path). This will re-compute all thumbnails
+   and analyze their colors, which may take a while.
 
 Features:
 
+ * The queue tab in the webinterface is now implemented, including buttons to
+   shuffle and clear the queue.
  * A new sort option is available in the album list: _For Now_. This ranking
    shows you albums that you played at similar times of the day, week, and year
    in the past. For example, if you tend to listen to more quiet music in the
@@ -41,8 +43,6 @@ Features:
    recent popularity to show you albums worth listening to again. Like the
    _For Now_ ranking, it takes into account the time of the day, week, and year,
    to show the most relevant suggestions.
- * The queue tab in the webinterface is now implemented, including buttons to
-   shuffle and clear the queue.
  * Musium now computes and saves the dominant color of album cover art. This
    color is used as a placeholder in the webinterface, to reduce visual flicker
    when thumbnails are loading.
