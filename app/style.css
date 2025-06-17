@@ -326,6 +326,12 @@ img.thumb
   background-color: #f8f8f8;
 }
 
+/* Hide the alt text that is displayed inside the img container when the image
+fails to load. */
+img.thumb::before {
+  display: none;
+}
+
 .title,
 #album-list .artist,
 .track-list .artist,
