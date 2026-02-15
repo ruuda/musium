@@ -13,14 +13,14 @@ use std::sync::{Arc, Mutex};
 
 use chrono::{SecondsFormat, Utc};
 
-use crate::database_utils;
 use crate::database as db;
 use crate::database::{Connection, Listen, Result};
+use crate::database_utils;
 use crate::mvar::Var;
-use crate::player::QueueId;
-use crate::{MetaIndex, MemoryMetaIndex, TrackId};
-use crate::user_data::{Rating, UserData};
 use crate::playcount::PlayCounter;
+use crate::player::QueueId;
+use crate::user_data::{Rating, UserData};
+use crate::{MemoryMetaIndex, MetaIndex, TrackId};
 
 /// Changes in the playback state or library to be recorded.
 pub enum PlaybackEvent {
@@ -123,18 +123,13 @@ pub fn main(
                 counter.count_from_database(&index, &mut tx)?;
                 tx.commit()?;
                 let counts = counter.into_counts();
-                let album_user_data = counts.compute_album_user_data();
+                let album_user_data = counts.compute_album_user_data(&index);
                 user_data.lock().unwrap().set_albums(album_user_data);
                 counter = counts.into_counter();
             }
             PlaybackEvent::Rated { track_id, rating } => {
                 let mut tx = db.begin()?;
-                db::insert_or_replace_rating(
-                    &mut tx,
-                    track_id.0 as i64,
-                    &now_str,
-                    rating as i64,
-                )?;
+                db::insert_or_replace_rating(&mut tx, track_id.0 as i64, &now_str, rating as i64)?;
                 tx.commit()?;
                 user_data.lock().unwrap().set_track_rating(track_id, rating);
             }

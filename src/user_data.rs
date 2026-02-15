@@ -181,7 +181,7 @@ impl UserData {
         let mut counter = PlayCounter::new();
         counter.count_from_database(index, tx)?;
         let counts = counter.into_counts();
-        stats.set_albums(counts.compute_album_user_data());
+        stats.set_albums(counts.compute_album_user_data(&index));
 
         Ok((stats, counts))
     }

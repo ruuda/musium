@@ -766,15 +766,50 @@ impl PlayCounts {
     }
 
     /// Recompute the albums table for the mutable user data.
-    pub fn compute_album_user_data(&self) -> AlbumTable<AlbumState> {
+    pub fn compute_album_user_data(&self, index: &MemoryMetaIndex) -> AlbumTable<AlbumState> {
         let mut albums = AlbumTable::new(self.counter.albums.len(), AlbumState::default());
         for (album_id, counter) in self.counter.albums.iter() {
-            let state = AlbumState {
+            let album = match index.get_album(*album_id) {
+                Some(a) => a,
+                None => continue,
+            };
+
+            let mut state = AlbumState {
                 score_discover: score_falling(counter),
                 score_trending: score_trending(counter),
                 score_longterm: score_longterm(counter),
                 time_embedding: counter.time_embedding,
             };
+
+            let artist_ids = index.get_album_artists(album.artist_ids);
+            let weight = match artist_ids.len() {
+                // If the artist is the "Various Artists" artist (which has this
+                // particular MusicBrainz id that translates to this particular
+                // magic artist id below), then the artist information contains
+                // little signal because it's mixed across many genres, so we
+                // mostly exclude this signal. To compensate that such albums
+                // get little artist component added, we amplify the album scores.
+                1 if artist_ids[0].0 == 0x89ad4ac39c546377 => {
+                    state.score_discover *= 1.25;
+                    state.score_longterm *= 1.25;
+                    0.1
+                }
+                1 => 1.0,
+                n => 1.0 / (n as f32),
+            };
+            for artist_id in artist_ids {
+                let counter = self
+                    .counter
+                    .artists
+                    .get(artist_id)
+                    .expect("We counted the album, it has artists.");
+                state.score_discover += score_falling(counter) * weight * 0.10;
+                state.score_longterm += score_longterm(counter) * weight * 0.10;
+                state.time_embedding = counter
+                    .time_embedding
+                    .mul_add(weight * 0.10, &state.time_embedding);
+            }
+
             albums.insert(*album_id, state);
         }
         albums
