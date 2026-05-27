@@ -125,9 +125,12 @@ impl AlbumState {
         let time_cos = self.time_embedding.dot(at) / self.time_embedding.norm();
         let time_weight = time_cos.mul_add(0.5, 0.5);
 
+        // Change the range from [0, 1] to [0.31, 1] with more mass near 1.
+        let time_weight_mellow = time_weight.mul_add(0.9, 0.1).sqrt();
+
         ScoreSnapshot {
             trending: self.score_trending,
-            discover: self.score_discover * time_weight,
+            discover: self.score_discover * time_weight_mellow,
             for_now: self.score_longterm * time_weight * time_weight,
         }
     }
