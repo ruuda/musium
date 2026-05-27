@@ -175,9 +175,18 @@ impl Epoch {
 ///
 /// Note, the current amount per bucket is stored in [`ExpCounter`], not in this
 /// config stuct.
+///
+/// Previously we used a real leaky bucket here, but it made for a quite harsh
+/// transition when the limit runs out. For example, at a limit of 3, listening
+/// to 3 or 4 tracks is counted the same. So now we instead count proportional
+/// to how full the bucket still is, so it asymptotically goes empty, but every
+/// count still contributes.
 pub struct RateLimit {
     /// The capacity of the bucket, also called the “burst” amount.
     pub capacity: f32,
+
+    /// 1.0 / capacity.
+    pub recip_capacity: f32,
 
     /// The rate at which the bucket refills until it reaches `capacity` again.
     pub fill_rate_per_second: f32,
@@ -363,12 +372,12 @@ impl std::ops::Mul<f32> for TimeVector {
     }
 }
 
-/// Exponential moving averages at different timescales plus leaky bucket rate limiter.
+/// Exponential moving averages at different timescales plus rate limiter.
 pub struct ExpCounter {
     /// Time at which the counts were last updated.
     pub t: Instant,
 
-    /// “Count” left in the bucket for leaky-bucket rate limiting.
+    /// “Count” left in the bucket for modified leaky-bucket rate limiting.
     pub bucket: f32,
 
     /// Exponentially decaying counts for different half-lives.
@@ -506,9 +515,10 @@ impl ExpCounter {
         debug_assert!(t1 >= self.t, "New time must be later than previous time.");
         self.refill_bucket(rate_limit, t1);
 
-        // Take 1.0 out of the bucket, or as much as we can get if there is not
-        // that much “count” left in the bucket.
-        let count = self.bucket.min(1.0);
+        // Take count from the bucket proportional to how much there is left
+        // relative to its capacity. So from a full bucket we get count 1.0, but
+        // subsequent counts go to zero asymptotically.
+        let count = self.bucket * rate_limit.recip_capacity;
         self.bucket -= count;
 
         // Apply any decay that has happened since the last update. See also
@@ -587,6 +597,13 @@ pub struct PlayCounts {
 
 impl PlayCounter {
     pub fn new() -> PlayCounter {
+        // Capacity and reciprocal capacity are redundant, verify that they are
+        // consistent. Alternatively we could do that in a constructor, but then
+        // we lose the parameter names.
+        debug_assert_eq!(Self::LIMIT_ARTIST.capacity * Self::LIMIT_ARTIST.recip_capacity, 1.0);
+        debug_assert_eq!(Self::LIMIT_ALBUM.capacity * Self::LIMIT_ALBUM.recip_capacity, 1.0);
+        debug_assert_eq!(Self::LIMIT_TRACK.capacity * Self::LIMIT_TRACK.recip_capacity, 1.0);
+
         PlayCounter {
             last_counted_at: Instant {
                 seconds_since_jan_2000: 0,
@@ -598,33 +615,52 @@ impl PlayCounter {
     }
 
     /// For artists, we want some balance between "unique days listened to
-    /// this artist" (which would correspond to a capacity of 1 and a fill
-    /// rate of 1/day) and "time listened to this artist" (which would
-    /// correspond to a capacity of ~1 and a high fill rate). After much
-    /// tweaking, I ended up with the following which I think reasonably
-    /// matches my feeling for what I listened to vs. what the algorithm
-    /// outputs.
+    /// this artist" and "time listened to this artist". The modified leaky
+    /// bucket captured this, a capacity of 3 strikes a balance between "days
+    /// listened" (which would have a capacity close to 1) vs. "time listened"
+    /// (which would have a high capacity or high fill rate). After tweaking and
+    /// seeing what matches my feeling, on the 15mo half life, a capacity of 8
+    /// matches my feeling better than 2 or 4, it's closer to "time spent
+    /// listening". A capacity of 12.0 was too high.
     const LIMIT_ARTIST: RateLimit = RateLimit {
-        capacity: 3.0,
-        fill_rate_per_second: 1.0 / (3600.0 * 8.0),
+        capacity: 8.0,
+        recip_capacity: 1.0 / 8.0,
+        fill_rate_per_second: 4.0 / (3600.0 * 24.0),
     };
 
     /// Similar for albums, give a burst of >1.0 so albums where we listen to
-    /// the full album count more than when we just listened one track. But make
-    /// the fill rate longer, so we only count every few hours. You can listen
-    /// to the album in the morning and the afternoon and it would be counted
-    /// more than listening a single time, but listening to half the album, then
-    /// some other tracks, and then the other half, would only count as slightly
-    /// more than a single session.
+    /// the full album count more than when we just listened one track.
+    /// Fine-tuning the capacity based on vibes, 4.0 was too little (too much
+    /// counting days listened, not enough time spent listening), 8.0 too high,
+    /// so we go for a value in between. The fill rate also matters slightly,
+    /// letting the full capacity refil over 2 days was too low (too much
+    /// counting days listened), refilling in half a day was too fast
+    /// (undercounting some albums that I should should outrank others), so
+    /// refill once per day feels right. This leads to the following counts:
+    ///
+    /// -  1 listen  -> 1.00
+    /// -  2 listens -> 1.83
+    /// -  3 listens -> 2.52
+    /// -  5 listens -> 3.59
+    /// - 10 listens -> 5.03
+    /// - 12 listens -> 5.23
+    /// - 20 listens -> 5.84
+    ///
+    /// So in particular, if you listen to a full album you get meaningfully
+    /// more weight than listening to just 2 or 3 tracks, but an album that has
+    /// 12 tracks does not get 20% more listen count than an album with 10
+    /// tracks.
     const LIMIT_ALBUM: RateLimit = RateLimit {
-        capacity: 2.0,
-        fill_rate_per_second: 1.0 / (3600.0 * 13.0),
+        capacity: 6.0,
+        recip_capacity: 1.0 / 6.0,
+        fill_rate_per_second: 6.0 / (3600.0 * 24.0),
     };
 
     /// For tracks we don't want to rate limit, but to keep the code uniform
     /// we have this which is generous enough that it should never trigger.
     const LIMIT_TRACK: RateLimit = RateLimit {
         capacity: 256.0,
+        recip_capacity: 1.0 / 256.0,
         fill_rate_per_second: 1.0,
     };
 
@@ -781,6 +817,9 @@ impl PlayCounts {
                 time_embedding: counter.time_embedding,
             };
 
+            // Mix in of the artist's counters with the album score, so that if
+            // an album surfaces in "Discover" but we then listen to a different
+            // album by the same artist, that also pushes down the first album.
             let artist_ids = index.get_album_artists(album.artist_ids);
             let weight = match artist_ids.len() {
                 // If the artist is the "Various Artists" artist (which has this
@@ -803,11 +842,11 @@ impl PlayCounts {
                     .artists
                     .get(artist_id)
                     .expect("We counted the album, it has artists.");
-                state.score_discover += score_falling(counter) * weight * 0.10;
-                state.score_longterm += score_longterm(counter) * weight * 0.10;
+                state.score_discover += score_falling(counter) * weight * 0.15;
+                state.score_longterm += score_longterm(counter) * weight * 0.15;
                 state.time_embedding = counter
                     .time_embedding
-                    .mul_add(weight * 0.10, &state.time_embedding);
+                    .mul_add(weight * 0.15, &state.time_embedding);
             }
 
             albums.insert(*album_id, state);
