@@ -67,12 +67,6 @@ impl TryFrom<i64> for Rating {
     }
 }
 
-#[derive(Default)]
-pub struct TrackState {
-    rating: Rating,
-    // TODO: Add playcount.
-}
-
 #[derive(Copy, Clone, Default)]
 pub struct AlbumState {
     /// Ranking for the _discover_ sorting method.
@@ -143,7 +137,12 @@ pub struct ArtistState {
 
 /// Mutable metadata for tracks, albums, and artists, stemming from user usage.
 pub struct UserData {
-    tracks: HashMap<TrackId, TrackState>,
+    /// User-saved track rating, for tracks that the user rated.
+    track_rating: HashMap<TrackId, Rating>,
+
+    /// Weighted sum of playcount at various timescales, for tracks that have listens.
+    track_frecency: HashMap<TrackId, f32>,
+
     albums: AlbumTable<AlbumState>,
     artists: HashMap<ArtistId, ArtistState>,
 }
@@ -154,7 +153,8 @@ impl Default for UserData {
         let s = RandomState::new();
         Self {
             // TODO: Use a cheaper hasher.
-            tracks: HashMap::with_hasher(s.clone()),
+            track_rating: HashMap::with_hasher(s.clone()),
+            track_frecency: HashMap::with_hasher(s.clone()),
             albums: AlbumTable::new(0, AlbumState::default()),
             artists: HashMap::with_hasher(s),
         }
@@ -184,20 +184,28 @@ impl UserData {
         let mut counter = PlayCounter::new();
         counter.count_from_database(index, tx)?;
         let counts = counter.into_counts();
+        stats.set_tracks(counts.compute_track_user_data());
         stats.set_albums(counts.compute_album_user_data(&index));
 
         Ok((stats, counts))
     }
 
     pub fn set_track_rating(&mut self, track_id: TrackId, rating: Rating) {
-        self.tracks.entry(track_id).or_default().rating = rating;
+        *self.track_rating.entry(track_id).or_default() = rating;
     }
 
     pub fn get_track_rating(&self, track_id: TrackId) -> Rating {
-        self.tracks
+        self.track_rating
             .get(&track_id)
-            .map(|t| t.rating)
+            .cloned()
             .unwrap_or_default()
+    }
+
+    pub fn get_track_frecency(&self, track_id: TrackId) -> f32 {
+        self.track_frecency
+            .get(&track_id)
+            .cloned()
+            .unwrap_or(0.0)
     }
 
     /// Take a snapshot of the scores for the given album, evaluated at the given query time.
@@ -210,6 +218,13 @@ impl UserData {
             .get(album_id)
             .map(|state| state.score(at))
             .unwrap_or_default()
+    }
+
+    /// Replace the track frecencies with new values.
+    ///
+    /// This should be tied to the computations [`PlayCounts::compute_track_user_data`].
+    pub fn set_tracks(&mut self, frecencies: HashMap<TrackId, f32>) {
+        self.track_frecency = frecencies;
     }
 
     /// Replace the album scores with new scores.

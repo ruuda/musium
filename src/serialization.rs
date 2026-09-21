@@ -128,9 +128,10 @@ pub fn write_album_json<W: Write>(
         serde_json::to_writer(&mut w, index.get_string(kv.track.artist))?;
         write!(
             w,
-            r#","duration_seconds":{},"rating":{}}}"#,
+            r#","duration_seconds":{},"rating":{},"frecency":{:.3}}}"#,
             kv.track.duration_seconds,
             user_data.get_track_rating(track_id) as i8,
+            user_data.get_track_frecency(track_id),
         )?;
         first = false;
     }

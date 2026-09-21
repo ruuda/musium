@@ -15,7 +15,7 @@ use crate::album_table::AlbumTable;
 use crate::database::{self, Transaction};
 use crate::database_utils::connect_readonly;
 use crate::prim::{AlbumId, ArtistId, TrackId};
-use crate::user_data::AlbumState;
+use crate::user_data::{AlbumState};
 use crate::{MemoryMetaIndex, MetaIndex};
 
 /// A point in time with second granularity.
@@ -801,6 +801,15 @@ impl PlayCounts {
         )
     }
 
+    /// Recompute the frecency of every counted track.
+    pub fn compute_track_user_data(&self) -> HashMap<TrackId, f32> {
+        let mut result = HashMap::with_capacity(self.counter.tracks.len());
+        for (track_id, counter) in self.counter.tracks.iter() {
+            *result.entry(*track_id).or_default() = score_frecency(counter);
+        }
+        result
+    }
+
     /// Recompute the albums table for the mutable user data.
     pub fn compute_album_user_data(&self, index: &MemoryMetaIndex) -> AlbumTable<AlbumState> {
         let mut albums = AlbumTable::new(self.counter.albums.len(), AlbumState::default());
@@ -929,6 +938,20 @@ fn score_trending(counter: &ExpCounter) -> f32 {
 /// Score for sorting by top on the longest two time scales.
 fn score_longterm(counter: &ExpCounter) -> f32 {
     counter.n[0].ln() + counter.n[1].ln()
+}
+
+/// Frecency score for tracks: long-term frequency, plus boost for recency.
+fn score_frecency(counter: &ExpCounter) -> f32 {
+    // For the longest two timescales, we take the logarithm, because they
+    // should have more plays. If we left them at the same scale, a track might
+    // have e.g. 20 plays over its lifetime and 2 recently, so adding the 2 is
+    // not going to meaningfully change the ranking. But ln(20) + 2 does bias
+    // it towards recency more.
+    counter.n[0].ln_1p()
+        + counter.n[1].ln_1p()
+        + counter.n[2].ln_1p()
+        + counter.n[3]
+        + counter.n[4]
 }
 
 /// Score for sorting entries by _falling_.
