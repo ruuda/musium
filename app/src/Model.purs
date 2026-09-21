@@ -65,6 +65,7 @@ import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NonEmptyArray
 import Data.Either (Either (..))
+import Data.Foldable (maximum)
 import Data.Int (rem)
 import Data.Int as Int
 import Data.Maybe (Maybe (Just, Nothing))
@@ -619,6 +620,7 @@ newtype Track = Track
   , artist :: String
   , durationSeconds :: Int
   , rating :: Rating
+  , frecency :: Number
   }
 
 instance decodeJsonTrack :: DecodeJson Track where
@@ -631,6 +633,7 @@ instance decodeJsonTrack :: DecodeJson Track where
     artist          <- Json.getField obj "artist"
     durationSeconds <- Json.getField obj "duration_seconds"
     rating          <- map Rating $ Json.getField obj "rating"
+    frecency        <- Json.getField obj "frecency"
     pure $ Track
       { id
       , discNumber
@@ -639,12 +642,24 @@ instance decodeJsonTrack :: DecodeJson Track where
       , artist
       , durationSeconds
       , rating
+      , frecency
       }
 
 decodeAlbumTracks :: Json -> Either JsonDecodeError (Array Track)
 decodeAlbumTracks json = do
   obj <- Json.decodeJson json
-  Json.getField obj "tracks"
+  tracks <- Json.getField obj "tracks"
+
+  -- The server returns the frecency values, but for displaying tracks we are
+  -- interested in the relevative frecency w.r.t the album's maximum.
+  -- TODO: Or do we want their percentiles?
+  let
+    maxFrecency = case maximum $ map (\(Track t) -> t.frecency) tracks of
+      Just mf -> mf
+      Nothing -> 1.0
+    relFrecency (Track t) = Track $ t { frecency = t.frecency / maxFrecency }
+
+  pure $ map relFrecency tracks
 
 getTracks :: AlbumId -> Aff (Array Track)
 getTracks (AlbumId aid) = do

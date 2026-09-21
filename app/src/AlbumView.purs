@@ -227,7 +227,8 @@ renderTrackList
   -> Array TrackId
   -> Array Track
   -> Effect Unit
-renderTrackList state queuedTracks tracks = do
+renderTrackList state queuedTracks tracks =
+  do
     -- Group the tracks by disk and render one <div> per disc, so we can leave
     -- some space in between. Collects the track <li> elements as an array per
     -- disc.
@@ -361,6 +362,10 @@ renderTrack postEvent (Album album) queuedTracks (Track track) =
           Html.text $ " " <> (show track.trackNumber)
     Html.div $ do
       Html.addClass "title"
+      when (track.frecency > 0.5 && track.frecency <= 0.75) $ do
+        Html.addClass "frecent-p50"
+      when (track.frecency > 0.75) $ do
+        Html.addClass "frecent-p75"
       Html.text track.title
     Html.div $ do
       Html.addClass "duration"

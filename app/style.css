@@ -374,6 +374,11 @@ img.thumb::before {
   padding-top: 0.5em;
 }
 
+/* Dim frecent (recently or frequently played) tracks a bit, to nudge the user
+   towards exploring more. */
+.frecent-p50 { opacity: 0.7; }
+.frecent-p75 { opacity: 0.5; }
+
 .duration, .track-number
 {
   text-align: right;
