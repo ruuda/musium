@@ -65,7 +65,6 @@ import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NonEmptyArray
 import Data.Either (Either (..))
-import Data.Foldable (sum)
 import Data.Int (rem)
 import Data.Int as Int
 import Data.Maybe (Maybe (Just, Nothing))
@@ -653,14 +652,15 @@ decodeAlbumTracks json = do
 
   -- The server returns the frecency values, but for displaying tracks we are
   -- interested in the frecency percentiles, so we can dim the top percentiles.
+  -- TODO: Even better would be to bucket them by ranked and non-ranked, so that
+  -- in both regimes we can dim the most frecent track(s). Or maybe we just
+  -- divide the frecency by the rank?
   let
     frecency (Track t) = t.frecency
-    -- Add a small offset to avoid division by zero on albums with 0 plays.
-    -- This then makes every track rank at 0th percentile.
-    total = 0.1 + (sum $ map frecency tracks)
+    total = Int.toNumber $ Array.length tracks
     visitTrack acc (Track t) =
       let
-        n = acc + t.frecency
+        n = acc + 1.0
         t' = t { frecency = n / total }
       in
         { value: Track t', accum: n }

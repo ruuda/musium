@@ -362,10 +362,10 @@ renderTrack postEvent (Album album) queuedTracks (Track track) =
           Html.text $ " " <> (show track.trackNumber)
     Html.div $ do
       Html.addClass "title"
-      when (track.frecency > 0.5 && track.frecency <= 0.75) $ do
-        Html.addClass "frecent-p50"
-      when (track.frecency > 0.75) $ do
-        Html.addClass "frecent-p75"
+      when (track.frecency > 0.6 && track.frecency <= 0.8) $ do
+        Html.addClass "frecent-dim1"
+      when (track.frecency > 0.8) $ do
+        Html.addClass "frecent-dim2"
       Html.text track.title
     Html.div $ do
       Html.addClass "duration"

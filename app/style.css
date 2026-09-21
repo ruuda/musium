@@ -376,8 +376,8 @@ img.thumb::before {
 
 /* Dim frecent (recently or frequently played) tracks a bit, to nudge the user
    towards exploring more. */
-.frecent-p50 { opacity: 0.7; }
-.frecent-p75 { opacity: 0.5; }
+.frecent-dim1 { opacity: 0.7; }
+.frecent-dim2 { opacity: 0.6; }
 
 .duration, .track-number
 {
