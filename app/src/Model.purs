@@ -65,11 +65,12 @@ import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NonEmptyArray
 import Data.Either (Either (..))
-import Data.Foldable (maximum)
+import Data.Foldable (sum)
 import Data.Int (rem)
 import Data.Int as Int
 import Data.Maybe (Maybe (Just, Nothing))
 import Data.String as String
+import Data.Traversable (mapAccumL)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
@@ -651,15 +652,21 @@ decodeAlbumTracks json = do
   tracks <- Json.getField obj "tracks"
 
   -- The server returns the frecency values, but for displaying tracks we are
-  -- interested in the relevative frecency w.r.t the album's maximum.
-  -- TODO: Or do we want their percentiles?
+  -- interested in the frecency percentiles, so we can dim the top percentiles.
   let
-    maxFrecency = case maximum $ map (\(Track t) -> t.frecency) tracks of
-      Just mf -> mf
-      Nothing -> 1.0
-    relFrecency (Track t) = Track $ t { frecency = t.frecency / maxFrecency }
+    frecency (Track t) = t.frecency
+    -- Add a small offset to avoid division by zero on albums with 0 plays.
+    -- This then makes every track rank at 0th percentile.
+    total = 0.1 + (sum $ map frecency tracks)
+    visitTrack acc (Track t) =
+      let
+        n = acc + t.frecency
+        t' = t { frecency = n / total }
+      in
+        { value: Track t', accum: n }
+    quantiles = mapAccumL visitTrack 0.0 $ Array.sortWith frecency tracks
 
-  pure $ map relFrecency tracks
+  pure $ Array.sortWith (\(Track t) -> [t.discNumber, t.trackNumber]) quantiles.value
 
 getTracks :: AlbumId -> Aff (Array Track)
 getTracks (AlbumId aid) = do
