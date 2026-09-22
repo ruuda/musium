@@ -27,8 +27,8 @@ use std::convert::TryFrom;
 
 use crate::album_table::AlbumTable;
 use crate::database as db;
-use crate::playcount::{PlayCounter, PlayCounts, TimeVector};
-use crate::prim::{AlbumId, ArtistId, TrackId};
+use crate::playcount::{AlbumData, CountData, PlayCounter, PlayCounts, TimeVector, TrackData};
+use crate::prim::{AlbumId, TrackId};
 use crate::MemoryMetaIndex;
 
 /// Track rating.
@@ -67,32 +67,6 @@ impl TryFrom<i64> for Rating {
     }
 }
 
-#[derive(Copy, Clone, Default)]
-pub struct AlbumState {
-    /// Ranking for the _discover_ sorting method.
-    ///
-    /// The discovery sorting methods identifies albums that were popular in the
-    /// past, but not recently. See the [`playcount`] module for more details.
-    pub score_discover: f32,
-
-    // Playcount on the shortest timescale.
-    pub score_trending: f32,
-
-    // Log playcount on the longer timescales.
-    //
-    // Could be used directly to sort by top albums, but in the UI this is not
-    // _that_ useful. Instead, we can mix it with the time embedding to provide
-    // a list of "for now" albums for this time of the day, where we don't
-    // suggest albums with a low playcount just because the one time we played
-    // them was at this time of the day.
-    pub score_longterm: f32,
-
-    // Vector embedding of the play times.
-    //
-    // Used to weigh the discover score, and compute the "for now" score.
-    pub time_embedding: TimeVector,
-}
-
 /// Scores (for ranking) evaluated at a given point in time.
 #[derive(Copy, Clone, Default)]
 pub struct ScoreSnapshot {
@@ -106,7 +80,7 @@ pub struct ScoreSnapshot {
     pub for_now: f32,
 }
 
-impl AlbumState {
+impl AlbumData {
     /// Evaluate scores for the current moment.
     ///
     /// The `at` time vector should be the embedding of the desired time to
@@ -130,21 +104,17 @@ impl AlbumState {
     }
 }
 
-#[derive(Default)]
-pub struct ArtistState {
-    // TODO: Add playcount.
-}
-
 /// Mutable metadata for tracks, albums, and artists, stemming from user usage.
 pub struct UserData {
     /// User-saved track rating, for tracks that the user rated.
-    track_rating: HashMap<TrackId, Rating>,
+    track_ratings: HashMap<TrackId, Rating>,
 
-    /// Weighted sum of playcount at various timescales, for tracks that have listens.
-    track_frecency: HashMap<TrackId, f32>,
+    /// Playcount-derived data per track.
+    /// TODO: Construct an AlbumTable, but for tracks.
+    track_data: HashMap<TrackId, TrackData>,
 
-    albums: AlbumTable<AlbumState>,
-    artists: HashMap<ArtistId, ArtistState>,
+    /// Playcount-derived data per album.
+    album_data: AlbumTable<AlbumData>,
 }
 
 impl Default for UserData {
@@ -153,10 +123,9 @@ impl Default for UserData {
         let s = RandomState::new();
         Self {
             // TODO: Use a cheaper hasher.
-            track_rating: HashMap::with_hasher(s.clone()),
-            track_frecency: HashMap::with_hasher(s.clone()),
-            albums: AlbumTable::new(0, AlbumState::default()),
-            artists: HashMap::with_hasher(s),
+            track_ratings: HashMap::with_hasher(s.clone()),
+            track_data: HashMap::with_hasher(s.clone()),
+            album_data: AlbumTable::new(0, AlbumData::default()),
         }
     }
 }
@@ -184,28 +153,28 @@ impl UserData {
         let mut counter = PlayCounter::new();
         counter.count_from_database(index, tx)?;
         let counts = counter.into_counts();
-        stats.set_tracks(counts.compute_track_user_data());
-        stats.set_albums(counts.compute_album_user_data(&index));
+        let count_data = counts.compute_user_data(&index);
+        stats.set_counts(count_data);
 
         Ok((stats, counts))
     }
 
     pub fn set_track_rating(&mut self, track_id: TrackId, rating: Rating) {
-        *self.track_rating.entry(track_id).or_default() = rating;
+        *self.track_ratings.entry(track_id).or_default() = rating;
     }
 
     pub fn get_track_rating(&self, track_id: TrackId) -> Rating {
-        self.track_rating
+        self.track_ratings
             .get(&track_id)
             .cloned()
             .unwrap_or_default()
     }
 
-    pub fn get_track_frecency(&self, track_id: TrackId) -> f32 {
-        self.track_frecency
+    pub fn get_track_playcounts(&self, track_id: TrackId) -> TrackData {
+        self.track_data
             .get(&track_id)
             .cloned()
-            .unwrap_or(0.0)
+            .unwrap_or_default()
     }
 
     /// Take a snapshot of the scores for the given album, evaluated at the given query time.
@@ -214,23 +183,17 @@ impl UserData {
     pub fn get_album_scores(&self, album_id: AlbumId, at: &TimeVector) -> ScoreSnapshot {
         // If an album is not present, we don't have playcounts, so it is
         // ranked as low as possible for all scores.
-        self.albums
+        self.album_data
             .get(album_id)
-            .map(|state| state.score(at))
+            .map(|data| data.score(at))
             .unwrap_or_default()
     }
 
-    /// Replace the track frecencies with new values.
+    /// Replace the album and track data with freshly computed counts.
     ///
-    /// This should be tied to the computations [`PlayCounts::compute_track_user_data`].
-    pub fn set_tracks(&mut self, frecencies: HashMap<TrackId, f32>) {
-        self.track_frecency = frecencies;
-    }
-
-    /// Replace the album scores with new scores.
-    ///
-    /// This should be tied to the computations [`PlayCounts::compute_album_user_data`].
-    pub fn set_albums(&mut self, albums: AlbumTable<AlbumState>) {
-        self.albums = albums;
+    /// This should be tied to the computations [`PlayCounts::compute_user_data`].
+    pub fn set_counts(&mut self, counts: CountData) {
+        self.track_data = counts.tracks;
+        self.album_data = counts.albums;
     }
 }

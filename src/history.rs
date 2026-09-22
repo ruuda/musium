@@ -123,11 +123,9 @@ pub fn main(
                 counter.count_from_database(&index, &mut tx)?;
                 tx.commit()?;
                 let counts = counter.into_counts();
-                let track_user_data = counts.compute_track_user_data();
-                let album_user_data = counts.compute_album_user_data(&index);
+                let count_user_data = counts.compute_user_data(&index);
                 let mut user_data_lock = user_data.lock().unwrap();
-                user_data_lock.set_tracks(track_user_data);
-                user_data_lock.set_albums(album_user_data);
+                user_data_lock.set_counts(count_user_data);
                 counter = counts.into_counter();
             }
             PlaybackEvent::Rated { track_id, rating } => {

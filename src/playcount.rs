@@ -15,7 +15,6 @@ use crate::album_table::AlbumTable;
 use crate::database::{self, Transaction};
 use crate::database_utils::connect_readonly;
 use crate::prim::{AlbumId, ArtistId, TrackId};
-use crate::user_data::{AlbumState};
 use crate::{MemoryMetaIndex, MetaIndex};
 
 /// A point in time with second granularity.
@@ -569,6 +568,49 @@ impl Ord for RevNotNan {
     }
 }
 
+/// Playcount-derived data for an album.
+#[derive(Copy, Clone, Default)]
+pub struct TrackData {
+    /// Mix of the playcount at timescales 0 and 1 (~10y and ~15mo).
+    pub playcount_longterm: f32,
+
+    /// Mix of the playcount at timescales 3 and 4 (1mo and 7d).
+    pub playcount_recently: f32,
+}
+
+/// Playcount-derived data for an album.
+#[derive(Copy, Clone, Default)]
+pub struct AlbumData {
+    /// Ranking for the _discover_ sorting method.
+    ///
+    /// The discovery sorting methods identifies albums that were popular in the
+    /// past, but not recently. See the [`playcount`] module for more details.
+    pub score_discover: f32,
+
+    /// Playcount on the shortest timescale.
+    pub score_trending: f32,
+
+    /// Log playcount on the longer timescales.
+    ///
+    /// Could be used directly to sort by top albums, but in the UI this is not
+    /// _that_ useful. Instead, we can mix it with the time embedding to provide
+    /// a list of "for now" albums for this time of the day, where we don't
+    /// suggest albums with a low playcount just because the one time we played
+    /// them was at this time of the day.
+    pub score_longterm: f32,
+
+    /// Vector embedding of the play times.
+    ///
+    /// Used to weigh the discover score, and compute the "for now" score.
+    pub time_embedding: TimeVector,
+}
+
+/// Playcount-derived data for the entire library.
+pub struct CountData {
+    pub tracks: HashMap<TrackId, TrackData>,
+    pub albums: AlbumTable<AlbumData>,
+}
+
 /// A playcounter counts plays.
 ///
 /// Internally it has a counter per entry (artist, album, track) with
@@ -801,33 +843,39 @@ impl PlayCounts {
         )
     }
 
-    /// Recompute the frecency of every counted track.
-    pub fn compute_track_user_data(&self) -> HashMap<TrackId, f32> {
+    /// Compute the track data from the playcounts, to go into user data.
+    fn compute_track_user_data(&self, _index: &MemoryMetaIndex) -> HashMap<TrackId, TrackData> {
         let mut result = HashMap::with_capacity(self.counter.tracks.len());
         for (track_id, counter) in self.counter.tracks.iter() {
-            *result.entry(*track_id).or_default() = score_frecency(counter);
+            let data: &mut TrackData = result.entry(*track_id).or_default();
+
+            // Longterm is a mix of the longest two timescales (10y and 1.25y),
+            // recently is a mix of the shortest two (7d and 30d).
+            data.playcount_longterm = (counter.n[0] + counter.n[1]) * 0.5;
+            data.playcount_recently = (counter.n[3] + counter.n[4]) * 0.5;
         }
+
         result
     }
 
-    /// Recompute the albums table for the mutable user data.
-    pub fn compute_album_user_data(&self, index: &MemoryMetaIndex) -> AlbumTable<AlbumState> {
-        let mut albums = AlbumTable::new(self.counter.albums.len(), AlbumState::default());
+    /// Compute the album data from the playcounts, to go into user data.
+    fn compute_album_user_data(&self, index: &MemoryMetaIndex) -> AlbumTable<AlbumData> {
+        let mut albums = AlbumTable::new(self.counter.albums.len(), AlbumData::default());
         for (album_id, counter) in self.counter.albums.iter() {
             let album = match index.get_album(*album_id) {
                 Some(a) => a,
                 None => continue,
             };
 
-            let mut state = AlbumState {
+            let mut data = AlbumData {
                 score_discover: score_falling(counter),
                 score_trending: score_trending(counter),
                 score_longterm: score_longterm(counter),
                 time_embedding: counter.time_embedding,
             };
 
-            // Mix in of the artist's counters with the album score, so that if
-            // an album surfaces in "Discover" but we then listen to a different
+            // Mix in the artist's counters with the album score, so that if an
+            // album surfaces in "Discover" but we then listen to a different
             // album by the same artist, that also pushes down the first album.
             let artist_ids = index.get_album_artists(album.artist_ids);
             let weight = match artist_ids.len() {
@@ -838,8 +886,8 @@ impl PlayCounts {
                 // mostly exclude this signal. To compensate that such albums
                 // get little artist component added, we amplify the album scores.
                 1 if artist_ids[0].0 == 0x89ad4ac39c546377 => {
-                    state.score_discover *= 1.25;
-                    state.score_longterm *= 1.25;
+                    data.score_discover *= 1.25;
+                    data.score_longterm *= 1.25;
                     0.1
                 }
                 1 => 1.0,
@@ -851,16 +899,25 @@ impl PlayCounts {
                     .artists
                     .get(artist_id)
                     .expect("We counted the album, it has artists.");
-                state.score_discover += score_falling(counter) * weight * 0.15;
-                state.score_longterm += score_longterm(counter) * weight * 0.15;
-                state.time_embedding = counter
+                data.score_discover += score_falling(counter) * weight * 0.15;
+                data.score_longterm += score_longterm(counter) * weight * 0.15;
+                data.time_embedding = counter
                     .time_embedding
-                    .mul_add(weight * 0.15, &state.time_embedding);
+                    .mul_add(weight * 0.15, &data.time_embedding);
             }
 
-            albums.insert(*album_id, state);
+            albums.insert(*album_id, data);
         }
+
         albums
+    }
+
+    /// Compute the track data from the playcounts, to go into user data.
+    pub fn compute_user_data(&self, index: &MemoryMetaIndex) -> CountData {
+        CountData {
+            tracks: self.compute_track_user_data(index),
+            albums: self.compute_album_user_data(index),
+        }
     }
 }
 
@@ -938,20 +995,6 @@ fn score_trending(counter: &ExpCounter) -> f32 {
 /// Score for sorting by top on the longest two time scales.
 fn score_longterm(counter: &ExpCounter) -> f32 {
     counter.n[0].ln() + counter.n[1].ln()
-}
-
-/// Frecency score for tracks: long-term frequency, plus boost for recency.
-fn score_frecency(counter: &ExpCounter) -> f32 {
-    // For the longest two timescales, we take the logarithm, because they
-    // should have more plays. If we left them at the same scale, a track might
-    // have e.g. 20 plays over its lifetime and 2 recently, so adding the 2 is
-    // not going to meaningfully change the ranking. But ln(20) + 2 does bias
-    // it towards recency more.
-    counter.n[0].ln_1p()
-        + counter.n[1].ln_1p()
-        + counter.n[2].ln_1p()
-        + counter.n[3]
-        + counter.n[4]
 }
 
 /// Score for sorting entries by _falling_.
