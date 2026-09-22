@@ -132,13 +132,14 @@ pub fn write_album_json<W: Write>(
         serde_json::to_writer(&mut w, index.get_string(kv.track.artist))?;
         write!(
             w,
-            r#","duration_seconds":{},"rating":{},"ft0":{:.3},"ft1":{:.3},"fc0":{:.3},"fc1":{:.3}}}"#,
+            r#","duration_seconds":{},"rating":{},"ft0":{:.3},"ft1":{:.3},"fc0":{:.3},"fc1":{:.3},"off":{:.3}}}"#,
             kv.track.duration_seconds,
             score.rating as i8,
             score.ft0,
             score.ft1,
             score.fc0,
             score.fc1,
+            score.off,
         )?;
         first = false;
     }
