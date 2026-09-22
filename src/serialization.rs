@@ -42,7 +42,7 @@ pub fn write_brief_album_json<W: Write>(
     }
     write!(w, r#"],"artist":"#)?;
     serde_json::to_writer(&mut w, index.get_string(album.artist))?;
-    let scores = user_data.get_album_scores(album_id, now_embed);
+    let score = user_data.get_album_score(album_id, now_embed);
     write!(
         w,
         r#","release_date":"{}","first_seen":"{}","color":"{}""#,
@@ -57,7 +57,7 @@ pub fn write_brief_album_json<W: Write>(
         // is always between 0 and 1 though, it needs more digits for precision
         // near the end of the ranking.
         r#","discover_score":{:.2},"trending_score":{:.4},"for_now_score":{:.3}}}"#,
-        scores.discover, scores.trending, scores.for_now,
+        score.discover, score.trending, score.for_now,
     )?;
     Ok(())
 }
@@ -110,8 +110,12 @@ pub fn write_album_json<W: Write>(
         r#","release_date":"{}","tracks":["#,
         album.original_release_date
     )?;
+
+    let tracks = index.get_album_tracks(id);
+    let scores = user_data.get_track_scores(tracks);
+
     let mut first = true;
-    for kv in index.get_album_tracks(id) {
+    for (kv, score) in tracks.iter().zip(scores) {
         let track_id = kv.track_id;
         if !first {
             write!(w, ",")?;
@@ -126,14 +130,15 @@ pub fn write_album_json<W: Write>(
         serde_json::to_writer(&mut w, index.get_string(kv.track.title))?;
         write!(w, r#","artist":"#)?;
         serde_json::to_writer(&mut w, index.get_string(kv.track.artist))?;
-        let n = user_data.get_track_playcounts(track_id);
         write!(
             w,
-            r#","duration_seconds":{},"rating":{},"frecency_t0":{:.3},"frecency_t1":{:.3}}}"#,
+            r#","duration_seconds":{},"rating":{},"ft0":{:.3},"ft1":{:.3},"fc0":{:.3},"fc1":{:.3}}}"#,
             kv.track.duration_seconds,
-            user_data.get_track_rating(track_id) as i8,
-            n.playcount_longterm,
-            n.playcount_recently,
+            score.rating as i8,
+            score.ft0,
+            score.ft1,
+            score.fc0,
+            score.fc1,
         )?;
         first = false;
     }

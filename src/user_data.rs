@@ -28,7 +28,7 @@ use std::convert::TryFrom;
 use crate::album_table::AlbumTable;
 use crate::database as db;
 use crate::playcount::{AlbumData, CountData, PlayCounter, PlayCounts, TimeVector, TrackData};
-use crate::prim::{AlbumId, TrackId};
+use crate::prim::{AlbumId, TrackId, TrackWithId};
 use crate::MemoryMetaIndex;
 
 /// Track rating.
@@ -69,7 +69,7 @@ impl TryFrom<i64> for Rating {
 
 /// Scores (for ranking) evaluated at a given point in time.
 #[derive(Copy, Clone, Default)]
-pub struct ScoreSnapshot {
+pub struct AlbumScore {
     /// Trending score, see [`AlbumState::score_trending`].
     pub trending: f32,
 
@@ -80,28 +80,14 @@ pub struct ScoreSnapshot {
     pub for_now: f32,
 }
 
-impl AlbumData {
-    /// Evaluate scores for the current moment.
-    ///
-    /// The `at` time vector should be the embedding of the desired time to
-    /// evaluate at, and then normalized.
-    pub fn score(&self, at: &TimeVector) -> ScoreSnapshot {
-        // The cosine distance between our time vector and the query time vector.
-        // We put it in the range [0, 1] so that when we multiply with a negative
-        // discover score, it doesn't flip the sign.
-        debug_assert!(self.time_embedding.norm().is_finite());
-        let time_cos = self.time_embedding.dot(at) / self.time_embedding.norm();
-        let time_weight = time_cos.mul_add(0.5, 0.5);
-
-        // Change the range from [0, 1] to [0.31, 1] with more mass near 1.
-        let time_weight_mellow = time_weight.mul_add(0.9, 0.1).sqrt();
-
-        ScoreSnapshot {
-            trending: self.score_trending,
-            discover: self.score_discover * time_weight_mellow,
-            for_now: self.score_longterm * time_weight * time_weight,
-        }
-    }
+/// Scores (for ranking) evaluated at a given point in time.
+#[derive(Copy, Clone, Default)]
+pub struct TrackScore {
+    pub ft0: f32,
+    pub ft1: f32,
+    pub fc0: f32,
+    pub fc1: f32,
+    pub rating: Rating,
 }
 
 /// Mutable metadata for tracks, albums, and artists, stemming from user usage.
@@ -170,23 +156,75 @@ impl UserData {
             .unwrap_or_default()
     }
 
-    pub fn get_track_playcounts(&self, track_id: TrackId) -> TrackData {
-        self.track_data
-            .get(&track_id)
-            .cloned()
-            .unwrap_or_default()
-    }
-
-    /// Take a snapshot of the scores for the given album, evaluated at the given query time.
+    /// Evaluate album scores for the given moment.
     ///
-    /// See also [`AlbumState::score`].
-    pub fn get_album_scores(&self, album_id: AlbumId, at: &TimeVector) -> ScoreSnapshot {
+    /// The `at` time vector should be the embedding of the desired time to
+    /// evaluate at, and then normalized.
+    pub fn get_album_score(&self, album_id: AlbumId, at: &TimeVector) -> AlbumScore {
         // If an album is not present, we don't have playcounts, so it is
         // ranked as low as possible for all scores.
-        self.album_data
-            .get(album_id)
-            .map(|data| data.score(at))
-            .unwrap_or_default()
+        let data = match self.album_data.get(album_id) {
+            Some(data) => data,
+            None => return AlbumScore::default(),
+        };
+
+        // The cosine distance between our time vector and the query time vector.
+        // We put it in the range [0, 1] so that when we multiply with a negative
+        // discover score, it doesn't flip the sign.
+        debug_assert!(data.time_embedding.norm().is_finite());
+        let time_cos = data.time_embedding.dot(at) / data.time_embedding.norm();
+        let time_weight = time_cos.mul_add(0.5, 0.5);
+
+        // Change the range from [0, 1] to [0.31, 1] with more mass near 1.
+        let time_weight_mellow = time_weight.mul_add(0.9, 0.1).sqrt();
+
+        AlbumScore {
+            trending: data.score_trending,
+            discover: data.score_discover * time_weight_mellow,
+            for_now: data.score_longterm * time_weight * time_weight,
+        }
+    }
+
+    /// Compute the scores for all tracks on the album.
+    pub fn get_track_scores(&self, tracks: &[TrackWithId]) -> Vec<TrackScore> {
+        // Bonus tracks on a B side should have less weight than the A side,
+        // but how do we even know if an album has a B side, vs. a compilation
+        // album with two equal sides, or a collection with many discs? If disc
+        // 1 is at least 2/3 of the tracks, we say the rest is b_side.
+        let n_disc1 = tracks.iter().filter(|t| t.track_id.disc_number() == 1).count();
+        let has_b_side = n_disc1 >= (tracks.len() * 2 / 3);
+
+        let mut result = Vec::with_capacity(tracks.len());
+        for t in tracks {
+            let counts = self.track_data.get(&t.track_id).cloned().unwrap_or_default();
+            let rating = self.track_ratings.get(&t.track_id).cloned().unwrap_or_default();
+
+            // We adjust the target playcount based on the track rating. A liked
+            // track should be played about 2.7 times as much as a regular one,
+            // a loved one 2.7 times as much as a liked one, and a disliked one
+            // only 1/20 as much. We also add a penalty for B-sides, and for
+            // very short tracks.
+            let is_b_side = has_b_side && t.track_id.disc_number() != 1;
+            let multiplier = match rating {
+                Rating::Love => 1.0 / 7.389,
+                Rating::Like => 1.0 / 2.718,
+                Rating::Neutral if is_b_side => 4.0,
+                Rating::Neutral if t.track.duration_seconds < 60 => 4.0,
+                Rating::Neutral => 1.0,
+                Rating::Dislike => 20.0,
+            };
+
+            let score = TrackScore {
+                ft0: counts.playcount_longterm,
+                ft1: counts.playcount_recently,
+                fc0: counts.playcount_longterm * multiplier,
+                fc1: counts.playcount_recently * multiplier,
+                rating,
+            };
+            result.push(score);
+        }
+
+        result
     }
 
     /// Replace the album and track data with freshly computed counts.
