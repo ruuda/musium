@@ -19,9 +19,6 @@
 //!
 //! This module is concerned with that mutable user data.
 
-// TODO: Remove once we add playcounts.
-#![allow(dead_code)]
-
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
@@ -29,7 +26,7 @@ use crate::album_table::AlbumTable;
 use crate::database as db;
 use crate::playcount::{AlbumData, CountData, PlayCounter, PlayCounts, RevNotNan, TimeVector, TrackData};
 use crate::prim::{AlbumId, TrackId, TrackWithId};
-use crate::MemoryMetaIndex;
+use crate::{MetaIndex, MemoryMetaIndex};
 
 /// Track rating.
 ///
@@ -40,7 +37,7 @@ use crate::MemoryMetaIndex;
 /// one level of dislike is sufficient. For likes, setting a scale is difficult,
 /// but I think it can be worth distinguishing between “this track was that one
 /// nice one on this album” and “this is one of my favorite tracks ever”.
-#[derive(Copy, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[repr(i8)]
 pub enum Rating {
     /// Would usually skip this track when it ended up in the queue.
@@ -143,6 +140,9 @@ impl UserData {
         let count_data = counts.compute_user_data(&index);
         stats.set_counts(count_data);
 
+        #[cfg(debug_assertions)]
+        stats.print_stats(index);
+
         Ok((stats, counts))
     }
 
@@ -203,19 +203,22 @@ impl UserData {
             let rating = self.track_ratings.get(&t.track_id).cloned().unwrap_or_default();
 
             // We adjust the target playcount based on the track rating. A liked
-            // track should be played about 2.7 times as much as a regular one,
-            // a loved one even more, and a disliked one only 1/20 as much.
-            // These numbers are tweaked by eyeballing the output across many
-            // of my albums and adjusting until it feels right. We also add a
+            // track should be played more than a regular one, a loved one even
+            // more, and a disliked one only a fraction as much. We also add a
             // penalty for B-sides, and for very short tracks.
+            //
+            // These numbers were tweaked by eyeballing the output across many
+            // of my albums and adjusting until it feels right, then by using
+            // the print_stats function, and ensuring that the ratio of is about
+            // 2:1 overplayed:underplayed on both liked and loved tracks.
             let is_b_side = has_b_side && t.track_id.disc_number() != 1;
             let multiplier = match rating {
-                Rating::Love => 1.0 / 6.000,
-                Rating::Like => 1.0 / 2.718,
-                Rating::Neutral if is_b_side => 4.0,
+                Rating::Love => 1.0 / 6.50,
+                Rating::Like => 1.0 / 3.65,
+                Rating::Neutral if is_b_side => 3.5,
                 Rating::Neutral if t.track.duration_seconds < 60 => 4.0,
                 Rating::Neutral => 1.0,
-                Rating::Dislike => 20.0,
+                Rating::Dislike => 10.0,
             };
 
             let score = TrackScore {
@@ -239,11 +242,12 @@ impl UserData {
         // whether this track is overplayed or underplayed, and then normalize
         // to the log of the median playcount. Underplayed by 1 listen when we
         // listened to most trackf 20 times already, is ~noise. But underplayed
-        // when we listened to most tracks only once, is real signal. I thought
-        // at first log might be too aggressive and use sqrt, but that one is
-        // too tame, then values rarely go over or under 1.
-        let norm = (median_longterm + 0.35).sqrt().recip();
-        //let norm = (2.7 + median_longterm).ln().recip();
+        // when we listened to most tracks only once, is real signal.
+        //
+        // I tested between (median + x).sqrt() and (median + x).ln(),
+        // for various values of x, and by tuning the numbers printed by
+        // print_stats, I arrived at the parameters below.
+        let norm = (median_longterm + 0.5).sqrt().recip();
         for score in result.iter_mut() {
             score.off = score.fc0 * norm;
 
@@ -271,6 +275,45 @@ impl UserData {
     pub fn set_counts(&mut self, counts: CountData) {
         self.track_data = counts.tracks;
         self.album_data = counts.albums;
+    }
+
+    /// Helper to print under/over-listened stats by rating, to help tune the scores.
+    #[cfg(debug_assertions)]
+    fn print_stats(&self, index: &dyn MetaIndex) {
+        use std::collections::BTreeMap;
+
+        #[derive(Default)]
+        struct Counter {
+            under: u32,
+            standard: u32,
+            over: u32,
+        }
+
+        let mut counters: BTreeMap<Rating, Counter> = BTreeMap::new();
+        for a in index.get_albums() {
+            let tracks = index.get_album_tracks(a.album_id);
+            for score in self.get_track_scores(tracks) {
+                let entry = counters.entry(score.rating).or_default();
+                if score.off < -1.0 {
+                    entry.under += 1;
+                } else if score.off < 1.0 {
+                    entry.standard += 1;
+                } else {
+                    entry.over += 1;
+                }
+            }
+        }
+
+        for (rating, ct) in counters.iter() {
+            let n = (ct.under + ct.standard + ct.over) as f32;
+            println!(
+                "{:7}  {:5} ({:5.1}%) under, {:5} ({:5.1}%) standard, {:5} ({:5.1}%) over",
+                format!("{rating:?}"),
+                ct.under, 100.0 * ct.under as f32 / n,
+                ct.standard, 100.0 * ct.standard as f32 / n,
+                ct.over, 100.0 * ct.over as f32 / n,
+            );
+        }
     }
 }
 
