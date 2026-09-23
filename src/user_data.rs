@@ -80,11 +80,16 @@ pub struct AlbumScore {
 /// Scores (for ranking) evaluated at a given point in time.
 #[derive(Copy, Clone, Default)]
 pub struct TrackScore {
-    pub ft0: f32,
-    pub ft1: f32,
-    pub fc0: f32,
-    pub fc1: f32,
-    pub off: f32,
+    /// Long-term playcount, adjusted for rating.
+    pub longterm_adjusted: f32,
+
+    /// Recent (short-term) playmount, not adjusted for rating.
+    pub recent_unadjusted: f32,
+
+    /// Frecency offset: below -1 is underlistened, above 1 is overlistened.
+    pub frecency_offset: f32,
+
+    /// The user's rating for this track.
     pub rating: Rating,
 }
 
@@ -210,11 +215,11 @@ impl UserData {
             // These numbers were tweaked by eyeballing the output across many
             // of my albums and adjusting until it feels right, then by using
             // the print_stats function, and ensuring that the ratio of is about
-            // 2:1 overplayed:underplayed on both liked and loved tracks.
+            // 3:2 overplayed:underplayed on both liked and loved tracks.
             let is_b_side = has_b_side && t.track_id.disc_number() != 1;
             let multiplier = match rating {
-                Rating::Love => 1.0 / 6.50,
-                Rating::Like => 1.0 / 3.65,
+                Rating::Love => 1.0 / 6.67,
+                Rating::Like => 1.0 / 3.85,
                 Rating::Neutral if is_b_side => 3.5,
                 Rating::Neutral if t.track.duration_seconds < 60 => 4.0,
                 Rating::Neutral => 1.0,
@@ -222,14 +227,12 @@ impl UserData {
             };
 
             let score = TrackScore {
-                ft0: counts.playcount_longterm,
-                ft1: counts.playcount_recently,
-                fc0: counts.playcount_longterm * multiplier,
-                fc1: counts.playcount_recently * multiplier,
-                off: 0.0,
+                longterm_adjusted: counts.playcount_longterm * multiplier,
+                recent_unadjusted: counts.playcount_recently,
+                frecency_offset: 0.0,
                 rating,
             };
-            buffer.push(RevNotNan(score.fc0));
+            buffer.push(RevNotNan(score.longterm_adjusted));
             result.push(score);
         }
 
@@ -249,21 +252,22 @@ impl UserData {
         // print_stats, I arrived at the parameters below.
         let norm = (median_longterm + 0.5).sqrt().recip();
         for score in result.iter_mut() {
-            score.off = score.fc0 * norm;
-
             // Then add the unadjusted recent playcount to it. Recent plays
             // restore the balance on the longterm excess/deficit at least for
             // now; if a track is underplayed by 3 listens, we don't want to
             // listen to it 3 times in a row to compensate, we'll listen to it
             // again in a few weeks.
-            score.off += score.ft1;
-
-            buffer.push(RevNotNan(score.off));
+            score.frecency_offset = score
+                .longterm_adjusted
+                .mul_add(norm, score.recent_unadjusted);
+            buffer.push(RevNotNan(score.frecency_offset));
         }
 
+        // Center the offests so that half of the tracks in this album is below
+        // its target and half above.
         let median_offset = median(&mut buffer);
         for score in result.iter_mut() {
-            score.off -= median_offset;
+            score.frecency_offset -= median_offset;
         }
 
         result
@@ -294,9 +298,9 @@ impl UserData {
             let tracks = index.get_album_tracks(a.album_id);
             for score in self.get_track_scores(tracks) {
                 let entry = counters.entry(score.rating).or_default();
-                if score.off < -1.0 {
+                if score.frecency_offset < -0.95 {
                     entry.under += 1;
-                } else if score.off < 1.0 {
+                } else if score.frecency_offset < 0.95 {
                     entry.standard += 1;
                 } else {
                     entry.over += 1;
@@ -307,11 +311,12 @@ impl UserData {
         for (rating, ct) in counters.iter() {
             let n = (ct.under + ct.standard + ct.over) as f32;
             println!(
-                "{:7}  {:5} ({:5.1}%) under, {:5} ({:5.1}%) standard, {:5} ({:5.1}%) over",
+                "{:7}  {:5} ({:5.1}%) under, {:5} ({:5.1}%) standard, {:5} ({:5.1}%) over, {:.2} of ideal",
                 format!("{rating:?}"),
                 ct.under, 100.0 * ct.under as f32 / n,
                 ct.standard, 100.0 * ct.standard as f32 / n,
                 ct.over, 100.0 * ct.over as f32 / n,
+                (2.0 * ct.over as f32) / (3.0 * ct.under as f32),
             );
         }
     }

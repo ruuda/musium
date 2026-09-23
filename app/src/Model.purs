@@ -648,25 +648,7 @@ instance decodeJsonTrack :: DecodeJson Track where
 decodeAlbumTracks :: Json -> Either JsonDecodeError (Array Track)
 decodeAlbumTracks json = do
   obj <- Json.decodeJson json
-  tracks <- Json.getField obj "tracks"
-
-  -- The server returns the frecency values, but for displaying tracks we are
-  -- interested in the frecency percentiles, so we can dim the top percentiles.
-  -- TODO: Even better would be to bucket them by ranked and non-ranked, so that
-  -- in both regimes we can dim the most frecent track(s). Or maybe we just
-  -- divide the frecency by the rank?
-  let
-    frecency (Track t) = t.frecency
-    total = Int.toNumber $ Array.length tracks
-    visitTrack acc (Track t) =
-      let
-        n = acc + 1.0
-        t' = t { frecency = n / total }
-      in
-        { value: Track t', accum: n }
-    quantiles = mapAccumL visitTrack 0.0 $ Array.sortWith frecency tracks
-
-  pure $ Array.sortWith (\(Track t) -> [t.discNumber, t.trackNumber]) quantiles.value
+  Json.getField obj "tracks"
 
 getTracks :: AlbumId -> Aff (Array Track)
 getTracks (AlbumId aid) = do
