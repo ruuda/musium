@@ -238,8 +238,8 @@ impl UserData {
             // 3:2 overplayed:underplayed on both liked and loved tracks.
             let is_b_side = has_b_side && t.track_id.disc_number() != 1;
             let multiplier = match rating {
-                Rating::Love => 1.0 / 6.67,
-                Rating::Like => 1.0 / 3.85,
+                Rating::Love => 1.0 / 5.50,
+                Rating::Like => 1.0 / 3.10,
                 Rating::Neutral if is_b_side => 3.5,
                 Rating::Neutral if t.track.duration_seconds < 60 => {
                     // From 60 seconds down, the factor goes from 1 up to 4 at 0:30.
@@ -351,7 +351,7 @@ impl UserData {
                 ct.under, 100.0 * ct.under as f32 / n,
                 ct.standard, 100.0 * ct.standard as f32 / n,
                 ct.over, 100.0 * ct.over as f32 / n,
-                (2.0 * ct.over as f32) / (3.0 * ct.under as f32),
+                (3.0 * ct.under as f32) / (2.0 * ct.over as f32),
             );
         }
     }
