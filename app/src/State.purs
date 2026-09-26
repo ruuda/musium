@@ -205,7 +205,7 @@ new bus = do
   pure
     { albums: []
     , albumsById: Object.empty
-    , sort: { field: SortReleaseDate, direction: SortDecreasing }
+    , sort: { field: SortHot, direction: SortDecreasing }
     , currentArtist: Nothing
     , queue: []
     , nextQueueFetch: never

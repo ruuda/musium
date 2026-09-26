@@ -217,11 +217,13 @@ renderSortOptions postEvent = Html.div $ do
     Html.text "Discover"
     onClickPost SortDiscover
     ask
-  optTrending <- Html.div $ do
-    Html.addClass "config-option"
-    Html.text "Trending"
-    onClickPost SortTrending
-    ask
+  -- We had this in the past, but it does't fit with "Hot" as well,
+  -- and "Hot" supersedes it, so we skip it here.
+  -- optTrending <- Html.div $ do
+  --   Html.addClass "config-option"
+  --   Html.text "Trending"
+  --   onClickPost SortTrending
+  --   ask
   optForNow <- Html.div $ do
     Html.addClass "config-option"
     Html.text "For Now"
@@ -233,13 +235,13 @@ renderSortOptions postEvent = Html.div $ do
     SortReleaseDate -> optReleaseDate
     SortFirstSeen   -> optFirstSeen
     SortDiscover    -> optDiscover
-    SortTrending    -> optTrending
+    SortTrending    -> optHot
     SortForNow      -> optForNow
 
 setSortMode :: SortMode -> AlbumListView -> Effect Unit
 setSortMode { field, direction } state =
   let
-    allFields = [SortHot, SortReleaseDate, SortFirstSeen, SortDiscover, SortTrending, SortForNow]
+    allFields = [SortHot, SortReleaseDate, SortFirstSeen, SortDiscover, SortForNow]
     unsort = do
       Html.removeClass "increasing"
       Html.removeClass "decreasing"
