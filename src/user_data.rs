@@ -174,7 +174,11 @@ impl UserData {
         let age_seconds = 0
             + self.last_counted_at.posix_seconds_utc
             - album.first_seen.posix_seconds_utc;
-        let log_age = (age_seconds as f32).ln_1p();
+
+        // Mutliply with a factor to tweak the balance of playcount vs.
+        // freshness. A factor 1.0 does not decreas the "hot" score quickly
+        // enough with age. 1.5 started looking more like it.
+        let log_age = (age_seconds as f32).ln_1p() * 3.0;
 
         // If an album is not present, we don't have playcounts, so it is
         // ranked as low as possible for all scores.
@@ -197,7 +201,10 @@ impl UserData {
         let time_weight_mellow = time_weight.mul_add(0.9, 0.1).sqrt();
 
         AlbumScore {
-            hot: data.score_longterm - log_age,
+            // Mix in a bit of recent popularity to the hotness score as well,
+            // to pull old but recently listened albums a bit more to the top,
+            // temporarily (because that score decays quickly).
+            hot: data.score_longterm - log_age + data.score_trending * 0.2,
             trending: data.score_trending,
             discover: data.score_discover * time_weight_mellow,
             for_now: data.score_longterm * time_weight * time_weight,

@@ -996,7 +996,11 @@ fn score_trending(counter: &ExpCounter) -> f32 {
 
 /// Score for sorting by top on the longest two time scales.
 fn score_longterm(counter: &ExpCounter) -> f32 {
-    counter.n[0].ln_1p() + counter.n[1].ln_1p()
+    // We add the logarithms, so we effectively multiply the playcount.
+    // That means means it's the shorter timescale that counts, but if you on
+    // a medium timescale listen a bit to something you listened to a lot in the
+    // further past, then the further past acts as a multiplier.
+    (counter.n[0] + counter.n[1]).ln_1p() + (2.0 + counter.n[1].ln())
 }
 
 /// Score for sorting entries by _falling_.
