@@ -352,22 +352,30 @@ renderTrack postEvent (Album album) queuedTracks (Track track) =
           Rating 2 -> Just { symbol: "❤", label: "Love" }
           _ -> Nothing
       case rating of
-        Nothing -> Html.text $ show track.trackNumber
+        Nothing -> pure unit
         Just r -> do
           Html.span $ do
             Html.addClass "rating"
             Html.addClass $ "rating-" <> (show track.rating)
             Html.setTitle $ "Rating: " <> r.label
             Html.text r.symbol
-          Html.text $ " " <> (show track.trackNumber)
+          Html.text " "
+      when (track.frecency < (-0.95)) $
+        Html.span $ do
+          Html.setTitle "Track is relatively underplayed"
+          Html.text "▸\x2009"
+      Html.text $ show track.trackNumber
+
     Html.div $ do
       Html.addClass "title"
       when (track.frecency > 0.75) $ do
         Html.addClass "frecent-dim"
       Html.text track.title
+
     Html.div $ do
       Html.addClass "duration"
       Html.text $ Model.formatDurationSeconds track.durationSeconds
+
     Html.div $ do
       Html.addClass "artist"
       Html.text track.artist

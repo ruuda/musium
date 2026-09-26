@@ -311,6 +311,10 @@ ul
   ;
 }
 
+.track {
+    grid-template-columns: 3.5em 1fr;
+}
+
 /* Leave some whitespace between tracks on different disks. */
 .disc + .disc {
   margin-top: 2.5rem;
@@ -376,10 +380,12 @@ img.thumb::before {
 
 /* Dim frecent (recently or frequently played) tracks a bit, to nudge the user
    towards exploring more. */
-.frecent-dim { opacity: 0.55; }
+.frecent-dim { opacity: 0.55 }
 
 .duration, .track-number
 {
+  /* Overflow should overflow on te left, not on the right. */
+  justify-self: flex-end;
   text-align: right;
   padding-right: 0.25em;
   color: #ccc;
@@ -551,8 +557,8 @@ img.thumb::before {
 }
 
 .album-info hgroup, .album-info .album-actions {
-  margin-left: 3rem;
-  margin-right: 3rem;
+  margin-left: 3.5rem;
+  margin-right: 3.5rem;
 }
 
 .album-info h1 {
@@ -1047,6 +1053,11 @@ button.scan-library::before {
 
   .current .album-info h1 {
     margin-top: 0;
+  }
+
+  .album-info hgroup, .album-info .album-actions {
+    margin-left: 3em;
+    margin-right: 3em;
   }
 
   .current .waveform {
