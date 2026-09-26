@@ -230,7 +230,7 @@ impl UserData {
             // We adjust the target playcount based on the track rating. A liked
             // track should be played more than a regular one, a loved one even
             // more, and a disliked one only a fraction as much. We also add a
-            // penalty for B-sides, and for very short tracks.
+            // penalty for B-sides, and for very short or long tracks.
             //
             // These numbers were tweaked by eyeballing the output across many
             // of my albums and adjusting until it feels right, then by using
@@ -241,7 +241,19 @@ impl UserData {
                 Rating::Love => 1.0 / 6.67,
                 Rating::Like => 1.0 / 3.85,
                 Rating::Neutral if is_b_side => 3.5,
-                Rating::Neutral if t.track.duration_seconds < 60 => 4.0,
+                Rating::Neutral if t.track.duration_seconds < 60 => {
+                    // From 60 seconds down, the factor goes from 1 up to 4 at 0:30.
+                    (t.track.duration_seconds as f32)
+                        .mul_add(-1.0 / 10.0, 1.0 + 60.0 / 10.0)
+                        .min(4.0)
+                }
+                Rating::Neutral if t.track.duration_seconds > 240 => {
+                    // From 4 minutes on, the factor goes up with 0.5 per minute,
+                    // up to a maximum of 5.
+                    (t.track.duration_seconds as f32)
+                        .mul_add(1.0 / 120.0, 1.0 - 240.0 / 120.0)
+                        .min(5.0)
+                }
                 Rating::Neutral => 1.0,
                 Rating::Dislike => 10.0,
             };
