@@ -69,7 +69,6 @@ import Data.Int (rem)
 import Data.Int as Int
 import Data.Maybe (Maybe (Just, Nothing))
 import Data.String as String
-import Data.Traversable (mapAccumL)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
@@ -140,9 +139,10 @@ newtype Album = Album
   , releaseDate :: String
   , firstSeen :: String
   , color :: String
-  , discoverScore :: Number
-  , trendingScore :: Number
-  , forNowScore :: Number
+  , scoreDiscover :: Number
+  , scoreTrending :: Number
+  , scoreForNow :: Number
+  , scoreHot :: Number
   }
 
 instance decodeJsonAlbum :: DecodeJson Album where
@@ -158,9 +158,10 @@ instance decodeJsonAlbum :: DecodeJson Album where
     releaseDate   <- Json.getField obj "release_date"
     firstSeen     <- Json.getField obj "first_seen"
     color         <- Json.getField obj "color"
-    discoverScore <- Json.getField obj "discover_score"
-    trendingScore <- Json.getField obj "trending_score"
-    forNowScore <- Json.getField obj "for_now_score"
+    scoreDiscover <- Json.getField obj "score_discover"
+    scoreTrending <- Json.getField obj "score_trending"
+    scoreForNow   <- Json.getField obj "score_for_now"
+    scoreHot      <- Json.getField obj "score_hot"
     pure $ Album
       { id
       , title
@@ -169,9 +170,10 @@ instance decodeJsonAlbum :: DecodeJson Album where
       , releaseDate
       , firstSeen
       , color
-      , discoverScore
-      , trendingScore
-      , forNowScore
+      , scoreDiscover
+      , scoreTrending
+      , scoreForNow
+      , scoreHot
       }
 
 getAlbums :: Aff (Array Album)

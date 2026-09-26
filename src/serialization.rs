@@ -42,7 +42,7 @@ pub fn write_brief_album_json<W: Write>(
     }
     write!(w, r#"],"artist":"#)?;
     serde_json::to_writer(&mut w, index.get_string(album.artist))?;
-    let score = user_data.get_album_score(album_id, now_embed);
+    let score = user_data.get_album_score(album_id, album, now_embed);
     write!(
         w,
         r#","release_date":"{}","first_seen":"{}","color":"{}""#,
@@ -56,8 +56,8 @@ pub fn write_brief_album_json<W: Write>(
         // to positive, it does not need a lot of precision. The trending score
         // is always between 0 and 1 though, it needs more digits for precision
         // near the end of the ranking.
-        r#","discover_score":{:.2},"trending_score":{:.4},"for_now_score":{:.3}}}"#,
-        score.discover, score.trending, score.for_now,
+        r#","score_discover":{:.2},"score_trending":{:.4},"score_for_now":{:.3},"score_hot":{:.2}}}"#,
+        score.discover, score.trending, score.for_now, score.hot,
     )?;
     Ok(())
 }

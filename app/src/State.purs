@@ -317,9 +317,9 @@ sortAlbums {field, direction} albums =
     applyDir $ case field of
       SortReleaseDate -> Array.sortWith (\(Album album) -> album.releaseDate)   albums
       SortFirstSeen   -> Array.sortWith (\(Album album) -> album.firstSeen)     albums
-      SortDiscover    -> Array.sortWith (\(Album album) -> album.discoverScore) albums
-      SortTrending    -> Array.sortWith (\(Album album) -> album.trendingScore) albums
-      SortForNow      -> Array.sortWith (\(Album album) -> album.forNowScore)   albums
+      SortDiscover    -> Array.sortWith (\(Album album) -> album.scoreDiscover) albums
+      SortTrending    -> Array.sortWith (\(Album album) -> album.scoreTrending) albums
+      SortForNow      -> Array.sortWith (\(Album album) -> album.scoreForNow)   albums
 
 toggleSortDirection :: SortDirection -> SortDirection
 toggleSortDirection = case _ of

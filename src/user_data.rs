@@ -25,7 +25,7 @@ use std::convert::TryFrom;
 use crate::album_table::AlbumTable;
 use crate::database as db;
 use crate::playcount::{AlbumData, CountData, PlayCounter, PlayCounts, RevNotNan, TimeVector, TrackData};
-use crate::prim::{AlbumId, TrackId, TrackWithId};
+use crate::prim::{Album, AlbumId, Instant, TrackId, TrackWithId};
 use crate::{MetaIndex, MemoryMetaIndex};
 
 /// Track rating.
@@ -67,8 +67,11 @@ impl TryFrom<i64> for Rating {
 /// Scores (for ranking) evaluated at a given point in time.
 #[derive(Copy, Clone, Default)]
 pub struct AlbumScore {
-    /// Trending score, see [`AlbumState::score_trending`].
+    /// Trending score, see [`AlbumData::score_trending`].
     pub trending: f32,
+
+    /// "Hot" score, like on Reddit. Upvotes (long-term playcount) over age.
+    pub hot: f32,
 
     /// Discovery score, adjusted for the current moment.
     pub discover: f32,
@@ -104,10 +107,13 @@ pub struct UserData {
 
     /// Playcount-derived data per album.
     album_data: AlbumTable<AlbumData>,
+
+    /// When the playcount was last updated.
+    last_counted_at: Instant,
 }
 
-impl Default for UserData {
-    fn default() -> Self {
+impl UserData {
+    pub fn new() -> Self {
         use std::collections::hash_map::RandomState;
         let s = RandomState::new();
         Self {
@@ -115,13 +121,8 @@ impl Default for UserData {
             track_ratings: HashMap::with_hasher(s.clone()),
             track_data: HashMap::with_hasher(s.clone()),
             album_data: AlbumTable::new(0, AlbumData::default()),
+            last_counted_at: Instant { posix_seconds_utc: 0 },
         }
-    }
-}
-
-impl UserData {
-    pub fn new() -> Self {
-        Self::default()
     }
 
     /// Rebuild the user data from events saved in the database.
@@ -129,7 +130,7 @@ impl UserData {
         index: &MemoryMetaIndex,
         tx: &mut db::Transaction,
     ) -> db::Result<(Self, PlayCounts)> {
-        let mut stats = Self::default();
+        let mut stats = Self::new();
 
         for opt_rating in db::iter_ratings(tx)? {
             let rating = opt_rating?;
@@ -166,12 +167,23 @@ impl UserData {
     ///
     /// The `at` time vector should be the embedding of the desired time to
     /// evaluate at, and then normalized.
-    pub fn get_album_score(&self, album_id: AlbumId, at: &TimeVector) -> AlbumScore {
+    pub fn get_album_score(&self, album_id: AlbumId, album: &Album, at: &TimeVector) -> AlbumScore {
+        // For the "hot" score, we compute "playcount / age". For better
+        // stability (and because we have the longterm playcounts as log
+        // anyway), we compute this in log space, so `ln(playcount) - ln(age)`.
+        let age_seconds = 0
+            + self.last_counted_at.posix_seconds_utc
+            - album.first_seen.posix_seconds_utc;
+        let log_age = (age_seconds as f32).ln_1p();
+
         // If an album is not present, we don't have playcounts, so it is
         // ranked as low as possible for all scores.
         let data = match self.album_data.get(album_id) {
             Some(data) => data,
-            None => return AlbumScore::default(),
+            None => return AlbumScore {
+                hot: -log_age,
+                ..AlbumScore::default()
+            },
         };
 
         // The cosine distance between our time vector and the query time vector.
@@ -185,6 +197,7 @@ impl UserData {
         let time_weight_mellow = time_weight.mul_add(0.9, 0.1).sqrt();
 
         AlbumScore {
+            hot: data.score_longterm - log_age,
             trending: data.score_trending,
             discover: data.score_discover * time_weight_mellow,
             for_now: data.score_longterm * time_weight * time_weight,
@@ -279,6 +292,9 @@ impl UserData {
     pub fn set_counts(&mut self, counts: CountData) {
         self.track_data = counts.tracks;
         self.album_data = counts.albums;
+        self.last_counted_at = Instant {
+            posix_seconds_utc: counts.last_counted_at.to_posix_timestamp(),
+        };
     }
 
     /// Helper to print under/over-listened stats by rating, to help tune the scores.

@@ -609,6 +609,7 @@ pub struct AlbumData {
 pub struct CountData {
     pub tracks: HashMap<TrackId, TrackData>,
     pub albums: AlbumTable<AlbumData>,
+    pub last_counted_at: Instant,
 }
 
 /// A playcounter counts plays.
@@ -917,6 +918,7 @@ impl PlayCounts {
         CountData {
             tracks: self.compute_track_user_data(index),
             albums: self.compute_album_user_data(index),
+            last_counted_at: self.counter.last_counted_at,
         }
     }
 }
@@ -994,7 +996,7 @@ fn score_trending(counter: &ExpCounter) -> f32 {
 
 /// Score for sorting by top on the longest two time scales.
 fn score_longterm(counter: &ExpCounter) -> f32 {
-    counter.n[0].ln() + counter.n[1].ln()
+    counter.n[0].ln_1p() + counter.n[1].ln_1p()
 }
 
 /// Score for sorting entries by _falling_.
