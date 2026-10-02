@@ -275,7 +275,7 @@ impl UserData {
 
         // Subtract the median from the longterm playcount, so we get a sense of
         // whether this track is overplayed or underplayed, and then normalize
-        // to the log of the median playcount. Underplayed by 1 listen when we
+        // to the sqrt of the median playcount. Underplayed by 1 listen when we
         // listened to most trackf 20 times already, is ~noise. But underplayed
         // when we listened to most tracks only once, is real signal.
         //
