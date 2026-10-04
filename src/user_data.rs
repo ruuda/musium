@@ -175,6 +175,10 @@ impl UserData {
             + self.last_counted_at.posix_seconds_utc
             - album.first_seen.posix_seconds_utc;
 
+        // When an album is new, and it was added after the most recent listen,
+        // the age would be negative and the log below fails. Clamp to zero.
+        let age_seconds = age_seconds.max(0);
+
         // Mutliply with a factor to tweak the balance of playcount vs.
         // freshness. A factor 1.0 does not decreas the "hot" score quickly
         // enough with age. 1.5 started looking more like it.
